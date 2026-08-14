@@ -47,6 +47,13 @@ export const persister =
 /**
  * Register a mutation so it survives a restart. Call at module scope, then pass
  * the returned key as `mutationKey` in useMutation and omit mutationFn.
+ *
+ * Gotcha: because mutationFn lives in setMutationDefaults, useMutation has no
+ * function signature to infer variables from. If the hook has no `onMutate` to
+ * infer from either, state the generics explicitly or TS infers `void` and every
+ * .mutate(arg) call fails to compile:
+ *
+ *   useMutation<unknown, Error, { id: string }>({ mutationKey: KEY })
  */
 export function defineMutation<TVars, TData>(
   key: string,
