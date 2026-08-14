@@ -42,6 +42,11 @@ export default function Onboarding() {
       setErr(error.message);
       return;
     }
+
+    // Fill the account with the prototype's fixture content so every surface
+    // has something in it on first open. No-ops if tasks already exist.
+    await supabase.rpc('bd_seed_demo');
+
     router.replace('/home/');
   }
 
