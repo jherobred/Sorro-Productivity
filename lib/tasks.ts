@@ -12,6 +12,9 @@ export type Task = {
   notes: string;
   done: boolean;
   due_on: string | null;
+  // Drives the checkbox ring colour (priCol in the prototype): high→coral,
+  // med→amber, low/null→tx3.
+  priority: 'low' | 'med' | 'high' | null;
   stars: number;
   position: number;
   deleted_at: string | null;
@@ -42,7 +45,7 @@ export function useTasks() {
     queryFn: async (): Promise<Task[]> => {
       const { data, error } = await supabase
         .from('bd_tasks')
-        .select('id,list_id,title,notes,done,due_on,stars,position,deleted_at')
+        .select('id,list_id,title,notes,done,due_on,priority,stars,position,deleted_at')
         .is('deleted_at', null)
         .order('position');
       if (error) throw error;
@@ -117,6 +120,7 @@ export function useTaskActions() {
           notes: '',
           done: false,
           due_on: null,
+          priority: null,
           stars: 0,
           position: Number.MAX_SAFE_INTEGER,
           deleted_at: null,

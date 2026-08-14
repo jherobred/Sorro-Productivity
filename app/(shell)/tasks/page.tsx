@@ -1,201 +1,431 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { useLists, useTasks, useTaskActions, type Task } from '@/lib/tasks';
-import { K, SECHUE } from '@/lib/pal';
+import { K, PAL } from '@/lib/pal';
+import { usePrefs } from '@/lib/prefs';
+import { useLayout } from '@/lib/useLayout';
+import { useLists, useTasks, useTaskActions, type Task, type List } from '@/lib/tasks';
+
+/**
+ * Ported from Basedly.dc.html — markup at lines 1081–1189, computed styles at
+ * 4571–4645 (`priCol`, `starRow`, `mkTask`, `taskGroups`). Grouping is by due
+ * state, not by list; every number here is the prototype's.
+ */
+
+const TSW = K.notebookSwipePx; // 156 — swipe reveal width
+const ACT = TSW / 3; // 52px per action button
+
+type Row = {
+  task: Task;
+  listName: string;
+  listColor: string;
+  late: number;
+  dueLabel: string;
+  pri: 'High' | 'Med' | 'Low';
+};
+
+const PRI_COL: Record<Row['pri'], string> = { High: PAL.coral, Med: PAL.amber, Low: 'var(--tx3)' };
+
+const priOf = (p: string | null): Row['pri'] =>
+  p === 'high' ? 'High' : p === 'med' ? 'Med' : 'Low';
+
+/** Days overdue, and the label the row shows. */
+function dueInfo(due: string | null): { late: number; label: string } {
+  if (!due) return { late: 0, label: '' };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(due + 'T00:00:00');
+  const days = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (days < 0) return { late: -days, label: `${-days}d late` };
+  if (days === 0) return { late: 0, label: 'Today' };
+  if (days === 1) return { late: 0, label: 'Tomorrow' };
+  return { late: 0, label: d.toLocaleDateString(undefined, { weekday: 'short' }) };
+}
 
 export default function TasksPage() {
+  const { phone } = useLayout();
+  const { prefs } = usePrefs();
   const { data: lists = [] } = useLists();
-  const { data: tasks = [], isLoading } = useTasks();
-  const actions = useTaskActions();
+  const { data: tasks = [] } = useTasks();
+  const A = useTaskActions();
 
-  // Rows animate out for 380 ms before they leave the list.
+  const [draft, setDraft] = useState('');
+  const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
+  const [starHover, setStarHover] = useState<{ id: string; v: number } | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
 
-  const complete = (t: Task) => {
-    setLeaving((s) => new Set(s).add(t.id));
-    // Do not block the animation on the response.
+  const byList = new Map(lists.map((l) => [l.id, l]));
+
+  const rows: Row[] = tasks
+    .filter((t) => !t.done)
+    .map((t) => {
+      const l = t.list_id ? byList.get(t.list_id) : undefined;
+      const { late, label } = dueInfo(t.due_on);
+      return {
+        task: t,
+        listName: l?.name ?? 'Inbox',
+        listColor: l?.color ?? PAL.indigo,
+        late,
+        dueLabel: label,
+        pri: priOf(t.priority),
+      };
+    });
+
+  const groups = [
+    { n: 'Overdue', items: rows.filter((r) => r.late > 0), tint: PAL.coral, note: 'Oldest first' },
+    { n: 'Today', items: rows.filter((r) => !r.late && r.dueLabel === 'Today'), tint: PAL.amber, note: 'Due before midnight' },
+    { n: 'Upcoming', items: rows.filter((r) => !r.late && r.dueLabel !== 'Today'), tint: PAL.mint, note: 'The rest of the week' },
+  ].filter((g) => g.items.length);
+
+  const add = () => {
+    const t = draft.trim();
+    if (!t) return;
+    A.create.mutate({ id: crypto.randomUUID(), title: t, listId: lists[0]?.id ?? null });
+    setDraft('');
+  };
+
+  const complete = (r: Row) => {
+    setLeaving((s) => new Set(s).add(r.task.id));
     setTimeout(() => {
-      actions.complete.mutate({ id: t.id, done: true });
-      setLeaving((s) => {
-        const n = new Set(s);
-        n.delete(t.id);
-        return n;
-      });
+      A.complete.mutate({ id: r.task.id, done: true });
+      setLeaving((s) => { const n = new Set(s); n.delete(r.task.id); return n; });
     }, K.taskExitMs);
   };
 
-  const open = tasks.filter((t) => !t.done);
-  const grouped = lists
-    .map((l) => ({ list: l, items: open.filter((t) => t.list_id === l.id) }))
-    .concat([{ list: { id: '__none', name: 'Inbox', color: SECHUE.tasks, position: 999 }, items: open.filter((t) => !t.list_id) }])
-    .filter((g) => g.items.length > 0 || g.list.id !== '__none');
+  const detailTask = tasks.find((t) => t.id === detail) ?? null;
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 22 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.025em' }}>Tasks</h1>
-        <span style={{ fontSize: 11.5, color: 'var(--tx3)', fontWeight: 600 }}>
-          {open.length} open
-        </span>
+    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, justifyContent: 'flex-start' }}>
+        <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-.025em', width: 56, height: '100%', textAlign: 'right' }}>
+          Tasks
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx3)', height: '100%', width: '100%', textAlign: 'center' }}>
+          {rows.length} open across every list and project
+        </div>
+        <button
+          className="hov"
+          title="Sort"
+          style={{ marginLeft: 'auto', width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}
+        >
+          <Icon name="sort" size={15} color="var(--tx2)" />
+        </button>
       </div>
 
-      {isLoading && <p style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Loading…</p>}
+      <div style={{ background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '2px 6px 2px' }}>
+          <Icon name="plus" size={15} color="var(--accTx)" />
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+            placeholder="Add a task — press Enter"
+            style={{ flex: 1, fontSize: 13, color: 'var(--tx)' }}
+          />
+          <button onClick={add} className="acc"
+            style={{ padding: '6px 13px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800 }}>
+            Add
+          </button>
+        </div>
+      </div>
 
-      {grouped.map(({ list, items }) => (
-        <section key={list.id} style={{ marginBottom: 26 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '.11em',
-              textTransform: 'uppercase',
-              color: 'var(--tx3)',
-              marginBottom: 9,
-            }}
-          >
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: list.color || SECHUE.tasks }} />
-            {list.name}
-            <span style={{ color: 'var(--tx3)', opacity: 0.7 }}>{items.length}</span>
+      {groups.map((g) => (
+        <div key={g.n}
+          style={{
+            background: 'var(--card)', borderRadius: 16, padding: '14px 14px 6px', marginTop: 12,
+            boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 34%, transparent)`,
+          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 3, flex: 'none', background: g.tint }} />
+            <span style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase',
+              color: prefs.theme === 'dark'
+                ? `color-mix(in srgb, ${g.tint} 100%, transparent)`
+                : `color-mix(in srgb, ${g.tint} 66%, #201E1D)`,
+            }}>
+              {g.n}
+            </span>
+            <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
+              {g.items.length}
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.note}</span>
           </div>
 
-          <div
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--line)',
-              borderRadius: 12,
-              boxShadow: 'var(--sh)',
-              overflow: 'hidden',
-            }}
-          >
-            {items.map((t, i) => (
-              <TaskRow
-                key={t.id}
-                task={t}
-                leaving={leaving.has(t.id)}
-                index={i}
-                onComplete={() => complete(t)}
-                onStar={(n) => actions.update.mutate({ id: t.id, patch: { stars: n } })}
-                onDelete={() => actions.removeWithUndo(t)}
-              />
-            ))}
-
-            <InlineAdd
-              listId={list.id === '__none' ? null : list.id}
-              onAdd={(title, listId) =>
-                actions.create.mutate({ id: crypto.randomUUID(), title, listId })
-              }
+          {g.items.map((r) => (
+            <TaskRow
+              key={r.task.id}
+              row={r}
+              phone={phone}
+              accent={prefs.accent}
+              leaving={leaving.has(r.task.id)}
+              tsw={tsw?.id === r.task.id ? tsw : null}
+              setTsw={setTsw}
+              starHover={starHover?.id === r.task.id ? starHover.v : 0}
+              setStarHover={setStarHover}
+              onCheck={() => complete(r)}
+              onOpen={() => { setDetail(r.task.id); setTsw(null); }}
+              onDelete={() => A.removeWithUndo(r.task)}
+              onStar={(v) => A.update.mutate({ id: r.task.id, patch: { stars: r.task.stars === v ? 0 : v } })}
             />
-          </div>
-        </section>
+          ))}
+        </div>
       ))}
+
+      <div style={{ fontSize: 10.5, color: 'var(--tx3)', padding: '4px 4px 0' }}>
+        Swipe a row left to reveal archive, edit and delete.
+      </div>
+
+      {detailTask && (
+        <TaskDetail
+          task={detailTask}
+          lists={lists}
+          onClose={() => setDetail(null)}
+          onPatch={(patch) => A.update.mutate({ id: detailTask.id, patch })}
+          onDelete={() => { A.removeWithUndo(detailTask); setDetail(null); }}
+        />
+      )}
     </div>
   );
 }
 
 function TaskRow({
-  task,
-  leaving,
-  index,
-  onComplete,
-  onStar,
-  onDelete,
+  row, phone, accent, leaving, tsw, setTsw, starHover, setStarHover,
+  onCheck, onOpen, onDelete, onStar,
 }: {
-  task: Task;
+  row: Row;
+  phone: boolean;
+  accent: string;
   leaving: boolean;
-  index: number;
-  onComplete: () => void;
-  onStar: (n: number) => void;
+  tsw: { id: string; dx: number; live: boolean } | null;
+  setTsw: (v: { id: string; dx: number; live: boolean } | null) => void;
+  starHover: number;
+  setStarHover: (v: { id: string; v: number } | null) => void;
+  onCheck: () => void;
+  onOpen: () => void;
   onDelete: () => void;
+  onStar: (v: number) => void;
 }) {
+  const dx = tsw ? tsw.dx : 0;
+  const startX = useRef(0);
+
+  const actBtn = (bg: string, tone: string): React.CSSProperties => ({
+    width: ACT, height: '100%', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+    fontSize: 9.5, fontWeight: 800, letterSpacing: '.02em', color: tone, background: bg,
+  });
+
+  /** Swipe left to reveal; snaps open past a third of the tray. */
+  const onPointerDown = (e: React.PointerEvent) => {
+    startX.current = e.clientX;
+    const move = (m: PointerEvent) => {
+      const d = Math.max(-TSW, Math.min(0, m.clientX - startX.current));
+      setTsw({ id: row.task.id, dx: d, live: true });
+    };
+    const up = (m: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const d = m.clientX - startX.current;
+      setTsw(d < -TSW / 3 ? { id: row.task.id, dx: -TSW, live: false } : null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  const locked = row.task.stars || 0;
+  const shown = starHover || locked;
+
   return (
-    <div
-      className={leaving ? 'leaving' : 'lensrow'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 11,
-        padding: '11px 14px',
-        borderBottom: '1px solid var(--line)',
-        animationDelay: leaving ? undefined : `${Math.min(index, 8) * 0.02}s`,
-      }}
-    >
-      <button
-        onClick={onComplete}
-        aria-label={`Complete ${task.title}`}
+    <div className={leaving ? 'leaving' : ''} style={{ position: 'relative', overflow: 'hidden', borderRadius: 0 }}>
+      <span style={{
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: TSW,
+        display: 'flex', alignItems: 'stretch',
+        pointerEvents: dx < -8 ? 'auto' : 'none',
+      }}>
+        <button title="Archive" onClick={onDelete} style={actBtn('var(--card2)', 'var(--tx2)')}>
+          <Icon name="archive" size={15} color="var(--tx2)" />Archive
+        </button>
+        <button title="Edit" onClick={onOpen} style={actBtn(`color-mix(in srgb, ${accent} 26%, var(--card2))`, 'var(--tx)')}>
+          <Icon name="edit" size={15} color="var(--tx)" />Edit
+        </button>
+        <button title="Delete" onClick={onDelete} style={actBtn(PAL.coral, '#0C0F16')}>
+          <Icon name="trash" size={15} color="#0C0F16" />Delete
+        </button>
+      </span>
+
+      <div
+        onPointerDown={onPointerDown}
         style={{
-          width: 19,
-          height: 19,
-          flex: 'none',
-          borderRadius: 7,
-          border: '1px solid var(--line2)',
-          display: 'grid',
-          placeItems: 'center',
+          position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 8px',
+          background: 'var(--card)', borderBottom: '1px solid var(--line)',
+          touchAction: 'pan-y', cursor: 'grab', userSelect: 'none',
+          transform: `translateX(${dx}px)`,
+          transition: tsw?.live ? 'none' : 'transform .42s cubic-bezier(0.34,1.56,0.64,1)',
         }}
       >
-        {task.done && <Icon name="task" size={12} color="var(--acc)" />}
-      </button>
+        <button
+          onClick={onCheck}
+          title="Complete"
+          style={{
+            width: 19, height: 19, borderRadius: '50%', flex: 'none', marginTop: 1,
+            border: `1.6px solid ${PRI_COL[row.pri]}`,
+            background: row.pri === 'High' ? `color-mix(in srgb, ${PAL.coral} 18%, transparent)` : 'transparent',
+            transition: 'all .2s',
+          }}
+        />
 
-      <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.4, textWrap: 'pretty' }}>{task.title}</span>
+        <button onClick={onOpen} style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
+            {row.task.title}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, flex: 'none', background: row.listColor }} />
+            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{row.listName}</span>
+          </span>
+        </button>
 
-      {/* stars 0–3; pressing the current value clears it back to 0 */}
-      <div style={{ display: 'flex', gap: 2 }}>
-        {[1, 2, 3].map((n) => (
-          <button
-            key={n}
-            onClick={() => onStar(task.stars === n ? 0 : n)}
-            aria-label={`Priority ${n}`}
-            style={{ padding: 3, minWidth: 22, minHeight: 22 }}
+        <span style={phone
+          ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flex: 'none' }
+          : { display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+          <span
+            onMouseLeave={() => setStarHover(null)}
+            title={locked ? `${locked} of 5` : 'Not rated'}
+            style={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}
           >
-            <Icon name="star" size={13} color={task.stars >= n ? 'var(--pal-amber)' : 'var(--tx3)'} />
-          </button>
-        ))}
-      </div>
-
-      {task.due_on && (
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)', flex: 'none' }}>
-          {new Date(task.due_on).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button
+                key={v}
+                onClick={() => onStar(v)}
+                onMouseEnter={() => setStarHover({ id: row.task.id, v })}
+                title={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                style={{
+                  fontSize: 16, lineHeight: 1, padding: '0 1px',
+                  color: v <= shown ? (starHover ? accent : 'var(--accTx)') : 'var(--line2)',
+                  transition: 'color .16s', transformOrigin: '50% 55%',
+                }}
+              >
+                ★
+              </button>
+            ))}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: row.late ? PAL.coral : 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: phone ? 'right' : 'center' }}>
+            {row.dueLabel}
+          </span>
         </span>
-      )}
-
-      <button onClick={onDelete} aria-label="Delete task" style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
-        <Icon name="trash" size={13} color="var(--tx3)" />
-      </button>
+      </div>
     </div>
   );
 }
 
-function InlineAdd({
-  listId,
-  onAdd,
-}: {
-  listId: string | null;
-  onAdd: (title: string, listId: string | null) => void;
-}) {
-  const [value, setValue] = useState('');
+const KICKER: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, letterSpacing: '.11em',
+  textTransform: 'uppercase', color: 'var(--tx3)',
+};
 
-  const submit = () => {
-    const title = value.trim();
-    if (!title) return;
-    onAdd(title, listId);
-    setValue('');
-  };
+const CHIP = (on: boolean): React.CSSProperties => ({
+  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', borderRadius: 9,
+  fontSize: 11.5, fontWeight: 700, minHeight: 32,
+  border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
+  background: on ? 'var(--hov)' : 'transparent',
+  color: on ? 'var(--accTx)' : 'var(--tx2)',
+});
+
+function TaskDetail({
+  task, lists, onClose, onPatch, onDelete,
+}: {
+  task: Task;
+  lists: List[];
+  onClose: () => void;
+  onPatch: (p: Partial<Task>) => void;
+  onDelete: () => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [notes, setNotes] = useState(task.notes);
+  const stars = task.stars || 0;
+
+  const dues: { n: string; v: string | null }[] = [
+    { n: 'Today', v: new Date().toISOString().slice(0, 10) },
+    { n: 'Tomorrow', v: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
+    { n: 'Next week', v: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10) },
+    { n: 'None', v: null },
+  ];
 
   return (
-    <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px' }}>
-      <Icon name="plus" size={15} color="var(--tx3)" />
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        onBlur={submit}
-        placeholder="Add a task"
-        style={{ flex: 1, fontSize: 13.5, color: 'var(--tx)', minHeight: 22 }}
-      />
-    </div>
+    <>
+      <div onClick={onClose} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.44)', zIndex: 30 }} />
+      <div className="sheet" style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 31,
+        maxHeight: 'calc(100% - 56px)', overflowY: 'auto',
+        background: 'var(--card)', borderRadius: '22px 22px 0 0', padding: '20px 22px 24px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em' }}>{title}</div>
+          <button onClick={onDelete} className="hov" title="Delete task"
+            style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="trash" size={14} color="var(--tx2)" />
+          </button>
+          <button onClick={onClose} className="hov" style={{ width: 26, height: 26, borderRadius: 8, color: 'var(--tx3)', fontSize: 15 }}>×</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '14px 22px' }}>
+          <div>
+            <div style={KICKER}>Title</div>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title !== task.title && onPatch({ title })}
+              style={{ width: '100%', marginTop: 6, padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 13, fontWeight: 600, color: 'var(--tx)' }} />
+          </div>
+
+          <div>
+            <div style={KICKER}>List</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {lists.map((l) => (
+                <button key={l.id} onClick={() => onPatch({ list_id: l.id })} style={CHIP(task.list_id === l.id)}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: l.color }} />
+                  {l.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={KICKER}>Due</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {dues.map((d) => (
+                <button key={d.n} onClick={() => onPatch({ due_on: d.v })} style={CHIP(task.due_on === d.v)}>{d.n}</button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={KICKER}>Rating</div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6 }}>
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button key={v} onClick={() => onPatch({ stars: stars === v ? 0 : v })} title={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                  style={{ fontSize: 16, lineHeight: 1, padding: '0 1px', color: v <= stars ? 'var(--accTx)' : 'var(--line2)', transition: 'color .16s' }}>
+                  ★
+                </button>
+              ))}
+              <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
+                {stars ? `${stars} of 5` : 'Not rated'}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <div style={KICKER}>Notes</div>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== task.notes && onPatch({ notes })}
+            rows={3} placeholder="Add a note…"
+            style={{ width: '100%', marginTop: 6, padding: '10px 12px', borderRadius: 11, border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical', fontFamily: 'inherit' }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 9, marginTop: 18 }}>
+          <button onClick={onClose} className="acc"
+            style={{ padding: '11px 20px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 13, fontWeight: 800 }}>
+            Done
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
