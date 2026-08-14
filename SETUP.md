@@ -97,6 +97,28 @@ reconnect.
 resumed after an app restart has no closure to resume into — only the key. See `lib/tasks.ts`
 for the pattern.
 
+## Fidelity debt — read this first
+
+The design tokens, keyframes, motion system, icon set and interaction constants are ported
+**verbatim** from `Basedly.dc.html`. The **section layouts are not**: Tasks, Calendar, Habits,
+Money, Notebooks, People, Files, Body and Projects were composed from scratch using the right
+tokens, rather than recreating the prototype's actual markup. README.md calls for
+pixel-for-pixel recreation, so each of these needs a second pass against the prototype.
+
+Reference material lives in the `Design feedback needed` Claude Design project
+(`4fd595cf-2503-4674-ac86-b2d873a35fd7`) — same `Basedly.dc.html` byte-for-byte, plus
+`screenshots/` showing the real rendered look and `uploads/BASEDLY-DESIGN-BRIEF.md`.
+
+Concrete deltas already spotted from `screenshots/01-ls.png` and `screenshots/phone.png`:
+
+- Phone nav is a **floating rounded pill** with a glass/gradient fill and a filled accent
+  capsule behind the active item — not the flat full-width bar currently shipped.
+- Notebooks uses a **segmented tab control** (Notes / Journal / Canvas / Java) and pill-shaped
+  notebook and section chips.
+- The FAB is a large circular accent button with a glow, draggable and position-remembering.
+- `/body` and `/projects` exist as routes but are deliberately **not linked in the sidebar**
+  until they are rebuilt faithfully.
+
 ## Known gaps
 
 - Long-press context menus (420 ms / 7 px cancel) are specified in `ANNOTATIONS.md` but only
