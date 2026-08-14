@@ -28,7 +28,7 @@ const SECTIONS: Section[] = [
   { id: 'profile', name: 'Profile', ic: 'focus' },
 ];
 
-const BUILT = new Set(['home', 'tasks']); // routes that exist so far
+const BUILT = new Set(['home', 'tasks', 'calendar']); // routes that exist so far
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
