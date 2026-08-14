@@ -9,6 +9,7 @@ import { usePrefs } from '@/lib/prefs';
 import { SECHUE } from '@/lib/pal';
 import { supabase } from '@/lib/supabase';
 import { onlineManager } from '@tanstack/react-query';
+import { lg, ON_ACCENT } from '@/lib/glass';
 
 type Section = { id: string; name: string; ic: IconName };
 
@@ -38,6 +39,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const [guard, setGuard] = useState<'checking' | 'ok'>('checking');
+  const [capture, setCapture] = useState(false);
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
   const hue = SECHUE[section] ?? 'var(--acc)';
@@ -150,13 +152,53 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <main
           key={pathname}
           className="pagein"
-          style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: phone ? '14px 14px 84px' : 22 }}
+          style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: phone ? 14 : 22 }}
         >
           {children}
         </main>
+
+        {phone && (
+          <BottomNav
+            picks={prefs.navPicks}
+            section={section}
+            go={go}
+            accent={prefs.accent}
+            dark={prefs.theme === 'dark'}
+            onCapture={() => setCapture((c) => !c)}
+            captureOpen={capture}
+          />
+        )}
       </div>
 
-      {phone && <BottomNav picks={prefs.navPicks} section={section} go={go} />}
+      {/* Desktop capture button — draggable in the prototype; position persists
+          in prefs.fabPos. Drag itself is still to come. */}
+      {!phone && (
+        <button
+          onClick={() => setCapture((c) => !c)}
+          title="Capture"
+          aria-label="Capture"
+          aria-expanded={capture}
+          style={{
+            position: 'fixed',
+            right: prefs.fabPos?.x ?? 22,
+            bottom: prefs.fabPos?.y ?? 22,
+            width: 54,
+            height: 54,
+            borderRadius: 27,
+            background: prefs.accent,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: `0 10px 28px color-mix(in srgb, ${prefs.accent} 40%, transparent)`,
+            transform: capture ? 'rotate(45deg)' : 'rotate(0)',
+            transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1), box-shadow .2s',
+            zIndex: 30,
+          }}
+        >
+          <Icon name="plus" size={22} color={ON_ACCENT} />
+        </button>
+      )}
+
       <ToastHost />
     </div>
   );
@@ -234,60 +276,111 @@ function TopBar({
   );
 }
 
-/** Phone portrait: 5 slots, user-customisable. Minimum 44px touch target. */
+/**
+ * Phone nav — a floating liquid-glass pill, not a flat bar. Slots split either
+ * side of the capture FAB. Geometry is verbatim from the prototype: 27px pill
+ * radius, 44px slots at 18px radius, accent fill + 3px dot on the active slot.
+ */
 function BottomNav({
   picks,
   section,
   go,
+  accent,
+  dark,
+  onCapture,
+  captureOpen,
 }: {
   picks: string[];
   section: string;
   go: (id: string) => void;
+  accent: string;
+  dark: boolean;
+  onCapture: () => void;
+  captureOpen: boolean;
 }) {
   const byId = new Map(SECTIONS.map((s) => [s.id, s]));
+  const slots = picks.map((id) => byId.get(id) ?? { id, name: 'More', ic: 'more' as IconName });
+  const half = Math.ceil(slots.length / 2);
+
+  const slot = (s: Section) => {
+    const on = s.id === section;
+    const enabled = BUILT.has(s.id);
+    return (
+      <button
+        key={s.id}
+        onClick={() => go(s.id)}
+        title={s.name}
+        aria-label={s.name}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: 44,
+          borderRadius: 18,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: on ? accent : 'transparent',
+          transition: 'background .24s',
+          opacity: enabled ? 1 : 0.38,
+        }}
+      >
+        <Icon name={s.ic} size={17} color={on ? ON_ACCENT : 'var(--tx2)'} />
+        <span
+          style={{
+            width: 3,
+            height: 3,
+            borderRadius: '50%',
+            marginTop: 3,
+            background: on ? ON_ACCENT : 'transparent',
+          }}
+        />
+      </button>
+    );
+  };
 
   return (
-    <nav
-      style={{
-        flex: 'none',
-        display: 'flex',
-        borderTop: '1px solid var(--line)',
-        background: 'var(--panel)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        position: 'fixed',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 60,
-      }}
-    >
-      {picks.map((id) => {
-        const s = byId.get(id) ?? { id, name: 'More', ic: 'more' as IconName };
-        const active = s.id === section;
-        const enabled = BUILT.has(s.id);
-        return (
-          <button
-            key={id}
-            onClick={() => go(s.id)}
-            style={{
-              flex: 1,
-              minHeight: 56,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              fontSize: 9.5,
-              fontWeight: 700,
-              color: active ? (SECHUE[s.id] ?? 'var(--accTx)') : 'var(--tx3)',
-              opacity: enabled ? 1 : 0.38,
-            }}
-          >
-            <Icon name={s.ic} size={18} color={active ? (SECHUE[s.id] ?? 'var(--accTx)') : 'var(--tx3)'} />
-            {s.name}
-          </button>
-        );
-      })}
-    </nav>
+    <div style={{ flex: 'none', padding: '4px 10px 12px', position: 'relative', zIndex: 12 }}>
+      <nav
+        style={{
+          ...lg({ tint: accent, strength: 1.15, radius: 27, dark }),
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          padding: '7px 10px',
+        }}
+      >
+        {slots.slice(0, half).map(slot)}
+
+        {/* Capture. Lifted out of the bar with a negative top margin and ringed
+            in the page colour so it reads as sitting proud of the glass. */}
+        <button
+          onClick={onCapture}
+          aria-label="Capture"
+          aria-expanded={captureOpen}
+          style={{
+            flex: 'none',
+            width: 54,
+            height: 54,
+            borderRadius: 27,
+            background: accent,
+            margin: '-12px 4px 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `3px solid ${dark ? '#0C0F16' : '#F4F2F2'}`,
+            boxShadow: `0 10px 26px color-mix(in srgb, ${accent} 52%, transparent)`,
+            transform: captureOpen ? 'rotate(45deg)' : 'rotate(0)',
+            transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1)',
+          }}
+        >
+          <Icon name="plus" size={22} color={ON_ACCENT} />
+        </button>
+
+        {slots.slice(half).map(slot)}
+      </nav>
+    </div>
   );
 }
