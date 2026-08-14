@@ -20,18 +20,33 @@ the APK, which is what keeps them in sync — same code, same database.
 | Calendar, Notebooks, Projects, Habits, Body, Money, Community, Files, People | Not built |
 | AI panel | Deliberately omitted from v1 |
 
+## Live
+
+| | |
+| --- | --- |
+| Web app | https://basedly-web-jhemsini.vercel.app |
+| Repo | https://github.com/jherobred/basedly (private) |
+| Vercel project | `basedly-web` — deploys automatically on push to `master` |
+| Supabase | project `basedly`, ref `jdkbnsjczanvmmpsovhm`, ap-southeast-1 |
+
 ## You have to do this — I can't
 
-Sign-in will fail until Google OAuth is configured. This needs credentials, so it is yours:
+The site is live, but **sign-in cannot work yet**: the Supabase project has only `email`
+enabled, `google: false` (verified against `/auth/v1/settings`). Enabling it means entering
+OAuth credentials, so it is yours:
 
 1. **Google Cloud Console** → create an OAuth 2.0 Client ID (type: Web application).
-   - Authorised redirect URI: `https://lgdvpghpivxnuwlpgbzf.supabase.co/auth/v1/callback`
+   - Authorised redirect URI: `https://jdkbnsjczanvmmpsovhm.supabase.co/auth/v1/callback`
 2. **Supabase dashboard** → Authentication → Providers → Google → paste the client ID and
    secret, enable.
 3. **Supabase** → Authentication → URL Configuration → add to *Redirect URLs*:
+   - `https://basedly-web-jhemsini.vercel.app/auth/callback/` (production)
    - `http://localhost:3000/auth/callback/` (local dev)
-   - `https://<your-domain>/auth/callback/` (production)
    - `com.basedly.app://auth` (the Android app)
+
+Note: `signInWithOAuth` builds the authorize URL client-side without validating it, so while
+Google is disabled the button fails silently rather than showing an error. That is a
+supabase-js behaviour, not a bug in the sign-in screen.
 
 The Android scheme is already registered in `android/app/src/main/AndroidManifest.xml` and
 must stay in sync with `NATIVE_REDIRECT` in `lib/nativeAuth.ts`.
@@ -55,14 +70,18 @@ npm run apk
 
 ## Backend
 
-Supabase project **`jhems-os`** (`lgdvpghpivxnuwlpgbzf`, ap-southeast-1). Basedly's tables all
-carry the `bd_` prefix and share the database with the older JHEMS-OS tables. The schema was
-already applied before this frontend existed — RLS is on every table, plus helper RPCs:
+Supabase project **`basedly`** (`jdkbnsjczanvmmpsovhm`, ap-southeast-1) — a clean database
+containing only the `bd_*` tables. The schema was replayed from the original `jhems-os`
+project's migrations, so the two are identical in structure; `jhems-os` is now unused by this
+app. RLS is on every table, plus helper RPCs:
 
 - `bd_restore(p_table, p_id)` — clears `deleted_at`, backs the Undo toast
 - `bd_set_pin` / `bd_verify_pin` — the Money section's PIN gate
 - `bd_locked_sections()` — which sections are PIN-gated
-- `manila_today()` — day boundaries in the user's timezone
+- `bd_complete_onboarding(...)` — seeds profile, term, notebook, lists and accounts in one
+  transaction. The onboarding screen calls this rather than hand-rolling the inserts.
+- `bd_habit_tick(habit, date, value)` — toggles a tick *and* recomputes linked challenge
+  progress in the same transaction, which is what BACKEND.md requires of `POST /habits/:id/tick`
 
 There is no API server. The client talks to Postgres directly, so **RLS is the only thing
 protecting the data** — every new table needs `user_id = auth.uid()` policies before it ships.
