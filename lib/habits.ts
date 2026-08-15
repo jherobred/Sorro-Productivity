@@ -141,7 +141,22 @@ export function useHabitActions(days: number) {
     onSettled: settle,
   });
 
-  const create = useMutation<unknown, Error, { id: string; name: string; color: string }>({ mutationKey: CREATE, onSettled: settle });
+  // Optimistic: the new row has to appear on the press. Waiting for the round
+  // trip made the button look dead on a slow connection, and offline — where
+  // the write is queued rather than sent — it never appeared at all.
+  const create = useMutation<unknown, Error, { id: string; name: string; color: string }, Habit[]>({
+    mutationKey: CREATE,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
+      queryClient.setQueryData<Habit[]>(HABITS_KEY, [
+        ...prev,
+        { id: v.id, name: v.name, color: v.color, kind: 'bin', target: null, position: prev.length, archived_at: null },
+      ]);
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(HABITS_KEY, ctx); },
+    onSettled: settle,
+  });
   const archive = useMutation<unknown, Error, { id: string; at: string | null }>({ mutationKey: ARCHIVE, onSettled: settle });
 
   const removeWithUndo = (h: Habit) => {

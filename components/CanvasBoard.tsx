@@ -6,6 +6,7 @@ import { ContextMenu, type CtxItem } from './ContextMenu';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { toast } from '@/lib/toast';
+import { ask } from '@/lib/ask';
 import {
   useBoards, useNodes, useEdges, useCanvasActions, anchor, edgePath, bestSides, bounds,
   CANVAS_COLORS, type CNode, type CEdge, type Side,
@@ -376,7 +377,7 @@ export function CanvasBoard() {
                 setMenu({
                   x: e.clientX, y: e.clientY, kind: 'node', label: b.name,
                   items: [
-                    { label: 'Rename', icon: 'edit', run: () => { const n = window.prompt('Canvas name', b.name); if (n) A.saveBoard.mutate({ id: b.id, patch: { name: n } }); } },
+                    { label: 'Rename', icon: 'edit', run: () => void ask('Rename canvas', { initial: b.name, placeholder: 'Canvas name' }).then((n) => { if (n) A.saveBoard.mutate({ id: b.id, patch: { name: n } }); }) },
                     { label: 'Delete canvas', icon: 'trash', run: () => { A.delBoard.mutate({ id: b.id }); toast('Canvas deleted'); }, danger: true },
                   ],
                 });
@@ -458,7 +459,7 @@ export function CanvasBoard() {
                           setMenu({
                             x: ev.clientX, y: ev.clientY, kind: 'node', label: e.label || 'Connection',
                             items: [
-                              { label: 'Label…', icon: 'edit', run: () => { const l = window.prompt('Label', e.label); if (l !== null) A.saveEdge.mutate({ id: e.id, patch: { label: l } }); } },
+                              { label: 'Label…', icon: 'edit', run: () => void ask('Label this connection', { initial: e.label, placeholder: 'e.g. leads to' }).then((l) => { if (l !== null) A.saveEdge.mutate({ id: e.id, patch: { label: l } }); }) },
                               { label: 'Delete', icon: 'trash', run: () => A.deleteSelection([], [e.id]), danger: true },
                             ],
                           });

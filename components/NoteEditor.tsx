@@ -11,6 +11,7 @@ import {
   textToBlocks, type Block, type BlockKind,
 } from '@/lib/blocks';
 import type { Note } from '@/lib/notebooks';
+import { confirmAsk } from '@/lib/ask';
 
 /**
  * A block editor in the OneNote / Evernote / Notion / RemNote family.
@@ -242,10 +243,14 @@ export function NoteEditor({
     };
   };
 
-  const openLink = (name: string) => {
+  const openLink = async (name: string) => {
     const id = linkTargets(name);
     if (id) { onPickNote(id); return; }
-    if (window.confirm(`“${name}” does not exist yet. Create it?`)) onNewNote(name);
+    const make = await confirmAsk(`Create “${name}”?`, {
+      message: 'That note does not exist yet. Creating it will link the two.',
+      confirmLabel: 'Create note',
+    });
+    if (make) onNewNote(name);
   };
 
   const words = blocks.reduce((n, b) => n + (b.text.trim() ? b.text.trim().split(/\s+/).length : 0), 0);
@@ -331,7 +336,7 @@ export function NoteEditor({
               onToggle={() => A.save.mutate({ id: b.id, patch: { done: !b.done } })}
               onPickKind={(k) => setKind(b, k, '')}
               onClickText={(at) => { setCaret(at); focusBlock(b.id, at); }}
-              onLink={openLink}
+              onLink={(n) => void openLink(n)}
               onMenu={(x, y) => setMenu({ x, y, label: b.kind, items: blockMenu(b, i) })}
               press={longPress(b, i)}
               linkExists={(n) => !!linkTargets(n)}

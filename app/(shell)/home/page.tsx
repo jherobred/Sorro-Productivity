@@ -57,6 +57,7 @@ const KICKER: React.CSSProperties = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const { phone } = useLayout();
   const { prefs } = usePrefs();
   const dark = prefs.theme === 'dark';
@@ -268,10 +269,19 @@ export default function HomePage() {
               )}
 
               <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
-                <button className="acc" style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                <button onClick={() => router.push('/notebooks/')} className="acc k-squish"
+                  style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
                   Open notes
                 </button>
-                <button onClick={() => upNext && A.snooze.mutate({ id: upNext.id })} className="hov"
+                <button
+                  onClick={() => {
+                    // Silence was the bug: with nothing scheduled this did
+                    // nothing at all and looked broken.
+                    if (!upNext) { toast('Nothing to snooze'); return; }
+                    A.snooze.mutate({ id: upNext.id });
+                    toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
+                  }}
+                  className="hov k-squish"
                   style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
                   Snooze
                 </button>
@@ -493,7 +503,8 @@ function Scratchpad({ phone }: { phone: boolean }) {
 
   const keep = () => {
     const t = draft.trim();
-    if (!t) return;
+    // Pressing Keep on an empty field used to do nothing and say nothing.
+    if (!t) { toast('Type something first'); return; }
     A.add.mutate({ id: crypto.randomUUID(), text: t, tag: 'Note', color: TAG_COLOR.Note });
     setDraft('');
   };

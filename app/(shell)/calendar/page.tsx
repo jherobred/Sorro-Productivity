@@ -270,7 +270,11 @@ export default function CalendarPage() {
         </p>
       )}
 
-      <div ref={stage} style={{ touchAction: LADDER.includes(view) ? 'pan-x' : undefined }}>
+      {/* touch-action must leave vertical panning alone: `pan-x` here forbade
+          it, so one finger could not scroll the page anywhere over the
+          calendar. `pan-y` keeps the scroll and still lets the two-finger
+          pinch handler take over, since that one calls preventDefault itself. */}
+      <div ref={stage} style={{ touchAction: 'pan-y' }}>
         <div key={view} className={zooming ? 'k-zoomfade' : undefined}>
           {view === 'week' && (
             <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}

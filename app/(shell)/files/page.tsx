@@ -8,6 +8,7 @@ import { defineMutation, queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
+import { ask } from '@/lib/ask';
 
 /** Ported from Basedly.dc.html markup 2185–2350 (Basedly Drive). */
 
@@ -168,7 +169,7 @@ export default function FilesPage() {
           </button>
           <input ref={inputRef} type="file" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }} />
-          <button onClick={() => { const n = window.prompt('Folder name'); if (n) newFolder.mutate({ name: n, parent_id: folder }); }}
+          <button onClick={() => void ask('New folder', { placeholder: 'Folder name', confirmLabel: 'Create' }).then((n) => { if (n) newFolder.mutate({ name: n, parent_id: folder }); })}
             className="hov" title="New folder" style={tool}>
             <Icon name="folderPlus" size={15} color="var(--tx2)" />
           </button>
@@ -261,7 +262,7 @@ export default function FilesPage() {
                 <div style={{ fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
                 <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{human(f.size_bytes)}</div>
               </button>
-              <button onClick={() => { const n = window.prompt('Rename file', f.name); if (n && n !== f.name) rename.mutate({ id: f.id, name: n }); }}
+              <button onClick={() => void ask('Rename file', { initial: f.name, placeholder: 'File name' }).then((n) => { if (n && n !== f.name) rename.mutate({ id: f.id, name: n }); })}
                 aria-label="Rename" style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
                 <Icon name="edit" size={13} color="var(--tx3)" />
               </button>

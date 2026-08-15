@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { ToastHost } from './ToastHost';
+import { AskHost } from './AskHost';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { SECHUE, PAL } from '@/lib/pal';
@@ -125,6 +126,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div style={{
       height: '100dvh', display: 'flex', flexDirection: phone ? 'column' : 'row',
       background: 'var(--bg)', color: 'var(--tx)', overflow: 'hidden', position: 'relative',
+      // Insets live here rather than on <body>: the frame is exactly the
+      // viewport, and padding shrinks it from the inside instead of pushing it
+      // past the bottom edge.
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingLeft: 'env(safe-area-inset-left)',
+      paddingRight: 'env(safe-area-inset-right)',
     }}>
       {/* First tab stop: jump past the whole sidebar straight to the page. */}
       <a href="#bd-main" className="skip"
@@ -322,7 +329,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
+      {/* minHeight:0 is load-bearing. A flex item defaults to min-height:auto,
+          which refuses to shrink below its content — so on the phone, where
+          this column is the flex *item*, it grew to fit the page instead of the
+          viewport. That pushed the nav bar past the bottom edge (where
+          overflow:hidden clipped it) and left <main> exactly as tall as its own
+          content, so there was nothing to scroll. minWidth:0 does the same job
+          for the desktop's row direction; both are needed. */}
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
           <div style={{ height: 54, flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '0 18px', borderBottom: '1px solid var(--line)' }}>
             <button onClick={() => setSearch(true)} className="hov" title="Quick actions" style={{
@@ -377,6 +391,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: 'var(--tx2)' }}>●●● ᯤ ▮</span>
             <NotificationBell compact />
+            {/* Capture moved up here when the FAB left the nav bar. */}
+            <button onClick={() => setCapture((c) => !c)} className="k-squish" aria-label="Capture" aria-expanded={capture}
+              style={{
+                width: 34, height: 34, flex: 'none', borderRadius: 17, background: acc,
+                display: 'grid', placeItems: 'center',
+                transform: capture ? 'rotate(45deg)' : 'rotate(0)',
+                transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1)',
+              }}>
+              <Icon name="plus" size={16} color={ON_ACCENT} />
+            </button>
             <button onClick={() => setSettings(true)} className="hov k-squish" aria-label="Settings"
               style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
               <Icon name="set" size={15} color="var(--tx2)" />
@@ -399,21 +423,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       {!phone && (
-        <button onClick={() => setCapture((c) => !c)} title="Capture — drag me anywhere" aria-expanded={capture}
-          style={{
-            position: 'fixed', right: 22, bottom: 22, width: 54, height: 54, borderRadius: 27, background: acc,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 10px 28px color-mix(in srgb, ${acc} 40%, transparent)`,
-            transform: capture ? 'rotate(45deg)' : 'rotate(0)',
-            transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1), box-shadow .2s', zIndex: 30,
-          }}>
-          <Icon name="plus" size={22} color={ON_ACCENT} />
-        </button>
+        <CaptureFab accent={acc} open={capture} onToggle={() => setCapture((c) => !c)}
+          pos={prefs.fabPos} onMove={(p) => void update({ fabPos: p })} />
       )}
 
       {/* Capture fan — children stagger out of the FAB (fabi spring). */}
       {capture && (
-        <div style={{ position: 'fixed', right: phone ? '50%' : 30, bottom: phone ? 152 : 88, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 9, alignItems: phone ? 'center' : 'flex-end', transform: phone ? 'translateX(50%)' : undefined }}>
+        <div style={phone
+          // The phone fan now drops from the header button rather than rising
+          // from a FAB that is no longer there.
+          ? { position: 'fixed', right: 12, top: 'calc(52px + env(safe-area-inset-top))', zIndex: 31, display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'flex-end' }
+          : { position: 'fixed', right: 30, bottom: 88, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'flex-end' }}>
           {([['task', 'Task', 'taskPlus'], ['note', 'Note', 'bookPlus'], ['money', 'Expense', 'money']] as [CaptureKind, string, IconName][])
             .map(([k, label, ic], i) => (
               <button key={k} className="fabi pop"
@@ -434,6 +454,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       <ToastHost />
+      <AskHost />
     </div>
   );
 }
@@ -484,27 +505,97 @@ function BottomNav({
     );
   };
 
+  void half;
+  void onCapture;
+  void captureOpen;
+
   return (
-    <div style={{ flex: 'none', padding: '4px 10px 12px', position: 'relative', zIndex: 12 }}>
+    // `flex: none` plus the bottom inset keeps the bar on screen whatever the
+    // page above it is doing — it is a sibling of the scroller, never inside it.
+    <div style={{
+      flex: 'none', position: 'relative', zIndex: 12,
+      padding: '4px 10px calc(12px + env(safe-area-inset-bottom))',
+    }}>
       <nav aria-label="Sections" style={{
         ...lg({ tint: accent, strength: 1.15, radius: 27, dark }),
         position: 'relative', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', gap: 2, padding: '7px 10px',
       }}>
-        {NAV_PHONE.slice(0, half).map(slot)}
-        <button onClick={onCapture} aria-label="Capture" aria-expanded={captureOpen}
-          style={{
-            flex: 'none', width: 54, height: 54, borderRadius: 27, background: accent, margin: '-12px 4px 0',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: `3px solid ${dark ? '#0C0F16' : '#F4F2F2'}`,
-            boxShadow: `0 10px 26px color-mix(in srgb, ${accent} 52%, transparent)`,
-            transform: captureOpen ? 'rotate(45deg)' : 'rotate(0)',
-            transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1)',
-          }}>
-          <Icon name="plus" size={22} color={ON_ACCENT} />
-        </button>
-        {NAV_PHONE.slice(half).map(slot)}
+        {/* The speed-dial FAB used to sit in the middle of this bar, splitting
+            the sections either side of it and overhanging the glass. Capture
+            lives in the header now, and the five slots share the width evenly. */}
+        {NAV_PHONE.map(slot)}
       </nav>
     </div>
+  );
+}
+
+/**
+ * The desktop capture button. Its tooltip has always said "drag me anywhere";
+ * this is the part that makes that true. The position is stored in prefs, so it
+ * stays where you put it across sessions and devices, and it is clamped back
+ * inside the viewport on resize rather than stranding itself off-screen.
+ */
+function CaptureFab({
+  accent, open, onToggle, pos, onMove,
+}: {
+  accent: string; open: boolean; onToggle: () => void;
+  pos: { x: number; y: number } | null;
+  onMove: (p: { x: number; y: number }) => void;
+}) {
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+
+  const clamp = (x: number, y: number) => ({
+    x: Math.min(Math.max(x, 8), window.innerWidth - 62),
+    y: Math.min(Math.max(y, 8), window.innerHeight - 62),
+  });
+
+  const at = drag ?? (pos ? clamp(pos.x, pos.y) : null);
+
+  const down = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const start = at ?? { x: window.innerWidth - 76, y: window.innerHeight - 76 };
+    const ox = e.clientX - start.x;
+    const oy = e.clientY - start.y;
+    moved.current = false;
+
+    const onPointerMove = (m: PointerEvent) => {
+      if (Math.hypot(m.clientX - e.clientX, m.clientY - e.clientY) > 5) moved.current = true;
+      if (moved.current) setDrag(clamp(m.clientX - ox, m.clientY - oy));
+    };
+    const onPointerUp = (m: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      if (moved.current) {
+        onMove(clamp(m.clientX - ox, m.clientY - oy));
+        setDrag(null);
+      } else {
+        // A press that never moved is a click, not a drag.
+        onToggle();
+      }
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  return (
+    <button
+      onPointerDown={down}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+      title="Capture — drag me anywhere"
+      aria-label="Capture"
+      aria-expanded={open}
+      style={{
+        position: 'fixed', zIndex: 30, width: 54, height: 54, borderRadius: 27, background: accent,
+        ...(at ? { left: at.x, top: at.y } : { right: 22, bottom: 22 }),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: `0 10px 28px color-mix(in srgb, ${accent} 40%, transparent)`,
+        transform: open ? 'rotate(45deg)' : 'rotate(0)',
+        transition: drag ? 'none' : 'transform .3s cubic-bezier(0.34,1.56,0.64,1), left .35s cubic-bezier(0.34,1.56,0.64,1), top .35s cubic-bezier(0.34,1.56,0.64,1)',
+        cursor: drag ? 'grabbing' : 'grab', touchAction: 'none',
+      }}>
+      <Icon name="plus" size={22} color={ON_ACCENT} />
+    </button>
   );
 }

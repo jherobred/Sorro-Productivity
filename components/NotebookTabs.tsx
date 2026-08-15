@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { ymd, lastDays } from '@/lib/habits';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
+import { ask } from '@/lib/ask';
 
 /** Journal / Canvas / Java tabs — Basedly.dc.html markup 1822–2101. */
 
@@ -183,7 +184,7 @@ function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; on
     const r = e.currentTarget.getBoundingClientRect();
     const x = +(((e.clientX - r.left) / r.width) * 100).toFixed(2);
     const y = +(((e.clientY - r.top) / r.height) * 100).toFixed(2);
-    const text = window.prompt('Note for this spot');
+    const text = await ask('Note for this spot', { placeholder: 'What is here?', confirmLabel: 'Pin' });
     if (!text) return;
     const user_id = await currentUserId();
     const { error } = await supabase.from('bd_photo_annotations').insert({ user_id, photo_id: photo.id, x, y, text });

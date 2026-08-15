@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { run, highlight, type RunResult, type Step } from '@/lib/java';
+import { ask } from '@/lib/ask';
 
 /**
  * Notebooks → Java. Runs the interpreter in lib/java.ts and shows what it did:
@@ -132,8 +133,8 @@ export function JavaLab() {
   const console = result ? (step ? result.out.slice(0, step.out) : result.out) : [];
   const activeLine = step?.line ?? null;
 
-  const newFile = () => {
-    const n = window.prompt('Class name', `Scratch${files.length + 1}`);
+  const newFile = async () => {
+    const n = await ask('New class', { initial: `Scratch${files.length + 1}`, placeholder: 'Class name', confirmLabel: 'Create' });
     if (!n) return;
     const cls = n.replace(/[^A-Za-z0-9_]/g, '') || 'Scratch';
     add.mutate({ id: crypto.randomUUID(), name: `${cls}.java`, src: STARTER(cls) }, {
@@ -146,7 +147,7 @@ export function JavaLab() {
       <div style={{ ...CARD, padding: '11px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span style={KICKER}>Source files</span>
-          <button onClick={newFile} className="hov k-squish" title="New class" aria-label="New class"
+          <button onClick={() => void newFile()} className="hov k-squish" title="New class" aria-label="New class"
             style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 6, display: 'grid', placeItems: 'center' }}>
             <Icon name="plus" size={13} color="var(--tx3)" />
           </button>

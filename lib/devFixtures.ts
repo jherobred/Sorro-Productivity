@@ -14,8 +14,17 @@ import { queryClient } from './offline';
  * Enable locally with NEXT_PUBLIC_DEV_FIXTURES=1 in .env.local.
  */
 
-export const devFixturesOn = () =>
+/**
+ * A module-level const, not a function call. Next inlines process.env.NODE_ENV
+ * at build time, so in production this folds to the literal `false` — which is
+ * what lets the minifier prove every guard below is unreachable and drop this
+ * whole file's data. As a function it survived inlining once lib/events.ts
+ * imported from here, and several kilobytes of fake student data shipped.
+ */
+export const DEV_FIXTURES =
   process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEV_FIXTURES === '1';
+
+export const devFixturesOn = () => DEV_FIXTURES;
 
 const iso = (dayOffset: number, h: number, m = 0) => {
   const d = new Date();
@@ -46,12 +55,12 @@ const LIST = {
 const store = new Map<string, unknown>();
 
 export function fixture<T>(prefix: string): T | null {
-  if (!devFixturesOn()) return null;
+  if (!DEV_FIXTURES) return null;
   return (store.get(prefix) as T | undefined) ?? null;
 }
 
 export function seedDevFixtures() {
-  if (!devFixturesOn()) return;
+  if (!DEV_FIXTURES) return;
 
   // Pre-seeding the cache alone is not enough: a component that mounts before
   // the seed, or any refetch that slips through, would hit Supabase and get the
@@ -328,6 +337,6 @@ export function seedDevFixtures() {
 }
 
 // Dev-only handle so the preview can be inspected from the console.
-if (typeof window !== 'undefined' && devFixturesOn()) {
+if (DEV_FIXTURES && typeof window !== 'undefined') {
   (window as unknown as { qc: typeof queryClient }).qc = queryClient;
 }

@@ -221,11 +221,14 @@ button, a, input, textarea, .hov, .row, .blk {
   }
 }
 
-/* Native-app niceties: no text selection or tap highlight on chrome, and
-   respect the notch. Harmless on the web build. */
+/* Native-app niceties: no tap highlight on chrome.
+
+   The notch is NOT handled with padding on <body>. The app frame is 100dvh, so
+   insetting the body pushed that frame past the bottom of the viewport by the
+   inset amount — `overflow: hidden` then clipped it, which is what took the
+   phone nav bar off screen. The frame handles its own insets instead. */
 body {
   -webkit-tap-highlight-color: transparent;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* ==========================================================================

@@ -7,6 +7,7 @@ import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useLists, useTasks, useTaskActions, type Task, type List } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
+import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
 
 /**
@@ -28,6 +29,9 @@ type Row = {
 };
 
 const PRI_COL: Record<Row['pri'], string> = { High: PAL.coral, Med: PAL.amber, Low: 'var(--tx3)' };
+
+/** High sorts above Med above Low. */
+const PRI_RANK: Record<Row['pri'], number> = { High: 3, Med: 2, Low: 1 };
 
 const priOf = (p: string | null): Row['pri'] =>
   p === 'high' ? 'High' : p === 'med' ? 'Med' : 'Low';
@@ -58,6 +62,7 @@ export default function TasksPage() {
   const [detail, setDetail] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
+  const [order, setOrder] = useState<'Due' | 'Priority' | 'Stars' | 'Title'>('Due');
 
   const byList = new Map(lists.map((l) => [l.id, l]));
 
@@ -76,15 +81,25 @@ export default function TasksPage() {
       };
     });
 
+  // Ordering inside each group. The groups themselves stay chronological —
+  // Overdue before Today before Upcoming is the whole point of the screen —
+  // so sorting only rearranges rows within a group.
+  const ordered = (items: Row[]) => [...items].sort((a, b) =>
+    order === 'Priority' ? PRI_RANK[b.pri] - PRI_RANK[a.pri]
+      : order === 'Stars' ? b.task.stars - a.task.stars
+      : order === 'Title' ? a.task.title.localeCompare(b.task.title)
+      : (a.task.due_on ?? '9999').localeCompare(b.task.due_on ?? '9999'));
+
   const groups = [
-    { n: 'Overdue', items: rows.filter((r) => r.late > 0), tint: PAL.coral, note: 'Oldest first' },
-    { n: 'Today', items: rows.filter((r) => !r.late && r.dueLabel === 'Today'), tint: PAL.amber, note: 'Due before midnight' },
-    { n: 'Upcoming', items: rows.filter((r) => !r.late && r.dueLabel !== 'Today'), tint: PAL.mint, note: 'The rest of the week' },
+    { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}` },
+    { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight' },
+    { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week' },
   ].filter((g) => g.items.length);
 
   const add = () => {
     const t = draft.trim();
-    if (!t) return;
+    // Pressing Add on an empty field used to do nothing and say nothing.
+    if (!t) { toast('Type a task first'); return; }
     A.create.mutate({ id: crypto.randomUUID(), title: t, listId: lists[0]?.id ?? null });
     setDraft('');
   };
@@ -109,11 +124,17 @@ export default function TasksPage() {
           {rows.length} open across every list and project
         </div>
         <button
-          className="hov"
-          title="Sort"
-          style={{ marginLeft: 'auto', width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}
+          className="hov k-squish"
+          title={`Sorted by ${order.toLowerCase()} — click to change`}
+          aria-label={`Sorted by ${order.toLowerCase()}. Change sort.`}
+          onClick={() => {
+            const next = { Due: 'Priority', Priority: 'Stars', Stars: 'Title', Title: 'Due' } as const;
+            setOrder(next[order]);
+            toast(`Sorted by ${next[order].toLowerCase()}`);
+          }}
+          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}
         >
-          <Icon name="sort" size={15} color="var(--tx2)" />
+          <Icon name="sort" size={15} color="var(--tx2)" />{order}
         </button>
       </div>
 

@@ -110,7 +110,10 @@ export default function ProfilePage() {
   };
 
   async function save() {
-    if (!uid) return;
+    // Silence was the bug: with no session this returned without a word, so the
+    // button looked broken rather than blocked.
+    if (!uid) return toast('Sign in to save your profile');
+    if (!dirty) return toast('Nothing to save');
     const { error } = await supabase.from('bd_profiles')
       .update({ name, handle: handle || null, bio, avatar }).eq('user_id', uid);
     if (error) return toast(error.message);
