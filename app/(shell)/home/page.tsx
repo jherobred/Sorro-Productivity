@@ -39,6 +39,13 @@ type Tod = 'morning' | 'afternoon' | 'evening';
 const INDIGO = '#6C7CF5';
 const CORAL_T = '#FF6B57';
 
+const QUOTES = [
+  'Every peso has a job.',
+  'Spend on what you actually use.',
+  'Small leaks sink big ships.',
+  'Future you is watching.',
+];
+
 const KICKER: React.CSSProperties = {
   fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em',
   textTransform: 'uppercase', color: 'var(--tx3)',
@@ -55,6 +62,7 @@ export default function HomePage() {
     return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
   });
   const [greetSeq, setGreetSeq] = useState(0);
+  const [quote, setQuote] = useState(0);
   const [, tick] = useState(0);
 
   const ws = weekStart(new Date());
@@ -95,6 +103,11 @@ export default function HomePage() {
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setQuote((q) => (q + 1) % QUOTES.length), 7000);
     return () => clearInterval(t);
   }, []);
 
@@ -385,6 +398,16 @@ export default function HomePage() {
             </div>
             <div style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
               {accounts.map((a) => <span key={a.id}>{a.name} {peso(balances.get(a.id) ?? 0)}</span>)}
+            </div>
+            {/* Rotating motivational line on the tloop keyframe. */}
+            <div style={{ marginTop: 10, minHeight: 30, overflow: 'hidden' }}>
+              <div key={quote} style={{
+                fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx3)', textWrap: 'pretty',
+                animation: 'tloop 7s cubic-bezier(.22,1,.36,1) both',
+                animationPlayState: 'var(--anim, running)' as React.CSSProperties['animationPlayState'],
+              }}>
+                {QUOTES[quote]}
+              </div>
             </div>
           </div>
 

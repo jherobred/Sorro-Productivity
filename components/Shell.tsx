@@ -103,7 +103,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       background: 'var(--bg)', color: 'var(--tx)', overflow: 'hidden', position: 'relative',
     }}>
       {/* Ambient accent aura behind the chrome (auraA). */}
-      <div aria-hidden style={{
+      <div aria-hidden className="aur" style={{
         position: 'absolute', width: '62%', height: '58%', left: '-14%', top: '-18%',
         borderRadius: '50%', pointerEvents: 'none',
         background: `radial-gradient(circle, color-mix(in srgb, ${acc} ${dark ? 34 : 20}%, transparent) 0%, transparent 68%)`,
