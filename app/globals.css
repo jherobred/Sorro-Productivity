@@ -4,6 +4,13 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
 
+/* The prototype's <helmet> loads the Modernist design-system stylesheet before
+   its own inline styles. README calls that link inert, but the browser applies
+   it — and the reference screenshots were rendered with it in the cascade. So
+   we load it in the same position and let the tokens below override, exactly
+   as the prototype does. Do not reorder these two. */
+@import './modernist.css';
+
 /* ---- Theme tokens (THEMES in the prototype) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
@@ -77,15 +84,8 @@ html, body {
   overflow: hidden;
 }
 
-/* The rendered prototype inherits these from the Modernist stylesheet its
-   <helmet> loads. The handoff calls that link "inert", but the browser applies
-   it — so the reference screenshots are laid out against a 15px base, not the
-   16px browser default. Match the reference, not the prose. */
-body {
-  font-size: 15px;
-  line-height: 1.55;
-  font-weight: 400;
-}
+/* Base type (15px/1.55) now comes from modernist.css above, same as the
+   prototype — no need to restate it here. */
 /* :root IS <html>, so it has to select itself here — `:root html` matches nothing. */
 html[data-theme='light'],
 html[data-theme='light'] body { background: #E9E7EF; }
