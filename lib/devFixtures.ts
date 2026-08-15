@@ -211,6 +211,33 @@ export function seedDevFixtures() {
   ]);
   seed(['project_comments'], []);
 
+  const post = (id: string, author_id: string, caption: string, tag: string, image_path: string | null, mins: number) =>
+    ({ id, author_id, caption, tag, image_path, created_at: new Date(Date.now() - mins * 60000).toISOString() });
+  seed(['posts'], [
+    post('po1', 'jl', 'Finally got the offline tiles rendering on a jeepney route. Six weeks of GTFS wrangling for this one screenshot.', 'Capstone', 'demo/route.png', 22),
+    post('po2', 'rt', 'Fourteen-day study streak. The 6 a.m. library slot is undefeated.', 'Habits', 'demo/streak.png', 120),
+    post('po3', 'csss', 'Orientation deck is up in Files. Bring a laptop, bring a friend, bring snacks.', 'Org', 'demo/deck.png', 300),
+    post('po4', 'me', 'Normalisation notes rewritten as a single page. Third normal form finally clicked.', 'Notes', null, 1440),
+  ]);
+  seed(['post_likes'], [
+    { post_id: 'po1', user_id: 'rt' }, { post_id: 'po1', user_id: 'bc' },
+    { post_id: 'po2', user_id: 'me' }, { post_id: 'po2', user_id: 'jl' }, { post_id: 'po2', user_id: 'bc' },
+  ]);
+  seed(['post_saves'], []);
+  seed(['threads'], [
+    { id: 'th1', author_id: 'me', title: 'Anyone else stuck on the CS 191 proposal scope?', body: 'Alonzo keeps saying one corridor only, but the rubric asks for a network-level evaluation. How are you all squaring that?', tag: 'CS 191', created_at: new Date(Date.now() - 60*60000).toISOString() },
+    { id: 'th2', author_id: 'rt', title: 'Best library floor for deep work, ranked', body: 'Fourth floor is silent but freezing. Second has outlets but the aircon drips. Ground floor is a food court with books.', tag: 'Campus', created_at: new Date(Date.now() - 240*60000).toISOString() },
+    { id: 'th3', author_id: 'bc', title: 'Selling: OS textbook, 8th ed, barely opened', body: 'Bought it, never used it, the slides were enough. Six hundred pesos or trade for a Math 55 reviewer.', tag: 'Market', created_at: new Date(Date.now() - 1500*60000).toISOString() },
+  ]);
+  seed(['thread_votes'], [
+    { thread_id: 'th1', user_id: 'jl' }, { thread_id: 'th1', user_id: 'rt' },
+    { thread_id: 'th2', user_id: 'me' }, { thread_id: 'th2', user_id: 'bc' }, { thread_id: 'th2', user_id: 'jl' },
+  ]);
+  seed(['thread_replies'], [
+    { id: 'tr1', thread_id: 'th1', author_id: 'jl', body: 'We scoped to one corridor and wrote the network bit as future work. He signed it.', created_at: new Date(Date.now() - 48*60000).toISOString() },
+    { id: 'tr2', thread_id: 'th1', author_id: 'rt', body: 'Same. Put the rubric line in your limitations section and cite the consultation date.', created_at: new Date(Date.now() - 31*60000).toISOString() },
+  ]);
+
   seed(['ranked'], { rp: 1340, peak_rp: 1425, wins: 7, losses: 5, season: 's1' });
   const chal = (
     id: string, name: string, description: string, metric: string, rule: string,

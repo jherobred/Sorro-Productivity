@@ -13,25 +13,24 @@ import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
+import { MediaFrame, Lightbox } from '@/components/MediaFrame';
 
 /** Ported from Basedly.dc.html markup 759–869, card styles 5932–6000. */
 
 type Post = { id: string; author_id: string; caption: string; tag: string; image_path: string | null; created_at: string };
 
-/** Real upload when there is one; the gradient plate stays as the fallback. */
-function PostImage({ path, tint }: { path: string | null; tint: string }) {
+/**
+ * The post's picture, shown whole in a fixed 4:5 stage — Instagram's desktop
+ * behaviour. The old version was a 150px band with object-fit: cover, which
+ * cropped the top and bottom off anything portrait; a photo of a whiteboard or
+ * a problem set lost exactly the part worth posting.
+ */
+function PostImage({ path, tint, alt, onOpen }: { path: string | null; tint: string; alt: string; onOpen?: () => void }) {
   const url = useSignedUrl('bd-feed', path);
   if (!path) return null;
   return (
-    <div style={{
-      height: 150, background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 40%, var(--card2)), var(--card2))`,
-      backgroundSize: 'cover', overflow: 'hidden',
-    }}>
-      {url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="fade"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      )}
+    <div style={{ background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 22%, var(--card2)), var(--card2))` }}>
+      <MediaFrame src={url ?? null} alt={alt} ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
     </div>
   );
 }
@@ -90,6 +89,7 @@ export default function CommunityPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('feed');
+  const [viewing, setViewing] = useState<string | null>(null);
   const [me, setMe] = useState<string>('');
 
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
@@ -252,7 +252,10 @@ export default function CommunityPage() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(2,1fr)', gap: 14, alignContent: 'start' }}>
+          {/* A fixed-width column, centred — Instagram's desktop feed. Letting
+              cards stretch across a wide monitor made every photo enormous and
+              the reading line uncomfortably long. */}
+          <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'minmax(0, 468px)', justifyContent: 'center', gap: 18, alignContent: 'start' }}>
             {posts.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Nothing posted yet.</div>}
             {posts.map((p) => {
               const mine = likes.some((l) => l.post_id === p.id && l.user_id === me);
@@ -280,7 +283,7 @@ export default function CommunityPage() {
                     )}
                   </div>
 
-                  <PostImage path={p.image_path} tint={c} />
+                  <PostImage path={p.image_path} tint={c} alt={p.caption || 'Post image'} onOpen={() => setViewing(p.id)} />
 
                   <div style={{ padding: '12px 13px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 11 }}>
@@ -316,6 +319,12 @@ export default function CommunityPage() {
       )}
 
       {tab === 'challenges' && <Challenges />}
+
+      {/* Tapping a post opens it full-screen, still fitted rather than cropped,
+          with arrow keys between the photos in the feed. */}
+      {viewing && (
+        <PostLightbox posts={posts} startId={viewing} onClose={() => setViewing(null)} />
+      )}
     </div>
   );
 }
@@ -434,5 +443,39 @@ function ThreadRow({
         )}
       </div>
     </div>
+  );
+}
+
+/** Feed photos in a full-screen viewer, in feed order. */
+function PostLightbox({ posts, startId, onClose }: { posts: Post[]; startId: string; onClose: () => void }) {
+  const withImages = posts.filter((p) => p.image_path);
+  const [i, setI] = useState(() => Math.max(0, withImages.findIndex((p) => p.id === startId)));
+  return (
+    <LightboxWithUrls posts={withImages} index={i} onIndex={setI} onClose={onClose} />
+  );
+}
+
+/**
+ * Storage paths need signing before they can be shown, and hooks cannot be
+ * called in a loop — so each slide resolves its own URL and the viewer only
+ * ever holds one at a time.
+ */
+function LightboxWithUrls({ posts, index, onIndex, onClose }: {
+  posts: Post[]; index: number; onIndex: (i: number) => void; onClose: () => void;
+}) {
+  const current = posts[index];
+  const url = useSignedUrl('bd-feed', current?.image_path ?? null);
+  if (!current) return null;
+  return (
+    <Lightbox
+      items={posts.map((p, n) => ({
+        src: n === index ? (url ?? null) : null,
+        alt: p.caption || 'Post image',
+        caption: p.caption,
+      }))}
+      index={index}
+      onIndex={onIndex}
+      onClose={onClose}
+    />
   );
 }

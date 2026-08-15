@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { ymd, lastDays } from '@/lib/habits';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
+import { MediaFrame } from './MediaFrame';
 import { ask } from '@/lib/ask';
 
 /** Journal / Canvas / Java tabs — Basedly.dc.html markup 1822–2101. */
@@ -196,28 +197,27 @@ function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; on
   return (
     <div onClick={onOpen} onDoubleClick={pin} title={open ? 'Double-click to pin a note' : photo.name}
       style={{
-        position: 'relative', aspectRatio: open ? '16/10' : '1', gridColumn: open ? '1 / -1' : 'auto',
-        borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-        background: 'linear-gradient(140deg, var(--card2), var(--panel))',
+        position: 'relative', gridColumn: open ? '1 / -1' : 'auto',
         border: `1px solid ${open ? 'var(--acc)' : 'var(--line)'}`,
-        transition: 'aspect-ratio .3s cubic-bezier(.22,1,.36,1), border-color .24s',
+        borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+        transition: 'border-color .24s',
       }}>
-      {url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={photo.name} className="fade"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      )}
-      {open && anns.map((a) => (
-        <span key={a.id} title={a.text} className="pop"
-          style={{
-            position: 'absolute', left: `${a.x}%`, top: `${a.y}%`, transform: 'translate(-50%,-50%)',
-            width: 18, height: 18, borderRadius: '50%', background: 'var(--acc)', color: '#0C0F16',
-            display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 800,
-            boxShadow: '0 2px 8px rgba(0,0,0,.5)',
-          }}>
-          {anns.indexOf(a) + 1}
-        </span>
-      ))}
+      {/* Journal photos are whiteboards, worked problems and lecture slides —
+          exactly the things a cover-crop ruins. Same fitted stage the feed uses;
+          opening one just gives it a wider frame, never a tighter crop. */}
+      <MediaFrame src={url ?? null} alt={photo.name} ratio={open ? 16 / 10 : 1} maxHeight={open ? 520 : 240} rounded={11}>
+        {open && anns.map((a) => (
+          <span key={a.id} title={a.text} className="pop"
+            style={{
+              position: 'absolute', left: `${a.x}%`, top: `${a.y}%`, transform: 'translate(-50%,-50%)',
+              width: 18, height: 18, borderRadius: '50%', background: 'var(--acc)', color: '#0C0F16',
+              display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 800,
+              boxShadow: '0 2px 8px rgba(0,0,0,.5)', zIndex: 2,
+            }}>
+            {anns.indexOf(a) + 1}
+          </span>
+        ))}
+      </MediaFrame>
     </div>
   );
 }
