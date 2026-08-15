@@ -11,11 +11,12 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useLongPress } from '@/lib/useLongPress';
+import { useDragCard } from '@/lib/useDragCard';
 import { ContextMenu } from '@/components/ContextMenu';
 
 /** Ported from Basedly.dc.html markup 1549–1702. */
 
-type Project = { id: string; name: string; tag: string; color: string; progress: number; deadline: string | null };
+type Project = { id: string; name: string; tag: string; color: string; progress: number; deadline: string | null; position: number };
 type Card = { id: string; project_id: string; title: string; col: string; color: string; position: number };
 type Comment = { id: string; project_id: string; author_id: string; body: string; created_at: string };
 
@@ -50,6 +51,11 @@ const NEW_CARD = defineMutation('proj.newCard', async (v: { project_id: string; 
   const { error } = await supabase.from('bd_cards').insert({ ...v, user_id });
   if (error) throw error;
 });
+const REORDER_PROJ = defineMutation('proj.reorder', async (v: { id: string; position: number }) => {
+  const { error } = await supabase.from('bd_projects').update({ position: v.position }).eq('id', v.id);
+  if (error) throw error;
+});
+
 const MOVE_CARD = defineMutation('proj.moveCard', async (v: { id: string; col: string; position: number }) => {
   const { error } = await supabase.from('bd_cards').update({ col: v.col, position: v.position }).eq('id', v.id);
   if (error) throw error;
@@ -86,7 +92,7 @@ export default function ProjectsPage() {
     queryKey: PROJ,
     queryFn: async (): Promise<Project[]> => {
       const { data, error } = await supabase.from('bd_projects')
-        .select('id,name,tag,color,progress,deadline').is('deleted_at', null).order('position');
+        .select('id,name,tag,color,progress,deadline,position').is('deleted_at', null).order('position');
       if (error) throw error;
       return data ?? [];
     },
@@ -116,7 +122,39 @@ export default function ProjectsPage() {
 
   const newProj = useMutation<unknown, Error, { name: string; color: string }>({ mutationKey: NEW_PROJ, onSettled: settle });
   const delProj = useMutation<unknown, Error, { id: string }>({ mutationKey: DEL_PROJ, onSettled: settle });
+
+  /**
+   * Folders sort by drag: sideways past 100px flings the card away and archives
+   * it (undoable from the toast), up or down swaps it with its neighbour.
+   */
+  const cardDrag = useDragCard({
+    onDismiss: (id) => {
+      const p = projects.find((x) => x.id === id);
+      delProj.mutate({ id });
+      toast(`${p?.name ?? 'Project'} archived`, () => restoreProj.mutate({ id }));
+    },
+    onReorder: (id, dir) => {
+      const order = shown.map((x) => x.id);
+      const i = order.indexOf(id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      order.forEach((pid, n) => reorderProj.mutate({ id: pid, position: n }));
+      setSort('Custom');
+      toast('Custom order saved');
+    },
+  });
   const restoreProj = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_PROJ, onSettled: settle });
+  const reorderProj = useMutation<unknown, Error, { id: string; position: number }>({
+    mutationKey: REORDER_PROJ,
+    onMutate: (v) => {
+      // Optimistic, so the folders settle into their new order on release
+      // rather than after a round trip per card.
+      const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+      queryClient.setQueryData<Project[]>(PROJ, prev.map((p) => (p.id === v.id ? { ...p, position: v.position } : p)));
+    },
+    onSettled: settle,
+  });
   const newCard = useMutation<unknown, Error, { project_id: string; title: string; col: string; color: string }>({ mutationKey: NEW_CARD, onSettled: settle });
   const restoreCard = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_CARD, onSettled: settle });
   const addCmt = useMutation<unknown, Error, { project_id: string; body: string }>({ mutationKey: ADD_CMT, onSettled: settle });
@@ -146,7 +184,9 @@ export default function ProjectsPage() {
     .filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => sort === 'Name' ? a.name.localeCompare(b.name)
       : sort === 'Cards' ? cards.filter((c) => c.project_id === b.id).length - cards.filter((c) => c.project_id === a.id).length
-        : 0);
+        // Custom is the drag order, so it has to read `position` — leaving it
+        // at 0 meant a reorder saved fine and then rendered in the old order.
+        : a.position - b.position);
 
   const proj = projects.find((p) => p.id === open);
   const mine = cards.filter((c) => c.project_id === open);
@@ -173,14 +213,19 @@ export default function ProjectsPage() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
-          {shown.map((p) => (
-            <button key={p.id} onClick={() => { setOpen(p.id); setView('board'); }} className="tilt"
-              onPointerDown={(e) => lp.start(e, 'project', p.id, p.name)}
+          {shown.map((p) => {
+            const dragProps = cardDrag.propsFor(p.id);
+            return (
+            <button key={p.id} onClick={() => { if (!cardDrag.dragging) { setOpen(p.id); setView('board'); } }}
+              onPointerDown={(e) => { dragProps.onPointerDown(e); lp.start(e, 'project', p.id, p.name); }}
               onContextMenu={(e) => lp.onContextMenu(e, 'project', p.id, p.name)}
+              className={`tilt ${dragProps.className}`}
+              title="Drag sideways to archive, up or down to reorder"
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
                 padding: '16px 15px 15px', borderRadius: 16, background: 'var(--card)',
                 border: '1px solid var(--line)', boxShadow: 'var(--sh)', textAlign: 'left',
+                ...dragProps.style,
               }}>
               {/* Layered folder: back plate, paper with three rules, front flap. */}
               <span style={{ position: 'relative', width: 74, height: 56, display: 'block' }}>
@@ -204,7 +249,8 @@ export default function ProjectsPage() {
                 </span>
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {shown.length === 0 && <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>Nothing matches that search.</div>}

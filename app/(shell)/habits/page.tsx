@@ -8,6 +8,7 @@ import { usePrefs } from '@/lib/prefs';
 import { useLongPress } from '@/lib/useLongPress';
 import { ContextMenu } from '@/components/ContextMenu';
 import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit, type Tick } from '@/lib/habits';
+import { Streak, bestStreakFrom } from '@/components/Streak';
 
 /** Ported from Basedly.dc.html markup 1020–1078; cell grid at 4433 (40px desktop). */
 
@@ -78,7 +79,8 @@ export default function HabitsPage() {
                   <span style={{ flex: 'none', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
                     {KIND_LABEL[h.kind] ?? 'Daily'}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#F5B33C', fontVariantNumeric: 'tabular-nums' }}>🔥 {s}</span>
+                  <Streak days={s} label="" size="sm" hue={h.color}
+                    best={bestStreakFrom(ticks.filter((t) => t.habit_id === h.id).map((t) => t.on_date))} />
                   <button onClick={() => setEditing(editing === h.id ? null : h.id)} className="hov" title="Edit habit"
                     style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="edit" size={14} color="var(--tx2)" />

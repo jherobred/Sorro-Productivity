@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { queryClient } from '@/lib/offline';
@@ -10,10 +11,12 @@ import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/even
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { PAL } from '@/lib/pal';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { useHabits, useTicks, useHabitActions, streak, ymd } from '@/lib/habits';
 import { useTransactions, useBudgets, useAccounts, peso } from '@/lib/money';
 import { useScratch, useScratchActions, SCRATCH_TAGS, TAG_COLOR, ago, type Scratch } from '@/lib/scratch';
+import { useNotifications, useNotifActions, NOTIF_HUE, NOTIF_ICON, ago as notifAgo } from '@/lib/notify';
+import { Streak, streakFrom } from '@/components/Streak';
 import { PhoneHome } from '@/components/PhoneHome';
 
 const AMBER = '#F5B33C';
@@ -322,6 +325,8 @@ export default function HomePage() {
       </div>
 
       <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+        <Announcements phone={phone} />
+
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
           {/* Today */}
           <div style={CARD}>
@@ -357,7 +362,12 @@ export default function HomePage() {
           <div style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
               <div style={KICKER}>Habits</div>
-              <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>tick inline</div>
+              {/* The best live run across every habit — one number that says
+                  whether the week is going well. */}
+              <div style={{ marginLeft: 'auto' }}>
+                <Streak size="sm" label="best run"
+                  days={habits.reduce((m, h) => Math.max(m, streakFrom(ticks.filter((t) => t.habit_id === h.id).map((t) => t.on_date))), 0)} />
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {habits.map((h) => {
@@ -385,9 +395,7 @@ export default function HomePage() {
                       {label}
                     </button>
                     <div style={{ flex: 1, fontSize: 12.5, fontWeight: 500 }}>{h.name}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: AMBER, fontVariantNumeric: 'tabular-nums' }}>
-                      🔥 {streak(ticks, h.id)}
-                    </div>
+                    <Streak days={streak(ticks, h.id)} label="" size="sm" hue={h.color} />
                   </div>
                 );
               })}
@@ -602,6 +610,76 @@ function ScratchRow({ n, A, onToTask }: { n: Scratch; A: ReturnType<typeof useSc
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The announcements pane: what arrived while you were away, newest first.
+ * Course announcements synced from Canvas LMS land here as well as in the bell,
+ * because a deadline change is the kind of thing you should meet on opening the
+ * app rather than have to go looking for.
+ */
+function Announcements({ phone }: { phone: boolean }) {
+  const { data: items = [] } = useNotifications();
+  const A = useNotifActions();
+  const router = useRouter();
+  const [open, setOpen] = useState(true);
+
+  const unread = items.filter((n) => !n.read_at);
+  const shown = (unread.length ? unread : items).slice(0, phone ? 3 : 4);
+  if (!shown.length) return null;
+
+  return (
+    <div style={{ ...CARD, marginBottom: 12, padding: '13px 15px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: open ? 11 : 0 }}>
+        <div style={KICKER}>Announcements</div>
+        {unread.length > 0 && (
+          <span style={{
+            padding: '1px 7px', borderRadius: 999, fontSize: 9.5, fontWeight: 800,
+            background: 'color-mix(in srgb, var(--pal-coral) 22%, transparent)', color: 'var(--pal-coral)',
+          }}>
+            {unread.length} new
+          </span>
+        )}
+        <button onClick={() => setOpen((v) => !v)} className="hov k-squish" aria-expanded={open}
+          aria-label={open ? 'Collapse announcements' : 'Expand announcements'}
+          style={{ marginLeft: 'auto', width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+          <Icon name="chev" size={13} color="var(--tx3)"
+            style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .3s var(--k-spring)' }} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="k-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {shown.map((n, i) => (
+            <div key={n.id} style={{ '--i': i } as React.CSSProperties}>
+              <button
+                onClick={() => { if (!n.read_at) A.read.mutate({ id: n.id }); if (n.href) router.push(n.href); }}
+                className="row"
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%', padding: '8px 9px', borderRadius: 10, textAlign: 'left' }}>
+                <span style={{
+                  width: 24, height: 24, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', marginTop: 1,
+                  background: `color-mix(in srgb, ${NOTIF_HUE[n.kind]} 20%, transparent)`,
+                }}>
+                  <Icon name={NOTIF_ICON[n.kind] as IconName} size={12} color={NOTIF_HUE[n.kind]} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: n.read_at ? 600 : 800, overflowWrap: 'anywhere' }}>{n.title}</span>
+                    <span style={{ marginLeft: 'auto', flex: 'none', fontSize: 10, color: 'var(--tx3)' }}>{notifAgo(n.created_at)}</span>
+                  </span>
+                  {n.body && (
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {n.body}
+                    </span>
+                  )}
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

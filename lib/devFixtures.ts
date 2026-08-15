@@ -181,6 +181,31 @@ export function seedDevFixtures() {
 
   seed(['integrations'], []);
 
+  seed(['ranked'], { rp: 1340, peak_rp: 1425, wins: 7, losses: 5, season: 's1' });
+  const chal = (
+    id: string, name: string, description: string, metric: string, rule: string,
+    target: number | null, unit: string, color: string, startOff: number, endOff: number,
+    settled: string | null = null, winner: string | null = null,
+  ) => ({
+    id, owner_id: 'me', name, description, habit_label: '', metric, rule, target, unit,
+    starts_on: ymdOf(startOff), ends_on: ymdOf(endOff), color,
+    visibility: 'public', join_code: null, ranked: true, settled_at: settled, winner_id: winner,
+  });
+  seed(['challenges'], [
+    chal('ch1', '6 a.m. club', 'Wake before six. Photo of the clock or it did not happen.', 'habit', 'most', null, 'days', '#FFC24B', -10, 4),
+    chal('ch2', 'No-skip gym', 'Three sessions a week, no excuses, for the rest of the term.', 'body', 'most', null, 'sessions', '#FF6B6B', -17, 11),
+    chal('ch3', 'Read 20 pages', 'Daily reading. First to a hundred pages takes it.', 'habit', 'first_to', 100, 'pages', '#34D9A0', 2, 30),
+    chal('ch4', 'Inbox to zero', 'Whoever clears the most tasks before the midterms.', 'task', 'most', null, 'tasks', '#7C6CFF', -30, -2, iso(-1, 20), 'rt'),
+  ]);
+  const mem = (challenge_id: string, user_id: string, display_name: string, progress: number, rp_delta = 0, placed: number | null = null) =>
+    ({ challenge_id, user_id, display_name, habit_id: null, progress, rp_delta, placed, joined_at: iso(-10, 8) });
+  seed(['challenge_members'], [
+    mem('ch1', 'rt', 'Rain T.', 14), mem('ch1', 'me', 'You', 12), mem('ch1', 'jl', 'Jules L.', 9), mem('ch1', 'bc', 'Bea C.', 6),
+    mem('ch2', 'jl', 'Jules L.', 9), mem('ch2', 'me', 'You', 8), mem('ch2', 'rt', 'Rain T.', 5),
+    mem('ch3', 'bc', 'Bea C.', 0), mem('ch3', 'csss', 'CSSS', 0),
+    mem('ch4', 'rt', 'Rain T.', 41, 88, 1), mem('ch4', 'me', 'You', 37, 40, 2), mem('ch4', 'jl', 'Jules L.', 22, 14, 3),
+  ]);
+
   seed(['notebooks'], [
     { id: 'nb1', name: '3rd year', color: '#7C8CFF', position: 0 },
     { id: 'nb2', name: 'Capstone research', color: '#B07CFF', position: 1 },

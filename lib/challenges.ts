@@ -1,0 +1,216 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase, currentUserId } from './supabase';
+import { defineMutation, queryClient } from './offline';
+import { toast } from './toast';
+import { rpFor, standings, type MetricId, type RuleId } from './rank';
+
+export type Challenge = {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string;
+  habit_label: string;
+  metric: MetricId;
+  rule: RuleId;
+  target: number | null;
+  unit: string;
+  starts_on: string;
+  ends_on: string;
+  color: string;
+  visibility: 'public' | 'invite';
+  join_code: string | null;
+  ranked: boolean;
+  settled_at: string | null;
+  winner_id: string | null;
+};
+
+export type Member = {
+  challenge_id: string;
+  user_id: string;
+  display_name: string | null;
+  habit_id: string | null;
+  progress: number;
+  rp_delta: number;
+  placed: number | null;
+  joined_at: string;
+};
+
+const CHALS = ['challenges'] as const;
+const MEMBERS = ['challenge_members'] as const;
+const RANKED = ['ranked'] as const;
+
+export function useChallenges() {
+  return useQuery({
+    queryKey: CHALS,
+    queryFn: async (): Promise<Challenge[]> => {
+      const { data, error } = await supabase.from('bd_challenges')
+        .select('id,owner_id,name,description,habit_label,metric,rule,target,unit,starts_on,ends_on,color,visibility,join_code,ranked,settled_at,winner_id')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Challenge[];
+    },
+  });
+}
+
+export function useMembers() {
+  return useQuery({
+    queryKey: MEMBERS,
+    queryFn: async (): Promise<Member[]> => {
+      const { data, error } = await supabase.from('bd_challenge_members')
+        .select('challenge_id,user_id,display_name,habit_id,progress,rp_delta,placed,joined_at');
+      if (error) throw error;
+      return (data ?? []) as Member[];
+    },
+  });
+}
+
+/** Your ladder standing. One row per player; tier is derived from rp. */
+export function useRanked() {
+  return useQuery({
+    queryKey: RANKED,
+    queryFn: async (): Promise<{ rp: number; peak_rp: number; wins: number; losses: number; season: string }> => {
+      const { data } = await supabase.from('bd_ranked').select('rp,peak_rp,wins,losses,season').maybeSingle();
+      return data ?? { rp: 0, peak_rp: 0, wins: 0, losses: 0, season: 's1' };
+    },
+  });
+}
+
+const CREATE = defineMutation('chal.create', async (v: Partial<Challenge> & { id: string; name: string }) => {
+  const owner_id = await currentUserId();
+  const { error } = await supabase.from('bd_challenges').insert({ ...v, owner_id });
+  if (error) throw error;
+  // The owner is always a competitor — a challenge with nobody in it is a note.
+  await supabase.from('bd_challenge_members').insert({ challenge_id: v.id, user_id: owner_id, progress: 0 });
+});
+
+const JOIN = defineMutation('chal.join', async (v: { challenge_id: string; habit_id?: string | null }) => {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('bd_challenge_members')
+    .insert({ challenge_id: v.challenge_id, user_id, habit_id: v.habit_id ?? null, progress: 0 });
+  if (error) throw error;
+});
+
+const LEAVE = defineMutation('chal.leave', async (v: { challenge_id: string }) => {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('bd_challenge_members')
+    .delete().eq('challenge_id', v.challenge_id).eq('user_id', user_id);
+  if (error) throw error;
+});
+
+const BUMP = defineMutation('chal.bump', async (v: { challenge_id: string; progress: number }) => {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('bd_challenge_members')
+    .update({ progress: v.progress }).eq('challenge_id', v.challenge_id).eq('user_id', user_id);
+  if (error) throw error;
+});
+
+const SETTLE = defineMutation('chal.settle', async (v: {
+  challenge_id: string; winner_id: string | null; awards: { user_id: string; place: number; rp: number }[];
+}) => {
+  const me = await currentUserId();
+  await supabase.from('bd_challenges')
+    .update({ settled_at: new Date().toISOString(), winner_id: v.winner_id })
+    .eq('id', v.challenge_id);
+
+  await Promise.all(v.awards.map((a) =>
+    supabase.from('bd_challenge_members')
+      .update({ placed: a.place, rp_delta: a.rp })
+      .eq('challenge_id', v.challenge_id).eq('user_id', a.user_id)));
+
+  // Only the caller's own ladder row can be written — RLS sees to that, so
+  // everyone banks their own result the first time they open the settled card.
+  const mine = v.awards.find((a) => a.user_id === me);
+  if (!mine) return;
+  const { data: cur } = await supabase.from('bd_ranked').select('rp,peak_rp,wins,losses').maybeSingle();
+  const rp = (cur?.rp ?? 0) + mine.rp;
+  const { error } = await supabase.from('bd_ranked').upsert({
+    user_id: me,
+    rp,
+    peak_rp: Math.max(cur?.peak_rp ?? 0, rp),
+    wins: (cur?.wins ?? 0) + (mine.place === 1 ? 1 : 0),
+    losses: (cur?.losses ?? 0) + (mine.place === 1 ? 0 : 1),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) throw error;
+});
+
+/**
+ * "Is this row me?" without an await. currentUserId() is async and the
+ * optimistic patch has to run synchronously, so the row is matched on the id
+ * Supabase gave us at sign-in — which the client caches — falling back to the
+ * label the preview fixtures use.
+ */
+function isMine(m: Member): boolean {
+  return m.user_id === cachedUserId() || m.display_name === 'You';
+}
+
+let uid: string | null = null;
+function cachedUserId(): string | null {
+  if (uid) return uid;
+  void currentUserId().then((id) => { uid = id; }).catch(() => {});
+  return uid;
+}
+
+export function useChallengeActions() {
+  const qc = useQueryClient();
+  const settle = () => {
+    void qc.invalidateQueries({ queryKey: CHALS });
+    void qc.invalidateQueries({ queryKey: MEMBERS });
+    void qc.invalidateQueries({ queryKey: RANKED });
+  };
+  const patchMembers = (fn: (p: Member[]) => Member[]) => {
+    const prev = queryClient.getQueryData<Member[]>(MEMBERS) ?? [];
+    queryClient.setQueryData<Member[]>(MEMBERS, fn(prev));
+    return prev;
+  };
+  const rollback = (_e: unknown, _v: unknown, ctx: Member[] | undefined) => {
+    if (ctx) queryClient.setQueryData(MEMBERS, ctx);
+  };
+
+  const create = useMutation<unknown, Error, Partial<Challenge> & { id: string; name: string }>({ mutationKey: CREATE, onSettled: settle });
+  const join = useMutation<unknown, Error, { challenge_id: string; habit_id?: string | null }>({ mutationKey: JOIN, onSettled: settle });
+  const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
+  const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({
+    mutationKey: BUMP,
+    // The bar has to move on the press, not on the round trip — a counter that
+    // waits for the network reads as a broken button.
+    onMutate: (v) => patchMembers((p) => p.map((m) =>
+      m.challenge_id === v.challenge_id && isMine(m) ? { ...m, progress: v.progress } : m)),
+    onError: rollback,
+    onSettled: settle,
+  });
+  const settleUp = useMutation<unknown, Error, { challenge_id: string; winner_id: string | null; awards: { user_id: string; place: number; rp: number }[] }>({
+    mutationKey: SETTLE, onSettled: settle,
+  });
+
+  return {
+    create, join, leave, bump, settleUp, patchMembers,
+    /** Work out places and RP, then bank them. */
+    finish(c: Challenge, members: Member[]) {
+      const { rows } = standings(members, c.rule, c.target);
+      const awards = rows.map((r) => ({ user_id: r.user_id, place: r.place, rp: c.ranked ? rpFor(r.place, rows.length) : 0 }));
+      settleUp.mutate({ challenge_id: c.id, winner_id: rows[0]?.user_id ?? null, awards });
+      toast(`${c.name} settled — ${rows[0]?.display_name ?? 'nobody'} took it`);
+    },
+  };
+}
+
+/**
+ * A challenge is live between its dates and unsettled. `first_to` also ends the
+ * moment somebody reaches the target, which is the whole point of that rule.
+ */
+export function phaseOf(c: Challenge, members: Member[]): 'upcoming' | 'live' | 'over' {
+  if (c.settled_at) return 'over';
+  const today = new Date().toISOString().slice(0, 10);
+  if (c.starts_on > today) return 'upcoming';
+  if (c.ends_on < today) return 'over';
+  if (c.rule === 'first_to' && c.target != null && members.some((m) => m.progress >= c.target!)) return 'over';
+  return 'live';
+}
+
+export function daysLeft(c: Challenge): number {
+  const end = new Date(`${c.ends_on}T23:59:59`).getTime();
+  return Math.max(0, Math.ceil((end - Date.now()) / 86_400_000));
+}

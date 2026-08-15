@@ -255,3 +255,11 @@
 /* Bars growing from the baseline — the printed-series chart in the Java lab. */
 @keyframes kgrow { from { transform: scaleY(0); transform-origin: bottom; } }
 .nomo [style*="kgrow"] { animation: none !important; }
+
+/* The streak halo. Period shortens as the run grows, so a long streak visibly
+   burns harder; paused by the motion setting like everything else. */
+@keyframes streakbreathe {
+  0%, 100% { transform: scale(.82); opacity: .55; }
+  50%      { transform: scale(1.12); opacity: 1; }
+}
+.nomo [style*="streakbreathe"] { animation: none !important; }

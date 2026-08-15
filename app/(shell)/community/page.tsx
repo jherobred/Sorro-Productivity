@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
+import { Challenges } from '@/components/Challenges';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { useRealtime } from '@/lib/realtime';
@@ -314,33 +315,7 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {tab === 'challenges' && (
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-          {challenges.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No challenges running.</div>}
-          {challenges.map((c) => {
-            const days = Math.max(0, Math.round((new Date(c.ends_on).getTime() - Date.now()) / 86_400_000));
-            return (
-              <div key={c.id} style={{
-                minWidth: 0, borderRadius: 18, padding: '16px 17px', background: 'var(--card)',
-                boxShadow: 'var(--sh)', border: '1px solid var(--line)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <span style={{ width: 34, height: 34, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center', background: `color-mix(in srgb, ${c.color} 18%, transparent)` }}>
-                    <Icon name="trophy" size={16} color={c.color} />
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-.015em' }}>{c.name}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{c.habit_label || 'Daily'} · {days}d left</div>
-                  </div>
-                </div>
-                <button className="acc" style={{ width: '100%', minHeight: 36, borderRadius: 10, background: 'var(--acc)', color: '#0A0912', fontSize: 12, fontWeight: 800 }}>
-                  Join
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {tab === 'challenges' && <Challenges />}
     </div>
   );
 }
