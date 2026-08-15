@@ -11,10 +11,29 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
+import { uploadTo, useSignedUrl } from '@/lib/uploads';
 
 /** Ported from Basedly.dc.html markup 759–869, card styles 5932–6000. */
 
-type Post = { id: string; author_id: string; caption: string; tag: string; created_at: string };
+type Post = { id: string; author_id: string; caption: string; tag: string; image_path: string | null; created_at: string };
+
+/** Real upload when there is one; the gradient plate stays as the fallback. */
+function PostImage({ path, tint }: { path: string | null; tint: string }) {
+  const url = useSignedUrl('bd-feed', path);
+  if (!path) return null;
+  return (
+    <div style={{
+      height: 150, background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 40%, var(--card2)), var(--card2))`,
+      backgroundSize: 'cover', overflow: 'hidden',
+    }}>
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" className="fade"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      )}
+    </div>
+  );
+}
 type Thread = { id: string; author_id: string; title: string; body: string; tag: string; created_at: string };
 type Challenge = { id: string; name: string; habit_label: string; starts_on: string; ends_on: string; color: string };
 
@@ -33,9 +52,10 @@ const hueOf = (id: string) => {
   return Object.values(PAL)[v % 10];
 };
 
-const ADD_POST = defineMutation('comm.addPost', async (v: { caption: string }) => {
+const ADD_POST = defineMutation('comm.addPost', async (v: { caption: string; image_path: string | null }) => {
   const author_id = await currentUserId();
-  const { error } = await supabase.from('bd_posts').insert({ author_id, caption: v.caption, tag: 'Update' });
+  const { error } = await supabase.from('bd_posts')
+    .insert({ author_id, caption: v.caption, tag: 'Update', image_path: v.image_path });
   if (error) throw error;
 });
 const LIKE = defineMutation('comm.like', async (v: { postId: string; on: boolean }) => {
@@ -80,7 +100,7 @@ export default function CommunityPage() {
     queryKey: POSTS,
     queryFn: async (): Promise<Post[]> => {
       const { data, error } = await supabase.from('bd_posts')
-        .select('id,author_id,caption,tag,created_at').is('deleted_at', null)
+        .select('id,author_id,caption,tag,image_path,created_at').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(30);
       if (error) throw error;
       return data ?? [];
@@ -127,7 +147,28 @@ export default function CommunityPage() {
   useRealtime('bd_threads', THREADS);
   useRealtime('bd_thread_votes', VOTES);
 
-  const addPost = useMutation<unknown, Error, { caption: string }>({ mutationKey: ADD_POST, onSettled: settle });
+  const addPost = useMutation<unknown, Error, { caption: string; image_path: string | null }>({ mutationKey: ADD_POST, onSettled: settle });
+  const [pending, setPending] = useState<{ path: string; name: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const attach = async (file: File) => {
+    setUploading(true);
+    try {
+      setPending({ path: await uploadTo('bd-feed', file), name: file.name });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const post = () => {
+    const cap = draft.trim();
+    if (!cap && !pending) return;
+    addPost.mutate({ caption: cap || pending!.name, image_path: pending?.path ?? null });
+    setDraft('');
+    setPending(null);
+  };
   const savePost = useMutation<unknown, Error, { postId: string; on: boolean }>({ mutationKey: SAVE_POST, onSettled: settle });
   const reply = useMutation<unknown, Error, { threadId: string; body: string }>({ mutationKey: REPLY, onSettled: settle });
 
@@ -189,12 +230,24 @@ export default function CommunityPage() {
               {initials(me || 'me')}
             </span>
             <input value={draft} onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { addPost.mutate({ caption: draft.trim() }); setDraft(''); } }}
-              placeholder="Share what you are working on"
+              onKeyDown={(e) => e.key === 'Enter' && post()}
+              placeholder={pending ? `Attached ${pending.name}` : 'Share what you are working on'}
               style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: 'var(--tx)' }} />
-            <button onClick={() => { if (draft.trim()) { addPost.mutate({ caption: draft.trim() }); setDraft(''); } }} className="acc"
+
+            <label title="Attach an image" className="hov"
+              style={{
+                flex: 'none', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center',
+                border: `1px solid ${pending ? 'var(--acc)' : 'var(--line2)'}`, cursor: 'pointer',
+                opacity: uploading ? 0.5 : 1,
+              }}>
+              <Icon name="image" size={15} color={pending ? 'var(--accTx)' : 'var(--tx2)'} />
+              <input type="file" accept="image/*" hidden
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = ''; }} />
+            </label>
+
+            <button onClick={post} className="acc"
               style={{ flex: 'none', padding: '8px 16px', borderRadius: 10, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800 }}>
-              Post
+              {uploading ? '…' : 'Post'}
             </button>
           </div>
 
@@ -226,8 +279,7 @@ export default function CommunityPage() {
                     )}
                   </div>
 
-                  {/* Gradient stand-in until real uploads land (README "Assets"). */}
-                  <div style={{ height: 150, background: `linear-gradient(140deg, color-mix(in srgb, ${c} 40%, var(--card2)), var(--card2))` }} />
+                  <PostImage path={p.image_path} tint={c} />
 
                   <div style={{ padding: '12px 13px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 11 }}>
