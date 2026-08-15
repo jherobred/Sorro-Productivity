@@ -10,7 +10,7 @@ export type Prefs = {
   motion: boolean;
   navPicks: string[];
   fabPos: { x: number; y: number } | null;
-  calView: 'week' | 'month' | 'day' | 'countdown';
+  calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
   journalMode: string | null;
 };
 

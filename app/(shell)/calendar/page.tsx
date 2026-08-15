@@ -19,8 +19,8 @@ const SPAN = H1 - H0;          // 15 intervals, 16 labels
 const GRID_H = 760;
 const pct = (hour: number) => ((hour - H0) / SPAN) * 100;
 
-type View = 'week' | 'month' | 'day' | 'countdown';
-const ORDER: View[] = ['month', 'week', 'day', 'countdown'];
+type View = 'week' | 'month' | 'day' | 'agenda' | 'countdown';
+const ORDER: View[] = ['month', 'week', 'day', 'agenda', 'countdown'];
 
 export default function CalendarPage() {
   const { phone } = useLayout();
@@ -100,6 +100,7 @@ export default function CalendarPage() {
       {view === 'month' && (
         <Month ws={ws} events={events} onPickDay={(d) => { setFocusDay(d); setCalView('day'); }} />
       )}
+      {view === 'agenda' && <Agenda ws={ws} events={events} />}
       {view === 'countdown' && <Countdown events={events} A={A} />}
 
       {menu && (
@@ -407,6 +408,52 @@ function Month({ ws, events, onPickDay }: { ws: Date; events: Ev[]; onPickDay: (
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Agenda — one block per day, each row a colour bar, 44px time, title, location. */
+function Agenda({ ws, events }: { ws: Date; events: Ev[] }) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(ws);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  return (
+    <div>
+      {days.map((d) => {
+        const items = events
+          .filter((e) => dayIndex(e.starts_at, ws) === (d.getDay() + 6) % 7)
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+        if (!items.length) return null;
+        const today = d.toDateString() === new Date().toDateString();
+        return (
+          <div key={d.toISOString()} className="lensrow" style={{
+            background: 'var(--card)', borderRadius: 16, padding: '13px 16px',
+            marginBottom: 10, boxShadow: 'var(--sh)',
+            border: `1px solid ${today ? `color-mix(in srgb, ${SECHUE.calendar} 34%, transparent)` : 'var(--line)'}`,
+          }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase',
+              color: today ? SECHUE.calendar : 'var(--tx3)', marginBottom: 6,
+            }}>
+              {d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
+            </div>
+            {items.map((a) => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
+                <span style={{ width: 3, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, background: a.color, flex: 'none' }} />
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 44, fontVariantNumeric: 'tabular-nums' }}>
+                  {hhmm(hoursOf(a.starts_at))}
+                </span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{a.title}</span>
+                <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{a.location}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      {events.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Nothing scheduled this week.</p>}
     </div>
   );
 }
