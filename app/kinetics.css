@@ -251,3 +251,7 @@
           .k-pillrail > .k-pill, .k-underline::after) {
   transition-duration: .01ms;
 }
+
+/* Bars growing from the baseline — the printed-series chart in the Java lab. */
+@keyframes kgrow { from { transform: scaleY(0); transform-origin: bottom; } }
+.nomo [style*="kgrow"] { animation: none !important; }

@@ -38,6 +38,20 @@ const LIST = {
 export function seedDevFixtures() {
   if (!devFixturesOn()) return;
 
+  // Seeded data is stale the moment it lands, so the first refetch would replace
+  // it with the empty result a signed-out Supabase client returns. Freezing the
+  // queries is what makes the preview survive longer than staleTime.
+  queryClient.setDefaultOptions({
+    queries: {
+      ...queryClient.getDefaultOptions().queries,
+      staleTime: Infinity,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: false,
+    },
+  });
+
   queryClient.setQueryData(['lists'], [
     { id: LIST.school, name: 'School', color: '#7C8CFF', position: 0 },
     { id: LIST.personal, name: 'Personal', color: '#FFC24B', position: 1 },
@@ -129,4 +143,58 @@ export function seedDevFixtures() {
   ]);
 
   queryClient.setQueryData(['integrations'], []);
+
+  queryClient.setQueryData(['java_files'], [
+    {
+      id: 'j1', name: 'Fibonacci.java', updated_at: iso(-1, 20),
+      src: `public class Fibonacci {
+    static int fib(int n) {
+        if (n < 2) return n;
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    public static void main(String[] args) {
+        for (int i = 0; i < 12; i++) {
+            System.out.println(fib(i));
+        }
+    }
+}`,
+    },
+    {
+      id: 'j2', name: 'Grades.java', updated_at: iso(-2, 15),
+      src: `public class Grades {
+    public static void main(String[] args) {
+        int[] scores = {88, 94, 71, 65, 100};
+        int total = 0;
+        int best = scores[0];
+
+        for (int s : scores) {
+            total += s;
+            if (s > best) best = s;
+        }
+
+        double avg = (double) total / scores.length;
+        System.out.printf("Average %.2f, best %d%n", avg, best);
+
+        String grade = avg >= 90 ? "A" : avg >= 80 ? "B" : "C";
+        System.out.println("Grade: " + grade);
+    }
+}`,
+    },
+    {
+      id: 'j3', name: 'Main.java', updated_at: iso(0, 11),
+      src: `public class Main {
+    public static void main(String[] args) {
+        String name = "Mika";
+        System.out.println("Hello, " + name + "!");
+
+        int total = 0;
+        for (int i = 1; i <= 10; i++) {
+            total = total + i;
+        }
+        System.out.println("Sum of 1..10 = " + total);
+    }
+}`,
+    },
+  ]);
 }
