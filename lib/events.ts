@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { K } from './pal';
+import { fixture } from './devFixtures';
 
 export type Ev = {
   id: string;
@@ -14,20 +15,55 @@ export type Ev = {
   all_day: boolean;
   location: string;
   color: string;
+  /** 'app' for anything created here; 'gcal_ics' rows are a read-only mirror. */
+  source?: string;
   remind_minutes: number | null;
   snoozed_until: string | null;
   deleted_at: string | null;
 };
 
+/** Synced events belong to the other calendar; editing them here would diverge. */
+export const isReadOnly = (e: Ev) => e.source === 'gcal_ics';
+
 const EVENTS_KEY = ['events'] as const;
 
-/** Monday-start week containing `d`, at local midnight. */
-export function weekStart(d: Date): Date {
+/** Last hour the grid draws. The band is 07:00–22:00 (Basedly.dc.html:4455). */
+export const GRID_START = 7;
+export const GRID_END = 22;
+
+/**
+ * Start of the week containing `d`, at local midnight. Which day that is comes
+ * from the "Week starts on" setting rather than being hardcoded to Monday, so
+ * every view — grid, month, agenda, day strip — rotates together.
+ */
+export function weekStart(d: Date, startsOn: 'mon' | 'sun' = readWeekStart()): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
-  const dow = (x.getDay() + 6) % 7; // 0 = Monday
+  const dow = startsOn === 'sun' ? x.getDay() : (x.getDay() + 6) % 7;
   x.setDate(x.getDate() - dow);
   return x;
+}
+
+/**
+ * Prefs live in localStorage and are read synchronously here on purpose: these
+ * helpers are called from pure layout maths that has no hook context.
+ */
+function readPref<T>(field: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const v = JSON.parse(localStorage.getItem('basedly-prefs') || '{}')[field];
+    return v === undefined ? fallback : (v as T);
+  } catch {
+    return fallback;
+  }
+}
+export const readWeekStart = () => readPref<'mon' | 'sun'>('weekStart', 'mon');
+export const read24h = () => readPref<boolean>('time24', false);
+
+/** Day labels rotated to the user's week start. */
+export function dayLabels(startsOn: 'mon' | 'sun' = readWeekStart()): string[] {
+  const mon = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  return startsOn === 'sun' ? ['Su', ...mon.slice(0, 6)] : mon;
 }
 
 /** Decimal hours since local midnight — the unit the grid lays out in. */
@@ -50,41 +86,98 @@ export function at(ws: Date, day: number, hour: number): string {
   return d.toISOString();
 }
 
-/** 12-hour label with AM/PM — never 24-hour (README "Responsive rules"). */
-export function hhmm(hour: number): string {
+/**
+ * Clock label. 12-hour with AM/PM is the design's default (README "Responsive
+ * rules"), but the time-format setting wins when the user has chosen 24-hour.
+ */
+export function hhmm(hour: number, force24?: boolean): string {
   const h24 = Math.floor(hour);
   const m = Math.round((hour % 1) * 60);
+  if (force24 ?? read24h()) return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   const ampm = h24 >= 12 ? 'PM' : 'AM';
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-export function useEvents(ws: Date) {
+/**
+ * Events in a window of `days` starting at `ws`.
+ *
+ * The window is a parameter because month view needs five or six weeks, not
+ * one: before this, month rendered a whole month but only ever received the
+ * events of a single week, so most of the dots were missing.
+ */
+export function useEvents(ws: Date, days = 7) {
   const from = new Date(ws);
   const to = new Date(ws);
-  to.setDate(to.getDate() + 7);
+  to.setDate(to.getDate() + days);
 
   return useQuery({
-    queryKey: [...EVENTS_KEY, ws.toISOString()],
+    queryKey: [...EVENTS_KEY, ws.toISOString(), days],
     queryFn: async (): Promise<Ev[]> => {
+      // Dev preview: the window is computed, so there is no fixed key to seed.
+      // Compiled out of production along with the rest of devFixtures.
+      const fx = fixture<Ev[]>('events');
+      if (fx) return fx;
+
       const { data, error } = await supabase
         .from('bd_events')
-        .select('id,title,starts_at,ends_at,all_day,location,color,remind_minutes,snoozed_until,deleted_at')
+        .select('id,title,starts_at,ends_at,all_day,location,color,source,remind_minutes,snoozed_until,deleted_at')
         .is('deleted_at', null)
         .gte('starts_at', from.toISOString())
         .lt('starts_at', to.toISOString())
         .order('starts_at');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Ev[];
     },
   });
+}
+
+/**
+ * Runs of the same event on consecutive days — the horizontal chip Google
+ * Calendar draws when a class or standup repeats at the same hour across the
+ * week. Purely a grouping pass over what is already loaded: a repeating event
+ * is still N rows, it is only *drawn* as one bar.
+ */
+export type Span = { key: string; ev: Ev; firstDay: number; days: number; ids: string[] };
+
+export function spanRuns(events: Ev[], ws: Date, dayCount: number): Span[] {
+  const byKey = new Map<string, { day: number; ev: Ev }[]>();
+  for (const e of events) {
+    if (e.all_day) continue;
+    const day = dayIndex(e.starts_at, ws);
+    if (day < 0 || day >= dayCount) continue;
+    // Same title at the same clock time is the same series to a reader.
+    const key = `${e.title}|${hoursOf(e.starts_at).toFixed(2)}|${hoursOf(e.ends_at).toFixed(2)}`;
+    (byKey.get(key) ?? byKey.set(key, []).get(key)!).push({ day, ev: e });
+  }
+
+  const out: Span[] = [];
+  for (const [key, items] of byKey) {
+    items.sort((a, b) => a.day - b.day);
+    let run = [items[0]];
+    const flush = () => {
+      out.push({
+        key: `${key}|${run[0].day}`,
+        ev: run[0].ev,
+        firstDay: run[0].day,
+        days: run.length,
+        ids: run.map((r) => r.ev.id),
+      });
+    };
+    for (let i = 1; i < items.length; i++) {
+      if (items[i].day === run[run.length - 1].day + 1) run.push(items[i]);
+      else { flush(); run = [items[i]]; }
+    }
+    flush();
+  }
+  return out;
 }
 
 /* ---- Mutations (registered so offline writes replay after a restart) ---- */
 
 const CREATE = defineMutation(
   'event.create',
-  async (v: { id: string; title: string; starts_at: string; ends_at: string; color: string }) => {
+  async (v: { id: string; title: string; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
     const user_id = await currentUserId();
     const { error } = await supabase.from('bd_events').insert({ ...v, user_id });
     if (error) throw error;
@@ -134,10 +227,10 @@ export function useEventActions(ws: Date) {
 
   const create = useMutation({
     mutationKey: CREATE,
-    onMutate: (v: { id: string; title: string; starts_at: string; ends_at: string; color: string }) =>
+    onMutate: (v: { id: string; title: string; starts_at: string; ends_at: string; color: string; all_day?: boolean }) =>
       optimistic((prev) => [
         ...prev,
-        { ...v, all_day: false, location: '', remind_minutes: null, snoozed_until: null, deleted_at: null },
+        { ...v, all_day: v.all_day ?? false, location: '', remind_minutes: null, snoozed_until: null, deleted_at: null },
       ]),
     onError: rollback,
     onSettled: settle,
@@ -161,24 +254,33 @@ export function useEventActions(ws: Date) {
     onSettled: settle,
   });
 
-  /** Create a 1-hour event at a grid slot and toast the time. */
-  const addAt = (day: number, hour: number, accent: string) => {
+  /**
+   * Create an event at a grid slot: one hour by default, or the whole day when
+   * called from the all-day tray. The tray used to make a 7:00 timed event
+   * while its tooltip promised an all-day item.
+   */
+  const addAt = (day: number, hour: number, accent: string, allDay = false) => {
     const id = crypto.randomUUID();
     create.mutate({
       id,
-      title: 'New event',
-      starts_at: at(ws, day, hour),
-      ends_at: at(ws, day, hour + 1),
+      title: allDay ? 'All-day item' : 'New event',
+      starts_at: at(ws, day, allDay ? 0 : hour),
+      ends_at: at(ws, day, allDay ? 23.98 : hour + 1),
+      all_day: allDay,
       color: accent,
     });
-    toast(`New event at ${hhmm(hour)}`);
+    toast(allDay ? 'New all-day item' : `New event at ${hhmm(hour)}`);
     return id;
   };
 
-  /** Move by whole days / 30-min steps, clamped to the visible 7:00–21:00 band. */
+  /**
+   * Move by whole days / 30-min steps, clamped to the band the grid draws.
+   * GRID_END is 22, not K.calEndHour (21) — clamping to 21 made the grid's last
+   * row unreachable by drag.
+   */
   const moveTo = (ev: Ev, day: number, hour: number) => {
     const len = hoursOf(ev.ends_at) - hoursOf(ev.starts_at);
-    const h = Math.max(K.calStartHour, Math.min(K.calEndHour - len, hour));
+    const h = Math.max(K.calStartHour, Math.min(GRID_END - len, hour));
     const prevStart = ev.starts_at;
     const prevEnd = ev.ends_at;
     update.mutate({ id: ev.id, patch: { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) } });
@@ -190,7 +292,7 @@ export function useEventActions(ws: Date) {
 
   const resizeTo = (ev: Ev, endHour: number) => {
     const start = hoursOf(ev.starts_at);
-    const h = Math.max(start + 0.5, Math.min(K.calEndHour, endHour));
+    const h = Math.max(start + 0.5, Math.min(GRID_END, endHour));
     const day = dayIndex(ev.starts_at, ws);
     update.mutate({ id: ev.id, patch: { ends_at: at(ws, day, h) } });
   };

@@ -35,6 +35,21 @@ const LIST = {
   errands: '7b6305bb-8174-40ce-a6cb-d6bfbf10d6e3',
 };
 
+/**
+ * Fixture data by key prefix, for queries whose key is computed at call time.
+ *
+ * Pre-seeding the cache covers every fixed key, but a query like
+ * `['events', <week>, <days>]` names a key nobody can predict, and TanStack's
+ * *defaults* cannot help — an explicit queryFn always beats a default one. So
+ * those queryFns ask here first.
+ */
+const store = new Map<string, unknown>();
+
+export function fixture<T>(prefix: string): T | null {
+  if (!devFixturesOn()) return null;
+  return (store.get(prefix) as T | undefined) ?? null;
+}
+
 export function seedDevFixtures() {
   if (!devFixturesOn()) return;
 
@@ -43,6 +58,7 @@ export function seedDevFixtures() {
   // empty result a signed-out client returns. Overriding the *queryFn* for each
   // key means the fixture is the answer however the query is reached.
   const seed = (key: readonly unknown[], data: unknown) => {
+    store.set(String(key[0]), data);
     queryClient.setQueryDefaults(key, {
       queryFn: async () => data,
       staleTime: Infinity,
@@ -66,28 +82,48 @@ export function seedDevFixtures() {
     task('t1', LIST.school, 'Finish CS 191 problem set 4', ymdOf(-4), 'high', 4, 'Sections 3 and 5 only.'),
     task('t2', LIST.school, 'Email Prof. Santos about regrade', ymdOf(-2), 'med', 2),
     task('t3', LIST.errands, 'Return library books', ymdOf(-1), 'low', 0),
-    task('t4', LIST.school, 'Draft thesis outline', ymdOf(0), 'high', 5, 'Three chapters, bullet form.'),
+    { ...task('t4', LIST.school, 'Draft thesis outline', ymdOf(0), 'high', 5, 'Three chapters, bullet form.'), due_at: iso(0, 11) },
     task('t5', LIST.personal, 'Gym — push day', ymdOf(0), 'med', 0),
     task('t6', LIST.school, 'Read Chapter 7 — algorithms', ymdOf(0), 'low', 1),
-    task('t7', LIST.school, 'Capstone group sync notes', ymdOf(1), 'med', 3),
+    { ...task('t7', LIST.school, 'Capstone group sync notes', ymdOf(1), 'med', 3), due_at: iso(1, 17, 30) },
     task('t8', LIST.errands, 'Buy notebook + pens', ymdOf(2), 'low', 0),
     task('t9', LIST.personal, 'Call home', ymdOf(3), 'med', 2),
   ]);
 
-  const ev = (id: string, title: string, d: number, sh: number, sm: number, eh: number, em: number, loc: string, color: string) =>
-    ({ id, title, starts_at: iso(d, sh, sm), ends_at: iso(d, eh, em), all_day: false, location: loc, color, remind_minutes: null, snoozed_until: null, deleted_at: null });
+  const ev = (id: string, title: string, d: number, sh: number, sm: number, eh: number, em: number, loc: string, color: string, source = 'app') =>
+    ({ id, title, starts_at: iso(d, sh, sm), ends_at: iso(d, eh, em), all_day: false, location: loc, color, source, remind_minutes: null, snoozed_until: null, deleted_at: null });
 
-  const ws = new Date();
-  ws.setHours(0, 0, 0, 0);
-  ws.setDate(ws.getDate() - ((ws.getDay() + 6) % 7));
+  // Monday of this week, so day offsets below read as weekdays.
+  const mon = new Date();
+  mon.setHours(0, 0, 0, 0);
+  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+  const off = Math.round((mon.getTime() - new Date().setHours(0, 0, 0, 0)) / 86_400_000);
+  const D = (weekday: number) => off + weekday;   // 0 = Monday
 
-  seed(['events', ws.toISOString()], [
-    ev('e1', 'CS 150 Lecture', 0, 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
-    ev('e2', 'Deep work — thesis outline', 0, 13, 0, 14, 30, 'Library 3F', '#34D9A0'),
-    ev('e3', 'CS 191 Lecture', 0, 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
-    ev('e4', 'Group call — capstone', 0, 19, 30, 20, 30, 'Discord', '#B07CFF'),
-    ev('e5', 'CS 165 Lecture', 1, 10, 0, 11, 30, "Eng'g 210", '#7C8CFF'),
-    ev('e6', 'Gym — pull day', 1, 17, 0, 18, 0, 'UST Gym', '#FF6FA8'),
+  /**
+   * Seeded on the ['events'] prefix so every window — the 7-day grid and the
+   * 42-day month — resolves to the same set; each view filters by day itself.
+   * The three Capstone standups are deliberately consecutive at the same hour,
+   * which is what the spanning-chip grouping pass collapses into one bar.
+   */
+  seed(['events'], [
+    ev('e1', 'CS 150 Lecture', D(0), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
+    ev('e2', 'Math 114', D(0), 13, 0, 14, 30, 'Math 201', '#7C8CFF'),
+    ev('e3', 'Capstone standup', D(2), 7, 30, 8, 30, 'Meet', '#B07CFF'),
+    ev('e4', 'Capstone standup', D(3), 7, 30, 8, 30, 'Meet', '#B07CFF'),
+    ev('e5', 'Capstone standup', D(4), 7, 30, 8, 30, 'Meet', '#B07CFF'),
+    ev('e6', 'Deep work — thesis outline', D(1), 13, 0, 14, 30, 'Library 3F', '#34D9A0'),
+    ev('e7', 'CS 191 Lecture', D(1), 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
+    ev('e8', 'Group call — capstone', D(1), 19, 30, 20, 30, 'Meet', '#B07CFF'),
+    ev('e9', 'CS 165 Lab', D(2), 10, 0, 12, 0, 'CS Lab 2', '#7C8CFF'),
+    ev('e10', 'STS 1', D(2), 16, 0, 17, 30, 'Palma 105', '#7C8CFF'),
+    ev('e11', 'CS 150 Lecture', D(3), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
+    ev('e12', 'Consultation — Prof. Alonzo', D(3), 14, 0, 15, 0, 'Faculty 12', '#FFC24B'),
+    ev('e13', 'CS 191 Lecture', D(4), 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
+    ev('e14', 'CSSS general assembly', D(4), 17, 30, 19, 0, 'AVR', '#B07CFF'),
+    ev('e15', 'Gym with Rene', D(5), 8, 0, 9, 30, 'UP Gym', '#FF6B6B', 'gcal_ics'),
+    { id: 'e16', title: 'STS paper due', starts_at: iso(D(1), 0), ends_at: iso(D(1), 23, 59), all_day: true, location: '', color: '#FF6B6B', source: 'app', remind_minutes: null, snoozed_until: null, deleted_at: null },
+    { id: 'e17', title: 'Math 114 midterm', starts_at: iso(D(4), 0), ends_at: iso(D(4), 23, 59), all_day: true, location: '', color: '#FFC24B', source: 'app', remind_minutes: null, snoozed_until: null, deleted_at: null },
   ]);
 
   seed(['habits'], [
