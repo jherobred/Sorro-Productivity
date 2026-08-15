@@ -26,11 +26,12 @@ const pct = (hour: number) => ((hour - GRID_START) / SPAN) * 100;
 type View = 'month' | 'week' | 'day' | 'agenda' | 'countdown';
 
 /**
- * The zoom ladder. Scrolling moves along it the way Google Earth moves through
- * altitude — one notch, one level. Agenda and countdown are different framings
- * of the same week rather than a zoom level, so they stay button-only.
+ * The zoom ladder, from widest to tightest. Scrolling moves along it the way
+ * Google Earth moves through altitude — one notch, one level. Agenda is the
+ * whole week compressed to a list; countdown is a single event filling the
+ * screen. Both are on the ladder now, so scrolling never dead-ends.
  */
-const LADDER: View[] = ['month', 'week', 'day'];
+const LADDER: View[] = ['agenda', 'month', 'week', 'day', 'countdown'];
 const ZOOM_STEP = 140;      // accumulated wheel delta for one level
 const ZOOM_COOLDOWN = 340;  // ms, so a flick does not fall through three levels
 
@@ -227,34 +228,64 @@ export default function CalendarPage() {
     });
   };
 
+  /**
+   * The phone header is deliberately thin. Day view already highlights the day
+   * you are on and the strip scrolls to any other, so a heading repeating that
+   * date, and a "< Today >" pager for a thing you can just tap, were both
+   * spending scarce vertical space to say what the grid already says.
+   */
+  const showHeading = !phone || view === 'month' || view === 'agenda';
+  const showPager = !phone || view !== 'day';
+
   return (
-    <div style={{ padding: phone ? '10px 14px 24px' : '18px 22px 28px' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: phone ? 20 : 24, fontWeight: 800, letterSpacing: '-.028em' }}>{heading}</h1>
+    <div style={{ padding: phone ? '6px 12px 20px' : '18px 22px 28px' }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: phone ? 9 : 16, flexWrap: 'wrap' }}>
+        {showHeading && (
+          <h1 style={{ fontSize: phone ? 17 : 24, fontWeight: 800, letterSpacing: '-.028em' }}>{heading}</h1>
+        )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          <button onClick={() => shift(-1)} className="hov k-squish" aria-label={`Previous ${view}`}
-            style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34 }}>
-            <Icon name="back" size={15} color="var(--tx2)" />
-          </button>
-          <button onClick={goToday} className="hov k-squish"
-            style={{ padding: '7px 11px', borderRadius: 9, fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 34 }}>
-            Today
-          </button>
-          <button onClick={() => shift(1)} className="hov k-squish" aria-label={`Next ${view}`}
-            style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34, transform: 'rotate(180deg)' }}>
-            <Icon name="back" size={15} color="var(--tx2)" />
+        <div style={{ marginLeft: showHeading ? 'auto' : 0, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', width: showHeading ? undefined : '100%' }}>
+          {showPager && (
+            <>
+              <button onClick={() => shift(-1)} className="hov k-squish" aria-label={`Previous ${view}`}
+                style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34 }}>
+                <Icon name="back" size={15} color="var(--tx2)" />
+              </button>
+              <button onClick={goToday} className="hov k-squish"
+                style={{ padding: '7px 11px', borderRadius: 9, fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 34 }}>
+                Today
+              </button>
+              <button onClick={() => shift(1)} className="hov k-squish" aria-label={`Next ${view}`}
+                style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34, transform: 'rotate(180deg)' }}>
+                <Icon name="back" size={15} color="var(--tx2)" />
+              </button>
+              {!phone && <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 5px' }} />}
+            </>
+          )}
+
+          {/* Lock pins every event where it is — useful once a timetable is set
+              and you are only reading it, especially on a phone where a scroll
+              can be read as a drag. */}
+          <button
+            onClick={() => { void update({ lockEvents: !prefs.lockEvents }); toast(prefs.lockEvents ? 'Events unlocked' : 'Events locked in place'); }}
+            className="hov k-squish" aria-pressed={prefs.lockEvents}
+            title={prefs.lockEvents ? 'Events are locked — tap to allow dragging' : 'Lock events in place'}
+            aria-label={prefs.lockEvents ? 'Unlock events' : 'Lock events in place'}
+            style={{
+              marginLeft: showPager ? 0 : 'auto',
+              width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center',
+              border: `1px solid ${prefs.lockEvents ? 'var(--acc)' : 'var(--line2)'}`,
+              background: prefs.lockEvents ? 'color-mix(in srgb, var(--acc) 18%, transparent)' : 'transparent',
+            }}>
+            <Icon name="lock" size={15} color={prefs.lockEvents ? 'var(--accTx)' : 'var(--tx3)'} />
           </button>
 
-          <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 5px' }} />
-
-          {/* Icon switcher, matching the four-button cluster in the design. */}
-          <div className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)' }}>
+          <div className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', marginLeft: 'auto' }}>
             {(['month', 'week', 'day', 'agenda', 'countdown'] as View[]).map((v) => (
               <button key={v} onClick={() => setCalView(v)} className="k-chip"
                 aria-pressed={view === v} aria-label={v[0].toUpperCase() + v.slice(1)} title={v[0].toUpperCase() + v.slice(1)}
                 style={{
-                  width: 34, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center',
+                  width: phone ? 30 : 34, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center',
                   background: view === v ? 'var(--acc)' : 'transparent',
                 }}>
                 <Icon name={VIEW_ICON[v]} size={15} color={view === v ? 'var(--ink)' : 'var(--tx3)'} />
@@ -263,12 +294,6 @@ export default function CalendarPage() {
           </div>
         </div>
       </header>
-
-      {LADDER.includes(view) && (
-        <p style={{ fontSize: 10.5, color: 'var(--tx3)', margin: '-8px 0 10px' }}>
-          Scroll or pinch over the calendar to zoom between month, week and day.
-        </p>
-      )}
 
       {/* touch-action must leave vertical panning alone: `pan-x` here forbade
           it, so one finger could not scroll the page anywhere over the
@@ -282,7 +307,7 @@ export default function CalendarPage() {
           )}
           {view === 'day' && (
             <>
-              <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} />
+              <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
               <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
                 sel={sel} setSel={setSel} openMenu={openMenu} onSchedule={schedule} />
             </>
@@ -360,7 +385,8 @@ function Grid({
     const origHour = hoursOf(ev.starts_at);
     const origEnd = hoursOf(ev.ends_at);
     const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-    const locked = isReadOnly(ev);
+    // Locked by the toolbar toggle, or read-only because Google owns it.
+    const locked = isReadOnly(ev) || prefs.lockEvents;
     let moved = false;
 
     const timer = window.setTimeout(() => {
@@ -389,7 +415,7 @@ function Grid({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       if (locked) {
-        if (moved) toast('Synced from Google — edit it there');
+        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
         return;
       }
       // Commit on drop, not per frame.
@@ -723,26 +749,80 @@ function NowLine({ ws, days, dayOffset }: { ws: Date; days: number; dayOffset: n
   );
 }
 
-function DayStrip({ ws, focus, onPick }: { ws: Date; focus: number; onPick: (d: number) => void }) {
+/**
+ * A continuous rail of days rather than one fixed week.
+ *
+ * This replaces the "< Today >" pager: scroll sideways to reach next week and
+ * the week after, tap a day to open it. Today carries a filled marker, the
+ * selected day the accent border, and a month divider appears where the month
+ * turns over so a long scroll stays legible.
+ */
+const STRIP_BACK = 7;      // days of history you can scroll back to
+const STRIP_AHEAD = 60;    // ~two months forward
+
+function DayStrip({ ws, focus, onPick, onJump }: {
+  ws: Date; focus: number;
+  onPick: (d: number) => void;
+  onJump: (weekStartDate: Date, dayIndex: number) => void;
+}) {
   const { prefs } = usePrefs();
+  const rail = useRef<HTMLDivElement>(null);
+
+  const selected = useMemo(() => { const d = new Date(ws); d.setDate(d.getDate() + focus); d.setHours(0, 0, 0, 0); return d; }, [ws, focus]);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+
+  const days = useMemo(() => Array.from({ length: STRIP_BACK + STRIP_AHEAD }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - STRIP_BACK + i);
+    return d;
+  }), [today]);
+
+  // Keep the chosen day on screen when it changes from anywhere else.
+  useEffect(() => {
+    rail.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [selected]);
+
   return (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-      {dayLabels(prefs.weekStart).map((d, i) => {
-        const date = new Date(ws);
-        date.setDate(date.getDate() + i);
-        const on = i === focus;
+    <div ref={rail} className="hbar" style={{ display: 'flex', gap: 6, marginBottom: 10, overflowX: 'auto', paddingBottom: 2, scrollSnapType: 'x proximity' }}>
+      {days.map((date, i) => {
+        const on = date.getTime() === selected.getTime();
+        const isToday = date.getTime() === today.getTime();
+        const newMonth = i === 0 || date.getDate() === 1;
         return (
-          <button key={d} onClick={() => onPick(i)} className="tt k-chip"
-            style={{
-              flex: 1, minHeight: 44, borderRadius: 10, padding: '7px 0',
-              border: `1px solid ${on ? SECHUE.calendar : 'var(--line)'}`,
-              background: on ? 'var(--hov)' : 'transparent',
-              color: on ? SECHUE.calendar : 'var(--tx3)',
-              fontSize: 10, fontWeight: 700, letterSpacing: '.06em',
-            }}>
-            {d}
-            <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 2, color: on ? 'var(--tx)' : 'var(--tx2)' }}>{date.getDate()}</div>
-          </button>
+          <div key={date.toISOString()} style={{ display: 'flex', alignItems: 'stretch', gap: 6, flex: 'none' }}>
+            {newMonth && (
+              <span aria-hidden style={{
+                alignSelf: 'center', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
+                color: 'var(--tx3)', writingMode: 'vertical-rl', padding: '2px 0',
+              }}>
+                {date.toLocaleDateString(undefined, { month: 'short' })}
+              </span>
+            )}
+            <button
+              data-sel={on ? '1' : '0'}
+              onClick={() => {
+                const w = weekStart(date, prefs.weekStart);
+                if (w.getTime() === ws.getTime()) onPick(dayIndex(date.toISOString(), w));
+                else onJump(w, dayIndex(date.toISOString(), w));
+              }}
+              className="tt k-chip"
+              aria-current={on ? 'date' : undefined}
+              aria-label={date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+              style={{
+                width: 48, minHeight: 52, borderRadius: 12, padding: '6px 0', flex: 'none', scrollSnapAlign: 'center',
+                border: `1px solid ${on ? SECHUE.calendar : 'var(--line)'}`,
+                background: on ? 'color-mix(in srgb, var(--pal-sky) 14%, transparent)' : 'transparent',
+                color: on ? SECHUE.calendar : 'var(--tx3)',
+                fontSize: 9.5, fontWeight: 700, letterSpacing: '.06em',
+              }}>
+              {dayLabels(prefs.weekStart)[dayIndex(date.toISOString(), weekStart(date, prefs.weekStart))]}
+              <div style={{ fontSize: 14, fontWeight: 800, marginTop: 1, color: on ? 'var(--tx)' : 'var(--tx2)' }}>{date.getDate()}</div>
+              <span aria-hidden style={{
+                display: 'block', width: 4, height: 4, borderRadius: 2, margin: '3px auto 0',
+                background: isToday ? 'var(--pal-coral)' : 'transparent',
+              }} />
+            </button>
+          </div>
         );
       })}
     </div>
