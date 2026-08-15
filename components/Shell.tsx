@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
   { id: 'people', name: 'People', ic: 'people' },
 ];
 
-const BUILT = new Set(['home', 'tasks', 'calendar', 'habits', 'money', 'notebooks', 'people', 'files', 'body', 'projects', 'community', 'profile']);
+const BUILT = new Set(['home', 'tasks', 'calendar', 'habits', 'money', 'notebooks', 'people', 'files', 'body', 'projects', 'community', 'profile', 'more']);
 
 const NAV_PHONE: Section[] = SECTIONS.filter((s) => ['home', 'calendar', 'tasks', 'notebooks'].includes(s.id))
   .concat([{ id: 'more', name: 'More', ic: 'more' }]);
