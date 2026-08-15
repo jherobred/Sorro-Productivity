@@ -145,6 +145,50 @@ export function seedDevFixtures() {
 
   seed(['integrations'], []);
 
+  seed(['notebooks'], [
+    { id: 'nb1', name: '3rd year', color: '#7C8CFF', position: 0 },
+    { id: 'nb2', name: 'Capstone research', color: '#B07CFF', position: 1 },
+  ]);
+  seed(['sections'], [
+    { id: 'sc1', notebook_id: 'nb1', name: 'CS 191', position: 0 },
+    { id: 'sc2', notebook_id: 'nb1', name: 'STS 1', position: 1 },
+    { id: 'sc3', notebook_id: 'nb2', name: 'Reading', position: 0 },
+  ]);
+  seed(['notes'], [
+    { id: 'nt1', section_id: 'sc1', title: 'Sprint planning', body: '', flag: null, position: 0, updated_at: iso(0, 11) },
+    { id: 'nt2', section_id: 'sc1', title: 'Normalisation — 3NF', body: '', flag: null, position: 1, updated_at: iso(0, 13) },
+    { id: 'nt3', section_id: 'sc2', title: 'Ellul reading', body: '', flag: null, position: 0, updated_at: iso(-1, 9) },
+    { id: 'nt4', section_id: 'sc3', title: 'Routing literature', body: '', flag: null, position: 0, updated_at: iso(-2, 15) },
+  ]);
+  const blk = (id: string, note_id: string, kind: string, text: string, position: number, done = false) =>
+    ({ id, note_id, kind, text, done, position });
+  seed(['note_blocks', 'nt1'], [
+    blk('b1', 'nt1', 'h1', 'Sprint planning', 0),
+    blk('b2', 'nt1', 'text', 'Scope is **one corridor**. The network-level evaluation goes in future work — see [[Routing literature]].', 1),
+    blk('b3', 'nt1', 'h2', 'This week', 2),
+    blk('b4', 'nt1', 'todo', 'Rebuild the GTFS import with the 2026 feed', 3, true),
+    blk('b5', 'nt1', 'todo', 'Draft the limitations section', 4),
+    blk('b6', 'nt1', 'todo', 'Book the defence slot — Friday', 5),
+    blk('b7', 'nt1', 'callout', 'Alonzo wants the rubric line quoted verbatim in the limitations.', 6),
+    blk('b8', 'nt1', 'h2', 'Open questions', 7),
+    blk('b9', 'nt1', 'bullet', 'Do we cite the consultation date, or the email?', 8),
+    blk('b10', 'nt1', 'bullet', 'Is 4,318 stops enough for the sample claim?', 9),
+    blk('b11', 'nt1', 'quote', 'Six weeks of GTFS wrangling for one screenshot.', 10),
+    blk('b12', 'nt1', 'code', 'SELECT stop_id, COUNT(*)\nFROM stop_times\nGROUP BY stop_id\nHAVING COUNT(*) > 40;', 11),
+  ]);
+  seed(['note_blocks', 'nt2'], [
+    blk('c1', 'nt2', 'h1', 'Normalisation — 3NF', 0),
+    blk('c2', 'nt2', 'text', 'Third normal form finally clicked. Every non-key column depends on *the key, the whole key, and nothing but the key*.', 1),
+    blk('c3', 'nt2', 'number', 'Remove repeating groups → 1NF', 2),
+    blk('c4', 'nt2', 'number', 'Remove partial dependencies → 2NF', 3),
+    blk('c5', 'nt2', 'number', 'Remove transitive dependencies → 3NF', 4),
+    blk('c6', 'nt2', 'text', 'Related: [[Sprint planning]]', 5),
+  ]);
+  seed(['note_blocks', 'nt3'], [blk('d1', 'nt3', 'text', 'Technique as an autonomous force. Compare with the routing work in [[Sprint planning]].', 0)]);
+  seed(['note_blocks', 'nt4'], [blk('e1', 'nt4', 'text', 'Papers on offline-first transit routing.', 0)]);
+  seed(['backlinks', 'nt1'], [{ id: 'nt2', title: 'Normalisation — 3NF' }, { id: 'nt3', title: 'Ellul reading' }]);
+  seed(['backlinks', 'nt4'], [{ id: 'nt1', title: 'Sprint planning' }]);
+
   seed(['canvases'], [
     { id: 'c1', name: 'Capstone map', color: '#7C6CFF', position: 0, viewport: { x: 40, y: 30, z: 1 }, updated_at: iso(0, 10) },
     { id: 'c2', name: 'Thesis argument', color: '#34D9A0', position: 1, viewport: { x: 0, y: 0, z: 1 }, updated_at: iso(-3, 16) },

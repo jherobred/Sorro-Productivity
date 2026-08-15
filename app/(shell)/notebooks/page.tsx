@@ -9,6 +9,7 @@ import { useNotebooks, useSections, useNotes, useNotebookActions, type Note } fr
 import { JournalTab } from '@/components/NotebookTabs';
 import { JavaLab } from '@/components/JavaLab';
 import { CanvasBoard } from '@/components/CanvasBoard';
+import { NoteEditor } from '@/components/NoteEditor';
 
 /**
  * Ported from Basedly.dc.html — markup 1703–1762, styles 5472–5486 (tab bar +
@@ -22,8 +23,6 @@ const TAB_LABEL: Record<Tab, string> = { notes: 'Notes', journal: 'Journal', can
 const KICKER: React.CSSProperties = {
   fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
 };
-
-const DOC_TOOLS = ['Text', 'H1', 'H2', 'List', 'Todo', 'Quote', 'Callout', 'Divider', 'Code'];
 
 export default function NotebooksPage() {
   const { phone } = useLayout();
@@ -48,6 +47,19 @@ export default function NotebooksPage() {
   const book = notebooks.find((b) => b.id === nbId);
   const sec = mySecs.find((s) => s.id === secId);
   const note = myNotes.find((n) => n.id === noteId) ?? null;
+
+  /**
+   * Open a note wherever it lives. A `[[wiki link]]` can point into another
+   * notebook entirely, so the rails have to follow it — setting noteId alone
+   * would be undone by the effect above the moment the section did not match.
+   */
+  const goToNote = (id: string) => {
+    const target = notes.find((n) => n.id === id);
+    if (!target) return;
+    const section = sections.find((s) => s.id === target.section_id);
+    if (section) { setNbId(section.notebook_id); setSecId(section.id); }
+    setNoteId(id);
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -142,9 +154,17 @@ export default function NotebooksPage() {
             </div>
           )}
 
-          <Doc note={note} phone={phone}
-            notes={myNotes} noteId={noteId} onPickNote={setNoteId}
-            onAddNote={() => secId && A.newNote.mutate({ id: crypto.randomUUID(), section_id: secId, title: 'Untitled' })}
+          <NoteEditor
+            note={note}
+            phone={phone}
+            notes={notes}
+            onPickNote={goToNote}
+            onNewNote={(title) => {
+              if (!secId) return;
+              const id = crypto.randomUUID();
+              A.newNote.mutate({ id, section_id: secId, title });
+              setNoteId(id);
+            }}
             onSave={(p) => note && A.saveNote.mutate({ id: note.id, patch: p })}
             onDelete={() => note && A.removeWithUndo(note)} />
         </div>
@@ -208,103 +228,6 @@ function ChipRow({
       }}>
         <Icon name="plus" size={13} color="var(--tx3)" />
       </button>
-    </div>
-  );
-}
-
-function Doc({
-  note, phone, notes, noteId, onPickNote, onAddNote, onSave, onDelete,
-}: {
-  note: Note | null; phone: boolean;
-  notes: Note[]; noteId: string | null; onPickNote: (id: string) => void; onAddNote: () => void;
-  onSave: (p: Partial<Note>) => void; onDelete: () => void;
-}) {
-  const [title, setTitle] = useState(note?.title ?? '');
-  const [body, setBody] = useState(note?.body ?? '');
-  const [prog, setProg] = useState(0);
-
-  useEffect(() => { setTitle(note?.title ?? ''); setBody(note?.body ?? ''); }, [note?.id, note?.title, note?.body]);
-
-  useEffect(() => {
-    if (!note || (title === note.title && body === note.body)) return;
-    const t = setTimeout(() => onSave({ title, body }), 600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, body]);
-
-  return (
-    <div style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Reading-progress bar pinned to the top of the document. */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0, top: 0, height: 3, zIndex: 4, borderRadius: 2,
-        background: 'rgba(124,108,255,.16)', overflow: 'hidden', pointerEvents: 'none',
-      }}>
-        <div style={{ height: '100%', width: `${prog}%`, borderRadius: 2, background: 'var(--acc)', transition: 'width .12s linear' }} />
-      </div>
-
-      <div
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const max = el.scrollHeight - el.clientHeight;
-          setProg(max > 0 ? Math.round((el.scrollTop / max) * 100) : 0);
-        }}
-        style={{
-          flex: 1, minHeight: 0, overflowY: 'auto',
-          background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)',
-        }}
-      >
-        {phone && (
-          <div className="hbar" style={{
-            display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto',
-            paddingBottom: 10, marginBottom: 12, borderBottom: '1px solid var(--line)',
-          }}>
-            {notes.map((n) => (
-              <button key={n.id} onClick={() => onPickNote(n.id)} style={{
-                flex: 'none', padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
-                border: `1px solid ${n.id === noteId ? 'var(--acc)' : 'var(--line2)'}`,
-                background: n.id === noteId ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
-                color: n.id === noteId ? 'var(--accTx)' : 'var(--tx2)',
-              }}>{n.title}</button>
-            ))}
-            <button onClick={onAddNote} className="hov" title="New note" style={{
-              flex: 'none', width: 24, height: 24, borderRadius: 8, border: '1px dashed var(--line2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon name="plus" size={12} color="var(--tx3)" />
-            </button>
-          </div>
-        )}
-
-        {!note ? (
-          <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: 8 }}>Pick a note, or make one.</div>
-        ) : (
-          <>
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 9, paddingBottom: 12, marginBottom: 16,
-              borderBottom: '2px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx3)',
-            }}>
-              {DOC_TOOLS.map((t) => (
-                <button key={t} className="hov" title={`Insert ${t}`} style={{ padding: '3px 7px', borderRadius: 7 }}>{t}</button>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <input value={title} onChange={(e) => setTitle(e.target.value)}
-                style={{ flex: 1, fontSize: 24, fontWeight: 800, letterSpacing: '-.025em', minWidth: 0, color: 'var(--tx)', overflowWrap: 'anywhere' }} />
-              <button onClick={onDelete} className="hov" title="Delete note" style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="trash" size={14} color="var(--tx3)" />
-              </button>
-            </div>
-
-            <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginBottom: 14 }}>
-              {body.trim() ? `${body.trim().split(/\s+/).length} words` : 'Empty'}
-            </div>
-
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Start writing…"
-              style={{ width: '100%', minHeight: 320, resize: 'vertical', fontSize: 13.5, lineHeight: 1.65, color: 'var(--tx)', fontFamily: 'inherit' }} />
-          </>
-        )}
-      </div>
     </div>
   );
 }
