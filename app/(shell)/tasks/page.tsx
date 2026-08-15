@@ -259,6 +259,7 @@ function TaskRow({
 
   const locked = row.task.stars || 0;
   const shown = starHover || locked;
+  const [popped, setPopped] = useState(0);
 
   return (
     <div className={leaving ? 'leaving' : ''} style={{ position: 'relative', overflow: 'hidden', borderRadius: 0 }}>
@@ -321,9 +322,11 @@ function TaskRow({
             {[1, 2, 3, 4, 5].map((v) => (
               <button
                 key={v}
-                onClick={() => onStar(v)}
+                onClick={() => { onStar(v); setPopped(v); }}
                 onMouseEnter={() => setStarHover({ id: row.task.id, v })}
                 title={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                // starpop fires on the star that just locked in.
+                className={!starHover && popped === v && locked === v ? 'starpop' : undefined}
                 style={{
                   fontSize: 16, lineHeight: 1, padding: '0 1px',
                   color: v <= shown ? (starHover ? accent : 'var(--accTx)') : 'var(--line2)',

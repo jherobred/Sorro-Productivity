@@ -231,11 +231,7 @@ export default function CommunityPage() {
 
                   <div style={{ padding: '12px 13px 13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 11 }}>
-                      <button onClick={() => like.mutate({ postId: p.id, on: !mine })} aria-label="Like"
-                        className={mine ? 'heartpop' : undefined}
-                        style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: mine ? PAL.coral : 'var(--tx2)' }}>
-                        <Icon name="heart" size={15} color={mine ? PAL.coral : 'var(--tx2)'} />{count}
-                      </button>
+                      <LikeButton mine={mine} count={count} onToggle={() => like.mutate({ postId: p.id, on: !mine })} />
                       <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: 'var(--tx2)' }}>
                         <Icon name="chat" size={15} color="var(--tx2)" />0
                       </span>
@@ -294,6 +290,45 @@ export default function CommunityPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Like with the particle burst. The heart pops and eight particles fly out on
+ * the `burst` keyframe, which reads --px/--py per particle (ANNOTATIONS §Feed).
+ */
+function LikeButton({ mine, count, onToggle }: { mine: boolean; count: number; onToggle: () => void }) {
+  const [burst, setBurst] = useState(0);
+
+  const fire = () => {
+    if (!mine) setBurst((n) => n + 1);
+    onToggle();
+  };
+
+  return (
+    <button onClick={fire} aria-label="Like"
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: mine ? PAL.coral : 'var(--tx2)' }}>
+      <span className={mine ? 'heartpop' : undefined} style={{ display: 'flex' }}>
+        <Icon name="heart" size={15} color={mine ? PAL.coral : 'var(--tx2)'} />
+      </span>
+      {count}
+
+      {burst > 0 && (
+        <span key={burst} aria-hidden style={{ position: 'absolute', left: 7, top: 8, width: 0, height: 0, pointerEvents: 'none' }}>
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i / 8) * Math.PI * 2;
+            return (
+              <span key={i} className="burst" style={{
+                position: 'absolute', width: 5, height: 5, borderRadius: '50%',
+                background: i % 2 ? PAL.coral : PAL.pink,
+                ['--px' as string]: `${Math.round(Math.cos(a) * 26)}px`,
+                ['--py' as string]: `${Math.round(Math.sin(a) * 26)}px`,
+              }} />
+            );
+          })}
+        </span>
+      )}
+    </button>
   );
 }
 
