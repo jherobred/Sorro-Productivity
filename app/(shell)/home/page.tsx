@@ -333,25 +333,32 @@ export default function HomePage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {habits.map((h) => {
-                const on = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
+                const tick = ticks.find((t) => t.habit_id === h.id && t.on_date === today);
+                const on = !!tick;
+                // qcLabel: '+' when untracked today, '✓' for binary, else the
+                // formatted value (a count, or h/m for a duration habit).
+                const label = !on ? '+' : h.kind === 'bin' ? '✓' : h.kind === 'dur'
+                  ? `${Math.floor(Number(tick!.value) / 60)}h${Math.round(Number(tick!.value) % 60)}m`
+                  : String(Number(tick!.value));
                 return (
                   <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button
                       onClick={() => HA.tick.mutate({ habitId: h.id, date: today })}
                       className={on ? 'cellpop' : ''}
                       style={{
-                        width: 24, height: 24, borderRadius: 8, flex: 'none',
-                        border: `1.5px solid ${on ? h.color : 'var(--line2)'}`,
-                        background: on ? h.color : 'transparent',
-                        color: '#0C0F16', fontSize: 12, fontWeight: 800,
+                        width: 28, height: 28, borderRadius: 9, flex: 'none',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: on ? 'none' : '1.5px solid var(--line2)',
+                        background: on ? h.color : 'transparent',
+                        color: on ? '#0C0F16' : 'var(--tx3)',
+                        fontSize: 11, fontWeight: 700,
                       }}
                     >
-                      {on ? '✓' : ''}
+                      {label}
                     </button>
                     <div style={{ flex: 1, fontSize: 12.5, fontWeight: 500 }}>{h.name}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: AMBER, fontVariantNumeric: 'tabular-nums' }}>
-                      {streak(ticks, h.id)}
+                      🔥 {streak(ticks, h.id)}
                     </div>
                   </div>
                 );
