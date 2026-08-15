@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
+import { SearchPalette } from './SearchPalette';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -49,6 +50,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [guard, setGuard] = useState<'checking' | 'ok'>('checking');
   const [capture, setCapture] = useState(false);
   const [sheet, setSheet] = useState<CaptureKind | null>(null);
+  const [search, setSearch] = useState(false);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
   const [wsOpen, setWsOpen] = useState(false);
   const [sideMore, setSideMore] = useState(false);
@@ -66,6 +68,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { if (!s) router.replace('/'); });
     return () => sub.subscription.unsubscribe();
   }, [router]);
+
+  // ⌘K / Ctrl-K opens the palette; the search field opens the same surface.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearch(true);
+      }
+      if (e.key === '/' && !/input|textarea/i.test((e.target as HTMLElement)?.tagName ?? '')) {
+        e.preventDefault();
+        setSearch(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     supabase.from('bd_tasks').select('id', { count: 'exact', head: true })
@@ -109,7 +127,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div style={{ padding: '0 12px 12px' }}>
-            <button className="hov" style={{
+            <button onClick={() => setSearch(true)} className="hov" style={{
               display: 'flex', alignItems: 'center', gap: 9, width: '100%', height: 34, padding: '0 11px',
               borderRadius: 9, background: 'var(--card)', border: '1px solid var(--line)',
             }}>
@@ -258,7 +276,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
           <div style={{ height: 54, flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '0 18px', borderBottom: '1px solid var(--line)' }}>
-            <button className="hov" title="Quick actions" style={{
+            <button onClick={() => setSearch(true)} className="hov" title="Quick actions" style={{
               flex: 'none', height: 30, padding: '0 11px', borderRadius: 9, border: '1px solid var(--line2)',
               fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', color: 'var(--tx2)', display: 'flex', alignItems: 'center',
             }}>⌘K</button>
@@ -267,7 +285,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
               display: 'flex', alignItems: 'center', height: 38, width: 38, borderRadius: 19,
               border: '1px solid var(--line2)', background: 'transparent',
             }}>
-              <button style={{ width: 38, height: 38, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => setSearch(true)} aria-label="Search"
+                style={{ width: 38, height: 38, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="search" size={16} color="var(--tx2)" />
               </button>
             </div>
@@ -340,6 +359,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
+      {search && <SearchPalette onClose={() => setSearch(false)} />}
 
       <ToastHost />
     </div>
