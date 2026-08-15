@@ -76,6 +76,16 @@ html, body {
   font-family: Archivo, system-ui, sans-serif;
   overflow: hidden;
 }
+
+/* The rendered prototype inherits these from the Modernist stylesheet its
+   <helmet> loads. The handoff calls that link "inert", but the browser applies
+   it — so the reference screenshots are laid out against a 15px base, not the
+   16px browser default. Match the reference, not the prose. */
+body {
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+}
 /* :root IS <html>, so it has to select itself here — `:root html` matches nothing. */
 html[data-theme='light'],
 html[data-theme='light'] body { background: #E9E7EF; }
