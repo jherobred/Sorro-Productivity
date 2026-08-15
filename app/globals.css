@@ -190,6 +190,28 @@ button, a, input, textarea, .hov, .row, .blk {
 .nomo .halo { animation: none; opacity: .5; }
 .nomo .skq { animation: none; }
 
+/* README: wire reduced motion to BOTH the product setting and the media query.
+   applyPrefs() covers the setting, but it only runs inside the app shell after
+   hydration — this covers sign-in, onboarding, and the pre-hydration frame. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --anim: paused; }
+
+  .pop, .rise, .fade, .sheet, .lens, .lensrow, .pagein {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+    max-height: none !important;
+  }
+  .halo { animation: none !important; opacity: .5; }
+  .skq, .heartpop, .starpop, .cellpop, .burst { animation: none !important; }
+
+  /* Keep colour/state feedback, just make it instant rather than eased. */
+  button, a, input, textarea, .hov, .row, .blk, .tt, .tilt, .tiltup, .pill, .fabi, .flip {
+    transition-duration: .01ms !important;
+  }
+}
+
 /* Native-app niceties: no text selection or tap highlight on chrome, and
    respect the notch. Harmless on the web build. */
 body {
