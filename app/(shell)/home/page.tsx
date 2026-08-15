@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase, currentUserId } from '@/lib/supabase';
+import { queryClient } from '@/lib/offline';
+import { toast } from '@/lib/toast';
 import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
@@ -490,6 +492,21 @@ function Scratchpad({ phone }: { phone: boolean }) {
 
   const shown = filter === 'All' ? notes : notes.filter((n) => n.tag === filter);
 
+  /** "→ Task" promotes a scratch note into the first task list and clears it. */
+  const toTask = async (n: Scratch) => {
+    try {
+      const user_id = await currentUserId();
+      const { data: list } = await supabase.from('bd_lists').select('id').order('position').limit(1).maybeSingle();
+      const { error } = await supabase.from('bd_tasks').insert({ user_id, title: n.text, list_id: list?.id ?? null });
+      if (error) throw error;
+      A.removeWithUndo(n);
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast('Turned into a task');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not create task');
+    }
+  };
+
   return (
     <div style={{ ...CARD, gridColumn: phone ? 'auto' : 'span 2' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
@@ -530,7 +547,7 @@ function Scratchpad({ phone }: { phone: boolean }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {shown.map((n) => <ScratchRow key={n.id} n={n} A={A} />)}
+        {shown.map((n) => <ScratchRow key={n.id} n={n} A={A} onToTask={toTask} />)}
         {shown.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '4px 2px' }}>Nothing kept under this tag yet.</div>
         )}
@@ -539,7 +556,7 @@ function Scratchpad({ phone }: { phone: boolean }) {
   );
 }
 
-function ScratchRow({ n, A }: { n: Scratch; A: ReturnType<typeof useScratchActions> }) {
+function ScratchRow({ n, A, onToTask }: { n: Scratch; A: ReturnType<typeof useScratchActions>; onToTask: (n: Scratch) => void }) {
   const cycleTag = () => {
     const i = SCRATCH_TAGS.indexOf(n.tag as (typeof SCRATCH_TAGS)[number]);
     const next = SCRATCH_TAGS[(i + 1) % SCRATCH_TAGS.length];
@@ -554,22 +571,32 @@ function ScratchRow({ n, A }: { n: Scratch; A: ReturnType<typeof useScratchActio
         <span style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, background: n.color, flex: 'none' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, lineHeight: 1.55, fontWeight: 500, textWrap: 'pretty' }}>{n.text}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          {/* Tag + stamp sit left; the actions are pushed to the right edge,
+              matching the prototype's row (markup 571–577). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <button onClick={cycleTag} title="Change tag"
               style={{
-                padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+                padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 800, flex: 'none',
                 color: n.color, background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
               }}>
               {n.tag}
             </button>
             <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{ago(n.created_at)}</span>
+
+            <button onClick={() => onToTask(n)} className="hov" title="Turn into a task"
+              style={{
+                marginLeft: 'auto', flex: 'none', padding: '4px 9px', borderRadius: 7,
+                border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)',
+              }}>
+              → Task
+            </button>
             <button onClick={() => A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } })}
-              className="hov" title={n.pinned ? 'Unpin' : 'Pin'}
-              style={{ padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
+              className="hov" title={n.pinned ? 'Unpin' : 'Pin to top'}
+              style={{ flex: 'none', padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
               {n.pinned ? '★' : '☆'}
             </button>
             <button onClick={() => A.removeWithUndo(n)} className="hov" title="Delete note"
-              style={{ padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
+              style={{ flex: 'none', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
               <Icon name="trash" size={13} color="var(--tx3)" />
             </button>
           </div>
