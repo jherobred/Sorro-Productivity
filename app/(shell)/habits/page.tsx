@@ -2,120 +2,182 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { SECHUE, PAL } from '@/lib/pal';
-import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit } from '@/lib/habits';
+import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
+import { usePrefs } from '@/lib/prefs';
+import { useLongPress } from '@/lib/useLongPress';
+import { ContextMenu } from '@/components/ContextMenu';
+import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit, type Tick } from '@/lib/habits';
+
+/** Ported from Basedly.dc.html markup 1020–1078; cell grid at 4433 (40px desktop). */
+
+const DAYS_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+const CELL = 40;
+const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
+
+const KIND_LABEL: Record<string, string> = { bin: 'Binary · daily', count: 'Quantity · daily', dur: 'Duration · daily' };
 
 export default function HabitsPage() {
   const { phone } = useLayout();
-  const [span, setSpan] = useState<'week' | 'month'>('week');
-  const days = span === 'week' ? 7 : 28;
+  const { prefs } = usePrefs();
+  const [year, setYear] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const lp = useLongPress();
 
-  const { data: habits = [], isLoading } = useHabits();
+  const days = year ? 365 : 7;
+  const { data: habits = [] } = useHabits();
   const { data: ticks = [] } = useTicks(days);
   const A = useHabitActions(days);
 
-  const grid = lastDays(days);
+  const week = lastDays(7);
   const today = ymd(new Date());
-  const isOn = (h: string, d: string) => ticks.some((t) => t.habit_id === h && t.on_date === d);
+
+  const label = (h: Habit, t: Tick | undefined) =>
+    !t ? '' : h.kind === 'bin' ? '✓'
+      : h.kind === 'dur' ? `${Math.floor(Number(t.value) / 60)}h`
+        : String(Number(t.value));
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.025em' }}>Habits</h1>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-          {(['week', 'month'] as const).map((s) => (
-            <button key={s} onClick={() => setSpan(s)} className="hov"
-              style={{
-                padding: '7px 11px', borderRadius: 9, fontSize: 11.5, fontWeight: 700, minHeight: 34,
-                color: span === s ? SECHUE.habits : 'var(--tx3)',
-                background: span === s ? 'var(--hov)' : undefined,
-              }}>
-              {s[0].toUpperCase() + s.slice(1)}
-            </button>
-          ))}
+    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Habits</div>
+        <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+          {week[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {week[6].toLocaleDateString(undefined, { day: 'numeric', year: 'numeric' })}
         </div>
-      </header>
-
-      {isLoading && <p style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Loading…</p>}
-
-      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, boxShadow: 'var(--sh)', overflow: 'hidden' }}>
-        {habits.map((h, i) => (
-          <div key={h.id} className="lensrow" style={{ padding: '13px 16px', borderBottom: '1px solid var(--line)', animationDelay: `${Math.min(i, 8) * 0.02}s` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: h.color, flex: 'none' }} />
-              <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{h.name}</span>
-
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
-                <Icon name="flame" size={12} color={streak(ticks, h.id) > 0 ? h.color : 'var(--tx3)'} />
-                {streak(ticks, h.id)}
-              </span>
-
-              <button onClick={() => A.removeWithUndo(h)} aria-label={`Delete ${h.name}`} style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
-                <Icon name="trash" size={13} color="var(--tx3)" />
-              </button>
-            </div>
-
-            {/* Heatmap. auto-fit so nothing clips at 360px. */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${span === 'week' ? 7 : 14}, 1fr)`, gap: 4 }}>
-              {grid.map((d) => {
-                const key = ymd(d);
-                const on = isOn(h.id, key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => A.tick.mutate({ habitId: h.id, date: key })}
-                    className={on ? 'cellpop' : undefined}
-                    aria-label={`${h.name} ${key}`}
-                    title={key}
-                    style={{
-                      height: phone ? 26 : 22,
-                      borderRadius: 7,
-                      background: on ? h.color : 'var(--card2)',
-                      border: key === today ? `1px solid ${on ? 'transparent' : h.color}` : '1px solid transparent',
-                      opacity: on ? 1 : 0.75,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-        <AddHabit onAdd={(name, color) => A.create.mutate({ id: crypto.randomUUID(), name, color })} />
+        <button onClick={() => setYear((v) => !v)} className="hov" title="Switch week / year view"
+          style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={year ? 'week' : 'grid'} size={15} color="var(--tx2)" />
+        </button>
+        <button onClick={() => A.create.mutate({ id: crypto.randomUUID(), name: 'New habit', color: PAL.coral })} className="acc"
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
+          <Icon name="plus" size={15} color="#0C0F16" />Add habit
+        </button>
       </div>
-    </div>
-  );
-}
 
-function AddHabit({ onAdd }: { onAdd: (name: string, color: string) => void }) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState<string>(PAL.coral);
-  const swatches = Object.values(PAL);
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {habits.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No habits yet.</div>}
 
-  const submit = () => {
-    const n = name.trim();
-    if (!n) return;
-    onAdd(n, color);
-    setName('');
-  };
+        {habits.map((h) => {
+          const s = streak(ticks, h.id);
+          return (
+            <div key={h.id} style={CARD}
+              onPointerDown={(e) => lp.start(e, 'habit', h.id, h.name)}
+              onContextMenu={(e) => lp.onContextMenu(e, 'habit', h.id, h.name)}>
+              <div style={phone
+                ? { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 13 }
+                : { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 1 auto', minWidth: 0 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: h.color, flex: 'none' }} />
+                  <span title={h.name} style={{
+                    fontSize: phone ? 14.5 : 15, fontWeight: 800, letterSpacing: '-.015em',
+                    minWidth: 0, overflowWrap: 'anywhere',
+                  }}>{h.name}</span>
+                </div>
 
-  return (
-    <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap' }}>
-      <Icon name="plus" size={15} color="var(--tx3)" />
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        placeholder="Add a habit"
-        style={{ flex: 1, minWidth: 120, fontSize: 13.5, color: 'var(--tx)', minHeight: 24 }}
-      />
-      <div style={{ display: 'flex', gap: 5 }}>
-        {swatches.slice(0, 6).map((c) => (
-          <button key={c} onClick={() => setColor(c)} aria-label={`Colour ${c}`}
-            style={{ width: 18, height: 18, borderRadius: 6, background: c, outline: color === c ? '2px solid var(--tx)' : undefined, outlineOffset: 2 }} />
-        ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: phone ? 0 : 'auto' }}>
+                  <span style={{ flex: 'none', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
+                    {KIND_LABEL[h.kind] ?? 'Daily'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#F5B33C', fontVariantNumeric: 'tabular-nums' }}>🔥 {s}</span>
+                  <button onClick={() => setEditing(editing === h.id ? null : h.id)} className="hov" title="Edit habit"
+                    style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="edit" size={14} color="var(--tx2)" />
+                  </button>
+                  <button onClick={() => A.removeWithUndo(h)} className="hov" title="Delete habit"
+                    style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="trash" size={14} color="var(--tx2)" />
+                  </button>
+                </div>
+              </div>
+
+              {editing === h.id && (
+                <div className="rise" style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
+                  padding: '10px 12px', borderRadius: 11, background: 'var(--card2)',
+                }}>
+                  <input defaultValue={h.name}
+                    onBlur={(e) => e.target.value !== h.name && A.rename.mutate({ id: h.id, name: e.target.value })}
+                    style={{ flex: 1, minWidth: 140, fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', padding: '5px 9px', borderRadius: 8, border: '1px solid var(--line2)' }} />
+                  <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--tx2)', flexWrap: 'wrap' }}>
+                    {(['bin', 'count', 'dur'] as const).map((k) => (
+                      <button key={k} onClick={() => A.setKind.mutate({ id: h.id, kind: k })} style={{
+                        padding: '5px 10px', borderRadius: 8,
+                        border: `1px solid ${h.kind === k ? 'var(--acc)' : 'var(--line2)'}`,
+                        color: h.kind === k ? 'var(--accTx)' : 'var(--tx2)',
+                      }}>
+                        {k === 'bin' ? 'Binary' : k === 'count' ? 'Quantity' : 'Duration'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!year ? (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: phone ? 'repeat(7,1fr)' : `repeat(7, ${CELL}px)`,
+                  gap: phone ? 7 : 6,
+                }}>
+                  {week.map((d, i) => {
+                    const key = ymd(d);
+                    const t = ticks.find((x) => x.habit_id === h.id && x.on_date === key);
+                    const on = !!t;
+                    return (
+                      <div key={key}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--tx3)', textAlign: 'center', marginBottom: 4 }}>
+                          {DAYS_SHORT[i]}
+                        </div>
+                        <button
+                          onClick={() => A.tick.mutate({ habitId: h.id, date: key })}
+                          className={on ? 'cellpop' : undefined}
+                          title={key}
+                          style={{
+                            width: '100%', height: phone ? 38 : CELL, borderRadius: 9,
+                            display: 'grid', placeItems: 'center',
+                            background: on ? h.color : 'var(--card2)',
+                            border: key === today ? `1px solid ${on ? 'transparent' : h.color}` : '1px solid transparent',
+                            color: on ? '#0C0F16' : 'var(--tx3)', fontSize: 11, fontWeight: 800,
+                          }}
+                        >
+                          {label(h, t)}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m) => <span key={m}>{m}</span>)}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateRows: 'repeat(7,1fr)', gridAutoFlow: 'column', gridAutoColumns: '1fr', gap: 2 }}>
+                    {lastDays(364).map((d) => {
+                      const key = ymd(d);
+                      const on = ticks.some((x) => x.habit_id === h.id && x.on_date === key);
+                      return <div key={key} title={key} style={{ aspectRatio: '1', borderRadius: 2, background: on ? h.color : 'var(--card2)', opacity: on ? 1 : 0.6 }} />;
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {lp.ctx && (
+        <ContextMenu
+          x={lp.ctx.x} y={lp.ctx.y} kind="habit" label={lp.ctx.label}
+          accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={lp.close}
+          items={[
+            { label: 'Tick today', icon: 'task', run: () => A.tick.mutate({ habitId: lp.ctx!.id, date: today }) },
+            { label: 'Rename', icon: 'edit', run: () => setEditing(lp.ctx!.id) },
+            {
+              label: 'Delete', icon: 'trash', danger: true,
+              run: () => { const h = habits.find((x) => x.id === lp.ctx!.id); if (h) A.removeWithUndo(h); },
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

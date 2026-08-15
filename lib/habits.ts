@@ -106,6 +106,16 @@ const ARCHIVE = defineMutation('habit.archive', async (v: { id: string; at: stri
   if (error) throw error;
 });
 
+const RENAME = defineMutation('habit.rename', async (v: { id: string; name: string }) => {
+  const { error } = await supabase.from('bd_habits').update({ name: v.name }).eq('id', v.id);
+  if (error) throw error;
+});
+
+const SET_KIND = defineMutation('habit.setKind', async (v: { id: string; kind: Habit['kind'] }) => {
+  const { error } = await supabase.from('bd_habits').update({ kind: v.kind }).eq('id', v.id);
+  if (error) throw error;
+});
+
 export function useHabitActions(days: number) {
   const qc = useQueryClient();
   const tKey = [...TICKS_KEY, days];
@@ -139,5 +149,8 @@ export function useHabitActions(days: number) {
     toast(`Deleted “${h.name}”`, () => archive.mutate({ id: h.id, at: null }));
   };
 
-  return { tick, create, archive, removeWithUndo };
+  const rename = useMutation<unknown, Error, { id: string; name: string }>({ mutationKey: RENAME, onSettled: settle });
+  const setKind = useMutation<unknown, Error, { id: string; kind: Habit['kind'] }>({ mutationKey: SET_KIND, onSettled: settle });
+
+  return { tick, create, archive, rename, setKind, removeWithUndo };
 }
