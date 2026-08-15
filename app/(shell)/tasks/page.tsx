@@ -6,6 +6,8 @@ import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useLists, useTasks, useTaskActions, type Task, type List } from '@/lib/tasks';
+import { useLongPress } from '@/lib/useLongPress';
+import { ContextMenu } from '@/components/ContextMenu';
 
 /**
  * Ported from Basedly.dc.html — markup at lines 1081–1189, computed styles at
@@ -55,6 +57,7 @@ export default function TasksPage() {
   const [starHover, setStarHover] = useState<{ id: string; v: number } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const lp = useLongPress();
 
   const byList = new Map(lists.map((l) => [l.id, l]));
 
@@ -168,6 +171,7 @@ export default function TasksPage() {
               onOpen={() => { setDetail(r.task.id); setTsw(null); }}
               onDelete={() => A.removeWithUndo(r.task)}
               onStar={(v) => A.update.mutate({ id: r.task.id, patch: { stars: r.task.stars === v ? 0 : v } })}
+              lp={lp}
             />
           ))}
         </div>
@@ -176,6 +180,23 @@ export default function TasksPage() {
       <div style={{ fontSize: 10.5, color: 'var(--tx3)', padding: '4px 4px 0' }}>
         Swipe a row left to reveal archive, edit and delete.
       </div>
+
+      {lp.ctx && (
+        <ContextMenu
+          x={lp.ctx.x} y={lp.ctx.y} kind="task" label={lp.ctx.label}
+          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          onClose={lp.close}
+          items={[
+            { label: 'Edit', icon: 'edit', run: () => setDetail(lp.ctx!.id) },
+            { label: 'Complete', icon: 'task', run: () => A.complete.mutate({ id: lp.ctx!.id, done: true }) },
+            { label: 'Clear stars', icon: 'star', run: () => A.update.mutate({ id: lp.ctx!.id, patch: { stars: 0 } }) },
+            {
+              label: 'Delete', icon: 'trash', danger: true,
+              run: () => { const t = tasks.find((x) => x.id === lp.ctx!.id); if (t) A.removeWithUndo(t); },
+            },
+          ]}
+        />
+      )}
 
       {detailTask && (
         <TaskDetail
@@ -192,7 +213,7 @@ export default function TasksPage() {
 
 function TaskRow({
   row, phone, accent, leaving, tsw, setTsw, starHover, setStarHover,
-  onCheck, onOpen, onDelete, onStar,
+  onCheck, onOpen, onDelete, onStar, lp,
 }: {
   row: Row;
   phone: boolean;
@@ -206,6 +227,7 @@ function TaskRow({
   onOpen: () => void;
   onDelete: () => void;
   onStar: (v: number) => void;
+  lp: ReturnType<typeof useLongPress>;
 }) {
   const dx = tsw ? tsw.dx : 0;
   const startX = useRef(0);
@@ -218,6 +240,8 @@ function TaskRow({
 
   /** Swipe left to reveal; snaps open past a third of the tray. */
   const onPointerDown = (e: React.PointerEvent) => {
+    // Hold and swipe share this pointerdown; 7px of movement cancels the hold.
+    lp.start(e, 'task', row.task.id, row.task.title);
     startX.current = e.clientX;
     const move = (m: PointerEvent) => {
       const d = Math.max(-TSW, Math.min(0, m.clientX - startX.current));
@@ -256,6 +280,7 @@ function TaskRow({
 
       <div
         onPointerDown={onPointerDown}
+        onContextMenu={(e) => lp.onContextMenu(e, 'task', row.task.id, row.task.title)}
         style={{
           position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 8px',
           background: 'var(--card)', borderBottom: '1px solid var(--line)',
