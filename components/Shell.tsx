@@ -10,6 +10,7 @@ import { SECHUE, PAL } from '@/lib/pal';
 import { supabase } from '@/lib/supabase';
 import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
+import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -47,6 +48,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { prefs, update } = usePrefs();
   const [guard, setGuard] = useState<'checking' | 'ok'>('checking');
   const [capture, setCapture] = useState(false);
+  const [sheet, setSheet] = useState<CaptureKind | null>(null);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
   const [wsOpen, setWsOpen] = useState(false);
   const [sideMore, setSideMore] = useState(false);
@@ -322,6 +324,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Icon name="plus" size={22} color={ON_ACCENT} />
         </button>
       )}
+
+      {/* Capture fan — children stagger out of the FAB (fabi spring). */}
+      {capture && (
+        <div style={{ position: 'fixed', right: phone ? '50%' : 30, bottom: phone ? 152 : 88, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 9, alignItems: phone ? 'center' : 'flex-end', transform: phone ? 'translateX(50%)' : undefined }}>
+          {([['task', 'Task', 'taskPlus'], ['note', 'Note', 'bookPlus'], ['money', 'Expense', 'money']] as [CaptureKind, string, IconName][])
+            .map(([k, label, ic], i) => (
+              <button key={k} className="fabi pop"
+                style={{ animationDelay: `${i * 0.04}s`, display: 'flex', alignItems: 'center', gap: 9, padding: '8px 13px', borderRadius: 22, background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}
+                onClick={() => { setSheet(k); setCapture(false); }}>
+                <Icon name={ic} size={15} color="var(--accTx)" />{label}
+              </button>
+            ))}
+        </div>
+      )}
+
+      {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
 
       <ToastHost />
     </div>
