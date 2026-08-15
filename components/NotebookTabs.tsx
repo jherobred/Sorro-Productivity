@@ -8,6 +8,7 @@ import { defineMutation } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { ymd, lastDays } from '@/lib/habits';
+import { uploadTo, useSignedUrl } from '@/lib/uploads';
 
 /** Journal / Canvas / Java tabs — Basedly.dc.html markup 1822–2101. */
 
@@ -32,7 +33,7 @@ export function JournalTab() {
 
   const { data: entries = [] } = useQuery({
     queryKey: JOURNAL,
-    queryFn: async () => {
+    queryFn: async (): Promise<{ id: string; entry_date: string; text: string }[]> => {
       const from = ymd(lastDays(30)[0]);
       const { data, error } = await supabase.from('bd_journal_entries')
         .select('id,entry_date,text').is('deleted_at', null).gte('entry_date', from);
@@ -93,8 +94,129 @@ export function JournalTab() {
           </div>
         </div>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="How was today?"
-          style={{ flex: 1, minHeight: 260, width: '100%', resize: 'vertical', fontSize: 13.5, lineHeight: 1.7, color: 'var(--tx)', fontFamily: 'inherit' }} />
+          style={{ width: '100%', minHeight: 200, resize: 'vertical', fontSize: 13.5, lineHeight: 1.7, color: 'var(--tx)', fontFamily: 'inherit' }} />
+
+        <JournalPhotos entryId={current?.id ?? null} entryDate={sel} onNeedEntry={() => save.mutate({ entry_date: sel, text })} />
       </div>
+    </div>
+  );
+}
+
+type Photo = { id: string; name: string; storage_path: string; position: number };
+
+/**
+ * Journal photos with annotation pins. Annotation coordinates are stored as
+ * 0–100 percentages (BACKEND.md), so pins stay put at any render size.
+ */
+function JournalPhotos({ entryId, entryDate, onNeedEntry }: { entryId: string | null; entryDate: string; onNeedEntry: () => void }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+
+  const { data: photos = [] } = useQuery({
+    queryKey: ['journal_photos', entryId],
+    enabled: !!entryId,
+    queryFn: async (): Promise<Photo[]> => {
+      const { data, error } = await supabase.from('bd_journal_photos')
+        .select('id,name,storage_path,position').eq('entry_id', entryId!).order('position');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  async function add(file: File) {
+    if (!entryId) { onNeedEntry(); toast('Write something first, then add photos'); return; }
+    setBusy(true);
+    try {
+      const user_id = await currentUserId();
+      const path = await uploadTo('bd-journal', file);
+      const { error } = await supabase.from('bd_journal_photos')
+        .insert({ user_id, entry_id: entryId, name: file.name, storage_path: path, position: photos.length });
+      if (error) throw error;
+      void qc.invalidateQueries({ queryKey: ['journal_photos'] });
+      toast('Photo added');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div style={KICKER}>Photos</div>
+        <label className="hov" title="Add a photo"
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px',
+            borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700,
+            color: 'var(--tx2)', cursor: 'pointer', opacity: busy ? 0.5 : 1,
+          }}>
+          <Icon name="photo" size={13} color="var(--tx2)" />{busy ? 'Uploading…' : 'Add'}
+          <input type="file" accept="image/*" hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void add(f); e.target.value = ''; }} />
+        </label>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8 }}>
+        {photos.map((p) => <JournalPhoto key={p.id} photo={p} open={open === p.id} onOpen={() => setOpen(open === p.id ? null : p.id)} />)}
+        {photos.length === 0 && (
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No photos for {entryDate}.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; onOpen: () => void }) {
+  const url = useSignedUrl('bd-journal', photo.storage_path);
+  const qc = useQueryClient();
+  const [anns, setAnns] = useState<{ id: string; x: number; y: number; text: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    supabase.from('bd_photo_annotations').select('id,x,y,text').eq('photo_id', photo.id)
+      .then(({ data }) => setAnns((data ?? []).map((a) => ({ ...a, x: Number(a.x), y: Number(a.y) }))));
+  }, [open, photo.id]);
+
+  // Click-to-pin: store x/y as percentages so pins survive any resize.
+  const pin = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!open) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = +(((e.clientX - r.left) / r.width) * 100).toFixed(2);
+    const y = +(((e.clientY - r.top) / r.height) * 100).toFixed(2);
+    const text = window.prompt('Note for this spot');
+    if (!text) return;
+    const user_id = await currentUserId();
+    const { error } = await supabase.from('bd_photo_annotations').insert({ user_id, photo_id: photo.id, x, y, text });
+    if (error) return toast(error.message);
+    setAnns((a) => [...a, { id: crypto.randomUUID(), x, y, text }]);
+    void qc.invalidateQueries({ queryKey: ['journal_photos'] });
+  };
+
+  return (
+    <div onClick={onOpen} onDoubleClick={pin} title={open ? 'Double-click to pin a note' : photo.name}
+      style={{
+        position: 'relative', aspectRatio: open ? '16/10' : '1', gridColumn: open ? '1 / -1' : 'auto',
+        borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+        background: 'linear-gradient(140deg, var(--card2), var(--panel))',
+        border: `1px solid ${open ? 'var(--acc)' : 'var(--line)'}`,
+        transition: 'aspect-ratio .3s cubic-bezier(.22,1,.36,1), border-color .24s',
+      }}>
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={photo.name} className="fade"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      )}
+      {open && anns.map((a) => (
+        <span key={a.id} title={a.text} className="pop"
+          style={{
+            position: 'absolute', left: `${a.x}%`, top: `${a.y}%`, transform: 'translate(-50%,-50%)',
+            width: 18, height: 18, borderRadius: '50%', background: 'var(--acc)', color: '#0C0F16',
+            display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 800,
+            boxShadow: '0 2px 8px rgba(0,0,0,.5)',
+          }}>
+          {anns.indexOf(a) + 1}
+        </span>
+      ))}
     </div>
   );
 }
