@@ -12,6 +12,7 @@ import { Icon } from '@/components/Icon';
 import { useHabits, useTicks, useHabitActions, streak, ymd } from '@/lib/habits';
 import { useTransactions, useBudgets, useAccounts, peso } from '@/lib/money';
 import { useScratch, useScratchActions, SCRATCH_TAGS, TAG_COLOR, ago, type Scratch } from '@/lib/scratch';
+import { PhoneHome } from '@/components/PhoneHome';
 
 const AMBER = '#F5B33C';
 const CARD: React.CSSProperties = {
@@ -154,6 +155,9 @@ export default function HomePage() {
     .slice(0, 3);
 
   const greeting = `Good ${tod}${name ? `, ${name}` : ''}`;
+
+  // Phone portrait is its own composition (markup 313–374), not this grid reflowed.
+  if (phone) return <PhoneHome name={name} />;
 
   return (
     <div>
