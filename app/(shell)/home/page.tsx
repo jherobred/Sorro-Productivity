@@ -156,7 +156,7 @@ export default function HomePage() {
   const greeting = `Good ${tod}${name ? `, ${name}` : ''}`;
 
   return (
-    <div style={{ margin: phone ? -14 : -22 }}>
+    <div>
       {/* Hero — the day/night sky band with its drifting gradient and sun blob. */}
       <div style={{
         padding: phone ? '14px 14px 4px' : '20px 24px 6px', position: 'relative', overflow: 'hidden',
