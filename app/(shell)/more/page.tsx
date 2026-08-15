@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from '@/components/Icon';
 import { lg } from '@/lib/glass';
 import { SECHUE, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
+import { useOverlayBack } from '@/lib/nav';
+import { toast } from '@/lib/toast';
 
 /**
  * Ported from Basedly.dc.html markup 639–661 — a 2-up grid of photo tiles,
@@ -24,7 +27,8 @@ const ITEMS: { id: string; n: string; meta: string; ic: IconName }[] = [
 
 export default function MorePage() {
   const router = useRouter();
-  const { prefs } = usePrefs();
+  const { prefs, update } = usePrefs();
+  const [navOpen, setNavOpen] = useState(false);
   const dark = prefs.theme === 'dark';
 
   return (
@@ -84,27 +88,110 @@ export default function MorePage() {
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Settings</div>
-        <Row label={dark ? 'Light mode' : 'Dark mode'} ic="moon" onClick={() => void 0} />
-        <Row label="Customise nav" ic="grid" onClick={() => void 0} />
+        <Row label={dark ? 'Light mode' : 'Dark mode'} ic="moon"
+          onClick={() => void update({ theme: dark ? 'light' : 'dark' })} />
+        <Row label="Customise nav" ic="grid" meta={`${prefs.navPicks.filter((x) => x !== 'more').length} of 4`}
+          onClick={() => setNavOpen(true)} />
       </div>
+
+      {navOpen && <NavPicker onClose={() => setNavOpen(false)} />}
     </div>
   );
 }
 
-function Row({ label, ic, onClick }: { label: string; ic: IconName; onClick: () => void }) {
-  const { prefs, update } = usePrefs();
+function Row({ label, ic, meta, onClick }: { label: string; ic: IconName; meta?: string; onClick: () => void }) {
   return (
-    <button onClick={() => {
-      if (ic === 'moon') update({ theme: prefs.theme === 'dark' ? 'light' : 'dark' });
-      else onClick();
-    }} className="row"
+    <button onClick={onClick} className="row k-squish"
       style={{
         display: 'flex', alignItems: 'center', gap: 11, padding: '12px 13px', borderRadius: 12,
         background: 'var(--card)', border: '1px solid var(--line)', minHeight: 48, textAlign: 'left',
       }}>
       <Icon name={ic} size={15} color={PAL.indigo} />
       <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>{label}</span>
+      {meta && <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{meta}</span>}
       <Icon name="chev" size={13} color="var(--tx3)" />
     </button>
+  );
+}
+
+/** Every section that can hold a slot on the phone tab bar. */
+const NAV_CHOICES: { id: string; n: string; meta: string; ic: IconName }[] = [
+  { id: 'home', n: 'Home', meta: 'Your day at a glance', ic: 'home' },
+  { id: 'calendar', n: 'Calendar', meta: 'Week, month and day', ic: 'cal' },
+  { id: 'tasks', n: 'Tasks', meta: 'Everything due', ic: 'task' },
+  { id: 'notebooks', n: 'Notebooks', meta: 'Notes, journal, canvas, Java', ic: 'book' },
+  ...ITEMS,
+];
+
+/**
+ * Pick which four sections sit on the tab bar. `More` always keeps the fifth
+ * slot and cannot be removed — without it, anything left off the bar would be
+ * unreachable on a phone.
+ */
+function NavPicker({ onClose }: { onClose: () => void }) {
+  const { prefs, update } = usePrefs();
+  useOverlayBack(true, onClose);
+
+  const chosen = prefs.navPicks.filter((id) => id !== 'more');
+
+  const toggle = (id: string) => {
+    const next = chosen.includes(id)
+      ? chosen.filter((x) => x !== id)
+      : chosen.length >= 4 ? chosen : [...chosen, id];
+    if (next.length === 0) { toast('Keep at least one section on the bar'); return; }
+    if (next === chosen) { toast('Four slots is the limit — drop one first'); return; }
+    void update({ navPicks: [...next, 'more'] });
+  };
+
+  return (
+    <div onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Customise nav" className="sheet"
+        style={{
+          width: '100%', maxWidth: 460, maxHeight: '82dvh', overflowY: 'auto',
+          background: 'var(--card)', borderRadius: '16px 16px 0 0', border: '1px solid var(--line2)',
+          padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
+        }}>
+        <h2 style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em' }}>Customise nav</h2>
+        <p style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.6, margin: '5px 0 15px' }}>
+          Choose up to four sections for the tab bar. More always keeps the fifth slot,
+          so nothing you leave off becomes unreachable.
+        </p>
+
+        <div className="k-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {NAV_CHOICES.map((m, i) => {
+            const on = chosen.includes(m.id);
+            return (
+              <button key={m.id} onClick={() => toggle(m.id)} role="checkbox" aria-checked={on} className="row"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 12,
+                  minHeight: 52, textAlign: 'left', '--i': i,
+                  border: `1px solid ${on ? 'var(--acc)' : 'var(--line)'}`,
+                  background: on ? 'color-mix(in srgb, var(--acc) 10%, transparent)' : 'transparent',
+                  opacity: !on && chosen.length >= 4 ? 0.45 : 1,
+                } as React.CSSProperties}>
+                <Icon name={m.ic} size={16} color={on ? 'var(--accTx)' : 'var(--tx3)'} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{m.n}</span>
+                  <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 1 }}>{m.meta}</span>
+                </span>
+                <span aria-hidden style={{
+                  width: 18, height: 18, flex: 'none', borderRadius: 6, display: 'grid', placeItems: 'center',
+                  border: `1.5px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: on ? 'var(--acc)' : 'transparent',
+                }}>
+                  {on && <Icon name="check" size={11} color="var(--ink)" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button onClick={onClose} className="k-squish"
+          style={{ width: '100%', minHeight: 46, marginTop: 16, borderRadius: 12, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800 }}>
+          Done
+        </button>
+      </div>
+    </div>
   );
 }

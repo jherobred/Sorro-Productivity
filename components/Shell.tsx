@@ -46,8 +46,21 @@ const SECTIONS: Section[] = [
 
 const BUILT = new Set(['home', 'tasks', 'calendar', 'habits', 'money', 'notebooks', 'people', 'files', 'body', 'projects', 'community', 'profile', 'more']);
 
-const NAV_PHONE: Section[] = SECTIONS.filter((s) => ['home', 'calendar', 'tasks', 'notebooks'].includes(s.id))
-  .concat([{ id: 'more', name: 'More', ic: 'more' }]);
+const MORE_SECTION: Section = { id: 'more', name: 'More', ic: 'more' };
+
+/**
+ * The phone tab bar, built from the user's picks (More → Customise nav) in the
+ * order they chose. `more` always takes the last slot so anything left off the
+ * bar is still reachable.
+ */
+function navFor(picks: string[]): Section[] {
+  const chosen = picks.filter((id) => id !== 'more');
+  const bar = chosen
+    .map((id) => SECTIONS.find((s) => s.id === id))
+    .filter((s): s is Section => !!s)
+    .slice(0, 4);
+  return [...(bar.length ? bar : SECTIONS.slice(0, 4)), MORE_SECTION];
+}
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -418,7 +431,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         {phone && (
           <BottomNav section={section} go={go} accent={acc} dark={dark} labels={prefs.alwaysShowLabels}
-            onCapture={() => setCapture((c) => !c)} captureOpen={capture} />
+            items={navFor(prefs.navPicks)} />
         )}
       </div>
 
@@ -476,12 +489,11 @@ function OfflinePill() {
 }
 
 function BottomNav({
-  section, go, accent, dark, labels, onCapture, captureOpen,
+  section, go, accent, dark, labels, items,
 }: {
   section: string; go: (id: string) => void; accent: string; dark: boolean; labels: boolean;
-  onCapture: () => void; captureOpen: boolean;
+  items: Section[];
 }) {
-  const half = Math.ceil(NAV_PHONE.length / 2);
   const slot = (s: Section) => {
     const on = s.id === section;
     return (
@@ -505,10 +517,6 @@ function BottomNav({
     );
   };
 
-  void half;
-  void onCapture;
-  void captureOpen;
-
   return (
     // `flex: none` plus the bottom inset keeps the bar on screen whatever the
     // page above it is doing — it is a sibling of the scroller, never inside it.
@@ -524,7 +532,7 @@ function BottomNav({
         {/* The speed-dial FAB used to sit in the middle of this bar, splitting
             the sections either side of it and overhanging the glass. Capture
             lives in the header now, and the five slots share the width evenly. */}
-        {NAV_PHONE.map(slot)}
+        {items.map(slot)}
       </nav>
     </div>
   );

@@ -216,7 +216,7 @@ export default function ProjectsPage() {
           {shown.map((p) => {
             const dragProps = cardDrag.propsFor(p.id);
             return (
-            <button key={p.id} onClick={() => { if (!cardDrag.dragging) { setOpen(p.id); setView('board'); } }}
+            <button key={p.id} onClick={() => { if (cardDrag.wasDrag()) return; setOpen(p.id); setView('board'); }}
               onPointerDown={(e) => { dragProps.onPointerDown(e); lp.start(e, 'project', p.id, p.name); }}
               onContextMenu={(e) => lp.onContextMenu(e, 'project', p.id, p.name)}
               className={`tilt ${dragProps.className}`}

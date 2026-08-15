@@ -40,6 +40,14 @@ export function useDragCard({
 }) {
   const [drag, setDrag] = useState<DragState>(IDLE);
   const settling = useRef(false);
+  /**
+   * Set once a gesture claims the pointer, cleared on the next pointerdown.
+   * `drag` state is no good for this: a spring-back sets it to IDLE
+   * synchronously in pointerup, so by the time the browser dispatches the
+   * `click` that follows, the card looks idle again — and a 60px drag that
+   * correctly sprang back would *also* open the card.
+   */
+  const wasDrag = useRef(false);
 
   const start = (e: React.PointerEvent, id: string) => {
     if (e.button !== 0 || settling.current) return;
@@ -47,6 +55,7 @@ export function useDragCard({
     const sy = e.clientY;
     let claimed = false;
     let vertical = false;
+    wasDrag.current = false;
 
     const onMove = (m: PointerEvent) => {
       const dx = m.clientX - sx;
@@ -57,6 +66,7 @@ export function useDragCard({
         // Whichever axis won the first 8px owns the gesture from then on.
         vertical = Math.abs(dy) > Math.abs(dx);
         claimed = true;
+        wasDrag.current = true;
         if (vertical) { stop(); return; }
       }
 
@@ -120,5 +130,11 @@ export function useDragCard({
     };
   };
 
-  return { drag, propsFor, dragging: drag.id };
+  return {
+    drag,
+    propsFor,
+    dragging: drag.id,
+    /** True if the press that just ended was a drag, not a click. */
+    wasDrag: () => wasDrag.current,
+  };
 }

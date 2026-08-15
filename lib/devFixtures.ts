@@ -190,6 +190,27 @@ export function seedDevFixtures() {
 
   seed(['integrations'], []);
 
+  const proj = (id: string, name: string, tag: string, color: string, progress: number, position: number, deadline: string | null = null) =>
+    ({ id, name, tag, color, progress, position, deadline });
+  seed(['projects'], [
+    proj('p1', 'Capstone — routing app', 'School', '#B07CFF', 45, 0, ymdOf(21)),
+    proj('p2', 'CSSS orientation', 'Org', '#38D6F2', 80, 1),
+    proj('p3', 'Jeepney tracker', 'Side', '#34D9A0', 20, 2),
+    proj('p4', 'OS machine project', 'School', '#7C8CFF', 60, 3, ymdOf(9)),
+    proj('p5', 'Portfolio site', 'Personal', '#FFC24B', 78, 4),
+    proj('p6', 'Thesis reading list', 'Research', '#FF6FA8', 15, 5),
+  ]);
+  seed(['cards'], [
+    { id: 'k1', project_id: 'p1', title: 'GTFS import rewrite', col: 'doing', color: '#B07CFF', position: 0 },
+    { id: 'k2', project_id: 'p1', title: 'Limitations section', col: 'todo', color: '#B07CFF', position: 1 },
+    { id: 'k3', project_id: 'p1', title: 'Book the defence slot', col: 'todo', color: '#FF6B6B', position: 2 },
+    { id: 'k4', project_id: 'p1', title: 'Corridor map export', col: 'done', color: '#34D9A0', position: 3 },
+    { id: 'k5', project_id: 'p2', title: 'Book the AVR', col: 'done', color: '#38D6F2', position: 0 },
+    { id: 'k6', project_id: 'p2', title: 'Print the deck', col: 'doing', color: '#38D6F2', position: 1 },
+    { id: 'k7', project_id: 'p3', title: 'Pick a map tile source', col: 'todo', color: '#34D9A0', position: 0 },
+  ]);
+  seed(['project_comments'], []);
+
   seed(['ranked'], { rp: 1340, peak_rp: 1425, wins: 7, losses: 5, season: 's1' });
   const chal = (
     id: string, name: string, description: string, metric: string, rule: string,
