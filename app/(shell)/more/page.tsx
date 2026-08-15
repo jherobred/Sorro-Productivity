@@ -7,6 +7,7 @@ import { lg } from '@/lib/glass';
 import { SECHUE, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
+import { MAX_NAV_SLOTS } from '@/components/Shell';
 import { toast } from '@/lib/toast';
 
 /**
@@ -90,7 +91,7 @@ export default function MorePage() {
         <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Settings</div>
         <Row label={dark ? 'Light mode' : 'Dark mode'} ic="moon"
           onClick={() => void update({ theme: dark ? 'light' : 'dark' })} />
-        <Row label="Customise nav" ic="grid" meta={`${prefs.navPicks.filter((x) => x !== 'more').length} of 4`}
+        <Row label="Customise nav" ic="grid" meta={`${prefs.navPicks.filter((x) => x !== 'more').length} of ${MAX_PICKS}`}
           onClick={() => setNavOpen(true)} />
       </div>
 
@@ -113,6 +114,9 @@ function Row({ label, ic, meta, onClick }: { label: string; ic: IconName; meta?:
     </button>
   );
 }
+
+/** More always takes the last of the seven slots, so six are user-choosable. */
+const MAX_PICKS = MAX_NAV_SLOTS - 1;
 
 /** Every section that can hold a slot on the phone tab bar. */
 const NAV_CHOICES: { id: string; n: string; meta: string; ic: IconName }[] = [
@@ -137,9 +141,9 @@ function NavPicker({ onClose }: { onClose: () => void }) {
   const toggle = (id: string) => {
     const next = chosen.includes(id)
       ? chosen.filter((x) => x !== id)
-      : chosen.length >= 4 ? chosen : [...chosen, id];
+      : chosen.length >= MAX_PICKS ? chosen : [...chosen, id];
     if (next.length === 0) { toast('Keep at least one section on the bar'); return; }
-    if (next === chosen) { toast('Four slots is the limit — drop one first'); return; }
+    if (next === chosen) { toast(`${MAX_PICKS} slots is the limit — drop one first`); return; }
     void update({ navPicks: [...next, 'more'] });
   };
 
@@ -154,7 +158,8 @@ function NavPicker({ onClose }: { onClose: () => void }) {
         }}>
         <h2 style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em' }}>Customise nav</h2>
         <p style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.6, margin: '5px 0 15px' }}>
-          Choose up to four sections for the tab bar. More always keeps the fifth slot,
+          Choose up to {MAX_PICKS} sections for the tab bar — they compress as you add more,
+          but every one stays a full-height tap target. More always keeps the last slot,
           so nothing you leave off becomes unreachable.
         </p>
 
@@ -168,7 +173,7 @@ function NavPicker({ onClose }: { onClose: () => void }) {
                   minHeight: 52, textAlign: 'left', '--i': i,
                   border: `1px solid ${on ? 'var(--acc)' : 'var(--line)'}`,
                   background: on ? 'color-mix(in srgb, var(--acc) 10%, transparent)' : 'transparent',
-                  opacity: !on && chosen.length >= 4 ? 0.45 : 1,
+                  opacity: !on && chosen.length >= MAX_PICKS ? 0.45 : 1,
                 } as React.CSSProperties}>
                 <Icon name={m.ic} size={16} color={on ? 'var(--accTx)' : 'var(--tx3)'} />
                 <span style={{ flex: 1, minWidth: 0 }}>

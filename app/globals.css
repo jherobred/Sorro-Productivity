@@ -294,3 +294,20 @@ body {
   transition: transform .25s var(--k-expo);
 }
 .skip:focus { transform: none; }
+
+/* The strip that brings the collapsed sidebar back. Invisible until you reach
+   for it, so it never competes with the page. */
+.railpeek > span { opacity: 0; transition: opacity .2s var(--k-expo), transform .3s var(--k-spring); transform: translateX(-6px); }
+.railpeek:hover > span, .railpeek:focus-visible > span { opacity: 1; transform: none; }
+
+/* Collapsible desktop sidebar (Notion's Ctrl+\). Driven by a root class so it
+   repaints with the rest of the chrome, and animated on width because the
+   content beside it genuinely has to reflow into the space. */
+/* Collapsed means the rail leaves the tree, not that it is styled to zero
+   width. Animating a flex item's width out is what a drawer usually does, but
+   here the rail is a flex *item* whose used width refused to follow the
+   cascade, so the reliable version is to unmount it and slide the replacement
+   in. Reopening plays `railin`, which is the same motion the eye expects. */
+.bd-rail { animation: railin .3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes railin { from { width: 0; opacity: .4; } }
+.nomo .bd-rail { animation: none; }

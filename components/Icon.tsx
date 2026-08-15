@@ -87,6 +87,12 @@ export const ICONS = {
   lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3',
   palette: 'M12 3a9 9 0 0 0 0 18 2 2 0 0 0 2-2c0-1.4 1-2 2-2h1a4 4 0 0 0 4-4c0-5-4-10-9-10zM7.5 11h.01M10.5 7.5h.01M15 9h.01',
   hand: 'M9 11V5.5a1.5 1.5 0 0 1 3 0V11M12 11V4.5a1.5 1.5 0 0 1 3 0V11M15 11V6.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6v-3a1.5 1.5 0 0 1 3 0',
+  // The toothed cog everyone recognises as settings. `set` is a thin asterisk
+  // of spokes that reads as a sun or a sparkle at 16px, which is why it kept
+  // being missed.
+  cog: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3 1a7.6 7.6 0 0 0-1.8-1L14.5 2.5h-4l-.8 2.6a7.6 7.6 0 0 0-1.8 1l-2.3-1-2 3.4L5.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7.6 7.6 0 0 0 1.8 1l.8 2.6h4l.8-2.6a7.6 7.6 0 0 0 1.8-1l2.3 1 2-3.4z',
+  collapse: 'M15 4v16M4 5h7M4 12h7M4 19h7M20 4v16',
+  expand: 'M9 4v16M4 5h2M4 12h2M4 19h2M20 4v16M12 9l3 3-3 3',
 } as const;
 
 export type IconName = keyof typeof ICONS;

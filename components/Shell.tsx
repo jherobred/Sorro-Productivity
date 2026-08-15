@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { ToastHost } from './ToastHost';
@@ -55,12 +55,14 @@ const MORE_SECTION: Section = { id: 'more', name: 'More', ic: 'more' };
  * order they chose. `more` always takes the last slot so anything left off the
  * bar is still reachable.
  */
+export const MAX_NAV_SLOTS = 7;
+
 function navFor(picks: string[]): Section[] {
   const chosen = picks.filter((id) => id !== 'more');
   const bar = chosen
     .map((id) => SECTIONS.find((s) => s.id === id))
     .filter((s): s is Section => !!s)
-    .slice(0, 4);
+    .slice(0, MAX_NAV_SLOTS - 1);
   return [...(bar.length ? bar : SECTIONS.slice(0, 4)), MORE_SECTION];
 }
 
@@ -89,6 +91,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useBackGuard();
   // Canvas LMS and Google Calendar pull themselves in; see useAutoSync.
   useAutoSync();
+
+  /**
+   * Ctrl/Cmd+\ collapses the sidebar, the shortcut Notion and VS Code use.
+   *
+   * The pref IS the state — there is no local mirror. Holding both a `railOpen`
+   * useState and `prefs.sidebar` meant an effect syncing one to the other kept
+   * overwriting a fresh toggle with the value still in flight, so every second
+   * press did nothing.
+   */
+  const railOpen = prefs.sidebar !== 'collapsed';
+  const toggleRail = useCallback(
+    (next?: boolean) => void update({ sidebar: (next ?? !railOpen) ? 'open' : 'collapsed' }),
+    [update, railOpen],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault();
+        toggleRail();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleRail]);
   useOverlayBack(capture, () => setCapture(false));
   useOverlayBack(wsOpen, () => setWsOpen(false));
 
@@ -163,10 +190,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
         filter: 'blur(46px)', opacity: dark ? 0.85 : 0.6, zIndex: 0,
       }} />
 
-      {!phone && (
-        <div style={{
+      {!phone && railOpen && (
+        <div className="bd-rail" style={{
           ...lg({ tint: acc, strength: 1, dark }),
-          width: 236, flex: 'none', position: 'relative', zIndex: 2,
+          // Collapsing to 0 rather than to an icon rail: the point of the ask
+          // was writing space in Notebooks, and a 60px strip still eats it. The
+          // hover edge and Ctrl+\\ bring it straight back.
+          // Width lives in the inline style, not a class. The rail is only in
+          // the tree at all when open (see the guard above), so there is no
+          // collapsed state to express in CSS — and an inline value cannot be
+          // out-cascaded by the design system the way the class rule was.
+          width: 236, minWidth: 236,
+          flex: 'none', position: 'relative', zIndex: 2,
           display: 'flex', flexDirection: 'column', padding: '14px 0', overflow: 'hidden',
           border: 0, borderRadius: 0,
           borderRight: `1px solid ${dark ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.9)'}`,
@@ -174,9 +209,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ? 'inset -1px 0 0 rgba(255,255,255,.07), inset 1px 0 0 rgba(255,255,255,.16)'
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px 14px' }}>
-            <div style={{ width: 22, height: 22, background: acc, borderRadius: 6 }} />
-            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em' }}>Basedly</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px 14px 14px' }}>
+            <div style={{ width: 22, height: 22, background: acc, borderRadius: 6, flex: 'none' }} />
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', flex: 1 }}>Basedly</div>
+            <button
+              onClick={() => toggleRail(false)}
+              className="hov k-squish" title="Collapse sidebar (Ctrl+\\)" aria-label="Collapse sidebar"
+              style={{ width: 26, height: 26, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+              <Icon name="collapse" size={15} color="var(--tx3)" />
+            </button>
           </div>
 
           <div style={{ padding: '0 12px 12px' }}>
@@ -214,7 +255,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
                       { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
                       { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
-                      { label: 'Settings', icon: 'set', run: () => setSettings(true) },
+                      { label: 'Settings', icon: 'cog', run: () => setSettings(true) },
                     ],
                   });
                 }}>
@@ -310,7 +351,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </button>
                 <button onClick={() => setSettings(true)} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="set" size={13} color="var(--tx3)" />All settings
+                  <Icon name="cog" size={13} color="var(--tx3)" />All settings
                 </button>
                 <button onClick={() => supabase.auth.signOut()} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
@@ -343,6 +384,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* With the sidebar closed, a hover strip down the left edge floats it
+          back — Notion's behaviour, so the nav is never more than a flick away. */}
+      {!phone && !railOpen && (
+        <button
+          onClick={() => toggleRail(true)}
+          title="Show sidebar (Ctrl+\\)" aria-label="Show sidebar"
+          className="railpeek"
+          style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, zIndex: 5,
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 3,
+          }}>
+          <span style={{
+            width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center',
+            background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--sh)',
+          }}>
+            <Icon name="expand" size={14} color="var(--tx2)" />
+          </span>
+        </button>
       )}
 
       {/* minHeight:0 is load-bearing. A flex item defaults to min-height:auto,
@@ -393,7 +454,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               <button onClick={() => setSettings(true)} className="hov k-squish" title="Settings" aria-label="Settings"
                 style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="set" size={16} color="var(--tx2)" />
+                <Icon name="cog" size={17} color="var(--tx2)" />
               </button>
 
               <button onClick={() => go('profile')} className="k-squish" title="Your profile" aria-label="Your profile"
@@ -403,9 +464,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
 
         {phone && (
-          <div style={{ height: 44, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 18px', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--tx)' }}>
-            <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: 'var(--tx2)' }}>●●● ᯤ ▮</span>
+          // No fake clock or signal bars: the phone already draws its own status
+          // bar directly above this, and duplicating it wasted 44px of a small
+          // screen to say the same thing twice.
+          <div style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 16px' }}>
+            <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em' }}>
+              {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
+            </span>
+            <span style={{ marginLeft: 'auto' }} />
             <NotificationBell compact />
             {/* Capture moved up here when the FAB left the nav bar. */}
             <button onClick={() => setCapture((c) => !c)} className="k-squish" aria-label="Capture" aria-expanded={capture}
@@ -419,7 +485,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </button>
             <button onClick={() => setSettings(true)} className="hov k-squish" aria-label="Settings"
               style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="set" size={15} color="var(--tx2)" />
+              <Icon name="cog" size={16} color="var(--tx2)" />
             </button>
           </div>
         )}
@@ -497,19 +563,28 @@ function BottomNav({
   section: string; go: (id: string) => void; accent: string; dark: boolean; labels: boolean;
   items: Section[];
 }) {
+  /* Seven icons have to fit a 360px phone. The slot compresses with the count
+     but the *button* never goes under 44px tall and stays a full share of the
+     width, so the tap target holds even when the glyph shrinks (WCAG 2.5.5).
+     Labels are dropped past five, where they would truncate to noise. */
+  const n = items.length;
+  const iconSize = n >= 7 ? 15 : n === 6 ? 16 : 17;
+  const showLabels = labels && n <= 5;
+
   const slot = (s: Section) => {
     const on = s.id === section;
     return (
       <button key={s.id} onClick={() => go(s.id)} title={s.name} aria-label={s.name} aria-current={on ? 'page' : undefined}
         className="k-squish"
         style={{
-          flex: 1, minWidth: 0, height: labels ? 52 : 44, borderRadius: 18, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: labels ? 2 : 0,
+          flex: '1 1 0', minWidth: 0, height: showLabels ? 52 : 44,
+          borderRadius: n >= 6 ? 14 : 18, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: showLabels ? 2 : 0,
           background: on ? accent : 'transparent', transition: 'background .24s, height .3s var(--k-expo)',
           opacity: BUILT.has(s.id) ? 1 : 0.45,
         }}>
-        <Icon name={s.ic} size={17} color={on ? ON_ACCENT : 'var(--tx2)'} />
-        {labels ? (
+        <Icon name={s.ic} size={iconSize} color={on ? ON_ACCENT : 'var(--tx2)'} />
+        {showLabels ? (
           <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '.02em', color: on ? ON_ACCENT : 'var(--tx2)', whiteSpace: 'nowrap' }}>
             {s.name}
           </span>
@@ -530,7 +605,7 @@ function BottomNav({
       <nav aria-label="Sections" style={{
         ...lg({ tint: accent, strength: 1.15, radius: 27, dark }),
         position: 'relative', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', gap: 2, padding: '7px 10px',
+        justifyContent: 'space-between', gap: n >= 6 ? 0 : 2, padding: n >= 6 ? '6px 6px' : '7px 10px',
       }}>
         {/* The speed-dial FAB used to sit in the middle of this bar, splitting
             the sections either side of it and overhanging the glass. Capture

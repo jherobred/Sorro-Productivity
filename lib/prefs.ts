@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
 import { DEFAULT_ACCENT } from './pal';
 
@@ -11,6 +11,8 @@ export type Prefs = {
   navPicks: string[];
   fabPos: { x: number; y: number } | null;
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
+  sidebar: 'open' | 'collapsed';
+  lockEvents: boolean;
   journalMode: string | null;
 
   /* Accessibility. Each of these maps to a WCAG success criterion:
@@ -42,6 +44,8 @@ export const DEFAULT_PREFS: Prefs = {
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
   fabPos: null,
   calView: 'week',
+  sidebar: 'open',
+  lockEvents: false,
   journalMode: null,
 
   fontScale: 1,
@@ -91,58 +95,79 @@ export function applyPrefs(p: Prefs) {
   r.setAttribute('data-contrast', p.contrast ?? 'normal');
   r.classList.toggle('ulink', !!p.underlineLinks);
   r.classList.toggle('noglass', !!p.reduceTransparency);
+
+  r.classList.toggle('railshut', p.sidebar === 'collapsed');
+}
+
+/* ------------------------------------------------------------------ store */
+
+/**
+ * Preferences are ONE store, not per-component state.
+ *
+ * Every screen calls usePrefs(), and the previous version gave each caller its
+ * own useState seeded from localStorage. Two things went wrong. Changing a
+ * preference in one component left every other component holding the old value
+ * until it happened to remount. Worse, each copy re-ran applyPrefs() with its
+ * own stale snapshot, so a component re-rendering for an unrelated reason would
+ * quietly undo a root class another component had just set — which is why the
+ * sidebar collapsed and then silently sprang back open.
+ */
+function read(): Prefs {
+  if (typeof window === 'undefined') return DEFAULT_PREFS;
+  try {
+    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
+let state: Prefs = DEFAULT_PREFS;
+let hydrated = false;
+const listeners = new Set<() => void>();
+
+const emit = () => { for (const l of listeners) l(); };
+
+function subscribe(l: () => void) {
+  // The first subscriber hydrates from storage. Doing it lazily rather than at
+  // module scope keeps the server render deterministic.
+  if (!hydrated) {
+    hydrated = true;
+    state = read();
+    applyPrefs(state);
+    void hydrateFromServer();
+  }
+  listeners.add(l);
+  return () => { listeners.delete(l); };
+}
+
+/** Prefs follow the user across devices; the server copy wins once it lands. */
+async function hydrateFromServer() {
+  const uid = await currentUserId().catch(() => null);
+  if (!uid) return;
+  const { data } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+  const remote = data?.prefs as Partial<Prefs> | undefined;
+  if (!remote || Object.keys(remote).length === 0) return;
+  state = { ...DEFAULT_PREFS, ...remote };
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  applyPrefs(state);
+  emit();
+}
+
+export function setPrefs(patch: Partial<Prefs>) {
+  state = { ...state, ...patch };
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  applyPrefs(state);
+  emit();
+  // Fire-and-forget: the local write already happened, so a failed sync costs
+  // nothing the next hydrate will not fix.
+  const snapshot = state;
+  void currentUserId()
+    .then((uid) => supabase.from('bd_profiles').update({ prefs: snapshot }).eq('user_id', uid))
+    .catch(() => { /* signed out */ });
 }
 
 export function usePrefs() {
-  const [prefs, setPrefs] = useState<Prefs>(() => {
-    if (typeof window === 'undefined') return DEFAULT_PREFS;
-    try {
-      return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') };
-    } catch {
-      return DEFAULT_PREFS;
-    }
-  });
-
-  // Reconcile from the server once — prefs follow the user across devices.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const uid = await currentUserId().catch(() => null);
-      if (!uid) return;
-      const { data } = await supabase
-        .from('bd_profiles')
-        .select('prefs')
-        .eq('user_id', uid)
-        .single();
-      if (cancelled || !data?.prefs || Object.keys(data.prefs).length === 0) return;
-      const merged = { ...DEFAULT_PREFS, ...(data.prefs as Partial<Prefs>) };
-      setPrefs(merged);
-      localStorage.setItem(LS_KEY, JSON.stringify(merged));
-      applyPrefs(merged);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    applyPrefs(prefs);
-  }, [prefs]);
-
-  const update = useCallback(async (patch: Partial<Prefs>) => {
-    setPrefs((prev) => {
-      const next = { ...prev, ...patch };
-      localStorage.setItem(LS_KEY, JSON.stringify(next));
-      // Fire-and-forget: local write already happened, so a failed sync
-      // costs nothing the next reconcile will not fix.
-      // Reads the cached id — flipping a switch should not cost an auth round
-      // trip before it even reaches the profile row.
-      void currentUserId()
-        .then((uid) => supabase.from('bd_profiles').update({ prefs: next }).eq('user_id', uid))
-        .catch(() => { /* signed out: the local write already happened */ });
-      return next;
-    });
-  }, []);
-
+  const prefs = useSyncExternalStore(subscribe, () => state, () => DEFAULT_PREFS);
+  const update = useCallback(async (patch: Partial<Prefs>) => setPrefs(patch), []);
   return { prefs, update };
 }

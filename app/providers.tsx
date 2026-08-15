@@ -8,12 +8,20 @@ import { queryClient, persister } from '@/lib/offline';
 import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // The persister needs `window`, so it is null during the static export's
-  // prerender pass. Render children bare until we are on the client.
+  // The *persister* needs `window`, so it is null during the static export's
+  // prerender pass — but the QueryClient itself is fine there, and the shell
+  // now reads queries, so it must always have a provider above it. Rendering
+  // children bare here threw "No QueryClient set" on every prerender.
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
 
-  if (!ready || !persister) return <>{children}</>;
+  if (!ready || !persister) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    );
+  }
 
   // Dev preview: restoring the persisted cache is asynchronous and lands *after*
   // mount effects, so it would overwrite the fixtures with whatever a signed-out
