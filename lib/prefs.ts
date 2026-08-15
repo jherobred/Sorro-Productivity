@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from './supabase';
+import { supabase, currentUserId } from './supabase';
 import { DEFAULT_ACCENT } from './pal';
 
 export type Prefs = {
@@ -107,12 +107,12 @@ export function usePrefs() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
+      const uid = await currentUserId().catch(() => null);
+      if (!uid) return;
       const { data } = await supabase
         .from('bd_profiles')
         .select('prefs')
-        .eq('user_id', auth.user.id)
+        .eq('user_id', uid)
         .single();
       if (cancelled || !data?.prefs || Object.keys(data.prefs).length === 0) return;
       const merged = { ...DEFAULT_PREFS, ...(data.prefs as Partial<Prefs>) };
@@ -135,11 +135,11 @@ export function usePrefs() {
       localStorage.setItem(LS_KEY, JSON.stringify(next));
       // Fire-and-forget: local write already happened, so a failed sync
       // costs nothing the next reconcile will not fix.
-      void supabase.auth.getUser().then(({ data }) => {
-        if (data.user) {
-          void supabase.from('bd_profiles').update({ prefs: next }).eq('user_id', data.user.id);
-        }
-      });
+      // Reads the cached id — flipping a switch should not cost an auth round
+      // trip before it even reaches the profile row.
+      void currentUserId()
+        .then((uid) => supabase.from('bd_profiles').update({ prefs: next }).eq('user_id', uid))
+        .catch(() => { /* signed out: the local write already happened */ });
       return next;
     });
   }, []);

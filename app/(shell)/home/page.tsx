@@ -118,11 +118,12 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: p } = await supabase.from('bd_profiles').select('name').eq('user_id', data.user.id).maybeSingle();
+    void (async () => {
+      const uid = await currentUserId().catch(() => null);
+      if (!uid) return;
+      const { data: p } = await supabase.from('bd_profiles').select('name').eq('user_id', uid).maybeSingle();
       setName((p?.name ?? '').split(' ')[0]);
-    });
+    })();
   }, []);
 
   const open = tasks.filter((t) => !t.done);

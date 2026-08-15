@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, currentUserId } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
@@ -88,16 +88,17 @@ export default function ProfilePage() {
   const [uid, setUid] = useState('');
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      setUid(data.user.id);
+    void (async () => {
+      const id = await currentUserId().catch(() => null);
+      if (!id) return;
+      setUid(id);
       const { data: p } = await supabase.from('bd_profiles')
-        .select('name,handle,bio,course,year,campus,avatar').eq('user_id', data.user.id).maybeSingle();
+        .select('name,handle,bio,course,year,campus,avatar').eq('user_id', id).maybeSingle();
       if (!p) return;
       setName(p.name ?? ''); setHandle(p.handle ?? ''); setBio(p.bio ?? '');
       setCourse([p.course, p.year].filter(Boolean).join(' · ')); setCampus(p.campus ?? '');
       if (p.avatar && Object.keys(p.avatar).length) setAvatar({ ...DEFAULT_AVATAR, ...p.avatar });
-    });
+    })();
   }, []);
 
   const set = (k: AvKey, id: string) => { setAvatar((a) => ({ ...a, [k]: id })); setDirty(true); };

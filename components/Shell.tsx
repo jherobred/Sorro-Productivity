@@ -18,6 +18,8 @@ import { SettingsSheet } from './SettingsSheet';
 import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
+import { useAutoSync } from '@/lib/integrations';
+import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 
 /**
@@ -74,10 +76,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
   const [wsOpen, setWsOpen] = useState(false);
   const [sideMore, setSideMore] = useState(false);
-  const [taskCount, setTaskCount] = useState<number | null>(null);
   const [settings, setSettings] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
   const [workspace, setWorkspace] = useState('Personal');
+  const { data: tasks = [] } = useTasks();
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
   const dark = prefs.theme === 'dark';
@@ -85,6 +87,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   // Back — mouse side button, browser gesture, Android key — stays inside the app.
   useBackGuard();
+  // Canvas LMS and Google Calendar pull themselves in; see useAutoSync.
+  useAutoSync();
   useOverlayBack(capture, () => setCapture(false));
   useOverlayBack(wsOpen, () => setWsOpen(false));
 
@@ -119,11 +123,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    supabase.from('bd_tasks').select('id', { count: 'exact', head: true })
-      .is('deleted_at', null).eq('done', false)
-      .then(({ count }) => setTaskCount(count ?? 0));
-  }, [pathname]);
+  // The sidebar badge reads the tasks already in cache. It used to fire a
+  // count query against Supabase on every single navigation — a network round
+  // trip per page change, for a number the app was holding all along.
+  const taskCount = tasks.filter((t) => !t.done && !t.deleted_at).length;
 
   if (guard === 'checking') return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
 
@@ -226,7 +229,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               const hue = SECHUE[sec.id] || acc;
               const hasKids = !!sec.kids;
               const open = hasKids && openKids[sec.id] !== false && openKids[sec.id] !== undefined;
-              const badge = sec.id === 'tasks' && taskCount !== null ? String(taskCount) : sec.badge ?? '';
+              const badge = sec.id === 'tasks' && taskCount > 0 ? String(taskCount) : sec.badge ?? '';
               return (
                 <div key={sec.id}>
                   <div className="hov" style={{

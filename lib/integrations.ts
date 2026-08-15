@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation } from './offline';
@@ -71,6 +72,63 @@ export async function runSync(kind: Integration['kind']): Promise<SyncResult> {
     return { ok: false, imported: 0, message };
   }
   return data ?? { ok: false, imported: 0, message: 'No response' };
+}
+
+const AUTO_SYNC_MS = 30 * 60_000;   // half an hour is plenty for a class timetable
+
+/**
+ * Keep connected integrations fresh without anyone pressing anything.
+ *
+ * Mounted once by the Shell. Syncs on open when the last run is stale, then on
+ * an interval, and again whenever the tab regains focus after a while — the
+ * common case being a phone coming out of a pocket between classes.
+ */
+export function useAutoSync() {
+  const qc = useQueryClient();
+  const { data: rows = [] } = useIntegrations();
+  const running = useRef(false);
+
+  const active = rows.filter((r) => r.enabled).map((r) => r.kind).join(',');
+
+  useEffect(() => {
+    if (!active) return;
+
+    const due = () => rows.filter((r) => {
+      if (!r.enabled) return false;
+      if (!r.last_sync_at) return true;                    // never synced
+      return Date.now() - new Date(r.last_sync_at).getTime() > AUTO_SYNC_MS;
+    });
+
+    const run = async () => {
+      if (running.current || document.hidden) return;
+      const todo = due();
+      if (!todo.length) return;
+      running.current = true;
+      try {
+        // Sequential on purpose: two Edge Function invocations at once from a
+        // phone on campus wifi is how you get one of them timing out.
+        for (const r of todo) await runSync(r.kind);
+        for (const k of ['tasks', 'events', 'notifications', 'integrations']) {
+          void qc.invalidateQueries({ queryKey: [k] });
+        }
+      } finally {
+        running.current = false;
+      }
+    };
+
+    void run();
+    const timer = setInterval(() => void run(), AUTO_SYNC_MS);
+    const onFocus = () => void run();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+    // `active` is the stable signal — `rows` is a new array on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 }
 
 export function useIntegrationActions() {

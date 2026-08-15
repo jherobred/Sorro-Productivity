@@ -92,7 +92,7 @@ export default function CommunityPage() {
   const [tab, setTab] = useState<Tab>('feed');
   const [me, setMe] = useState<string>('');
 
-  useEffect(() => { supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? '')); }, []);
+  useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
 
   const qc = useQueryClient();
   const settle = () => { for (const k of [POSTS, LIKES, THREADS, VOTES, CHALS]) void qc.invalidateQueries({ queryKey: k }); };

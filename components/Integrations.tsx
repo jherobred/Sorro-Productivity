@@ -69,10 +69,24 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
 
   const complete = spec.fields.every((f) => (draft[f.key] ?? '').trim());
 
+  /**
+   * Connecting runs the first sync straight away.
+   *
+   * Saving the config and then waiting for the user to find "Sync now" is what
+   * shipped, and it meant a correctly-connected account showed nothing at all:
+   * last_sync_at stayed null and not one row was imported. Connecting *is* the
+   * request for the data.
+   */
   const save = () => {
     A.save.mutate(
       { kind: spec.kind, config: draft, enabled: true },
-      { onSuccess: () => { setOpen(false); toast(`${spec.name} connected`); } },
+      {
+        onSuccess: async () => {
+          setOpen(false);
+          toast(`${spec.name} connected — syncing…`);
+          await sync();
+        },
+      },
     );
   };
 
