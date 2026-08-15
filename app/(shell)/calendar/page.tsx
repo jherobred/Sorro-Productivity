@@ -213,7 +213,14 @@ function Grid({
   return (
     <div style={{ display: 'flex', background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
       {/* hour axis — labels sit on the rule, centred by translateY(-50%) */}
-      <div style={{ width: 52, flex: 'none', position: 'relative', height: GRID_H, marginTop: 30 }}>
+      <div style={{ width: 52, flex: 'none', position: 'relative', height: GRID_H, marginTop: 64 }}>
+        <div style={{
+          position: 'absolute', top: -34, right: 0, left: 0, height: 34,
+          fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+          color: 'var(--tx3)', padding: '6px 7px 0', textAlign: 'right',
+        }}>
+          All-day
+        </div>
         {hours.map((h, i) => (
           <div key={h} style={{
             position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`, transform: 'translateY(-50%)',
@@ -236,6 +243,27 @@ function Grid({
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: today ? SECHUE.calendar : 'var(--tx3)' }}>
                 {DAYS_SHORT[idx]} <span style={{ opacity: .7 }}>{d.getDate()}</span>
               </div>
+            );
+          })}
+        </div>
+
+        {/* all-day strip — 2px rule under it, 34px minimum */}
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--line2)', minHeight: 34 }}>
+          {Array.from({ length: days }, (_, i) => {
+            const idx = days === 1 ? dayOffset : i;
+            const allDay = events.filter((e) => e.all_day && dayIndex(e.starts_at, ws) === idx);
+            return (
+              <button key={i} onClick={() => A.addAt(idx, K.calStartHour, prefs.accent)} className="hov"
+                title="Add an all-day item"
+                style={{ flex: 1, minWidth: 0, padding: '5px 3px', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined, textAlign: 'left' }}>
+                {allDay.map((e) => (
+                  <div key={e.id} style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, marginBottom: 2,
+                    background: `color-mix(in srgb, ${e.color} 26%, var(--card))`, color: 'var(--tx)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{e.title}</div>
+                ))}
+              </button>
             );
           })}
         </div>
