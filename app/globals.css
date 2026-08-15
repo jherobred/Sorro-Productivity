@@ -194,20 +194,24 @@ button, a, input, textarea, .hov, .row, .blk {
    applyPrefs() covers the setting, but it only runs inside the app shell after
    hydration — this covers sign-in, onboarding, and the pre-hydration frame. */
 @media (prefers-reduced-motion: reduce) {
-  :root { --anim: paused; }
+  /* Guarded on data-motion="on": once the user has explicitly enabled motion in
+     the app, their choice wins and the OS hint stops applying. Without this
+     guard a machine with animation effects turned off flattens the entire
+     design, which is not what the product setting means. */
+  :root:not([data-motion='on']) { --anim: paused; }
 
-  .pop, .rise, .fade, .sheet, .lens, .lensrow, .pagein {
+  :root:not([data-motion='on']) :is(.pop, .rise, .fade, .sheet, .lens, .lensrow, .pagein) {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
     clip-path: none !important;
     max-height: none !important;
   }
-  .halo { animation: none !important; opacity: .5; }
-  .skq, .heartpop, .starpop, .cellpop, .burst { animation: none !important; }
+  :root:not([data-motion='on']) .halo { animation: none !important; opacity: .5; }
+  :root:not([data-motion='on']) :is(.skq, .heartpop, .starpop, .cellpop, .burst) { animation: none !important; }
 
   /* Keep colour/state feedback, just make it instant rather than eased. */
-  button, a, input, textarea, .hov, .row, .blk, .tt, .tilt, .tiltup, .pill, .fabi, .flip {
+  :root:not([data-motion='on']) :is(button, a, input, textarea, .hov, .row, .blk, .tt, .tilt, .tiltup, .pill, .fabi, .flip) {
     transition-duration: .01ms !important;
   }
 }

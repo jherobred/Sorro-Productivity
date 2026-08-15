@@ -324,8 +324,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
+        {/* Content is capped and centred: the design was drawn against a ~986px
+            frame, so letting it span a 1900px monitor stretches the flexible
+            middle column far past its intended proportions. */}
         <div key={pathname} className="pagein" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
-          {children}
+          <div style={{ maxWidth: 1180, margin: '0 auto', minHeight: '100%' }}>
+            {children}
+          </div>
         </div>
 
         {phone && <BottomNav section={section} go={go} accent={acc} dark={dark} onCapture={() => setCapture((c) => !c)} captureOpen={capture} />}

@@ -29,7 +29,9 @@ r.setAttribute('data-theme',p.theme==='light'?'light':'dark');
 if(p.accent){r.style.setProperty('--acc',p.accent);
 r.style.setProperty('--accTx','color-mix(in srgb, '+p.accent+(p.theme==='light'?' 62%, #1C1A26)':' 82%, #FFFFFF)'));
 r.style.setProperty('--gl2','color-mix(in srgb, '+p.accent+' 55%, transparent)');}
-if(p.motion===false){r.style.setProperty('--anim','paused');r.classList.add('nomo');}
+var mo=p.motion!==false;
+r.setAttribute('data-motion',mo?'on':'off');
+if(!mo){r.style.setProperty('--anim','paused');r.classList.add('nomo');}
 }catch(e){}})();`,
           }}
         />

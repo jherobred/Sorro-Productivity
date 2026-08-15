@@ -37,9 +37,13 @@ export function applyPrefs(p: Prefs) {
   );
   r.style.setProperty('--gl2', `color-mix(in srgb, ${p.accent} 55%, transparent)`);
 
-  // Motion is a product setting, not just a media query — it freezes every
-  // infinite loop (--anim) and nulls entrance animations (.nomo).
-  const reduced = !p.motion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Motion is a first-class product setting, so the user's choice wins over the
+  // OS hint. `prefers-reduced-motion` only decides the *default* (see
+  // DEFAULT_PREFS); once motion is on, we animate even if the OS asks not to —
+  // otherwise a machine with animation effects disabled (common on Windows)
+  // silently flattens the whole design.
+  const reduced = !p.motion;
+  r.setAttribute('data-motion', p.motion ? 'on' : 'off');
   r.style.setProperty('--anim', reduced ? 'paused' : 'running');
   r.classList.toggle('nomo', reduced);
 }
