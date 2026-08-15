@@ -6,8 +6,9 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useNotebooks, useSections, useNotes, useNotebookActions, type Note } from '@/lib/notebooks';
-import { JournalTab, CanvasTab } from '@/components/NotebookTabs';
+import { JournalTab } from '@/components/NotebookTabs';
 import { JavaLab } from '@/components/JavaLab';
+import { CanvasBoard } from '@/components/CanvasBoard';
 
 /**
  * Ported from Basedly.dc.html — markup 1703–1762, styles 5472–5486 (tab bar +
@@ -150,7 +151,7 @@ export default function NotebooksPage() {
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: phone ? '0 14px 20px' : '0 22px 20px' }}>
           {tab === 'journal' && <JournalTab />}
-          {tab === 'canvas' && <CanvasTab />}
+          {tab === 'canvas' && <CanvasBoard />}
           {tab === 'code' && <JavaLab />}
         </div>
       )}

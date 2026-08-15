@@ -15,7 +15,7 @@ import { SearchPalette } from './SearchPalette';
 import { NotificationBell } from './NotificationBell';
 import { SettingsSheet } from './SettingsSheet';
 import { ContextMenu, type CtxItem } from './ContextMenu';
-import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
+import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 
@@ -77,8 +77,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Dev-only preview. `NODE_ENV` is inlined at build time, so this whole
     // branch is stripped from production bundles — it cannot be enabled by an
-    // env var on the deployed site.
-    if (devFixturesOn()) { seedDevFixtures(); setGuard('ok'); return; }
+    // env var on the deployed site. Providers does the seeding; this just skips
+    // the auth gate.
+    if (devFixturesOn()) { setGuard('ok'); return; }
 
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) router.replace('/');

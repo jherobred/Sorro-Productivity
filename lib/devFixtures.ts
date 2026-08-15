@@ -38,21 +38,22 @@ const LIST = {
 export function seedDevFixtures() {
   if (!devFixturesOn()) return;
 
-  // Seeded data is stale the moment it lands, so the first refetch would replace
-  // it with the empty result a signed-out Supabase client returns. Freezing the
-  // queries is what makes the preview survive longer than staleTime.
-  queryClient.setDefaultOptions({
-    queries: {
-      ...queryClient.getDefaultOptions().queries,
+  // Pre-seeding the cache alone is not enough: a component that mounts before
+  // the seed, or any refetch that slips through, would hit Supabase and get the
+  // empty result a signed-out client returns. Overriding the *queryFn* for each
+  // key means the fixture is the answer however the query is reached.
+  const seed = (key: readonly unknown[], data: unknown) => {
+    queryClient.setQueryDefaults(key, {
+      queryFn: async () => data,
       staleTime: Infinity,
-      refetchOnMount: false,
+      retry: false,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      retry: false,
-    },
-  });
+    });
+    queryClient.setQueryData(key, data);
+  };
 
-  queryClient.setQueryData(['lists'], [
+  seed(['lists'], [
     { id: LIST.school, name: 'School', color: '#7C8CFF', position: 0 },
     { id: LIST.personal, name: 'Personal', color: '#FFC24B', position: 1 },
     { id: LIST.errands, name: 'Errands', color: '#34D9A0', position: 2 },
@@ -61,7 +62,7 @@ export function seedDevFixtures() {
   const task = (id: string, list: string, title: string, due: string, priority: string, stars: number, notes = '') =>
     ({ id, list_id: list, title, notes, done: false, due_on: due, priority, stars, position: 0, deleted_at: null });
 
-  queryClient.setQueryData(['tasks'], [
+  seed(['tasks'], [
     task('t1', LIST.school, 'Finish CS 191 problem set 4', ymdOf(-4), 'high', 4, 'Sections 3 and 5 only.'),
     task('t2', LIST.school, 'Email Prof. Santos about regrade', ymdOf(-2), 'med', 2),
     task('t3', LIST.errands, 'Return library books', ymdOf(-1), 'low', 0),
@@ -80,7 +81,7 @@ export function seedDevFixtures() {
   ws.setHours(0, 0, 0, 0);
   ws.setDate(ws.getDate() - ((ws.getDay() + 6) % 7));
 
-  queryClient.setQueryData(['events', ws.toISOString()], [
+  seed(['events', ws.toISOString()], [
     ev('e1', 'CS 150 Lecture', 0, 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
     ev('e2', 'Deep work — thesis outline', 0, 13, 0, 14, 30, 'Library 3F', '#34D9A0'),
     ev('e3', 'CS 191 Lecture', 0, 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
@@ -89,7 +90,7 @@ export function seedDevFixtures() {
     ev('e6', 'Gym — pull day', 1, 17, 0, 18, 0, 'UST Gym', '#FF6FA8'),
   ]);
 
-  queryClient.setQueryData(['habits'], [
+  seed(['habits'], [
     { id: 'h1', name: 'Read 20 pages', color: '#FF6B6B', kind: 'bin', target: null, position: 0, archived_at: null },
     { id: 'h2', name: 'Drink 8 glasses', color: '#38D6F2', kind: 'bin', target: null, position: 1, archived_at: null },
     { id: 'h3', name: 'No phone before bed', color: '#B07CFF', kind: 'bin', target: null, position: 2, archived_at: null },
@@ -98,42 +99,42 @@ export function seedDevFixtures() {
   for (let g = 0; g <= 5; g++) ticks.push({ habit_id: 'h1', on_date: ymdOf(-g), value: 1 });
   for (let g = 1; g <= 9; g++) if (g !== 4) ticks.push({ habit_id: 'h2', on_date: ymdOf(-g), value: 1 });
   for (let g = 0; g <= 12; g++) if (g % 3) ticks.push({ habit_id: 'h3', on_date: ymdOf(-g), value: 1 });
-  for (const d of [7, 30, 365]) queryClient.setQueryData(['habit_ticks', d], ticks);
+  for (const d of [7, 30, 365]) seed(['habit_ticks', d], ticks);
 
-  queryClient.setQueryData(['scratch'], [
+  seed(['scratch'], [
     { id: 's1', text: 'Ask about the thesis template margins', tag: 'Note', color: '#38D6F2', pinned: true, position: 0, created_at: iso(0, 9) },
     { id: 's2', text: 'Bus leaves at 6:40, not 6:50', tag: 'Idea', color: '#FFC24B', pinned: false, position: 1, created_at: iso(-1, 11) },
     { id: 's3', text: 'Library closes early on Fridays', tag: 'Todo', color: '#34D9A0', pinned: false, position: 2, created_at: iso(-2, 14) },
   ]);
 
-  queryClient.setQueryData(['accounts'], [
+  seed(['accounts'], [
     { id: 'a1', name: 'Cash', kind: 'cash', color: '#34D9A0' },
     { id: 'a2', name: 'Maribank', kind: 'ewallet', color: '#7C8CFF' },
   ]);
-  queryClient.setQueryData(['budgets'], [
+  seed(['budgets'], [
     { id: 'b1', category: 'Food', period: 'monthly', amount_centavos: 600000 },
     { id: 'b2', category: 'Transport', period: 'monthly', amount_centavos: 200000 },
   ]);
-  queryClient.setQueryData(['transactions'], [
+  seed(['transactions'], [
     { id: 'x1', account_id: 'a1', name: 'Jeepney fare', amount_centavos: 2400, category: 'Transport', occurred_at: iso(-1, 8), deleted_at: null },
     { id: 'x2', account_id: 'a1', name: 'Lunch — canteen', amount_centavos: 9500, category: 'Food', occurred_at: iso(-1, 12), deleted_at: null },
     { id: 'x3', account_id: 'a2', name: 'Groceries', amount_centavos: 87500, category: 'Food', occurred_at: iso(-5, 17), deleted_at: null },
   ]);
-  queryClient.setQueryData(['to_buy'], [
+  seed(['to_buy'], [
     { id: 'y1', name: 'Notebook + pens', amount_centavos: 18000, bought_at: null },
   ]);
 
-  queryClient.setQueryData(['home_projects'], [
+  seed(['home_projects'], [
     { id: 'p1', name: 'Capstone — routing app', progress: 45, color: '#B07CFF' },
     { id: 'p2', name: 'Portfolio site', progress: 78, color: '#34D9A0' },
   ]);
-  queryClient.setQueryData(['home_recent_notes'], [
+  seed(['home_recent_notes'], [
     { id: 'n1', title: 'Normalisation — 3NF', updated_at: iso(0, 13) },
     { id: 'n2', title: 'Eigenvectors and diagonalisation', updated_at: iso(-1, 16) },
   ]);
 
   const mins = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
-  queryClient.setQueryData(['notifications'], [
+  seed(['notifications'], [
     { id: 'f1', kind: 'canvas', title: 'CS 191 — Proposal defence moved to Friday', body: 'CS 191 · Bring two printed copies of the revised scope. Slots are first come, first served.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(14) },
     { id: 'f2', kind: 'task', title: 'Problem set 4 is overdue', body: 'Was due four days ago. Still sitting in School.', href: '/tasks/', source: 'app', read_at: null, created_at: mins(52) },
     { id: 'f3', kind: 'challenge', title: 'Rain T. passed you in 6 a.m. club', body: 'You are #2 with 12. One more morning takes it back.', href: '/community/', source: 'app', read_at: null, created_at: mins(140) },
@@ -142,9 +143,31 @@ export function seedDevFixtures() {
     { id: 'f6', kind: 'social', title: 'Jules replied to your thread', body: '“We scoped to one corridor and wrote the network bit as future work.”', href: '/community/', source: 'app', read_at: mins(600), created_at: mins(610) },
   ]);
 
-  queryClient.setQueryData(['integrations'], []);
+  seed(['integrations'], []);
 
-  queryClient.setQueryData(['java_files'], [
+  seed(['canvases'], [
+    { id: 'c1', name: 'Capstone map', color: '#7C6CFF', position: 0, viewport: { x: 40, y: 30, z: 1 }, updated_at: iso(0, 10) },
+    { id: 'c2', name: 'Thesis argument', color: '#34D9A0', position: 1, viewport: { x: 0, y: 0, z: 1 }, updated_at: iso(-3, 16) },
+  ]);
+  const node = (id: string, text: string, x: number, y: number, w = 180, h = 80, color = '#7C6CFF', kind = 'text') =>
+    ({ id, canvas_id: 'c1', kind, text, x, y, w, h, color, note_id: null, z: 0 });
+  seed(['canvas_nodes', 'c1'], [
+    node('g1', 'Routing engine', 20, 20, 400, 300, '#34D9A0', 'group'),
+    node('cn1', 'Offline tiles — six weeks of GTFS wrangling', 50, 70, 200, 90),
+    node('cn2', 'Corridor evaluation only.\nNetwork-level is future work.', 50, 190, 200, 90, '#FFC24B'),
+    node('cn3', 'Alonzo signed off on the narrowed scope', 470, 70, 200, 80, '#FF6B6B'),
+    node('cn4', 'Dataset: 4,318 jeepney stops', 470, 200, 200, 70, '#38D6F2'),
+    node('cn5', 'Defence — Friday, two printed copies', 470, 320, 200, 70, '#FF6FA8'),
+  ]);
+  seed(['canvas_edges', 'c1'], [
+    { id: 'ce1', canvas_id: 'c1', from_node: 'cn1', to_node: 'cn3', from_side: 'right', to_side: 'left', label: 'scope', color: '#7C6CFF' },
+    { id: 'ce2', canvas_id: 'c1', from_node: 'cn2', to_node: 'cn4', from_side: 'right', to_side: 'left', label: '', color: '#FFC24B' },
+    { id: 'ce3', canvas_id: 'c1', from_node: 'cn3', to_node: 'cn5', from_side: 'bottom', to_side: 'top', label: 'then', color: '#FF6B6B' },
+  ]);
+  seed(['canvas_nodes', 'c2'], []);
+  seed(['canvas_edges', 'c2'], []);
+
+  seed(['java_files'], [
     {
       id: 'j1', name: 'Fibonacci.java', updated_at: iso(-1, 20),
       src: `public class Fibonacci {
@@ -197,4 +220,9 @@ export function seedDevFixtures() {
 }`,
     },
   ]);
+}
+
+// Dev-only handle so the preview can be inspected from the console.
+if (typeof window !== 'undefined' && devFixturesOn()) {
+  (window as unknown as { qc: typeof queryClient }).qc = queryClient;
 }

@@ -3,7 +3,9 @@
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { onlineManager } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient, persister } from '@/lib/offline';
+import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // The persister needs `window`, so it is null during the static export's
@@ -12,6 +14,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => setReady(true), []);
 
   if (!ready || !persister) return <>{children}</>;
+
+  // Dev preview: restoring the persisted cache is asynchronous and lands *after*
+  // mount effects, so it would overwrite the fixtures with whatever a signed-out
+  // client last stored — usually nothing. Skip persistence entirely here.
+  if (devFixturesOn()) {
+    seedDevFixtures();
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ReconnectBridge />
+        {children}
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <PersistQueryClientProvider
