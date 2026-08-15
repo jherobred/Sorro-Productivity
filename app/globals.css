@@ -11,6 +11,11 @@
    as the prototype does. Do not reorder these two. */
 @import './modernist.css';
 
+/* The kinetics motion vocabulary. Loaded after the design system so its spring
+   curves are available to every token block below, and before the Basedly
+   overrides so a page can still take a curve off a specific element. */
+@import './kinetics.css';
+
 /* ---- Theme tokens (THEMES in the prototype) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
@@ -222,3 +227,67 @@ body {
   -webkit-tap-highlight-color: transparent;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+/* ==========================================================================
+   Accessibility settings. applyPrefs() sets --fs, data-density, data-contrast
+   and the two classes; everything they change lives here so the settings sheet
+   stays declarative.
+   ========================================================================== */
+
+/* Content size (WCAG 1.4.4). The prototype sizes everything in px, so scaling
+   the root font-size would move nothing — zooming the content frame scales the
+   whole layout the way the browser's own zoom does, while the chrome (sidebar,
+   top bar, phone nav) keeps its designed size. */
+.pagein { zoom: calc(var(--fs, 1) * var(--dens, 1)); }
+:root[data-density='compact'] { --dens: .92; }
+
+/* High contrast (WCAG 1.4.6 / 1.4.11): lift the dim text and hairlines until
+   they clear 7:1 and 3:1 respectively, rather than swapping the palette. */
+:root[data-contrast='high'] {
+  --tx2: #E6E3F2;
+  --tx3: #B9B4CE;
+  --line: rgba(255, 255, 255, .26);
+  --line2: rgba(255, 255, 255, .34);
+}
+:root[data-contrast='high'][data-theme='light'] {
+  --tx2: #221F2E;
+  --tx3: #45405A;
+  --line: rgba(28, 26, 38, .30);
+  --line2: rgba(28, 26, 38, .40);
+}
+:root[data-contrast='high'] :is(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--acc);
+  outline-offset: 2px;
+}
+
+/* Underline links (WCAG 1.4.1 — colour must not be the only signal). */
+.ulink a,
+.ulink .k-underline { text-decoration: underline; text-underline-offset: 2px; }
+.ulink .k-underline::after { transform: scaleX(1); }
+
+/* Reduce transparency (WCAG 1.4.11, and a real readability win on weak GPUs). */
+.noglass *,
+.noglass *::before,
+.noglass *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Visible focus everywhere. The prototype styles hover but never focus, which
+   leaves keyboard users with no position indicator (WCAG 2.4.7). */
+:is(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Skip link — first tab stop, hidden until focused (WCAG 2.4.1). */
+.skip {
+  position: fixed; left: 10px; top: 10px; z-index: 200;
+  padding: 10px 16px; border-radius: 10px;
+  background: var(--acc); color: var(--ink, #0C0F16);
+  font-size: 13px; font-weight: 800;
+  transform: translateY(-160%);
+  transition: transform .25s var(--k-expo);
+}
+.skip:focus { transform: none; }

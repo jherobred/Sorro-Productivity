@@ -117,4 +117,16 @@ export function seedDevFixtures() {
     { id: 'n1', title: 'Normalisation — 3NF', updated_at: iso(0, 13) },
     { id: 'n2', title: 'Eigenvectors and diagonalisation', updated_at: iso(-1, 16) },
   ]);
+
+  const mins = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+  queryClient.setQueryData(['notifications'], [
+    { id: 'f1', kind: 'canvas', title: 'CS 191 — Proposal defence moved to Friday', body: 'CS 191 · Bring two printed copies of the revised scope. Slots are first come, first served.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(14) },
+    { id: 'f2', kind: 'task', title: 'Problem set 4 is overdue', body: 'Was due four days ago. Still sitting in School.', href: '/tasks/', source: 'app', read_at: null, created_at: mins(52) },
+    { id: 'f3', kind: 'challenge', title: 'Rain T. passed you in 6 a.m. club', body: 'You are #2 with 12. One more morning takes it back.', href: '/community/', source: 'app', read_at: null, created_at: mins(140) },
+    { id: 'f4', kind: 'canvas', title: 'STS 1 — Reading list for week 12 posted', body: 'STS 1 · Chapters 7 and 8, plus the Ellul excerpt in Files.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(320) },
+    { id: 'f5', kind: 'event', title: 'Capstone standup in 30 minutes', body: 'Meet · 7:30 AM tomorrow', href: '/calendar/', source: 'app', read_at: mins(400), created_at: mins(420) },
+    { id: 'f6', kind: 'social', title: 'Jules replied to your thread', body: '“We scoped to one corridor and wrote the network bit as future work.”', href: '/community/', source: 'app', read_at: mins(600), created_at: mins(610) },
+  ]);
+
+  queryClient.setQueryData(['integrations'], []);
 }

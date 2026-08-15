@@ -12,7 +12,12 @@ import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 import { SearchPalette } from './SearchPalette';
+import { NotificationBell } from './NotificationBell';
+import { SettingsSheet } from './SettingsSheet';
+import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
+import { useBackGuard, useOverlayBack } from '@/lib/nav';
+import { toast } from '@/lib/toast';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -56,10 +61,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [wsOpen, setWsOpen] = useState(false);
   const [sideMore, setSideMore] = useState(false);
   const [taskCount, setTaskCount] = useState<number | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
+  const [workspace, setWorkspace] = useState('Personal');
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
   const dark = prefs.theme === 'dark';
   const acc = prefs.accent;
+
+  // Back — mouse side button, browser gesture, Android key — stays inside the app.
+  useBackGuard();
+  useOverlayBack(capture, () => setCapture(false));
+  useOverlayBack(wsOpen, () => setWsOpen(false));
 
   useEffect(() => {
     // Dev-only preview. `NODE_ENV` is inlined at build time, so this whole
@@ -100,6 +113,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (guard === 'checking') return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
 
   const go = (id: string) => { if (BUILT.has(id)) router.push(`/${id}/`); };
+  /** Same navigation, plus `?focus=` so the page can open on that sub-item. */
+  const goFiltered = (id: string, focus: string) => {
+    if (BUILT.has(id)) router.push(`/${id}/?focus=${encodeURIComponent(focus)}`);
+  };
   const hueTx = (hue: string) =>
     dark ? `color-mix(in srgb, ${hue} 84%, #FFFFFF)` : `color-mix(in srgb, ${hue} 62%, #1C1A26)`;
 
@@ -108,6 +125,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
       height: '100dvh', display: 'flex', flexDirection: phone ? 'column' : 'row',
       background: 'var(--bg)', color: 'var(--tx)', overflow: 'hidden', position: 'relative',
     }}>
+      {/* First tab stop: jump past the whole sidebar straight to the page. */}
+      <a href="#bd-main" className="skip"
+        onClick={(e) => { e.preventDefault(); document.getElementById('bd-main')?.focus(); }}>
+        Skip to content
+      </a>
+
       {/* Ambient accent aura behind the chrome (auraA). */}
       <div aria-hidden className="aur" style={{
         position: 'absolute', width: '62%', height: '58%', left: '-14%', top: '-18%',
@@ -144,24 +167,33 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
           <div style={{ position: 'relative', padding: '0 12px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <button className="acc" style={{
+              <button onClick={() => setSheet('note')} className="acc k-squish" style={{
                 display: 'flex', alignItems: 'center', gap: 7, flex: '1 1 auto', height: 34, padding: '0 13px',
                 borderRadius: 9, background: acc, color: ON_ACCENT, fontSize: 12.5, fontWeight: 800,
               }}>
                 <Icon name="bookPlus" size={15} color={ON_ACCENT} />Note
               </button>
-              {([['taskPlus', 'New task'], ['spark', 'AI helper']] as [IconName, string][]).map(([ic, n]) => (
-                <button key={n} title={n} className="hov" style={{
-                  width: 30, height: 34, flex: 'none', borderRadius: 9, border: '1px solid var(--line2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+              <button title="New task" aria-label="New task" onClick={() => setSheet('task')} className="hov k-squish" style={SIDE_ACTION}>
+                <Icon name="taskPlus" size={15} color="var(--tx2)" />
+              </button>
+              <button title="AI helper" aria-label="AI helper" onClick={() => toast('The AI panel is switched off in this build')}
+                className="hov k-squish" style={SIDE_ACTION}>
+                <Icon name="spark" size={15} color="var(--tx2)" />
+              </button>
+              <button title="More actions" aria-label="More actions" aria-haspopup="menu" className="hov k-squish" style={SIDE_ACTION}
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setMenu({
+                    x: r.left, y: r.bottom + 6, kind: 'global', label: 'Quick actions',
+                    items: [
+                      { label: 'New expense', icon: 'money', run: () => setSheet('money') },
+                      { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
+                      { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
+                      { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
+                      { label: 'Settings', icon: 'set', run: () => setSettings(true) },
+                    ],
+                  });
                 }}>
-                  <Icon name={ic} size={15} color="var(--tx2)" />
-                </button>
-              ))}
-              <button title="More actions" className="hov" style={{
-                width: 30, height: 34, flex: 'none', borderRadius: 9, border: '1px solid var(--line2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
                 <Icon name="dots" size={15} color="var(--tx2)" />
               </button>
             </div>
@@ -214,7 +246,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       paddingLeft: 9, borderLeft: '1px solid var(--line2)',
                     }}>
                       {sec.kids.map((k) => (
-                        <button key={k.n} onClick={() => go(sec.id)} className="hov" style={{
+                        // The sub-item carries its own name as a filter so the
+                        // page can open focused on it, rather than three rows
+                        // that all land in the same place.
+                        <button key={k.n} onClick={() => goFiltered(sec.id, k.n)} className="hov" style={{
                           display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 8px',
                           borderRadius: 6, fontSize: 11.5, fontWeight: 500, color: 'var(--tx2)',
                         }}>
@@ -249,6 +284,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="spark" size={13} color="var(--tx3)" />{prefs.motion ? 'Reduce motion' : 'Enable motion'}
                 </button>
+                <button onClick={() => setSettings(true)} className="hov"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                  <Icon name="set" size={13} color="var(--tx3)" />All settings
+                </button>
                 <button onClick={() => supabase.auth.signOut()} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="back" size={13} color="var(--tx3)" />Sign out
@@ -261,13 +300,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={() => setWsOpen((v) => !v)} className="hov"
               style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 8 }}>
               <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--tx2)', flex: 'none' }}>MR</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', flex: 1, textAlign: 'left' }}>Personal</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', flex: 1, textAlign: 'left' }}>{workspace}</span>
               <span style={{ fontSize: 10, color: 'var(--tx3)' }}>▲▼</span>
             </button>
             {wsOpen && (
-              <div className="rise" style={{ margin: '6px 0 4px', padding: 5, borderRadius: 10, background: 'var(--card)', boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
-                {[{ n: 'Personal', r: 'owner', c: acc }, { n: 'Capstone — Team 4', r: 'member', c: PAL.violet }, { n: 'CSSS Officers', r: 'viewer', c: PAL.mint }].map((w) => (
-                  <button key={w.n} className="hov" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 7, fontSize: 11.5, color: 'var(--tx2)' }}>
+              <div className="rise k-stagger" role="menu" aria-label="Switch workspace"
+                style={{ margin: '6px 0 4px', padding: 5, borderRadius: 10, background: 'var(--card)', boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+                {[{ n: 'Personal', r: 'owner', c: acc }, { n: 'Capstone — Team 4', r: 'member', c: PAL.violet }, { n: 'CSSS Officers', r: 'viewer', c: PAL.mint }].map((w, i) => (
+                  <button key={w.n} role="menuitemradio" aria-checked={workspace === w.n}
+                    onClick={() => { setWorkspace(w.n); setWsOpen(false); toast(`Switched to ${w.n}`); }}
+                    className="hov" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 7, fontSize: 11.5, color: workspace === w.n ? 'var(--tx)' : 'var(--tx2)', '--i': i } as React.CSSProperties}>
                     <span style={{ width: 7, height: 7, borderRadius: 2, background: w.c, flex: 'none' }} />
                     <span style={{ flex: 1, textAlign: 'left' }}>{w.n}</span>
                     <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.r}</span>
@@ -297,7 +339,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
 
-            <button className="hov" title="AI helper" style={{
+            <button onClick={() => toast('The AI panel is switched off in this build')} className="hov k-squish" title="AI helper" aria-label="AI helper" style={{
               width: 38, height: 38, flex: 'none', borderRadius: 19, border: '1px solid var(--line2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
@@ -306,38 +348,53 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
-              <div style={{ display: 'flex' }}>
+              <button onClick={() => go('people')} className="k-dock" title="Your people" aria-label="Your people" style={{ display: 'flex' }}>
                 {[{ i: 'JL', c: PAL.mint }, { i: 'RT', c: PAL.amber }, { i: 'BC', c: PAL.violet }].map((m, i) => (
-                  <div key={m.i} style={{
+                  <span key={m.i} style={{
                     width: 24, height: 24, borderRadius: '50%', background: m.c, marginLeft: i ? -7 : 0,
                     border: '2px solid var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 8.5, fontWeight: 700, color: ON_ACCENT,
-                  }}>{m.i}</div>
+                  }}>{m.i}</span>
                 ))}
-              </div>
-              <button className="hov" style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              </button>
+
+              <NotificationBell />
+
+              <button onClick={() => setSettings(true)} className="hov k-squish" title="Settings" aria-label="Settings"
+                style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="set" size={16} color="var(--tx2)" />
               </button>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: PAL.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: ON_ACCENT }}>MR</div>
+
+              <button onClick={() => go('profile')} className="k-squish" title="Your profile" aria-label="Your profile"
+                style={{ width: 28, height: 28, borderRadius: '50%', background: PAL.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: ON_ACCENT }}>MR</button>
             </div>
           </div>
         )}
 
         {phone && (
-          <div style={{ height: 44, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--tx)' }}>
+          <div style={{ height: 44, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 18px', fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--tx)' }}>
             <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-            <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: 'var(--tx2)' }}>●●● ᯤ ▮</span>
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center', fontSize: 10, color: 'var(--tx2)' }}>●●● ᯤ ▮</span>
+            <NotificationBell compact />
+            <button onClick={() => setSettings(true)} className="hov k-squish" aria-label="Settings"
+              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
+              <Icon name="set" size={15} color="var(--tx2)" />
+            </button>
           </div>
         )}
 
         {/* Full width, matching the reference screenshots: the fixed 353px
             tiles hold their size and the flexible middle column takes the
             slack, which is how the design reads on a wide monitor. */}
-        <div key={pathname} className="pagein" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
+        <main id="bd-main" key={pathname} className="pagein" tabIndex={-1}
+          style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
           {children}
-        </div>
+        </main>
 
-        {phone && <BottomNav section={section} go={go} accent={acc} dark={dark} onCapture={() => setCapture((c) => !c)} captureOpen={capture} />}
+        {phone && (
+          <BottomNav section={section} go={go} accent={acc} dark={dark} labels={prefs.alwaysShowLabels}
+            onCapture={() => setCapture((c) => !c)} captureOpen={capture} />
+        )}
       </div>
 
       {!phone && (
@@ -369,11 +426,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
       {search && <SearchPalette onClose={() => setSearch(false)} />}
+      {settings && <SettingsSheet onClose={() => setSettings(false)} />}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}
+          onClose={() => setMenu(null)} accent={acc} dark={dark} />
+      )}
 
       <ToastHost />
     </div>
   );
 }
+
+const SIDE_ACTION: React.CSSProperties = {
+  width: 30, height: 34, flex: 'none', borderRadius: 9, border: '1px solid var(--line2)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
 
 function OfflinePill() {
   const [online, setOnline] = useState(true);
@@ -387,31 +454,38 @@ function OfflinePill() {
 }
 
 function BottomNav({
-  section, go, accent, dark, onCapture, captureOpen,
+  section, go, accent, dark, labels, onCapture, captureOpen,
 }: {
-  section: string; go: (id: string) => void; accent: string; dark: boolean;
+  section: string; go: (id: string) => void; accent: string; dark: boolean; labels: boolean;
   onCapture: () => void; captureOpen: boolean;
 }) {
   const half = Math.ceil(NAV_PHONE.length / 2);
   const slot = (s: Section) => {
     const on = s.id === section;
     return (
-      <button key={s.id} onClick={() => go(s.id)} title={s.name} aria-label={s.name}
+      <button key={s.id} onClick={() => go(s.id)} title={s.name} aria-label={s.name} aria-current={on ? 'page' : undefined}
+        className="k-squish"
         style={{
-          flex: 1, minWidth: 0, height: 44, borderRadius: 18, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          background: on ? accent : 'transparent', transition: 'background .24s',
+          flex: 1, minWidth: 0, height: labels ? 52 : 44, borderRadius: 18, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: labels ? 2 : 0,
+          background: on ? accent : 'transparent', transition: 'background .24s, height .3s var(--k-expo)',
           opacity: BUILT.has(s.id) ? 1 : 0.45,
         }}>
         <Icon name={s.ic} size={17} color={on ? ON_ACCENT : 'var(--tx2)'} />
-        <span style={{ width: 3, height: 3, borderRadius: '50%', marginTop: 3, background: on ? ON_ACCENT : 'transparent' }} />
+        {labels ? (
+          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '.02em', color: on ? ON_ACCENT : 'var(--tx2)', whiteSpace: 'nowrap' }}>
+            {s.name}
+          </span>
+        ) : (
+          <span style={{ width: 3, height: 3, borderRadius: '50%', marginTop: 3, background: on ? ON_ACCENT : 'transparent' }} />
+        )}
       </button>
     );
   };
 
   return (
     <div style={{ flex: 'none', padding: '4px 10px 12px', position: 'relative', zIndex: 12 }}>
-      <nav style={{
+      <nav aria-label="Sections" style={{
         ...lg({ tint: accent, strength: 1.15, radius: 27, dark }),
         position: 'relative', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', gap: 2, padding: '7px 10px',

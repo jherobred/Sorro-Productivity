@@ -12,6 +12,27 @@ export type Prefs = {
   fabPos: { x: number; y: number } | null;
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
   journalMode: string | null;
+
+  /* Accessibility. Each of these maps to a WCAG success criterion:
+     fontScale → 1.4.4 Resize Text, contrast → 1.4.6, underlineLinks → 1.4.1
+     (colour is not the only visual means), reduceTransparency → 1.4.11, and
+     `motion` above → 2.3.3 Animation from Interactions. */
+  fontScale: number;              // 0.875 – 1.375, applied to the root font size
+  density: 'comfortable' | 'compact';
+  contrast: 'normal' | 'high';
+  underlineLinks: boolean;
+  reduceTransparency: boolean;
+  alwaysShowLabels: boolean;      // phone nav labels under the icons
+
+  /* Behaviour. */
+  weekStart: 'mon' | 'sun';
+  time24: boolean;
+  haptics: boolean;
+  landing: string;                // section to open on launch
+  confirmDelete: boolean;
+
+  /* Which kinds of event may raise a notification. */
+  notify: { tasks: boolean; events: boolean; social: boolean; challenges: boolean; canvas: boolean };
 };
 
 export const DEFAULT_PREFS: Prefs = {
@@ -22,6 +43,21 @@ export const DEFAULT_PREFS: Prefs = {
   fabPos: null,
   calView: 'week',
   journalMode: null,
+
+  fontScale: 1,
+  density: 'comfortable',
+  contrast: 'normal',
+  underlineLinks: false,
+  reduceTransparency: false,
+  alwaysShowLabels: false,
+
+  weekStart: 'mon',
+  time24: false,
+  haptics: true,
+  landing: 'home',
+  confirmDelete: false,
+
+  notify: { tasks: true, events: true, social: true, challenges: true, canvas: true },
 };
 
 const LS_KEY = 'basedly-prefs';
@@ -46,6 +82,15 @@ export function applyPrefs(p: Prefs) {
   r.setAttribute('data-motion', p.motion ? 'on' : 'off');
   r.style.setProperty('--anim', reduced ? 'paused' : 'running');
   r.classList.toggle('nomo', reduced);
+
+  // Text resize (WCAG 1.4.4). Everything in the design is sized in px off the
+  // prototype, so scaling the root font size alone would not move it — the
+  // layout reads --fs through the `zoom`-style multiplier on the app frame.
+  r.style.setProperty('--fs', String(p.fontScale ?? 1));
+  r.setAttribute('data-density', p.density ?? 'comfortable');
+  r.setAttribute('data-contrast', p.contrast ?? 'normal');
+  r.classList.toggle('ulink', !!p.underlineLinks);
+  r.classList.toggle('noglass', !!p.reduceTransparency);
 }
 
 export function usePrefs() {

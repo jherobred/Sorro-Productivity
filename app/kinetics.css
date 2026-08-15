@@ -1,0 +1,253 @@
+/* ==========================================================================
+   Kinetics — the motion vocabulary, ported from kinetics.colorion.co.
+
+   That library is copy-paste snippets rather than a package, so this file is
+   the subset Basedly actually uses, kept as one vocabulary instead of scattered
+   inline transitions. Four spring curves carry almost everything:
+
+     --k-spring    overshoot-and-settle. Anything that "arrives": pops, chips,
+                   drag spring-back, swatches, stars.
+     --k-expo      decelerate hard, no overshoot. Anything that "reveals":
+                   panels, sheets, staggered rows, progress.
+     --k-over      gentler overshoot for things entering from off-screen:
+                   toasts, notifications, snackbars.
+     --k-swift     symmetric in-out. Sliding pills, underlines, wipes.
+
+   Every effect below degrades under `.nomo` (the product motion setting) — the
+   block at the end of globals.css already flattens animation-driven classes, so
+   what matters here is that nothing depends on motion to be *legible*.
+   ========================================================================== */
+
+:root {
+  --k-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --k-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --k-over: cubic-bezier(0.18, 1.25, 0.4, 1);
+  --k-swift: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --k-fast: .18s;
+  --k-base: .35s;
+  --k-slow: .5s;
+}
+
+/* ----------------------------------------------------------------- pressure */
+
+/* Squish — the default press feedback for anything card-like. Fast down so it
+   feels mechanical, slow spring up so it feels alive. */
+.k-squish { transition: transform var(--k-slow) var(--k-spring); }
+.k-squish:active { transform: scale(.88); transition-duration: .08s; transition-timing-function: ease-out; }
+
+/* Push — for keycaps and toolbar buttons that should feel like they travel. */
+.k-push { transition: transform .06s ease, box-shadow .06s ease; }
+.k-push:active { transform: translateY(5px); box-shadow: none; }
+
+/* Liquid glass press: a specular sweep across the surface as it sinks. */
+.k-glass { position: relative; overflow: hidden; transition: transform .65s var(--k-expo); }
+.k-glass:active { transform: scale(.97); }
+.k-glass::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .16) 50%, transparent 62%);
+  transform: translateX(-120%);
+}
+.k-glass:active::after { transform: translateX(120%); transition: transform .65s var(--k-expo); }
+
+/* Ripple — set --kx/--ky from the pointer, toggle .on for one cycle. */
+.k-ripple { position: relative; overflow: hidden; }
+.k-ripple::before {
+  content: ''; position: absolute; left: var(--kx, 50%); top: var(--ky, 50%);
+  width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+  background: currentColor; opacity: 0; transform: scale(0); pointer-events: none;
+}
+.k-ripple.on::before { animation: kripple .6s ease-out; }
+@keyframes kripple {
+  0% { transform: scale(0); opacity: .28; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* Magnetic — JS sets --kmx/--kmy from pointer distance; CSS just eases it. */
+.k-magnet { transition: transform .15s ease-out; transform: translate(var(--kmx, 0px), var(--kmy, 0px)); }
+
+/* ------------------------------------------------------------------ arrival */
+
+/* Stagger entrance — set --i on each child (index) and rows cascade in. */
+.k-stagger > * { animation: kstagger .45s var(--k-expo) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes kstagger { from { opacity: 0; transform: translateY(14px); } }
+
+/* Notification slide-in, from above the fold. */
+.k-slidein { animation: kslidein .55s var(--k-over) both; }
+@keyframes kslidein { from { opacity: 0; transform: translateY(-160%); } }
+
+/* Toast / snackbar rise with overshoot. */
+.k-toast { animation: ktoast .5s var(--k-over) both; }
+@keyframes ktoast { from { opacity: 0; transform: translateY(100%) scale(.9); } }
+
+/* Command-palette bloom: a clip-path wipe, then rows cascade behind it. */
+.k-bloom { animation: kbloom .5s var(--k-expo) both; }
+@keyframes kbloom {
+  from { opacity: 0; clip-path: inset(0 0 92% 0 round 14px); transform: translateY(-8px) scale(.97); }
+  to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); transform: none; }
+}
+
+/* Tag / node pop-in, and its matching pop-out. */
+.k-tagin { animation: ktagin .4s var(--k-spring) both; }
+@keyframes ktagin { from { opacity: 0; transform: scale(.4); } }
+
+/* --------------------------------------------------------------- selections */
+
+/* Choice chips, swatches, stars — three sizes of the same "picked it" pop. */
+.k-chip { transition: transform var(--k-base) var(--k-spring), background-color var(--k-fast), border-color var(--k-fast), color var(--k-fast); }
+.k-chip[aria-pressed='true'], .k-chip.on { transform: scale(1.06); }
+.k-chip:active { transform: scale(.94); transition-duration: .08s; }
+
+.k-swatch { transition: transform var(--k-slow) var(--k-spring), box-shadow var(--k-slow) var(--k-spring); }
+.k-swatch.on { transform: scale(1.2); }
+
+.k-star { transition: transform .25s var(--k-spring); }
+.k-star:hover { transform: scale(1.3); }
+.k-star.pop { animation: kstar .25s var(--k-spring); }
+@keyframes kstar { 50% { transform: scale(1.45); } }
+
+/* Like burst — the heart kicks, a ring expands past it. */
+.k-burst { position: relative; }
+.k-burst.on { animation: kheart .3s var(--k-spring); }
+@keyframes kheart { 40% { transform: scale(1.35); } }
+.k-burst.on::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 50%;
+  border: 2px solid currentColor; animation: kring .6s var(--k-expo) forwards; pointer-events: none;
+}
+@keyframes kring { from { transform: scale(.5); opacity: .7; } to { transform: scale(1.9); opacity: 0; } }
+
+/* Sliding segmented pill. JS sets --kn (count) and --ki (index). */
+.k-pillrail { position: relative; }
+.k-pillrail > .k-pill {
+  position: absolute; top: 3px; bottom: 3px; left: 3px;
+  width: calc((100% - 6px) / var(--kn, 4));
+  transform: translateX(calc(var(--ki, 0) * 100%));
+  transition: transform .45s var(--k-spring), background-color var(--k-base);
+}
+
+/* Underline draw, for links and active tab labels. */
+.k-underline { position: relative; }
+.k-underline::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px;
+  background: currentColor; border-radius: 2px;
+  transform: scaleX(0); transform-origin: left; transition: transform .4s var(--k-swift);
+}
+.k-underline:hover::after, .k-underline.on::after { transform: scaleX(1); }
+
+/* ------------------------------------------------------------------- states */
+
+/* Elastic progress — width eases toward its target rather than snapping. */
+.k-progress { transition: width .9s var(--k-expo); }
+
+/* Ring fill/drain (countdowns, hold-to-confirm). Set --kdash on the circle. */
+.k-ring { transition: stroke-dashoffset .9s var(--k-expo); }
+.k-ring.linear { transition: stroke-dashoffset 1s linear; }
+
+/* Pulse badge — the unread dot on the notification bell. */
+.k-pulse { position: relative; }
+.k-pulse::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: inherit; animation: kpulse 1.8s ease-out infinite; pointer-events: none;
+  animation-play-state: var(--anim, running);
+}
+@keyframes kpulse { from { transform: scale(1); opacity: .55; } to { transform: scale(2.4); opacity: 0; } }
+
+/* Skeleton shimmer, for anything still loading. */
+.k-skeleton {
+  background: linear-gradient(90deg, var(--card2) 25%, var(--hov) 50%, var(--card2) 75%) 0 0 / 300% 100%;
+  animation: kshimmer 1.4s ease-in-out infinite;
+  animation-play-state: var(--anim, running);
+}
+@keyframes kshimmer { to { background-position: -300% 0; } }
+
+/* Orbit spinner. */
+.k-orbit {
+  border: 2px solid var(--line2); border-top-color: var(--acc); border-radius: 50%;
+  animation: korbit .8s linear infinite; animation-play-state: var(--anim, running);
+}
+@keyframes korbit { to { transform: rotate(1turn); } }
+
+/* Number counter — bump the digit when the value changes. */
+.k-count { display: inline-block; }
+.k-count.on { animation: kcount .4s var(--k-spring); }
+@keyframes kcount { 45% { transform: scale(1.25) translateY(-6px); } }
+
+/* Icon morph swap — blur through the change instead of cutting. */
+.k-morph { transition: transform .3s var(--k-spring), opacity .3s ease, filter .3s ease; }
+.k-morph.out { opacity: 0; filter: blur(6px); transform: scale(.7) rotate(-20deg); }
+
+/* Checkbox tick draw. */
+.k-check { stroke-dasharray: 24; stroke-dashoffset: 24; transition: stroke-dashoffset .32s var(--k-expo); }
+.k-check.on { stroke-dashoffset: 0; }
+
+/* ------------------------------------------------------------------ motion  */
+
+/* Drag to dismiss / reorder. JS writes --kdx and --kdr during the gesture and
+   removes .dragging on release, at which point this transition springs it home
+   (or the fling class throws it off-screen). */
+.k-drag { transform: translateX(var(--kdx, 0px)) rotate(var(--kdr, 0deg)); touch-action: pan-y; }
+.k-drag.settle { transition: transform var(--k-slow) var(--k-spring), opacity var(--k-slow) var(--k-spring); }
+.k-drag.fling { transition: transform .4s var(--k-expo), opacity .4s var(--k-expo); opacity: 0; }
+.k-drag.dragging { transition: none; cursor: grabbing; z-index: 3; }
+
+/* Reorderable list — siblings glide out of the way. */
+.k-reorder { transition: transform .3s var(--k-expo); }
+
+/* Swipe-to-reveal tray. */
+.k-swipe { transition: transform .4s var(--k-spring); }
+
+/* Lattice snap — a tile settling into its grid cell. */
+.k-snap { transition: transform var(--k-slow) var(--k-spring), width var(--k-slow) var(--k-spring), height var(--k-slow) var(--k-spring); }
+
+/* Accordion spring: max-height plus a chevron rotation. */
+.k-accordion { overflow: hidden; transition: max-height .45s var(--k-expo), opacity .3s ease; }
+.k-chevron { transition: transform .35s var(--k-spring); }
+.k-chevron.on { transform: rotate(180deg); }
+
+/* Bento expand — the focused tile grows, its siblings give way. */
+.k-bento { transition: transform var(--k-base) var(--k-spring), box-shadow var(--k-base) var(--k-spring); }
+.k-bento.focus { transform: scale(1.04); }
+.k-bento.dim { transform: scale(.96); }
+
+/* Contextual dock — the macOS dock lift. */
+.k-dock { transition: transform .3s var(--k-spring); }
+.k-dock:hover { transform: translateY(-14px) scale(1.35); }
+
+/* Expanding search field. */
+.k-search { transition: width .4s var(--k-expo); }
+
+/* Speed-dial fan-out. Set --i per child. */
+.k-fan > * {
+  transition: transform var(--k-slow) var(--k-spring), opacity var(--k-slow) var(--k-spring);
+  transition-delay: calc(var(--i, 0) * 40ms);
+}
+.k-fan:not(.open) > * { transform: scale(.4); opacity: 0; pointer-events: none; }
+
+/* Focus relay — one shared ring that morphs between focused elements. */
+.k-relay { transition: transform .48s var(--k-spring), width .48s var(--k-spring), height .48s var(--k-spring), opacity .2s; }
+
+/* Momentum picker column. Set --i to the selected index. */
+.k-picker { transition: transform .58s var(--k-spring); transform: translateY(calc(var(--i, 0) * -38px)); }
+
+/* Canvas / calendar viewport zoom — the "Google Earth" crossfade between two
+   levels of detail. .k-zoom eases the transform; .k-zoomfade swaps the layers. */
+.k-zoom { transition: transform var(--k-slow) var(--k-expo); transform-origin: var(--kox, 50%) var(--koy, 50%); }
+.k-zoomfade { animation: kzoomfade .32s var(--k-expo) both; }
+@keyframes kzoomfade { from { opacity: 0; transform: scale(.965); } }
+
+/* Keep the vocabulary honest under the motion setting: transitions collapse,
+   looping animations stop, but nothing is left mid-transform. */
+.nomo :is(.k-stagger > *, .k-slidein, .k-toast, .k-bloom, .k-tagin, .k-zoomfade),
+.nomo :is(.k-star.pop, .k-burst.on, .k-count.on, .k-ripple.on::before) {
+  animation: none;
+  opacity: 1;
+  transform: none;
+  clip-path: none;
+}
+.nomo :is(.k-pulse::after, .k-skeleton, .k-orbit) { animation: none; }
+.nomo :is(.k-squish, .k-push, .k-glass, .k-chip, .k-swatch, .k-star, .k-progress, .k-ring,
+          .k-morph, .k-check, .k-drag.settle, .k-reorder, .k-swipe, .k-snap, .k-accordion,
+          .k-chevron, .k-bento, .k-dock, .k-search, .k-fan > *, .k-relay, .k-picker, .k-zoom,
+          .k-pillrail > .k-pill, .k-underline::after) {
+  transition-duration: .01ms;
+}
