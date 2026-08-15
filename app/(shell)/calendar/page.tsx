@@ -10,8 +10,14 @@ import {
 } from '@/lib/events';
 
 const DAYS_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-const HOUR_PX = K.calHalfHourPx * 2; // 16px = 30 min → 32px per hour
-const HOURS = K.calEndHour - K.calStartHour;
+
+// The desktop grid is a fixed 760px band from 07:00 to 22:00 (H0/H1 at
+// Basedly.dc.html:4455), with hour rules and events positioned by percentage.
+const H0 = 7;
+const H1 = 22;
+const SPAN = H1 - H0;          // 15 intervals, 16 labels
+const GRID_H = 760;
+const pct = (hour: number) => ((hour - H0) / SPAN) * 100;
 
 type View = 'week' | 'month' | 'day' | 'countdown';
 const ORDER: View[] = ['month', 'week', 'day', 'countdown'];
@@ -132,7 +138,7 @@ function Grid({
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);
   const [resize, setResize] = useState<{ id: string; end: number } | null>(null);
 
-  const hours = Array.from({ length: HOURS + 1 }, (_, i) => K.calStartHour + i);
+  const hours = Array.from({ length: SPAN + 1 }, (_, i) => H0 + i);
 
   /**
    * One pointerdown drives long-press, drag and resize. Moving more than 7px
@@ -168,11 +174,15 @@ function Grid({
 
       if (mode === 'resize') {
         // 16px = 30 min
-        const steps = Math.round(dy / K.calHalfHourPx);
+        // 30-min step, derived from the real row height so the chip tracks the
+        // pointer on this 760px grid (README's 16px figure is for the phone grid).
+        const steps = Math.round(dy / (GRID_H / SPAN / 2));
         setResize({ id: ev.id, end: origEnd + steps * 0.5 });
       } else {
         const dayStep = days === 1 ? 0 : Math.round(dx / colW);
-        const steps = Math.round(dy / K.calHalfHourPx);
+        // 30-min step, derived from the real row height so the chip tracks the
+        // pointer on this 760px grid (README's 16px figure is for the phone grid).
+        const steps = Math.round(dy / (GRID_H / SPAN / 2));
         setDrag({
           id: ev.id,
           day: Math.max(0, Math.min(6, origDay + dayStep)),
@@ -202,10 +212,13 @@ function Grid({
 
   return (
     <div style={{ display: 'flex', background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
-      {/* hour axis */}
-      <div style={{ width: 52, flex: 'none', borderRight: '1px solid var(--line)', paddingTop: 30 }}>
-        {hours.slice(0, -1).map((h) => (
-          <div key={h} style={{ height: HOUR_PX, fontSize: 9.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--tx3)', padding: '2px 7px', textAlign: 'right' }}>
+      {/* hour axis — labels sit on the rule, centred by translateY(-50%) */}
+      <div style={{ width: 52, flex: 'none', position: 'relative', height: GRID_H, marginTop: 30 }}>
+        {hours.map((h, i) => (
+          <div key={h} style={{
+            position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`, transform: 'translateY(-50%)',
+            fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          }}>
             {hhmm(h)}
           </div>
         ))}
@@ -228,18 +241,28 @@ function Grid({
         </div>
 
         {/* slots */}
-        <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: HOURS * HOUR_PX }}>
+        <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: GRID_H }}>
+          {/* hour rules span the full width, behind the columns */}
+          {hours.map((h, i) => (
+            <div key={`r${h}`} aria-hidden style={{
+              position: 'absolute', left: 0, right: 0, top: `${(i / SPAN) * 100}%`,
+              height: 1, background: 'var(--line)', pointerEvents: 'none',
+            }} />
+          ))}
           {Array.from({ length: days }, (_, i) => {
             const idx = days === 1 ? dayOffset : i;
             return (
               <div key={i} style={{ position: 'relative', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined }}>
-                {hours.slice(0, -1).map((h) => (
+                {hours.slice(0, -1).map((h, i) => (
                   <button
                     key={h}
                     onClick={() => A.addAt(idx, h, prefs.accent)}
                     className="hov"
                     aria-label={`Add event ${hhmm(h)}`}
-                    style={{ display: 'block', width: '100%', height: HOUR_PX, borderTop: '1px solid var(--line)' }}
+                    style={{
+                      position: 'absolute', left: 0, right: 0,
+                      top: `${(i / SPAN) * 100}%`, height: `${(1 / SPAN) * 100}%`,
+                    }}
                   />
                 ))}
 
@@ -252,8 +275,8 @@ function Grid({
 
                     const start = isDrag ? drag.hour : hoursOf(e.starts_at);
                     const end = isResize ? resize.end : isDrag ? drag.hour + (hoursOf(e.ends_at) - hoursOf(e.starts_at)) : hoursOf(e.ends_at);
-                    const top = (start - K.calStartHour) * HOUR_PX;
-                    const height = Math.max(HOUR_PX / 2, (end - start) * HOUR_PX);
+                    const top = pct(start);
+                    const height = Math.max((0.5 / SPAN) * 100, pct(end) - pct(start));
 
                     return (
                       <div
@@ -261,7 +284,7 @@ function Grid({
                         onPointerDown={(p) => press(p, e, 'move')}
                         className={sel === e.id ? 'pop' : undefined}
                         style={{
-                          position: 'absolute', left: 3, right: 3, top, height,
+                          position: 'absolute', left: 3, right: 3, top: `${top}%`, height: `${height}%`,
                           borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
                           background: `color-mix(in srgb, ${e.color} 26%, var(--card))`,
                           borderLeft: `2px solid ${e.color}`,
@@ -271,10 +294,12 @@ function Grid({
                           outline: sel === e.id ? `1px solid ${e.color}` : undefined,
                         }}
                       >
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
                           {e.title}
-                        </div>
-                        <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--tx2)' }}>{hhmm(start)}</div>
+                        </span>
+                        <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                          {hhmm(start)} {e.location}
+                        </span>
 
                         {/* bottom edge resizes the end time in 30-min steps */}
                         <div
