@@ -231,7 +231,16 @@ export default function HomePage() {
               border: `1px solid color-mix(in srgb, ${INDIGO} 38%, transparent)`,
               minHeight: 170, display: 'flex', flexDirection: 'column',
             }}>
-              <div style={{ ...KICKER, color: INDIGO, marginBottom: 10 }}>Up next</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                <div style={{ ...KICKER, color: INDIGO }}>Up next</div>
+                {upNext && (
+                  // Live indicator: a dot under an expanding halo ring.
+                  <span style={{ position: 'relative', width: 6, height: 6, flex: 'none' }}>
+                    <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: INDIGO }} />
+                    <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${INDIGO}` }} />
+                  </span>
+                )}
+              </div>
 
               {upNext ? (
                 <>

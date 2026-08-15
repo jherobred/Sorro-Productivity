@@ -234,7 +234,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <span style={{ flex: 1, textAlign: 'left' }}>More</span>
             </button>
             {sideMore && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 2px 15px', paddingLeft: 9, borderLeft: '1px solid var(--line2)' }}>
+              <div className="lens" style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 2px 15px', paddingLeft: 9, borderLeft: '1px solid var(--line2)' }}>
                 <button onClick={() => update({ theme: dark ? 'light' : 'dark' })} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="moon" size={13} color="var(--tx3)" />{dark ? 'Light mode' : 'Dark mode'}
