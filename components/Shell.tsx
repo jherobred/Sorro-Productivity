@@ -12,6 +12,7 @@ import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 import { SearchPalette } from './SearchPalette';
+import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -61,6 +62,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const acc = prefs.accent;
 
   useEffect(() => {
+    // Dev-only preview. `NODE_ENV` is inlined at build time, so this whole
+    // branch is stripped from production bundles — it cannot be enabled by an
+    // env var on the deployed site.
+    if (devFixturesOn()) { seedDevFixtures(); setGuard('ok'); return; }
+
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) router.replace('/');
       else setGuard('ok');
