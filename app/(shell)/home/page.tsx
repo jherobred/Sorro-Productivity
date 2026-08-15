@@ -1,12 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { PAL } from '@/lib/pal';
+import { Icon } from '@/components/Icon';
+import { useHabits, useTicks, useHabitActions, streak, ymd } from '@/lib/habits';
+import { useTransactions, useBudgets, useAccounts, peso } from '@/lib/money';
+import { useScratch, useScratchActions, SCRATCH_TAGS, TAG_COLOR, ago, type Scratch } from '@/lib/scratch';
+
+const AMBER = '#F5B33C';
+const CARD: React.CSSProperties = {
+  background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)',
+};
 
 /**
  * Ported from Basedly.dc.html — markup 469–638 (desktop), computed styles
@@ -51,6 +61,37 @@ export default function HomePage() {
   const { data: events = [] } = useEvents(ws);
   const A = useEventActions(ws);
 
+  const today = ymd(new Date());
+  const { data: habits = [] } = useHabits();
+  const { data: ticks = [] } = useTicks(30);
+  const HA = useHabitActions(30);
+
+  const { data: txns = [] } = useTransactions();
+  const { data: budgets = [] } = useBudgets();
+  const { data: accounts = [] } = useAccounts();
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['home_projects'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bd_projects').select('id,name,progress,color')
+        .is('deleted_at', null).eq('status', 'active').order('position').limit(4);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: recent = [] } = useQuery({
+    queryKey: ['home_recent_notes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bd_notes').select('id,title,updated_at')
+        .is('deleted_at', null).order('updated_at', { ascending: false }).limit(3);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(t);
@@ -84,6 +125,33 @@ export default function HomePage() {
   const untilLabel = !upNext ? '' : minsUntil >= 60
     ? `in ${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`
     : `in ${Math.max(0, minsUntil)} min`;
+
+  // Money tile: spend this calendar month against the summed monthly budgets.
+  const month = new Date().toISOString().slice(0, 7);
+  const spent = txns.filter((t) => t.occurred_at.startsWith(month)).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
+  const budgetTotal = budgets.filter((b) => b.period === 'monthly').reduce((s, b) => s + b.amount_centavos, 0);
+  const left = Math.max(0, budgetTotal - spent);
+  const spentPct = budgetTotal > 0 ? Math.min(100, Math.round((spent / budgetTotal) * 100)) : 0;
+  const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const daysLeft = endOfMonth - new Date().getDate();
+
+  // Running balance per account: opening + everything logged against it.
+  const balances = new Map<string, number>();
+  for (const a of accounts) balances.set(a.id, 0);
+  for (const t of txns) {
+    if (!t.account_id) continue;
+    balances.set(t.account_id, (balances.get(t.account_id) ?? 0) - Math.abs(t.amount_centavos));
+  }
+
+  const deadlines = open
+    .filter((t) => t.due_on && t.due_on >= todayISO)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      days: Math.round((new Date(t.due_on! + 'T00:00:00').getTime() - new Date(todayISO + 'T00:00:00').getTime()) / 86_400_000),
+    }))
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 3);
 
   const greeting = `Good ${tod}${name ? `, ${name}` : ''}`;
 
@@ -225,10 +293,10 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Today's schedule */}
       <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-          <div style={{ background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' }}>
+          {/* Today */}
+          <div style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
               <div style={KICKER}>Today</div>
               <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
@@ -253,6 +321,214 @@ export default function HomePage() {
                 );
               })}
             </div>
+          </div>
+
+          <Scratchpad phone={phone} />
+
+          {/* Habits — tick inline */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
+              <div style={KICKER}>Habits</div>
+              <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>tick inline</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {habits.map((h) => {
+                const on = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
+                return (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                      onClick={() => HA.tick.mutate({ habitId: h.id, date: today })}
+                      className={on ? 'cellpop' : ''}
+                      style={{
+                        width: 24, height: 24, borderRadius: 8, flex: 'none',
+                        border: `1.5px solid ${on ? h.color : 'var(--line2)'}`,
+                        background: on ? h.color : 'transparent',
+                        color: '#0C0F16', fontSize: 12, fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      {on ? '✓' : ''}
+                    </button>
+                    <div style={{ flex: 1, fontSize: 12.5, fontWeight: 500 }}>{h.name}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: AMBER, fontVariantNumeric: 'tabular-nums' }}>
+                      {streak(ticks, h.id)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Money */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
+              <div style={KICKER}>Money</div>
+              <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>{daysLeft} days left</div>
+            </div>
+            <div style={{ fontSize: 23, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginBottom: 3 }}>{peso(left)}</div>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--tx3)', marginBottom: 12 }}>
+              left of {peso(budgetTotal)} this month
+            </div>
+            <div style={{ height: 6, borderRadius: 4, background: 'var(--line2)', overflow: 'hidden', marginBottom: 11 }}>
+              <div style={{ width: `${spentPct}%`, height: '100%', background: AMBER, borderRadius: 4 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
+              {accounts.map((a) => <span key={a.id}>{a.name} {peso(balances.get(a.id) ?? 0)}</span>)}
+            </div>
+          </div>
+
+          {/* Deadlines */}
+          <div style={CARD}>
+            <div style={KICKER}>Deadlines</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+              {deadlines.length === 0 && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Nothing due soon.</div>}
+              {deadlines.map((d) => (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: d.days <= 7 ? AMBER : 'var(--tx2)', width: 40, fontVariantNumeric: 'tabular-nums' }}>
+                    {d.days}d
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>{d.title}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Active projects */}
+          <div style={CARD}>
+            <div style={KICKER}>Active projects</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 12 }}>
+              {projects.length === 0 && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>No active projects.</div>}
+              {projects.map((p) => (
+                <div key={p.id}>
+                  <div style={{ display: 'flex', marginBottom: 5 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{p.name}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</div>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--line2)', overflow: 'hidden' }}>
+                    <div style={{ width: `${p.progress}%`, height: '100%', background: p.color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recently edited */}
+          <div style={CARD}>
+            <div style={KICKER}>Recently edited</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 12 }}>
+              {recent.length === 0 && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Nothing edited yet.</div>}
+              {recent.map((n) => (
+                <div key={n.id}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{n.title}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{ago(n.updated_at)} ago</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Scratchpad — spans two grid columns on desktop (scratchCardStyle). */
+function Scratchpad({ phone }: { phone: boolean }) {
+  const { data: notes = [] } = useScratch();
+  const A = useScratchActions();
+  const [draft, setDraft] = useState('');
+  const [filter, setFilter] = useState<string>('All');
+
+  const keep = () => {
+    const t = draft.trim();
+    if (!t) return;
+    A.add.mutate({ id: crypto.randomUUID(), text: t, tag: 'Note', color: TAG_COLOR.Note });
+    setDraft('');
+  };
+
+  const shown = filter === 'All' ? notes : notes.filter((n) => n.tag === filter);
+
+  return (
+    <div style={{ ...CARD, gridColumn: phone ? 'auto' : 'span 2' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+        <div style={KICKER}>Scratchpad</div>
+        <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>{notes.length} kept</div>
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 12,
+        background: 'var(--card2)', border: '1px solid var(--line)', marginBottom: 12,
+      }}>
+        <Icon name="plus" size={15} color="var(--accTx)" />
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); keep(); } }}
+          rows={1}
+          placeholder="Jot something — Enter to keep it"
+          style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--tx)', resize: 'none', fontFamily: 'inherit', background: 'transparent' }}
+        />
+        <button onClick={keep} className="acc"
+          style={{ flex: 'none', padding: '5px 11px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11, fontWeight: 800 }}>
+          Keep
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {['All', ...SCRATCH_TAGS].map((f) => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{
+              padding: '4px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 700,
+              background: filter === f ? 'color-mix(in srgb, var(--acc) 20%, transparent)' : 'transparent',
+              color: filter === f ? 'var(--accTx)' : 'var(--tx3)',
+            }}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {shown.map((n) => <ScratchRow key={n.id} n={n} A={A} />)}
+        {shown.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '4px 2px' }}>Nothing kept under this tag yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScratchRow({ n, A }: { n: Scratch; A: ReturnType<typeof useScratchActions> }) {
+  const cycleTag = () => {
+    const i = SCRATCH_TAGS.indexOf(n.tag as (typeof SCRATCH_TAGS)[number]);
+    const next = SCRATCH_TAGS[(i + 1) % SCRATCH_TAGS.length];
+    A.save.mutate({ id: n.id, patch: { tag: next, color: TAG_COLOR[next] } });
+  };
+
+  return (
+    <div className="pop" style={{
+      padding: '10px 11px', borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--line)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <span style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, background: n.color, flex: 'none' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, fontWeight: 500, textWrap: 'pretty' }}>{n.text}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <button onClick={cycleTag} title="Change tag"
+              style={{
+                padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+                color: n.color, background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
+              }}>
+              {n.tag}
+            </button>
+            <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{ago(n.created_at)}</span>
+            <button onClick={() => A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } })}
+              className="hov" title={n.pinned ? 'Unpin' : 'Pin'}
+              style={{ padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
+              {n.pinned ? '★' : '☆'}
+            </button>
+            <button onClick={() => A.removeWithUndo(n)} className="hov" title="Delete note"
+              style={{ padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
+              <Icon name="trash" size={13} color="var(--tx3)" />
+            </button>
           </div>
         </div>
       </div>
