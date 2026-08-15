@@ -1,53 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
+import { useLayout } from '@/lib/useLayout';
+
+/** Ported from Basedly.dc.html markup 2351–2420. */
 
 type Person = { id: string; name: string; category: string; color: string; email: string; note: string };
 
 const KEY = ['people'] as const;
+const CATS = ['Classmate', 'Groupmate', 'Friend', 'Family', 'Prof'];
+const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
-const ADD = defineMutation('people.add', async (v: { id: string; name: string; category: string; color: string }) => {
+const hueFor = (c: string) =>
+  ({ Classmate: PAL.indigo, Groupmate: PAL.violet, Friend: PAL.mint, Family: PAL.amber, Prof: PAL.cyan }[c] ?? PAL.indigo);
+
+const ADD = defineMutation('people.add', async (v: { name: string; category: string; color: string; email: string }) => {
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_people').insert({ ...v, user_id });
   if (error) throw error;
 });
-
 const SAVE = defineMutation('people.save', async (v: { id: string; patch: Partial<Person> }) => {
   const { error } = await supabase.from('bd_people').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
-
-// bd_people has no deleted_at, so this is a hard delete — no undo to offer.
 const DEL = defineMutation('people.del', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_people').delete().eq('id', v.id);
   if (error) throw error;
 });
 
-const CATEGORIES = ['Classmate', 'Groupmate', 'Friend', 'Family', 'Prof'];
-
 export default function PeoplePage() {
+  const { phone } = useLayout();
   const qc = useQueryClient();
   const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+
+  const [sel, setSel] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [dName, setDName] = useState('');
+  const [dEmail, setDEmail] = useState('');
+  const [dCat, setDCat] = useState(CATS[0]);
 
   const { data: people = [] } = useQuery({
     queryKey: KEY,
     queryFn: async (): Promise<Person[]> => {
-      const { data, error } = await supabase
-        .from('bd_people')
-        .select('id,name,category,color,email,note')
-        .order('created_at');
+      const { data, error } = await supabase.from('bd_people')
+        .select('id,name,category,color,email,note').order('created_at');
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const add = useMutation<unknown, Error, { id: string; name: string; category: string; color: string }>({ mutationKey: ADD, onSettled: settle });
+  useEffect(() => { if (!sel && people.length && !phone) setSel(people[0].id); }, [people, sel, phone]);
+
+  const add = useMutation<unknown, Error, { name: string; category: string; color: string; email: string }>({ mutationKey: ADD, onSettled: settle });
   const save = useMutation({
     mutationKey: SAVE,
     onMutate: (v: { id: string; patch: Partial<Person> }) => {
@@ -69,57 +79,128 @@ export default function PeoplePage() {
     onSettled: settle,
   });
 
-  const [name, setName] = useState('');
-  const [cat, setCat] = useState(CATEGORIES[0]);
+  const person = people.find((p) => p.id === sel) ?? null;
 
-  const submit = () => {
-    const n = name.trim();
+  const create = () => {
+    const n = dName.trim();
     if (!n) return;
-    add.mutate({ id: crypto.randomUUID(), name: n, category: cat, color: PAL.indigo });
-    setName('');
+    add.mutate({ name: n, category: dCat, color: hueFor(dCat), email: dEmail.trim() });
+    setDName(''); setDEmail(''); setAdding(false);
   };
 
-  return (
-    <div style={{ maxWidth: 680, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.025em', marginBottom: 20 }}>People</h1>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder="Add someone"
-          style={{ flex: 2, minWidth: 150, minHeight: 44, padding: '12px 14px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--card)', color: 'var(--tx)', fontSize: 13.5 }} />
-        <select value={cat} onChange={(e) => setCat(e.target.value)}
-          style={{ minHeight: 44, padding: '12px 10px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--card)', color: 'var(--tx)', fontSize: 12.5 }}>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <button onClick={submit} className="acc" style={{ minHeight: 44, padding: '0 18px', borderRadius: 14, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13.5, fontWeight: 700 }}>Add</button>
+  const list = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <div style={KICKER}>All people</div>
+        <button onClick={() => setAdding((v) => !v)} className="hov" title="Add someone"
+          style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+          <Icon name="plus" size={13} color="var(--tx3)" />
+        </button>
       </div>
 
-      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: 'var(--sh)', overflow: 'hidden' }}>
-        {people.length === 0 && <p style={{ padding: 16, fontSize: 12.5, color: 'var(--tx3)' }}>Nobody yet.</p>}
-        {people.map((p, i) => (
-          <div key={p.id} className="lensrow" style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', animationDelay: `${Math.min(i, 8) * 0.02}s` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ width: 30, height: 30, borderRadius: '50%', background: `color-mix(in srgb, ${p.color} 30%, var(--card2))`, display: 'grid', placeItems: 'center', fontSize: 11.5, fontWeight: 700, color: p.color, flex: 'none' }}>
-                {p.name.slice(0, 2).toUpperCase()}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{p.name}</div>
-                <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{p.category}</div>
-              </div>
-              <button onClick={() => { del.mutate({ id: p.id }); toast(`Removed ${p.name}`); }} aria-label={`Remove ${p.name}`}
-                style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
-                <Icon name="trash" size={13} color="var(--tx3)" />
-              </button>
-            </div>
-            <input
-              defaultValue={p.note}
-              onBlur={(e) => e.target.value !== p.note && save.mutate({ id: p.id, patch: { note: e.target.value } })}
-              placeholder="What you want to remember about them…"
-              style={{ width: '100%', marginTop: 8, fontSize: 12, color: 'var(--tx2)', minHeight: 24 }}
-            />
+      {adding && (
+        <div className="rise" style={{ padding: '13px 14px', borderRadius: 14, background: 'var(--card)', boxShadow: 'var(--sh)', marginBottom: 8 }}>
+          <input value={dName} onChange={(e) => setDName(e.target.value)} placeholder="Full name"
+            style={{ width: '100%', padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', marginBottom: 8 }} />
+          <input value={dEmail} onChange={(e) => setDEmail(e.target.value)} placeholder="Email"
+            style={{ width: '100%', padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 500, color: 'var(--tx)', marginBottom: 10 }} />
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 12 }}>
+            {CATS.map((c) => (
+              <button key={c} onClick={() => setDCat(c)} style={{
+                padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                border: `1px solid ${dCat === c ? 'var(--acc)' : 'var(--line2)'}`,
+                color: dCat === c ? 'var(--accTx)' : 'var(--tx2)',
+              }}>{c}</button>
+            ))}
           </div>
+          <div style={{ display: 'flex', gap: 7 }}>
+            <button onClick={create} className="acc"
+              style={{ padding: '8px 15px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800 }}>Add</button>
+            <button onClick={() => setAdding(false)} className="hov"
+              style={{ padding: '8px 15px', borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {people.map((p) => (
+        <button key={p.id} onClick={() => setSel(p.id)} className="row" style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', borderRadius: 11, textAlign: 'left',
+          background: p.id === sel ? 'var(--hov)' : 'transparent',
+        }}>
+          <span style={{
+            width: 32, height: 32, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center',
+            background: `color-mix(in srgb, ${p.color} 28%, var(--card2))`, color: p.color, fontSize: 11, fontWeight: 700,
+          }}>
+            {p.name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()}
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{p.category}</span>
+          </span>
+        </button>
+      ))}
+
+      {people.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 2px' }}>Nobody yet.</div>}
+    </div>
+  );
+
+  const detail = person && (
+    <div style={{ background: 'var(--card)', borderRadius: 16, padding: '18px 18px 20px', boxShadow: 'var(--sh)', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+        <div style={{
+          width: 54, height: 54, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center',
+          background: `color-mix(in srgb, ${person.color} 28%, var(--card2))`, color: person.color, fontSize: 17, fontWeight: 800,
+        }}>
+          {person.name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.02em' }}>{person.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3 }}>
+            {person.category}{person.email ? ` · ${person.email}` : ''}
+          </div>
+        </div>
+        <button onClick={() => { del.mutate({ id: person.id }); setSel(null); toast(`Removed ${person.name}`); }}
+          className="hov" title="Remove" style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+          <Icon name="trash" size={14} color="var(--tx2)" />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
+        {CATS.map((c) => (
+          <button key={c} onClick={() => save.mutate({ id: person.id, patch: { category: c, color: hueFor(c) } })} style={{
+            padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+            border: `1px solid ${person.category === c ? 'var(--acc)' : 'var(--line2)'}`,
+            color: person.category === c ? 'var(--accTx)' : 'var(--tx2)',
+          }}>{c}</button>
         ))}
       </div>
+
+      <div style={{ ...KICKER, marginBottom: 6 }}>What you want to remember</div>
+      <textarea key={person.id} defaultValue={person.note}
+        onBlur={(e) => e.target.value !== person.note && save.mutate({ id: person.id, patch: { note: e.target.value } })}
+        rows={5} placeholder="How you met, what they're working on, what to ask next time…"
+        style={{ width: '100%', padding: '11px 13px', borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical', fontFamily: 'inherit' }} />
+    </div>
+  );
+
+  return (
+    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+      {phone ? (
+        person ? (
+          <>
+            <button onClick={() => setSel(null)} className="hov"
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 12 }}>
+              <Icon name="back" size={14} color="var(--tx2)" /> People
+            </button>
+            {detail}
+          </>
+        ) : list
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+          {list}
+          {detail ?? <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: 20 }}>Pick someone.</div>}
+        </div>
+      )}
     </div>
   );
 }
