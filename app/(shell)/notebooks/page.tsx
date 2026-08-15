@@ -6,6 +6,7 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useNotebooks, useSections, useNotes, useNotebookActions, type Note } from '@/lib/notebooks';
+import { JournalTab, CanvasTab, JavaTab } from '@/components/NotebookTabs';
 
 /**
  * Ported from Basedly.dc.html — markup 1703–1762, styles 5472–5486 (tab bar +
@@ -146,8 +147,10 @@ export default function NotebooksPage() {
             onDelete={() => note && A.removeWithUndo(note)} />
         </div>
       ) : (
-        <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12.5, padding: 22 }}>
-          {TAB_LABEL[tab]} is not built yet.
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: phone ? '0 14px 20px' : '0 22px 20px' }}>
+          {tab === 'journal' && <JournalTab />}
+          {tab === 'canvas' && <CanvasTab />}
+          {tab === 'code' && <JavaTab />}
         </div>
       )}
     </div>
