@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 import { useHabits } from '@/lib/habits';
 import { currentUserId, cachedUserId } from '@/lib/supabase';
 import { RowActions } from './MoneyRows';
+import { useRankUp, RankUpCard } from './RankUp';
 import { rankOf, standings, rpFor, TIERS, METRICS, RULES, type MetricId, type RuleId } from '@/lib/rank';
 import {
   useChallenges, useMembers, useRanked, useChallengeActions, phaseOf, daysLeft,
@@ -43,6 +44,8 @@ export function Challenges() {
   const { data: members = [] } = useMembers();
   const { data: ranked } = useRanked();
   const A = useChallengeActions();
+  const me = useMe();
+  const { move, dismiss } = useRankUp(ranked?.rp, me);
   const [composing, setComposing] = useState(false);
   /** The challenge being edited, if any. The composer doubles as the editor. */
   const [editing, setEditing] = useState<Challenge | null>(null);
@@ -64,6 +67,7 @@ export function Challenges() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <RankCard ranked={ranked} />
+      {move && <RankUpCard {...move} onClose={dismiss} />}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
         {(['live', 'upcoming', 'over'] as const).map((f) => (
