@@ -615,7 +615,8 @@ function ScratchRow({ n, A, onToTask }: { n: Scratch; A: ReturnType<typeof useSc
               style={{ flex: 'none', padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
               {n.pinned ? '★' : '☆'}
             </button>
-            <button onClick={() => A.removeWithUndo(n)} className="hov" title="Delete note"
+            <button onClick={() => A.removeWithUndo(n)} className="hov"
+              aria-label={`Delete note: ${n.text.slice(0, 30)}`} title="Delete note"
               style={{ flex: 'none', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
               <Icon name="trash" size={13} color="var(--tx3)" />
             </button>
