@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from '@/components/Icon';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
+import { RowActions } from '@/components/MoneyRows';
 import { useRealtime } from '@/lib/realtime';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
@@ -33,9 +34,9 @@ const VIEW_ICON: Record<View, IconName> = { board: 'grid', list: 'agenda', timel
 
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
-const NEW_PROJ = defineMutation('proj.new', async (v: { name: string; color: string }) => {
+const NEW_PROJ = defineMutation('proj.new', async (v: { id: string; name: string; color: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_projects').insert({ user_id, name: v.name, color: v.color });
+  const { error } = await supabase.from('bd_projects').insert({ ...v, user_id });
   if (error) throw error;
 });
 const DEL_PROJ = defineMutation('proj.del', async (v: { id: string }) => {
@@ -44,6 +45,14 @@ const DEL_PROJ = defineMutation('proj.del', async (v: { id: string }) => {
 });
 const RESTORE_PROJ = defineMutation('proj.restore', async (v: { id: string }) => {
   const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: v.id });
+  if (error) throw error;
+});
+const EDIT_PROJ = defineMutation('proj.edit', async (v: { id: string; patch: { name?: string; tag?: string } }) => {
+  const { error } = await supabase.from('bd_projects').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+const EDIT_CARD = defineMutation('proj.editCard', async (v: { id: string; title: string }) => {
+  const { error } = await supabase.from('bd_cards').update({ title: v.title }).eq('id', v.id);
   if (error) throw error;
 });
 const NEW_CARD = defineMutation('proj.newCard', async (v: { project_id: string; title: string; col: string; color: string }) => {
@@ -85,6 +94,8 @@ export default function ProjectsPage() {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'Custom' | 'Name' | 'Cards'>('Custom');
   const [dragId, setDragId] = useState<string | null>(null);
+  /** `proj:<id>` while renaming a folder, 'proj:new' while naming a new one. */
+  const [editing, setEditing] = useState<string | null>(null);
 
   const settle = () => { for (const k of [PROJ, CARDS, CMTS]) void qc.invalidateQueries({ queryKey: k }); };
 
@@ -120,8 +131,43 @@ export default function ProjectsPage() {
   useRealtime('bd_cards', CARDS);
   useRealtime('bd_project_comments', CMTS);
 
-  const newProj = useMutation<unknown, Error, { name: string; color: string }>({ mutationKey: NEW_PROJ, onSettled: settle });
-  const delProj = useMutation<unknown, Error, { id: string }>({ mutationKey: DEL_PROJ, onSettled: settle });
+  const newProj = useMutation<unknown, Error, { id: string; name: string; color: string }>({
+    mutationKey: NEW_PROJ,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+      queryClient.setQueryData<Project[]>(PROJ, [
+        ...prev,
+        { id: v.id, name: v.name, tag: '', color: v.color, progress: 0, deadline: null, position: prev.length },
+      ]);
+    },
+    onSettled: settle,
+  });
+  const editProj = useMutation<unknown, Error, { id: string; patch: { name?: string; tag?: string } }>({
+    mutationKey: EDIT_PROJ,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+      queryClient.setQueryData<Project[]>(PROJ, prev.map((x) => (x.id === v.id ? { ...x, ...v.patch } : x)));
+    },
+    onSettled: settle,
+  });
+  const editCard = useMutation<unknown, Error, { id: string; title: string }>({
+    mutationKey: EDIT_CARD,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Card[]>(CARDS) ?? [];
+      queryClient.setQueryData<Card[]>(CARDS, prev.map((c) => (c.id === v.id ? { ...c, title: v.title } : c)));
+    },
+    onSettled: settle,
+  });
+  const delProj = useMutation<unknown, Error, { id: string }, Project[]>({
+    mutationKey: DEL_PROJ,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+      queryClient.setQueryData<Project[]>(PROJ, prev.filter((x) => x.id !== v.id));
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(PROJ, ctx); },
+    onSettled: settle,
+  });
 
   /**
    * Folders sort by drag: sideways past 100px flings the card away and archives
@@ -131,7 +177,7 @@ export default function ProjectsPage() {
     onDismiss: (id) => {
       const p = projects.find((x) => x.id === id);
       delProj.mutate({ id });
-      toast(`${p?.name ?? 'Project'} archived`, () => restoreProj.mutate({ id }));
+      toast(`${p?.name ?? 'Project'} archived`, () => restoreProj.mutate({ id, row: p }));
     },
     onReorder: (id, dir) => {
       const order = shown.map((x) => x.id);
@@ -144,7 +190,18 @@ export default function ProjectsPage() {
       toast('Custom order saved');
     },
   });
-  const restoreProj = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_PROJ, onSettled: settle });
+  // Undo carries the row it removed, so the folder comes back the moment you
+  // press it rather than one refetch later.
+  const restoreProj = useMutation<unknown, Error, { id: string; row?: Project }>({
+    mutationKey: RESTORE_PROJ,
+    onMutate: (v) => {
+      if (!v.row) return;
+      const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+      if (prev.some((x) => x.id === v.id)) return;
+      queryClient.setQueryData<Project[]>(PROJ, [...prev, v.row].sort((a, b) => a.position - b.position));
+    },
+    onSettled: settle,
+  });
   const reorderProj = useMutation<unknown, Error, { id: string; position: number }>({
     mutationKey: REORDER_PROJ,
     onMutate: (v) => {
@@ -156,7 +213,16 @@ export default function ProjectsPage() {
     onSettled: settle,
   });
   const newCard = useMutation<unknown, Error, { project_id: string; title: string; col: string; color: string }>({ mutationKey: NEW_CARD, onSettled: settle });
-  const restoreCard = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_CARD, onSettled: settle });
+  const restoreCard = useMutation<unknown, Error, { id: string; row?: Card }>({
+    mutationKey: RESTORE_CARD,
+    onMutate: (v) => {
+      if (!v.row) return;
+      const prev = queryClient.getQueryData<Card[]>(CARDS) ?? [];
+      if (prev.some((x) => x.id === v.id)) return;
+      queryClient.setQueryData<Card[]>(CARDS, [...prev, v.row].sort((a, b) => a.position - b.position));
+    },
+    onSettled: settle,
+  });
   const addCmt = useMutation<unknown, Error, { project_id: string; body: string }>({ mutationKey: ADD_CMT, onSettled: settle });
 
   const moveCard = useMutation({
@@ -206,51 +272,61 @@ export default function ProjectsPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
             <Icon name="sort" size={14} color="var(--tx2)" />{sort}
           </button>
-          <button onClick={() => newProj.mutate({ name: 'New project', color: PAL.amber })} className="acc"
+          <button onClick={() => setEditing('proj:new')} className="acc k-squish"
             style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
             <Icon name="plus" size={15} color="#0C0F16" />New project
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
+        {/* A folder is a folder. The card that used to sit behind each one
+            added a border, a shadow and 15px of padding to say "this is a
+            thing you can click", which the folder already said by itself —
+            and it cost half the row's width, so six folders filled a screen
+            that now holds fifteen. Finder, Explorer and Drive all draw the
+            icon on the bare background; so do we. */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${phone ? 104 : 124}px,1fr))`, gap: phone ? 6 : 10 }}>
           {shown.map((p) => {
             const dragProps = cardDrag.propsFor(p.id);
+            const n = cards.filter((c) => c.project_id === p.id).length;
+            if (editing === `proj:${p.id}`) {
+              return (
+                <NameField key={p.id} initial={p.name} color={p.color} phone={phone}
+                  onCancel={() => setEditing(null)}
+                  onSave={(name) => { editProj.mutate({ id: p.id, patch: { name } }); setEditing(null); toast('Folder renamed'); }} />
+              );
+            }
             return (
             <button key={p.id} onClick={() => { if (cardDrag.wasDrag()) return; setOpen(p.id); setView('board'); }}
+              onDoubleClick={() => setEditing(`proj:${p.id}`)}
               onPointerDown={(e) => { dragProps.onPointerDown(e); lp.start(e, 'project', p.id, p.name); }}
               onContextMenu={(e) => lp.onContextMenu(e, 'project', p.id, p.name)}
-              className={`tilt ${dragProps.className}`}
-              title="Drag sideways to archive, up or down to reorder"
+              className={`hov k-squish ${dragProps.className}`}
+              title={`${p.name} — ${n} card${n === 1 ? '' : 's'}. Drag sideways to archive, up or down to reorder.`}
               style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                padding: '16px 15px 15px', borderRadius: 16, background: 'var(--card)',
-                border: '1px solid var(--line)', boxShadow: 'var(--sh)', textAlign: 'left',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+                padding: phone ? '10px 4px' : '12px 6px', borderRadius: 12, textAlign: 'center',
                 ...dragProps.style,
               }}>
-              {/* Layered folder: back plate, paper with three rules, front flap. */}
-              <span style={{ position: 'relative', width: 74, height: 56, display: 'block' }}>
-                <span style={{ position: 'absolute', left: 0, top: 0, width: 30, height: 9, borderRadius: '5px 5px 0 0', background: `color-mix(in srgb, ${p.color} 70%, #000)` }} />
-                <span style={{ position: 'absolute', left: 0, top: 7, right: 0, bottom: 10, borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', padding: '7px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ height: 3, width: '76%', borderRadius: 2, background: 'var(--line2)' }} />
-                  <span style={{ height: 3, width: '58%', borderRadius: 2, background: 'var(--line2)' }} />
-                  <span style={{ height: 3, width: '40%', borderRadius: 2, background: 'var(--line2)' }} />
-                </span>
-                <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 34, borderRadius: '4px 8px 8px 8px', background: `linear-gradient(160deg, ${p.color}, color-mix(in srgb, ${p.color} 62%, #000))` }} />
+              <FolderIcon color={p.color} count={n} size={phone ? 52 : 60} />
+              <span style={{ width: '100%', fontSize: 11.5, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
+                {p.name}
               </span>
-
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 13, width: '100%' }}>
-                <span style={{ minWidth: 0, fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                {p.tag && <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 9.5, fontWeight: 800, color: p.color, background: `color-mix(in srgb, ${p.color} 16%, transparent)` }}>{p.tag}</span>}
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, width: '100%' }}>
-                <span style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx2)' }}>{cards.filter((c) => c.project_id === p.id).length} cards</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>
-                  {p.deadline ? new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `${p.progress}%`}
-                </span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                {p.deadline ? new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `${p.progress}%`}
               </span>
             </button>
             );
           })}
+
+          {editing === 'proj:new' && (
+            <NameField initial="" color={PAL.amber} phone={phone} placeholder="Folder name"
+              onCancel={() => setEditing(null)}
+              onSave={(name) => {
+                newProj.mutate({ id: crypto.randomUUID(), name, color: PAL.amber });
+                setEditing(null);
+                toast(`Created \u201C${name}\u201D`);
+              }} />
+          )}
         </div>
 
         {shown.length === 0 && <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>Nothing matches that search.</div>}
@@ -260,7 +336,8 @@ export default function ProjectsPage() {
             accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={lp.close}
             items={[
               { label: 'Open', icon: 'proj', run: () => setOpen(lp.ctx!.id) },
-              { label: 'Delete', icon: 'trash', danger: true, run: () => { const id = lp.ctx!.id; delProj.mutate({ id }); toast('Project deleted', () => restoreProj.mutate({ id })); } },
+              { label: 'Rename', icon: 'edit', run: () => setEditing(`proj:${lp.ctx!.id}`) },
+              { label: 'Delete', icon: 'trash', danger: true, run: () => { const id = lp.ctx!.id; const row = projects.find((x) => x.id === id); delProj.mutate({ id }); toast('Project deleted', () => restoreProj.mutate({ id, row })); } },
             ]} />
         )}
       </div>
@@ -316,13 +393,21 @@ export default function ProjectsPage() {
                     transform: dragId === c.id ? 'scale(1.03)' : 'scale(1)',
                     transition: dragId === c.id ? 'none' : 'transform .42s cubic-bezier(0.34,1.56,0.64,1), opacity .42s, box-shadow .2s',
                   }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, marginBottom: 9, textWrap: 'pretty' }}>{c.title}</div>
+                  {editing === `card:${c.id}` ? (
+                    <CardTitle initial={c.title}
+                      onCancel={() => setEditing(null)}
+                      onSave={(t) => { editCard.mutate({ id: c.id, title: t }); setEditing(null); toast('Card updated'); }} />
+                  ) : (
+                    <div onDoubleClick={() => setEditing(`card:${c.id}`)}
+                      style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, marginBottom: 9, textWrap: 'pretty' }}>{c.title}</div>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <div style={{ width: 20, height: 20, borderRadius: '50%', background: PAL.indigo, display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700, color: '#0C0F16' }}>MR</div>
-                    <button onClick={() => { delCard.mutate({ id: c.id }); toast(`Deleted “${c.title}”`, () => restoreCard.mutate({ id: c.id })); }}
-                      style={{ marginLeft: 'auto', padding: 3 }} aria-label="Delete card">
-                      <Icon name="trash" size={12} color="var(--tx3)" />
-                    </button>
+                    <span style={{ marginLeft: 'auto' }}>
+                      <RowActions label={c.title}
+                        onEdit={() => setEditing(`card:${c.id}`)}
+                        onDelete={() => { delCard.mutate({ id: c.id }); toast(`Deleted \u201C${c.title}\u201D`, () => restoreCard.mutate({ id: c.id, row: c })); }} />
+                    </span>
                   </div>
                 </div>
               ))}
@@ -341,7 +426,18 @@ export default function ProjectsPage() {
               {mine.filter((c) => c.col === col.id).map((c) => (
                 <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
                   <span style={{ width: 3, height: 20, borderRadius: 2, background: c.color }} />
-                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>{c.title}</span>
+                  {editing === `card:${c.id}` ? (
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <CardTitle initial={c.title}
+                        onCancel={() => setEditing(null)}
+                        onSave={(t) => { editCard.mutate({ id: c.id, title: t }); setEditing(null); toast('Card updated'); }} />
+                    </span>
+                  ) : (
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600 }}>{c.title}</span>
+                  )}
+                  <RowActions label={c.title}
+                    onEdit={() => setEditing(`card:${c.id}`)}
+                    onDelete={() => { delCard.mutate({ id: c.id }); toast(`Deleted \u201C${c.title}\u201D`, () => restoreCard.mutate({ id: c.id, row: c })); }} />
                 </div>
               ))}
             </div>
@@ -410,6 +506,69 @@ function AddComment({ onAdd }: { onAdd: (b: string) => void }) {
       <input value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()}
         placeholder="Say something" style={{ flex: 1, fontSize: 13.5, color: 'var(--tx)', minHeight: 26 }} />
       <button onClick={submit} style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accTx)', padding: '5px 8px', minHeight: 28 }}>Post</button>
+    </div>
+  );
+}
+
+/** A card's title, edited where it sits. */
+function CardTitle({ initial, onSave, onCancel }: {
+  initial: string; onSave: (t: string) => void; onCancel: () => void;
+}) {
+  const [v, setV] = useState(initial);
+  return (
+    <input autoFocus value={v} onChange={(e) => setV(e.target.value)}
+      onBlur={() => (v.trim() ? onSave(v.trim()) : onCancel())}
+      onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) onSave(v.trim()); if (e.key === 'Escape') onCancel(); }}
+      style={{ width: '100%', minHeight: 32, padding: '6px 8px', marginBottom: 9, borderRadius: 8, border: '1px solid var(--acc)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5, fontWeight: 600 }} />
+  );
+}
+
+/**
+ * The folder glyph itself: back plate, ruled paper, front flap, and the card
+ * count printed on the flap where a paper folder would have its label.
+ */
+function FolderIcon({ color, count, size }: { color: string; count: number; size: number }) {
+  const h = Math.round(size * 0.78);
+  return (
+    <span style={{ position: 'relative', width: size, height: h, display: 'block', flex: 'none' }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, width: size * 0.42, height: h * 0.17, borderRadius: '4px 4px 0 0', background: `color-mix(in srgb, ${color} 70%, #000)` }} />
+      <span style={{ position: 'absolute', left: 0, top: h * 0.13, right: 0, bottom: h * 0.2, borderRadius: 6, background: 'var(--card2)', border: '1px solid var(--line2)', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ height: 2.5, width: '76%', borderRadius: 2, background: 'var(--line2)' }} />
+        <span style={{ height: 2.5, width: '54%', borderRadius: 2, background: 'var(--line2)' }} />
+      </span>
+      <span style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0, height: h * 0.6,
+        borderRadius: '3px 7px 7px 7px', display: 'grid', placeItems: 'center',
+        background: `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 62%, #000))`,
+      }}>
+        {count > 0 && (
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#0C0F16', opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+/** Rename in place, on the tile, the way a file manager does it. */
+function NameField({ initial, color, phone, placeholder, onSave, onCancel }: {
+  initial: string; color: string; phone: boolean; placeholder?: string;
+  onSave: (name: string) => void; onCancel: () => void;
+}) {
+  const [v, setV] = useState(initial);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: phone ? '10px 4px' : '12px 6px' }}>
+      <FolderIcon color={color} count={0} size={phone ? 52 : 60} />
+      <input autoFocus value={v} onChange={(e) => setV(e.target.value)}
+        placeholder={placeholder}
+        onBlur={() => (v.trim() ? onSave(v.trim()) : onCancel())}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && v.trim()) onSave(v.trim());
+          if (e.key === 'Escape') onCancel();
+        }}
+        style={{
+          width: '100%', minHeight: 30, padding: '5px 7px', borderRadius: 7, textAlign: 'center',
+          border: '1px solid var(--acc)', background: 'var(--card)', color: 'var(--tx)', fontSize: 11.5, fontWeight: 600,
+        }} />
     </div>
   );
 }
