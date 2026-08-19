@@ -1,105 +1,139 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
 import { Icon } from '../Icon';
-import { supabase, currentUserId } from '@/lib/supabase';
-import { toast } from '@/lib/toast';
-import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { MediaFrame } from '../MediaFrame';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
+import { useSignedUrl } from '@/lib/uploads';
 import { usePrefs } from '@/lib/prefs';
-import { ask } from '@/lib/ask';
+import { useLongPress } from '@/lib/useLongPress';
+import { ask, confirmAsk } from '@/lib/ask';
+import { toast } from '@/lib/toast';
+import { usePhotos, usePins, usePhotoActions, usePinActions, type Photo } from '@/lib/journalPhotos';
 
 /**
- * Journal photos and their annotation pins, lifted verbatim from the old
- * journal tab — this part was never the problem. Pin coordinates are 0–100
- * percentages, so a pin stays on the thing it points at at any render size.
+ * The day's photos: whiteboards, problem sets, lecture slides.
  *
- * The one change: it is `export`ed now, because the new journal page keeps it
- * on the left leaf of the spread instead of in a section of its own.
+ * Every verb the picture needs is here — add, replace, rename, pin, archive,
+ * delete, undo — and each one reaches them by two routes, because the phone
+ * build has no right mouse button: the row of buttons on an open photo, and
+ * the menu that right-click or a half-second hold opens on any tile.
+ *
+ * Photos are shown whole, never cropped (see MediaFrame). A cover-crop on a
+ * photo of a whiteboard eats the top line of the derivation.
  */
 
-const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
+const KICKER: React.CSSProperties = {
+  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
+};
 
-type Photo = { id: string; name: string; storage_path: string; position: number };
-
-/**
- * Journal photos with annotation pins. Annotation coordinates are stored as
- * 0–100 percentages (BACKEND.md), so pins stay put at any render size.
- */
-export function JournalPhotos({ entryId, entryDate, onNeedEntry }: { entryId: string | null; entryDate: string; onNeedEntry: () => void }) {
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
+export function JournalPhotos({
+  entryId, entryDate, onNeedEntry,
+}: { entryId: string | null; entryDate: string; onNeedEntry: () => void }) {
+  const { data: all = [] } = usePhotos(entryId);
+  const A = usePhotoActions(entryId);
   const [open, setOpen] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const addInput = useRef<HTMLInputElement>(null);
 
-  const { data: photos = [] } = useQuery({
-    queryKey: ['journal_photos', entryId],
-    enabled: !!entryId,
-    queryFn: async (): Promise<Photo[]> => {
-      const { data, error } = await supabase.from('bd_journal_photos')
-        .select('id,name,storage_path,position').eq('entry_id', entryId!).order('position');
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const live = all.filter((p) => !p.archived_at && !p.deleted_at);
+  const hidden = all.filter((p) => p.archived_at || p.deleted_at);
 
-  async function add(file: File) {
+  const addFiles = async (files: FileList) => {
     if (!entryId) { onNeedEntry(); toast('Write something first, then add photos'); return; }
     setBusy(true);
-    try {
-      const user_id = await currentUserId();
-      const path = await uploadTo('bd-journal', file);
-      const { error } = await supabase.from('bd_journal_photos')
-        .insert({ user_id, entry_id: entryId, name: file.name, storage_path: path, position: photos.length });
-      if (error) throw error;
-      void qc.invalidateQueries({ queryKey: ['journal_photos'] });
-      toast('Photo added');
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Upload failed');
-    } finally { setBusy(false); }
-  }
+    let n = 0;
+    // Sequential: the uploads share one bucket and one connection, and a
+    // parallel burst on a phone's radio is slower than doing them in turn.
+    for (const f of Array.from(files)) if (await A.upload(entryId, f, live.length + n)) n += 1;
+    setBusy(false);
+    if (n) toast(n === 1 ? 'Photo added' : `${n} photos added`);
+  };
 
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <div style={KICKER}>Photos</div>
+        <div style={KICKER}>Photos{live.length ? ` · ${live.length}` : ''}</div>
+
+        {hidden.length > 0 && (
+          <button onClick={() => setDrawer((v) => !v)} className="hov" aria-pressed={drawer}
+            style={{
+              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+              borderRadius: 9, border: `1px solid ${drawer ? 'var(--acc)' : 'var(--line2)'}`,
+              fontSize: 10.5, fontWeight: 700, color: drawer ? 'var(--accTx)' : 'var(--tx3)',
+            }}>
+            <Icon name="archive" size={12} color={drawer ? 'var(--accTx)' : 'var(--tx3)'} />
+            {hidden.length}
+          </button>
+        )}
+
         <label className="hov" title="Add a photo"
           style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px',
-            borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700,
-            color: 'var(--tx2)', cursor: 'pointer', opacity: busy ? 0.5 : 1,
+            marginLeft: hidden.length ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 11px', borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11,
+            fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', opacity: busy ? 0.5 : 1,
           }}>
           <Icon name="photo" size={13} color="var(--tx2)" />{busy ? 'Uploading…' : 'Add'}
-          <input type="file" accept="image/*" hidden
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void add(f); e.target.value = ''; }} />
+          <input ref={addInput} type="file" accept="image/*" multiple hidden
+            onChange={(e) => { const f = e.target.files; if (f?.length) void addFiles(f); e.target.value = ''; }} />
         </label>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8 }}>
-        {photos.map((p) => <JournalPhoto key={p.id} photo={p} open={open === p.id} onOpen={() => setOpen(open === p.id ? null : p.id)} />)}
-        {photos.length === 0 && (
+        {live.map((p) => (
+          <PhotoTile key={p.id} photo={p} open={open === p.id}
+            onOpen={() => setOpen(open === p.id ? null : p.id)} A={A} />
+        ))}
+        {live.length === 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No photos for {entryDate}.</div>
         )}
       </div>
+
+      {drawer && hidden.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={KICKER}>Put away</div>
+          {hidden.map((p) => (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
+              borderRadius: 10, border: '1px solid var(--line)',
+            }}>
+              <Icon name={p.deleted_at ? 'trash' : 'archive'} size={13} color="var(--tx3)" />
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--tx2)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {p.name}
+              </span>
+              <button onClick={() => A.restore(p)} className="hov" style={CHIP}>Restore</button>
+              <button
+                onClick={() => void confirmAsk('Delete this photo for good?', {
+                  message: `“${p.name}” and its pins go with it.`, confirmLabel: 'Delete forever', danger: true,
+                }).then((yes) => { if (yes) { A.purge.mutate({ id: p.id, storage_path: p.storage_path }); toast('Deleted for good'); } })}
+                className="hov" style={{ ...CHIP, color: 'var(--pal-coral)' }}>
+                Forever
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; onOpen: () => void }) {
+/* -------------------------------------------------------------------- tile */
+
+function PhotoTile({
+  photo, open, onOpen, A,
+}: { photo: Photo; open: boolean; onOpen: () => void; A: ReturnType<typeof usePhotoActions> }) {
   const url = useSignedUrl('bd-journal', photo.storage_path);
-  const qc = useQueryClient();
   const { prefs } = usePrefs();
-  const [anns, setAnns] = useState<{ id: string; x: number; y: number; text: string }[]>([]);
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const { data: pins = [] } = usePins(photo.id, open);
+  const P = usePinActions(photo.id);
+  const press = useLongPress();
+  const swapInput = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    supabase.from('bd_photo_annotations').select('id,x,y,text').eq('photo_id', photo.id)
-      .then(({ data }) => setAnns((data ?? []).map((a) => ({ ...a, x: Number(a.x), y: Number(a.y) }))));
-  }, [open, photo.id]);
-
-  // Click-to-pin: store x/y as percentages so pins survive any resize.
+  /** Click-to-pin: percentages, so a pin survives any resize. */
   const pin = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!open) return;
     const r = e.currentTarget.getBoundingClientRect();
@@ -107,99 +141,115 @@ function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; on
     const y = +(((e.clientY - r.top) / r.height) * 100).toFixed(2);
     const text = await ask('Note for this spot', { placeholder: 'What is here?', confirmLabel: 'Pin' });
     if (!text) return;
-    const user_id = await currentUserId();
-    const { error } = await supabase.from('bd_photo_annotations').insert({ user_id, photo_id: photo.id, x, y, text });
-    if (error) return toast(error.message);
-    setAnns((a) => [...a, { id: crypto.randomUUID(), x, y, text }]);
-    void qc.invalidateQueries({ queryKey: ['journal_photos'] });
+    P.addPin.mutate({ id: crypto.randomUUID(), photo_id: photo.id, x, y, text });
   };
 
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['journal_photos'] });
+  const editPin = async (id: string, current: string) => {
+    const text = await ask('Edit this pin', { initial: current, placeholder: 'Leave empty to remove' });
+    if (text === null) return;
+    if (text.trim()) P.editPin.mutate({ id, text });
+    else { P.delPin.mutate({ id, photo_id: photo.id }); toast('Pin removed'); }
+  };
 
   const rename = () =>
-    void ask('Rename photo', { initial: photo.name, placeholder: 'Photo name' }).then(async (n) => {
-      if (!n || n === photo.name) return;
-      const { error } = await supabase.from('bd_journal_photos').update({ name: n }).eq('id', photo.id);
-      if (error) return toast(error.message);
-      refresh();
-      toast('Photo renamed');
-    });
+    void ask('Rename photo', { initial: photo.name, placeholder: 'Photo name' })
+      .then((n) => { if (n && n !== photo.name) A.rename(photo, n); });
 
-  /**
-   * Delete the row and the object. The file goes second: a storage delete that
-   * succeeds against a row that then fails to delete leaves a photo pointing at
-   * nothing, which is worse than an orphaned file nobody can see.
-   */
-  const remove = async () => {
-    const { error } = await supabase.from('bd_journal_photos').delete().eq('id', photo.id);
-    if (error) return toast(error.message);
-    void supabase.storage.from('bd-journal').remove([photo.storage_path]);
-    refresh();
-    toast(`Deleted “${photo.name}”`);
-  };
-
-  const clearPins = async () => {
-    const { error } = await supabase.from('bd_photo_annotations').delete().eq('photo_id', photo.id);
-    if (error) return toast(error.message);
-    setAnns([]);
-    toast('Pins cleared');
-  };
-
-  const photoMenu = (): CtxGroup[] => [
+  const menu = (): CtxGroup[] => [
     { items: [
       { label: open ? 'Collapse' : 'Open', icon: open ? 'collapse' : 'expand', run: onOpen },
-      { label: 'Open in a new tab', icon: 'link', disabled: !url,
-        hint: url ? undefined : 'Still loading',
+      { label: 'Open in a new tab', icon: 'link', disabled: !url, hint: url ? undefined : 'Still loading',
         run: () => url && window.open(url, '_blank', 'noopener') },
     ] },
     { label: 'Photo', items: [
-      { label: 'Rename', icon: 'edit', shortcut: 'F2', run: rename },
+      { label: 'Replace…', icon: 'refresh', run: () => swapInput.current?.click() },
+      { label: 'Rename', icon: 'edit', run: rename },
       { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(photo.name); toast('Copied'); } },
     ] },
     { label: 'Pins', items: [
-      { label: 'Add a pin', icon: 'pin',
-        disabled: !open, hint: open ? 'Then click the spot' : 'Open the photo first',
+      { label: 'Add a pin', icon: 'pin', disabled: !open,
+        hint: open ? 'Then double-click the spot' : 'Open the photo first',
         run: () => toast('Double-click the spot you want to pin') },
-      { label: `Clear ${anns.length} pin${anns.length === 1 ? '' : 's'}`, icon: 'close',
-        disabled: anns.length === 0, hint: anns.length ? undefined : 'Nothing pinned yet',
-        run: () => void clearPins() },
+      { label: `Clear ${pins.length} pin${pins.length === 1 ? '' : 's'}`, icon: 'close',
+        disabled: pins.length === 0, hint: pins.length ? undefined : 'Nothing pinned yet',
+        run: () => { P.clearPins.mutate({ photo_id: photo.id }); toast('Pins cleared'); } },
     ] },
     { items: [
-      { label: 'Delete photo', icon: 'trash', danger: true, run: () => void remove() },
+      { label: 'Archive', icon: 'archive', run: () => A.setArchived(photo, true) },
+      { label: 'Delete photo', icon: 'trash', danger: true, run: () => A.remove(photo) },
     ] },
   ];
 
   return (
-    <div onClick={onOpen} onDoubleClick={pin}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }); }}
-      title={open ? 'Double-click to pin a note · right-click for more' : photo.name}
+    <div
+      onClick={onOpen}
+      onDoubleClick={pin}
+      onPointerDown={(e) => press.start(e, 'scratch', photo.id, photo.name)}
+      onContextMenu={(e) => { e.stopPropagation(); press.onContextMenu(e, 'scratch', photo.id, photo.name); }}
+      title={open ? 'Double-click to pin · right-click or hold for more' : photo.name}
       style={{
         position: 'relative', gridColumn: open ? '1 / -1' : 'auto',
         border: `1px solid ${open ? 'var(--acc)' : 'var(--line)'}`,
-        borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-        transition: 'border-color .24s',
+        borderRadius: 12, overflow: 'hidden', cursor: 'pointer', transition: 'border-color .24s',
       }}>
-      {/* Journal photos are whiteboards, worked problems and lecture slides —
-          exactly the things a cover-crop ruins. Same fitted stage the feed uses;
-          opening one just gives it a wider frame, never a tighter crop. */}
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} kind="scratch" label={photo.name} items={photoMenu()}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+
+      <input ref={swapInput} type="file" accept="image/*" hidden
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void A.swap(photo, f); e.target.value = ''; }} />
+
+      {press.ctx && (
+        <ContextMenu x={press.ctx.x} y={press.ctx.y} kind="scratch" label={photo.name} items={menu()}
+          onClose={press.close} accent={prefs.accent} dark={prefs.theme === 'dark'} />
       )}
 
       <MediaFrame src={url ?? null} alt={photo.name} ratio={open ? 16 / 10 : 1} maxHeight={open ? 520 : 240} rounded={11}>
-        {open && anns.map((a) => (
-          <span key={a.id} title={a.text} className="pop"
+        {open && pins.map((a, i) => (
+          <button key={a.id} title={a.text} className="pop"
+            onClick={(e) => { e.stopPropagation(); void editPin(a.id, a.text); }}
+            onDoubleClick={(e) => e.stopPropagation()}
             style={{
               position: 'absolute', left: `${a.x}%`, top: `${a.y}%`, transform: 'translate(-50%,-50%)',
               width: 18, height: 18, borderRadius: '50%', background: 'var(--acc)', color: '#0C0F16',
               display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 800,
-              boxShadow: '0 2px 8px rgba(0,0,0,.5)', zIndex: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,.5)', zIndex: 2, cursor: 'pointer',
             }}>
-            {anns.indexOf(a) + 1}
-          </span>
+            {i + 1}
+          </button>
         ))}
       </MediaFrame>
+
+      {/* The verbs, spelled out, on the photo you are looking at. Touch has no
+          right button and a menu you have to know about is a menu nobody uses. */}
+      {open && (
+        <div onClick={(e) => e.stopPropagation()} style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          padding: '8px 10px', borderTop: '1px solid var(--line)',
+        }}>
+          <span style={{
+            flex: '1 1 90px', minWidth: 0, fontSize: 11, fontWeight: 600, color: 'var(--tx2)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {photo.name}
+          </span>
+          <button onClick={() => swapInput.current?.click()} className="hov" style={CHIP} title="Swap in a different picture, keep the pins">
+            <Icon name="refresh" size={12} color="var(--tx3)" />Replace
+          </button>
+          <button onClick={rename} className="hov" style={CHIP}>
+            <Icon name="edit" size={12} color="var(--tx3)" />Rename
+          </button>
+          <button onClick={() => A.setArchived(photo, true)} className="hov" style={CHIP}>
+            <Icon name="archive" size={12} color="var(--tx3)" />Archive
+          </button>
+          <button onClick={() => A.remove(photo)} className="hov" style={{ ...CHIP, color: 'var(--pal-coral)' }}>
+            <Icon name="trash" size={12} color="var(--pal-coral)" />Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+
+const CHIP: React.CSSProperties = {
+  flex: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', minHeight: 28,
+  borderRadius: 8, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)',
+};

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../Icon';
 import { useLayout } from '@/lib/useLayout';
 import { JournalPhotos } from './JournalPhotos';
+import { JournalWindow } from './JournalWindow';
 import {
   useJournalDates, useJournalMonth, useOnThisDay, useJournalActions,
   MOODS, moodColor, ymd, fromYmd, monthOf, monthGrid, shiftMonth, heat, words, streaks,
@@ -106,6 +107,7 @@ export function Journal() {
 
   const rail = (
     <>
+      <JournalWindow />
       <MonthCard ym={ym} sel={sel} today={today} month={month} onPick={jump}
         onShift={(by) => setYm(shiftMonth(ym, by))} />
       <div style={{ ...CARD, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -196,6 +198,7 @@ export function Journal() {
   if (phone) {
     return (
       <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <JournalWindow />
         <MonthCard ym={ym} sel={sel} today={today} month={month} onPick={jump}
           onShift={(by) => setYm(shiftMonth(ym, by))} />
         <div style={{ ...CARD, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

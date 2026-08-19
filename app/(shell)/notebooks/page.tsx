@@ -16,9 +16,9 @@ import { NotebookTable } from '@/components/notes/NotebookTable';
 import { NoteList } from '@/components/notes/NoteList';
 import { NoteEditor } from '@/components/notes/NoteEditor';
 import { GraphView } from '@/components/notes/GraphView';
+import { Canvas } from '@/components/notes/Canvas';
 import { Journal } from '@/components/notes/Journal';
 import { JavaLab } from '@/components/JavaLab';
-import { CanvasBoard } from '@/components/CanvasBoard';
 
 /**
  * Notebooks, rebuilt on Evernote's model.
@@ -32,11 +32,14 @@ import { CanvasBoard } from '@/components/CanvasBoard';
  * Canvas is the infinite board. Journal and Java are unchanged.
  */
 
-const TABS = ['notebooks', 'graph', 'canvas', 'journal', 'code'] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = {
-  notebooks: 'Notebooks', graph: 'Graph', canvas: 'Canvas', journal: 'Journal', code: 'Java',
-};
+const TABS = [
+  { id: 'notebooks', label: 'Notebooks', icon: 'book' },
+  { id: 'canvas', label: 'Canvas', icon: 'grid' },
+  { id: 'graph', label: 'Graph', icon: 'link' },
+  { id: 'journal', label: 'Journal', icon: 'pen' },
+  { id: 'code', label: 'Java', icon: 'code' },
+] as const;
+type Tab = (typeof TABS)[number]['id'];
 
 export default function NotebooksPage() {
   const { phone } = useLayout();
@@ -51,6 +54,9 @@ export default function NotebooksPage() {
   const A = useNoteActions();
 
   const [nbId, setNbId] = useState<string | null>(null);
+  /** Which canvas is open. Here rather than in Canvas, so a dot in the graph
+      can open the board it belongs to. */
+  const [boardId, setBoardId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [inTrash, setInTrash] = useState(false);
 
@@ -107,27 +113,37 @@ export default function NotebooksPage() {
         flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
         display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
       }}>
-        <div className="hbar" style={{
-          position: 'relative', display: 'flex', flex: phone ? '1 1 auto' : '0 0 auto',
-          width: phone ? '100%' : 'auto', padding: 3, borderRadius: 12, background: 'var(--card)',
-          overflowX: 'auto',
+        {/* The old bar slid one accent pill behind the labels, positioned as
+            `index * 100%` of an equal share of the width. That is only ever
+            aligned when every tab is the same width, which is true on a phone
+            and false on a desktop, where the pill sat under "Notebooks" while
+            "Java" was lit. The active tab now carries its own background, so
+            the highlight cannot drift from the label it belongs to. */}
+        <div className="hbar" role="tablist" aria-label="Notebook views" style={{
+          display: 'flex', gap: 2, flex: phone ? '1 1 auto' : '0 0 auto',
+          width: phone ? '100%' : 'auto', padding: 3, borderRadius: 12,
+          background: 'var(--card)', overflowX: 'auto',
         }}>
-          <div aria-hidden style={{
-            position: 'absolute', top: 3, bottom: 3, left: 3, width: `calc((100% - 6px)/${TABS.length})`,
-            borderRadius: 9, background: prefs.accent,
-            transform: `translateX(${TABS.indexOf(tab) * 100}%)`,
-            transition: 'transform .34s cubic-bezier(0.16,1,0.3,1)',
-          }} />
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              position: 'relative', zIndex: 1, flex: phone ? '1 1 0' : '0 0 auto', minWidth: 0,
-              padding: phone ? '7px 6px' : '6px 15px', borderRadius: 9, textAlign: 'center',
-              fontSize: phone ? 11 : 12, fontWeight: 700, whiteSpace: 'nowrap',
-              color: tab === t ? '#0C0F16' : 'var(--tx2)', transition: 'color .24s',
-            }}>
-              {TAB_LABEL[t]}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const on = tab === t.id;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} role="tab" aria-selected={on}
+                className={on ? undefined : 'hov'} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  flex: phone ? '1 1 auto' : '0 0 auto', minWidth: 0, minHeight: 32,
+                  padding: phone ? '7px 8px' : '6px 14px', borderRadius: 9,
+                  fontSize: phone ? 11 : 12, fontWeight: 700, whiteSpace: 'nowrap',
+                  background: on ? prefs.accent : 'transparent',
+                  color: on ? '#0C0F16' : 'var(--tx2)',
+                  transition: 'background-color .2s, color .2s',
+                }}>
+                {/* Icon and label on a desktop; the label alone on a phone,
+                    where five icons in 345px would be five guesses. */}
+                {!phone && <Icon name={t.icon} size={13} color={on ? '#0C0F16' : 'var(--tx3)'} />}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {!phone && tab === 'notebooks' && (
@@ -221,9 +237,13 @@ export default function NotebooksPage() {
 
         {tab === 'graph' && (
           <GraphView notes={notes} notebooks={notebooks} phone={phone}
-            onOpen={(id) => { setTab('notebooks'); goToNote(id); }} />
+            onOpenNote={(id) => { setTab('notebooks'); goToNote(id); }}
+            onOpenBoard={(id) => { setTab('canvas'); setBoardId(id); }} />
         )}
-        {tab === 'canvas' && <CanvasBoard />}
+        {tab === 'canvas' && (
+          <Canvas notes={notes} phone={phone} boardId={boardId} onBoard={setBoardId}
+            onOpenNote={(id) => { setTab('notebooks'); goToNote(id); }} />
+        )}
         {tab === 'journal' && <Journal />}
         {tab === 'code' && <JavaLab />}
       </div>

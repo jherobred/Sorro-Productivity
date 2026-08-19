@@ -3,7 +3,7 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-19 (notebook system rewrite).
+Last updated: 2026-08-19 (canvas + graph rewrite, journal photos).
 
 ---
 
@@ -116,6 +116,61 @@ These are the non-obvious ones. Every one of them cost a debugging session.
 
 ---
 
+## Touched 2026-08-19 (canvas + graph rewrite, journal photos)
+
+**The bug under all of it.** `bd_canvas_nodes.kind` allowed
+`('hub','note','flag','muted')` — names from a scratch-board that no longer
+exists — while the canvas wrote `'text'` and `'group'`. Every card insert failed
+its check constraint, which is why production held two canvases and *zero*
+cards: drop a card, watch it vanish on the next refetch. `KINDS` in
+`lib/canvas.ts` and `bd_canvas_nodes_kind_check` must stay the same list; change
+one, change the other in the same commit.
+
+**New / rewritten**
+- `supabase/migrations/0003_canvas_v2.sql` (applied to production): card kinds
+  `text|note|canvas|group`, `bd_canvas_nodes.ref_canvas`, `bd_canvases.kind`
+  (`canvas|graph`) + `settings` jsonb, `bd_journal_photos.archived_at` and
+  `.deleted_at`.
+- `lib/canvas.ts` — rewritten. Card text now saves on a debounce with a
+  `pending` overlay on reads, the same rule `lib/notes.ts` arrived at; before,
+  text was only written on blur. Board-scoped keys *and* the two everything keys
+  (`canvas_nodes_all`, `canvas_edges_all`) are patched by every write, or the
+  graph goes stale the moment you add a card.
+- `components/notes/Canvas.tsx` — rewritten. Boards are a list on the left
+  (a phone gets list-then-board), not a scrolling row of pills. Note cards and
+  canvas cards are the point: a card can *be* a note or open another board, and
+  that is what the graph reads. Local undo stack (no redo) on add / delete /
+  move / resize / colour / connect.
+- `components/notes/GraphView.tsx` — rewritten. A graph view is now a saved
+  `bd_canvases` row of kind `graph`, so there can be several, each with its own
+  name, viewport and switches. It draws boards as hubs, cards as their spokes,
+  and reaches into the notebook through note cards and `[[wiki links]]`.
+- `lib/graph.ts` + `lib/graph.check.ts` — the graph as one pure function.
+  `node lib/graph.check.ts` is the runnable check.
+- `lib/journalPhotos.ts` + `components/notes/JournalPhotos.tsx` — add,
+  replace (same row, so the pins survive), rename, archive, delete with undo,
+  purge from the "put away" drawer, and pins you can edit or remove by clicking
+  them. Every verb has a button on the open photo as well as a menu row, because
+  the APK has no right mouse button.
+- `components/notes/JournalWindow.tsx` — the pane above the heat map. Drawn,
+  not fetched; sky and greeting come from the hour.
+- The notebook tab bar no longer slides a pill behind the labels. It positioned
+  the pill as `index * 100%` of an equal share, which is only aligned when every
+  tab is the same width — true on a phone, false on a desktop. The active tab
+  carries its own background now, so the highlight cannot drift.
+
+**Archived** — `archive/canvas-v1/` (`CanvasBoard.tsx`, `GraphView.tsx`,
+`lib-canvas.ts`). Excluded from `tsconfig.json`, imported by nothing.
+
+**Verified in the browser (fixture mode).** Tabs, both new panes on desktop and
+at 375px, the graph's counts and its settings toggles, hover hit-testing,
+clicking a card dot jumping to the board it lives on, add-card + undo on the
+canvas, archive + undo on a photo. Fixture mode still cannot prove persistence
+— writes go to a signed-out Supabase and roll back — so the
+optimistic paths were sampled inside their window.
+
+---
+
 ## Touched 2026-08-19 (notebook rewrite)
 
 The whole notes system was archived and rebuilt on Evernote's model. Old files
@@ -205,23 +260,33 @@ Recorded so nobody burns the time again.
 
 In priority order:
 
-1. **Verify the rewrite against production, signed in.** Fixture mode cannot
-   prove persistence (signed-out writes 400). Type into a note, hard-reload,
-   confirm the text survived; make a notebook, move a note between notebooks,
-   delete one and restore it from Trash. What *was* verified locally: typed
-   text survives a failed write and a note switch, the note list, table, trash,
-   read mode and graph all render, `npx tsc --noEmit` and `npm run build` pass.
+1. **Verify against production, signed in.** Fixture mode cannot prove
+   persistence (signed-out writes 400). Two rewrites are now waiting on the same
+   pass:
+   - *Notes*: type into a note, hard-reload, confirm the text survived; make a
+     notebook, move a note between notebooks, delete one and restore it from
+     Trash.
+   - *Canvas*: drop a card and reload — this is the one the check constraint was
+     silently eating, so it is the single most valuable thing to confirm. Then a
+     note card, a canvas card, a connection, and a graph view that shows them.
+   - *Journal photos*: upload, replace, archive, delete, undo, and "Forever"
+     from the drawer (the last one is the only path that touches storage).
 2. **The Journal's skipped bits**, if wanted: a rotating daily prompt above the
    page (a constant list, no schema), and weather chips (needs an API key, so it
-   is a real decision rather than a small one).
-3. **Menus replace the row icons** (user-chosen). Tasks rows, Calendar events
+   is a real decision rather than a small one). The window pane above the heat
+   map is drawn from the clock alone — wiring real weather into it is the same
+   API-key decision.
+3. **Canvas redo**, if the undo stack proves useful. It is one stack of
+   inverses, deliberately without redo or coalescing; a drag that snaps back one
+   card at a time would be the sign it wants a proper command history.
+4. **Menus replace the row icons** (user-chosen). Tasks rows, Calendar events
    and empty slots, Files rows, Money rows. Every one needs long-press wired
    alongside right-click or touch users lose the only way in — the icons are
    being removed.
-4. **Type-scale consolidation**: 25 font sizes and 14 radii down to ~5 and ~4,
+5. **Type-scale consolidation**: 25 font sizes and 14 radii down to ~5 and ~4,
    with a 12px floor. Touches nearly every file; do it in one pass, not
    piecemeal.
-5. Remaining audit findings not yet actioned: the auth gate has no error state
+6. Remaining audit findings not yet actioned: the auth gate has no error state
    or timeout (`Shell.tsx:144-149`) and can hang on a permanently blank screen;
    `prefers-reduced-motion` is ignored for first-run users because
    `DEFAULT_PREFS.motion` is unconditionally `true`; eight inputs have

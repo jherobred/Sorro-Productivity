@@ -387,27 +387,69 @@ export function seedDevFixtures() {
   seed(['journal_month'], jEntries);
   seed(['journal_on_this_day'], [jEntries[jEntries.length - 1]]);
 
+  // A canvas row is a board or a saved graph view (0003_canvas_v2.sql), so the
+  // preview seeds one of each - otherwise the Graph tab shows its empty state
+  // and there is nothing to look at.
+  const board = (id: string, name: string, color: string, position: number, kind = 'canvas', settings: unknown = {}) =>
+    ({ id, name, kind, color, position, viewport: { x: 0, y: 0, z: 1 }, settings, updated_at: iso(0, 10) });
+
   seed(['canvases'], [
-    { id: 'c1', name: 'Capstone map', color: '#7C6CFF', position: 0, viewport: { x: 40, y: 30, z: 1 }, updated_at: iso(0, 10) },
-    { id: 'c2', name: 'Thesis argument', color: '#34D9A0', position: 1, viewport: { x: 0, y: 0, z: 1 }, updated_at: iso(-3, 16) },
+    board('c1', 'Capstone map', '#7C6CFF', 0),
+    board('c2', 'Thesis argument', '#34D9A0', 1),
+    board('gv1', 'Everything', '#38D6F2', 2, 'graph',
+      { canvases: true, cards: true, notes: true, orphans: true, labels: true, spread: 1 }),
   ]);
-  const node = (id: string, text: string, x: number, y: number, w = 180, h = 80, color = '#7C6CFF', kind = 'text') =>
-    ({ id, canvas_id: 'c1', kind, text, x, y, w, h, color, note_id: null, z: 0 });
-  seed(['canvas_nodes', 'c1'], [
-    node('g1', 'Routing engine', 20, 20, 400, 300, '#34D9A0', 'group'),
-    node('cn1', 'Offline tiles — six weeks of GTFS wrangling', 50, 70, 200, 90),
-    node('cn2', 'Corridor evaluation only.\nNetwork-level is future work.', 50, 190, 200, 90, '#FFC24B'),
-    node('cn3', 'Alonzo signed off on the narrowed scope', 470, 70, 200, 80, '#FF6B6B'),
-    node('cn4', 'Dataset: 4,318 jeepney stops', 470, 200, 200, 70, '#38D6F2'),
-    node('cn5', 'Defence — Friday, two printed copies', 470, 320, 200, 70, '#FF6FA8'),
-  ]);
-  seed(['canvas_edges', 'c1'], [
+
+  const node = (
+    canvas_id: string, id: string, text: string, x: number, y: number,
+    w = 180, h = 80, color = '#7C6CFF', kind = 'text',
+    extra: { note_id?: string | null; ref_canvas?: string | null } = {},
+  ) => ({
+    id, canvas_id, kind, text, x, y, w, h, color,
+    note_id: extra.note_id ?? null, ref_canvas: extra.ref_canvas ?? null, z: 0,
+  });
+
+  const c1Nodes = [
+    node('c1', 'g1', 'Routing engine', 20, 20, 400, 300, '#34D9A0', 'group'),
+    node('c1', 'cn1', 'Offline tiles \u2014 six weeks of GTFS wrangling', 50, 70, 200, 90),
+    node('c1', 'cn2', 'Corridor evaluation only.\nNetwork-level is future work.', 50, 190, 200, 90, '#FFC24B'),
+    node('c1', 'cn3', 'Alonzo signed off on the narrowed scope', 470, 70, 200, 80, '#FF6B6B'),
+    node('c1', 'cn4', 'Dataset: 4,318 jeepney stops', 470, 200, 200, 70, '#38D6F2'),
+    node('c1', 'cn5', 'Defence \u2014 Friday, two printed copies', 470, 320, 200, 70, '#FF6FA8'),
+    node('c1', 'cn6', 'Sprint planning', 250, 420, 220, 104, '#7C8CFF', 'note', { note_id: 'nt1' }),
+    node('c1', 'cn7', 'Thesis argument', 520, 440, 220, 104, '#34D9A0', 'canvas', { ref_canvas: 'c2' }),
+  ];
+  const c2Nodes = [
+    node('c2', 'dn1', 'Claim: offline routing is the constraint', 60, 60, 220, 90, '#34D9A0'),
+    node('c2', 'dn2', 'Routing literature', 60, 220, 220, 104, '#B07CFF', 'note', { note_id: 'nt4' }),
+  ];
+  const c1Edges = [
     { id: 'ce1', canvas_id: 'c1', from_node: 'cn1', to_node: 'cn3', from_side: 'right', to_side: 'left', label: 'scope', color: '#7C6CFF' },
     { id: 'ce2', canvas_id: 'c1', from_node: 'cn2', to_node: 'cn4', from_side: 'right', to_side: 'left', label: '', color: '#FFC24B' },
     { id: 'ce3', canvas_id: 'c1', from_node: 'cn3', to_node: 'cn5', from_side: 'bottom', to_side: 'top', label: 'then', color: '#FF6B6B' },
+    { id: 'ce4', canvas_id: 'c1', from_node: 'cn6', to_node: 'cn1', from_side: 'top', to_side: 'bottom', label: 'writes up', color: '#7C8CFF' },
+  ];
+  const c2Edges = [
+    { id: 'de1', canvas_id: 'c2', from_node: 'dn1', to_node: 'dn2', from_side: 'bottom', to_side: 'top', label: 'rests on', color: '#34D9A0' },
+  ];
+
+  seed(['canvas_nodes', 'c1'], c1Nodes);
+  seed(['canvas_edges', 'c1'], c1Edges);
+  seed(['canvas_nodes', 'c2'], c2Nodes);
+  seed(['canvas_edges', 'c2'], c2Edges);
+  // The graph reads every board at once, not one board at a time.
+  seed(['canvas_nodes_all'], [...c1Nodes, ...c2Nodes]);
+  seed(['canvas_edges_all'], [...c1Edges, ...c2Edges]);
+
+  // Two photos on whichever day is open, one of them put away, so the grid,
+  // the drawer and the row of verbs all have something to show. The storage
+  // paths are fake: signing them fails and MediaFrame draws its placeholder,
+  // which is the same thing a slow connection shows.
+  seed(['journal_photos'], [
+    { id: 'jp1', name: 'whiteboard.jpg', storage_path: 'me/whiteboard.jpg', position: 0, archived_at: null, deleted_at: null },
+    { id: 'jp2', name: 'lecture-slide.png', storage_path: 'me/lecture-slide.png', position: 1, archived_at: iso(-1, 9), deleted_at: null },
   ]);
-  seed(['canvas_nodes', 'c2'], []);
-  seed(['canvas_edges', 'c2'], []);
+  seed(['photo_pins'], []);
 
   seed(['java_files'], [
     {
