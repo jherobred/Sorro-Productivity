@@ -53,6 +53,50 @@ must stay in sync with `NATIVE_REDIRECT` in `lib/nativeAuth.ts`.
 
 ### Where the APK lives (Settings → App)
 
+**Done, except the signing key — which has to be yours.**
+
+`bd-releases` is a public-read bucket holding `update.json`, and
+`NEXT_PUBLIC_UPDATE_URL` points at it. Settings → App checks it and currently
+answers "You are on the latest build". A GitHub release would have been the
+obvious host, but this repo is private: a release asset there needs a token to
+fetch, and a phone asking "is there a new build?" has none.
+
+To cut a release:
+
+```bash
+npm run build && npx cap sync android && (cd android && ./gradlew assembleRelease)
+```
+
+That needs a signing key first, and **the key must be yours, not one I
+generate**. It is the app's permanent identity: every future update has to be
+signed with the same key, and if it is lost nobody can ever update an installed
+Basedly again — they would have to uninstall and lose nothing but be annoyed.
+It also must never be committed.
+
+```bash
+keytool -genkey -v -keystore ~/basedly-release.jks -keyalg RSA   -keysize 2048 -validity 10000 -alias basedly
+```
+
+Then add a `signingConfigs` block to `android/app/build.gradle` pointing at it,
+with the passwords in `~/.gradle/gradle.properties` rather than the repo.
+
+A **debug** APK builds today without any of this and installs fine for testing —
+but do not hand it out as the download. Debug builds are signed with a
+throwaway key, so the first properly signed release will refuse to install over
+one, which is exactly the uninstall-reinstall cycle this whole mechanism exists
+to avoid.
+
+Once you have a signed APK, upload it and bump the manifest:
+
+```bash
+supabase storage cp android/app/build/outputs/apk/release/app-release.apk   ss:///bd-releases/basedly-1.1.0.apk
+```
+
+then edit `update.json` in the bucket to the new `version`, `url` and `notes`,
+and set `NEXT_PUBLIC_APP_VERSION` to match before deploying the web build.
+
+### Turning the bot on
+
 Settings → App can check for a new build and hand the user the APK, but it needs somewhere
 to look. Publish a small JSON manifest alongside each release and point the app at it:
 
@@ -75,12 +119,13 @@ uninstall-reinstall cycle is needed.
 
 ### Turning the bot on
 
-Threads and Challenges are written and ready for the bot, and the preview shows what its
-posts look like, but **nothing is deployed and nothing is scheduled** — it writes to your
-live database on a timer, so switching it on is yours to do:
+**Done and running.** The key came across from jhems-os into `app_secrets`, the function is
+deployed, and three cron jobs are scheduled: tips every two hours, a campus post every five,
+a challenge each Monday. All three were verified posting real rows.
 
-1. **Create the bot's identity.** Run `supabase/migrations/0001_gemini_bot.sql` in the SQL
-   editor. It adds one confirmed auth user with no password and no identity provider — it
+Kept here for when you need to change or stop it:
+
+1. **The bot's identity** is `supabase/migrations/0001_gemini_bot.sql`, already applied. It adds one confirmed auth user with no password and no identity provider — it
    cannot be signed into; it exists so `bd_threads.author_id` and `bd_challenges.owner_id`
    have something to point at, and so the existing RLS keeps working untouched.
 2. **Set the secrets** (Edge Functions → Secrets):
