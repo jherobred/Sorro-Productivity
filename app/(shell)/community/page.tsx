@@ -397,7 +397,7 @@ export default function CommunityPage() {
                         <Icon name="chat" size={15} color="var(--tx2)" />0
                       </span>
                       <Icon name="share" size={15} color="var(--tx3)" />
-                      <button onClick={() => savePost.mutate({ postId: p.id, on: true })} aria-label="Save" style={{ marginLeft: 'auto', flex: 'none' }}>
+                      <button onClick={() => savePost.mutate({ postId: p.id, on: true })} aria-label="Save" className="tap" style={{ marginLeft: 'auto', flex: 'none' }}>
                         <Icon name="bookmark" size={15} color="var(--tx3)" />
                       </button>
                     </div>
@@ -490,7 +490,7 @@ function LikeButton({ mine, count, onToggle }: { mine: boolean; count: number; o
   };
 
   return (
-    <button onClick={fire} aria-label="Like"
+    <button onClick={fire} className="tap" aria-label="Like"
       style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: mine ? PAL.coral : 'var(--tx2)' }}>
       <span className={mine ? 'heartpop' : undefined} style={{ display: 'flex' }}>
         <Icon name="heart" size={15} color={mine ? PAL.coral : 'var(--tx2)'} />

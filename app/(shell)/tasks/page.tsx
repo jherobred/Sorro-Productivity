@@ -293,6 +293,7 @@ function TaskRow({
         <button
           onClick={onCheck}
           title="Complete"
+          className="tap"
           style={{
             width: 19, height: 19, borderRadius: '50%', flex: 'none', marginTop: 1,
             border: `1.6px solid ${PRI_COL[row.pri]}`,
@@ -326,7 +327,7 @@ function TaskRow({
                 onMouseEnter={() => setStarHover({ id: row.task.id, v })}
                 title={`${v} ${v === 1 ? 'star' : 'stars'}`}
                 // starpop fires on the star that just locked in.
-                className={!starHover && popped === v && locked === v ? 'starpop' : undefined}
+                className={`tap ${!starHover && popped === v && locked === v ? 'starpop' : ''}`}
                 style={{
                   fontSize: 16, lineHeight: 1, padding: '0 1px',
                   color: v <= shown ? (starHover ? accent : 'var(--accTx)') : 'var(--line2)',

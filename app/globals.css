@@ -338,3 +338,18 @@ body {
   overflow: hidden;
   white-space: nowrap;
 }
+
+/* A 44x44 hit area behind a control that is drawn smaller.
+   WCAG 2.5.5 asks for 44x44; a task checkbox is 19x19, a Like is 29x19 and a
+   Save is 15x23 because that is the right SIZE for the glyph — the target and
+   the drawing are different things. This expands the target without moving a pixel
+   of the design: a centred pseudo-element that never paints. */
+.tap { position: relative; }
+.tap::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}
