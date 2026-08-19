@@ -39,9 +39,9 @@ export default function HabitsPage() {
         : String(Number(t.value));
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Habits</div>
+        <h1 className="sronly">Habits</h1>
         <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
           {weekLabel(week[0], week[6])}
         </div>

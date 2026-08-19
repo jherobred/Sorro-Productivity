@@ -195,7 +195,7 @@ export default function PeoplePage() {
   );
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px' }}>
       {phone ? (
         person ? (
           <>

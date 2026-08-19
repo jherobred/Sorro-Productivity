@@ -297,9 +297,9 @@ export default function CommunityPage() {
   });
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Community</div>
+        <h1 className="sronly">Community</h1>
         <div style={{ position: 'relative', display: 'flex', padding: 3, borderRadius: 12, background: 'var(--card)' }}>
           <div style={{
             position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc((100% - 6px)/3)',

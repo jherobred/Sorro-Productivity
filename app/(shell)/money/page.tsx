@@ -16,7 +16,17 @@ import { toast } from '@/lib/toast';
 
 /** Ported from Basedly.dc.html markup 2102–2183. */
 
-const TABS = ['Overview', 'Budgets', 'Transactions', 'Goals', 'Subscriptions', 'To buy'] as const;
+/**
+ * Six tabs for one student's money was more navigation than content: four of
+ * them held a single list, and Overview restated numbers that Budgets already
+ * showed. Three now, grouped by the question being asked.
+ *
+ *   Overview  where do I stand — accounts, this month, budgets against actuals
+ *   Activity  what happened, and what is about to — transactions and the
+ *             to-buy list, which is only a transaction that has not happened
+ *   Plan      money already spoken for — goals and subscriptions
+ */
+const TABS = ['Overview', 'Activity', 'Plan'] as const;
 type Tab = (typeof TABS)[number];
 
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
@@ -92,9 +102,9 @@ function Money() {
   const spentBy = (c: string) => monthTx.filter((t) => t.category === c).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 820, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em', marginRight: 6 }}>Money</div>
+        <h1 className="sronly">Money</h1>
         <div className="hbar" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', overflowX: 'auto' }}>
           {TABS.map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
@@ -166,66 +176,76 @@ function Money() {
               </div>
             </div>
           </div>
+
+          {/* Budgets belong next to what was actually spent. On their own tab
+              they were a list of numbers you had to hold in your head while
+              you went to look at the other list. */}
+          <div style={{ ...CARD, marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 4 }}>
+              <div style={KICKER}>Budgets</div>
+              <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                this month
+              </div>
+            </div>
+            {budgets.length === 0 && editing !== 'budget:new' && (
+              <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 0' }}>No budgets set.</div>
+            )}
+            {budgets.map((b) => {
+              const sp = spentBy(b.category);
+              const pc = Math.min(100, Math.round((sp / b.amount_centavos) * 100));
+              const over = sp > b.amount_centavos;
+              if (editing === `budget:${b.id}`) {
+                return (
+                  <InlineForm key={b.id}
+                    fields={[{ key: 'category', label: 'Category', kind: 'text' }, { key: 'amount', label: 'Monthly limit', kind: 'money' }]}
+                    initial={{ category: b.category, amount: fromCentavos(b.amount_centavos) }}
+                    submitLabel="Save"
+                    onCancel={() => setEditing(null)}
+                    onSubmit={(v) => {
+                      BA.edit.mutate({ id: b.id, patch: { category: v.category, amount_centavos: toCentavos(v.amount) } });
+                      setEditing(null);
+                      toast('Budget updated');
+                    }} />
+                );
+              }
+              return (
+                <div key={b.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, flex: 1 }}>{b.category}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{peso(sp)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>of {peso(b.amount_centavos)}</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: over ? PAL.coral : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{pc}%</div>
+                    <RowActions label={b.category} onEdit={() => setEditing(`budget:${b.id}`)}
+                      onDelete={() => BA.removeWithUndo(b, b.category)} />
+                  </div>
+                  <div style={{ height: 7, borderRadius: 5, background: 'var(--line2)', overflow: 'hidden' }}>
+                    <div style={{ width: `${pc}%`, height: '100%', background: over ? PAL.coral : '#F5B33C', transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                  </div>
+                </div>
+              );
+            })}
+            {editing === 'budget:new' ? (
+              <InlineForm
+                fields={[{ key: 'category', label: 'Category', kind: 'text', placeholder: 'Food' }, { key: 'amount', label: 'Monthly limit', kind: 'money', placeholder: '6000' }]}
+                submitLabel="Add budget"
+                onCancel={() => setEditing(null)}
+                onSubmit={(v) => {
+                  BA.add.mutate({ id: crypto.randomUUID(), category: v.category, amount_centavos: toCentavos(v.amount), period: 'monthly' });
+                  setEditing(null);
+                  toast(`Budget for ${v.category} added`);
+                }} />
+            ) : (
+              <AddButton label="Add a budget" onClick={() => setEditing('budget:new')} />
+            )}
+          </div>
         </>
       )}
 
-      {tab === 'Budgets' && (
-        <div style={CARD}>
-          {budgets.length === 0 && editing !== 'budget:new' && (
-            <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No budgets set.</div>
-          )}
-          {budgets.map((b) => {
-            const sp = spentBy(b.category);
-            const p = Math.min(100, Math.round((sp / b.amount_centavos) * 100));
-            const over = sp > b.amount_centavos;
-            if (editing === `budget:${b.id}`) {
-              return (
-                <InlineForm key={b.id}
-                  fields={[{ key: 'category', label: 'Category', kind: 'text' }, { key: 'amount', label: 'Monthly limit', kind: 'money' }]}
-                  initial={{ category: b.category, amount: fromCentavos(b.amount_centavos) }}
-                  submitLabel="Save"
-                  onCancel={() => setEditing(null)}
-                  onSubmit={(v) => {
-                    BA.edit.mutate({ id: b.id, patch: { category: v.category, amount_centavos: toCentavos(v.amount) } });
-                    setEditing(null);
-                    toast('Budget updated');
-                  }} />
-              );
-            }
-            return (
-              <div key={b.id} className="blk" style={{ padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{b.category}</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{peso(sp)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>of {peso(b.amount_centavos)}</div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: over ? PAL.coral : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{p}%</div>
-                  <RowActions label={b.category} onEdit={() => setEditing(`budget:${b.id}`)}
-                    onDelete={() => BA.removeWithUndo(b, b.category)} />
-                </div>
-                <div style={{ height: 7, borderRadius: 5, background: 'var(--line2)', overflow: 'hidden' }}>
-                  <div className="k-progress" style={{ width: `${p}%`, height: '100%', background: over ? PAL.coral : '#F5B33C' }} />
-                </div>
-              </div>
-            );
-          })}
-
-          {editing === 'budget:new' ? (
-            <InlineForm
-              fields={[{ key: 'category', label: 'Category', kind: 'text', placeholder: 'Food' }, { key: 'amount', label: 'Monthly limit', kind: 'money', placeholder: '6000' }]}
-              submitLabel="Add budget"
-              onCancel={() => setEditing(null)}
-              onSubmit={(v) => {
-                BA.add.mutate({ id: crypto.randomUUID(), category: v.category, amount_centavos: toCentavos(v.amount), period: 'monthly' });
-                setEditing(null);
-                toast(`Budget for ${v.category} added`);
-              }} />
-          ) : (
-            <AddButton label="Add a budget" onClick={() => setEditing('budget:new')} />
-          )}
-        </div>
-      )}
-
-      {tab === 'Transactions' && (
+      {/* What happened, and what is about to. The to-buy list is only a
+          transaction that has not been made yet, so it belongs beside the
+          ones that have rather than on a tab of its own. */}
+      {tab === 'Activity' && (
+        <>
         <div style={CARD}>
           {txns.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Nothing logged yet.</div>}
           {txns.map((t) => (
@@ -260,9 +280,59 @@ function Money() {
             )
           ))}
         </div>
+
+        <div style={{ ...KICKER, margin: '18px 0 8px' }}>To buy</div>
+        <div style={{ ...CARD, marginTop: 12 }}>
+          {toBuy.map((b) => (
+            editing === `buy:${b.id}` ? (
+              <InlineForm key={b.id}
+                fields={[{ key: 'name', label: 'Item', kind: 'text' }, { key: 'amount', label: 'Roughly', kind: 'money' }]}
+                initial={{ name: b.name, amount: fromCentavos(b.amount_centavos) }}
+                submitLabel="Save"
+                onCancel={() => setEditing(null)}
+                onSubmit={(v) => {
+                  BuyA.edit.mutate({ id: b.id, patch: { name: v.name, amount_centavos: toCentavos(v.amount) } });
+                  setEditing(null);
+                  toast('Item updated');
+                }} />
+            ) : (
+              <div key={b.id} className="blk" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{b.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{peso(b.amount_centavos)}</div>
+                <button onClick={() => A.logBuy.mutate({ item: b, account_id: accounts[0]?.id ?? null })} className="acc k-squish"
+                  style={{ padding: '6px 11px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11, fontWeight: 800, minHeight: 32 }}>
+                  Log as expense
+                </button>
+                <RowActions label={b.name} onEdit={() => setEditing(`buy:${b.id}`)}
+                  onDelete={() => BuyA.removeWithUndo(b, b.name)} />
+              </div>
+            )
+          ))}
+          {toBuy.length === 0 && editing !== 'buy:new' && (
+            <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '6px 0' }}>Nothing on the list — everything here has been logged.</div>
+          )}
+
+          {editing === 'buy:new' ? (
+            <InlineForm
+              fields={[{ key: 'name', label: 'Item', kind: 'text', placeholder: 'Notebook + pens' }, { key: 'amount', label: 'Roughly', kind: 'money', placeholder: '180' }]}
+              submitLabel="Add to list"
+              onCancel={() => setEditing(null)}
+              onSubmit={(v) => {
+                BuyA.add.mutate({ id: crypto.randomUUID(), name: v.name, amount_centavos: toCentavos(v.amount), bought_at: null });
+                setEditing(null);
+                toast(`${v.name} added`);
+              }} />
+          ) : (
+            <AddButton label="Add something to buy" onClick={() => setEditing('buy:new')} />
+          )}
+        </div>
+        </>
       )}
 
-      {tab === 'Goals' && (
+      {/* Money already spoken for: a goal is saving towards something, a
+          subscription is a payment that will happen whether you look or not. */}
+      {tab === 'Plan' && (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
           {goals.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No goals yet.</div>}
           {goals.map((g) => {
@@ -332,10 +402,9 @@ function Money() {
             </div>
           )}
         </div>
-      )}
 
-      {tab === 'Subscriptions' && (
-        <div style={CARD}>
+        <div style={{ ...KICKER, margin: '18px 0 8px' }}>Subscriptions</div>
+        <div style={{ ...CARD, marginTop: 12 }}>
           {subs.length === 0 && editing !== 'sub:new' && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No subscriptions.</div>}
           {subs.map((sub, i) => (
             editing === `sub:${sub.id}` ? (
@@ -384,53 +453,7 @@ function Money() {
             <AddButton label="Add a subscription" onClick={() => setEditing('sub:new')} />
           )}
         </div>
-      )}
-
-      {tab === 'To buy' && (
-        <div style={CARD}>
-          {toBuy.map((b) => (
-            editing === `buy:${b.id}` ? (
-              <InlineForm key={b.id}
-                fields={[{ key: 'name', label: 'Item', kind: 'text' }, { key: 'amount', label: 'Roughly', kind: 'money' }]}
-                initial={{ name: b.name, amount: fromCentavos(b.amount_centavos) }}
-                submitLabel="Save"
-                onCancel={() => setEditing(null)}
-                onSubmit={(v) => {
-                  BuyA.edit.mutate({ id: b.id, patch: { name: v.name, amount_centavos: toCentavos(v.amount) } });
-                  setEditing(null);
-                  toast('Item updated');
-                }} />
-            ) : (
-              <div key={b.id} className="blk" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{b.name}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{peso(b.amount_centavos)}</div>
-                <button onClick={() => A.logBuy.mutate({ item: b, account_id: accounts[0]?.id ?? null })} className="acc k-squish"
-                  style={{ padding: '6px 11px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11, fontWeight: 800, minHeight: 32 }}>
-                  Log as expense
-                </button>
-                <RowActions label={b.name} onEdit={() => setEditing(`buy:${b.id}`)}
-                  onDelete={() => BuyA.removeWithUndo(b, b.name)} />
-              </div>
-            )
-          ))}
-          {toBuy.length === 0 && editing !== 'buy:new' && (
-            <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '6px 0' }}>Nothing on the list — everything here has been logged.</div>
-          )}
-
-          {editing === 'buy:new' ? (
-            <InlineForm
-              fields={[{ key: 'name', label: 'Item', kind: 'text', placeholder: 'Notebook + pens' }, { key: 'amount', label: 'Roughly', kind: 'money', placeholder: '180' }]}
-              submitLabel="Add to list"
-              onCancel={() => setEditing(null)}
-              onSubmit={(v) => {
-                BuyA.add.mutate({ id: crypto.randomUUID(), name: v.name, amount_centavos: toCentavos(v.amount), bought_at: null });
-                setEditing(null);
-                toast(`${v.name} added`);
-              }} />
-          ) : (
-            <AddButton label="Add something to buy" onClick={() => setEditing('buy:new')} />
-          )}
-        </div>
+        </>
       )}
     </div>
   );

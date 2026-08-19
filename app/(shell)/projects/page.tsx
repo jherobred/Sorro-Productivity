@@ -257,7 +257,7 @@ export default function ProjectsPage() {
   const proj = projects.find((p) => p.id === open);
   const mine = cards.filter((c) => c.project_id === open);
 
-  const pad = phone ? '16px 14px 26px' : '20px 24px 30px';
+  const pad = phone ? '14px 14px 24px' : '20px 24px 28px';
 
   if (!proj) {
     return (

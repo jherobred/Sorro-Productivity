@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { Page } from '@/components/Page';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
@@ -115,14 +116,11 @@ export default function TasksPage() {
   const detailTask = tasks.find((t) => t.id === detail) ?? null;
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, justifyContent: 'flex-start' }}>
-        <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-.025em', width: 56, height: '100%', textAlign: 'right' }}>
-          Tasks
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx3)', height: '100%', width: '100%', textAlign: 'center' }}>
-          {rows.length} open across every list and project
-        </div>
+    <Page
+      name="Tasks"
+      width="list"
+      meta={`${rows.length} open across every list and project`}
+      actions={
         <button
           className="hov k-squish"
           title={`Sorted by ${order.toLowerCase()} — click to change`}
@@ -132,11 +130,12 @@ export default function TasksPage() {
             setOrder(next[order]);
             toast(`Sorted by ${next[order].toLowerCase()}`);
           }}
-          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}
         >
           <Icon name="sort" size={15} color="var(--tx2)" />{order}
         </button>
-      </div>
+      }
+    >
 
       <div style={{ background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '2px 6px 2px' }}>
@@ -228,7 +227,7 @@ export default function TasksPage() {
           onDelete={() => { A.removeWithUndo(detailTask); setDetail(null); }}
         />
       )}
-    </div>
+    </Page>
   );
 }
 

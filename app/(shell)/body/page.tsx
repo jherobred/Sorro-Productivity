@@ -141,9 +141,9 @@ export default function BodyPage() {
   const macro = { p: meals.reduce((s, m) => s + m.protein, 0), c: meals.reduce((s, m) => s + m.carbs, 0), f: meals.reduce((s, m) => s + m.fat, 0) };
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Body</div>
+        <h1 className="sronly">Body</h1>
         <div style={{ position: 'relative', display: 'flex', padding: 3, borderRadius: 12, background: 'var(--card)' }}>
           <div style={{
             position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc((100% - 6px)/3)',

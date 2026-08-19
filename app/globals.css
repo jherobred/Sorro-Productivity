@@ -311,3 +311,16 @@ body {
 .bd-rail { animation: railin .3s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes railin { from { width: 0; opacity: .4; } }
 .nomo .bd-rail { animation: none; }
+
+/* Announced, not drawn. Each section keeps an h1 naming it for screen readers
+   while the visible line carries something the navigation is not already
+   saying. Clipped rather than display:none, which would remove it from the
+   accessibility tree along with the pixels. */
+.sronly {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}

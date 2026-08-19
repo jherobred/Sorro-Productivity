@@ -128,9 +128,9 @@ export default function ProfilePage() {
   const [eyeRx, eyeRy] = pick(avatar, 'eyes').v.split(',');
 
   return (
-    <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Profile</div>
+        <h1 className="sronly">Profile</h1>
         <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Your face across Basedly</div>
         <button onClick={surprise} className="hov"
           style={{ marginLeft: 'auto', flex: 'none', padding: '10px 16px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
