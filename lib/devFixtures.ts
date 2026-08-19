@@ -217,6 +217,22 @@ export function seedDevFixtures() {
   ]);
   seed(['project_comments'], []);
 
+  seed(['folders'], [
+    { id: 'f1', name: 'CS 191', parent_id: null },
+    { id: 'f2', name: 'Scans', parent_id: null },
+  ]);
+  const file = (id: string, name: string, kind: string, size_bytes: number, folder_id: string | null, days: number) =>
+    ({ id, name, kind, size_bytes, folder_id, starred: false, storage_path: `me/${id}-${name}`,
+       created_at: new Date(Date.now() - days * 86400000).toISOString() });
+  seed(['files'], [
+    file('fl1', 'Proposal draft 3.pdf', 'doc', 842_000, 'f1', 1),
+    file('fl2', 'Corridor map.png', 'img', 1_940_000, 'f1', 2),
+    file('fl3', 'Orientation deck.pdf', 'doc', 5_100_000, null, 3),
+    file('fl4', 'Normalisation notes.md', 'doc', 12_400, null, 4),
+    file('fl5', 'Whiteboard 08-14.jpg', 'img', 2_310_000, 'f2', 5),
+    file('fl6', 'Reviewer bundle.zip', 'zip', 18_700_000, null, 9),
+  ]);
+
   const post = (id: string, author_id: string, caption: string, tag: string, image_path: string | null, mins: number) =>
     ({ id, author_id, caption, tag, image_path, created_at: new Date(Date.now() - mins * 60000).toISOString() });
   seed(['posts'], [

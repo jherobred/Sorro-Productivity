@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from '@/components/Icon';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
+import { RowActions } from '@/components/MoneyRows';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
@@ -61,6 +62,22 @@ const NEW_FOLDER = defineMutation('files.newFolder', async (v: { name: string; p
   if (error) throw error;
 });
 
+const RENAME_FOLDER = defineMutation('files.renameFolder', async (v: { id: string; name: string }) => {
+  const { error } = await supabase.from('bd_folders').update({ name: v.name }).eq('id', v.id);
+  if (error) throw error;
+});
+/**
+ * Deleting a folder does not delete what is in it. The files move up to the
+ * Drive root, which is the only outcome that cannot lose anything — and it is
+ * what every drive does when you remove a container rather than its contents.
+ */
+const DEL_FOLDER = defineMutation('files.delFolder', async (v: { id: string }) => {
+  const { error: e1 } = await supabase.from('bd_files').update({ folder_id: null }).eq('folder_id', v.id);
+  if (e1) throw e1;
+  const { error } = await supabase.from('bd_folders').delete().eq('id', v.id);
+  if (error) throw error;
+});
+
 export default function FilesPage() {
   const { phone } = useLayout();
   const qc = useQueryClient();
@@ -92,9 +109,53 @@ export default function FilesPage() {
     },
   });
 
-  const rename = useMutation<unknown, Error, { id: string; name: string }>({ mutationKey: RENAME, onSettled: settle });
-  const restore = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE, onSettled: settle });
-  const newFolder = useMutation<unknown, Error, { name: string; parent_id: string | null }>({ mutationKey: NEW_FOLDER, onSettled: settle });
+  const rename = useMutation<unknown, Error, { id: string; name: string }>({
+    mutationKey: RENAME,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<FileRow[]>(FILES) ?? [];
+      queryClient.setQueryData<FileRow[]>(FILES, prev.map((f) => (f.id === v.id ? { ...f, name: v.name } : f)));
+    },
+    onSettled: settle,
+  });
+  // Undo carries the row, so the file reappears on press rather than on refetch.
+  const restore = useMutation<unknown, Error, { id: string; row?: FileRow }>({
+    mutationKey: RESTORE,
+    onMutate: (v) => {
+      if (!v.row) return;
+      const prev = queryClient.getQueryData<FileRow[]>(FILES) ?? [];
+      if (prev.some((f) => f.id === v.id)) return;
+      queryClient.setQueryData<FileRow[]>(FILES, [v.row, ...prev]);
+    },
+    onSettled: settle,
+  });
+  const newFolder = useMutation<unknown, Error, { id: string; name: string; parent_id: string | null }>({
+    mutationKey: NEW_FOLDER,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Folder[]>(FOLDERS) ?? [];
+      queryClient.setQueryData<Folder[]>(FOLDERS, [...prev, { id: v.id, name: v.name, parent_id: v.parent_id }]);
+    },
+    onSettled: settle,
+  });
+  const renameFolder = useMutation<unknown, Error, { id: string; name: string }>({
+    mutationKey: RENAME_FOLDER,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Folder[]>(FOLDERS) ?? [];
+      queryClient.setQueryData<Folder[]>(FOLDERS, prev.map((f) => (f.id === v.id ? { ...f, name: v.name } : f)));
+    },
+    onSettled: settle,
+  });
+  const delFolder = useMutation<unknown, Error, { id: string }, Folder[]>({
+    mutationKey: DEL_FOLDER,
+    onMutate: (v) => {
+      const prevF = queryClient.getQueryData<Folder[]>(FOLDERS) ?? [];
+      queryClient.setQueryData<Folder[]>(FOLDERS, prevF.filter((f) => f.id !== v.id));
+      const prevFiles = queryClient.getQueryData<FileRow[]>(FILES) ?? [];
+      queryClient.setQueryData<FileRow[]>(FILES, prevFiles.map((f) => (f.folder_id === v.id ? { ...f, folder_id: null } : f)));
+      return prevF;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(FOLDERS, ctx); },
+    onSettled: settle,
+  });
   const del = useMutation({
     mutationKey: DEL,
     onMutate: (v: { id: string }) => {
@@ -143,6 +204,15 @@ export default function FilesPage() {
     window.open(data.signedUrl, '_blank', 'noopener');
   }
 
+  const renamePrompt = (f: FileRow) =>
+    void ask('Rename file', { initial: f.name, placeholder: 'File name' })
+      .then((n) => { if (n && n !== f.name) { rename.mutate({ id: f.id, name: n }); toast('File renamed'); } });
+
+  const removeFile = (f: FileRow) => {
+    del.mutate({ id: f.id });
+    toast(`Deleted \u201C${f.name}\u201D`, () => restore.mutate({ id: f.id, row: f }));
+  };
+
   const tool: React.CSSProperties = {
     width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
@@ -169,7 +239,7 @@ export default function FilesPage() {
           </button>
           <input ref={inputRef} type="file" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }} />
-          <button onClick={() => void ask('New folder', { placeholder: 'Folder name', confirmLabel: 'Create' }).then((n) => { if (n) newFolder.mutate({ name: n, parent_id: folder }); })}
+          <button onClick={() => void ask('New folder', { placeholder: 'Folder name', confirmLabel: 'Create' }).then((n) => { if (n) newFolder.mutate({ id: crypto.randomUUID(), name: n, parent_id: folder }); })}
             className="hov" title="New folder" style={tool}>
             <Icon name="folderPlus" size={15} color="var(--tx2)" />
           </button>
@@ -220,16 +290,30 @@ export default function FilesPage() {
               </button>
             )}
             {folders.filter((f) => f.parent_id === folder).map((f) => (
-              <button key={f.id} onClick={() => setFolder(f.id)} className="tt" style={folderTile}>
+              <div key={f.id} className="tt" style={{ ...folderTile, position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                   <Icon name="proj" size={16} color={PAL.amber} />
-                  <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>⋮</span>
+                  {/* The vertical dots used to be decoration. Now they are the
+                      two things you would have wanted them to be. */}
+                  <span style={{ marginLeft: 'auto' }}>
+                    <RowActions label={f.name}
+                      onEdit={() => void ask('Rename folder', { initial: f.name, placeholder: 'Folder name' })
+                        .then((n) => { if (n && n !== f.name) { renameFolder.mutate({ id: f.id, name: n }); toast('Folder renamed'); } })}
+                      onDelete={() => {
+                        const n = files.filter((x) => x.folder_id === f.id).length;
+                        delFolder.mutate({ id: f.id });
+                        if (folder === f.id) setFolder(null);
+                        toast(n ? `Deleted \u201C${f.name}\u201D \u00B7 ${n} file${n === 1 ? '' : 's'} moved to Drive` : `Deleted \u201C${f.name}\u201D`);
+                      }} />
+                  </span>
                 </div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 11 }}>{f.name}</div>
-                <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {files.filter((x) => x.folder_id === f.id).length} items
-                </div>
-              </button>
+                <button onClick={() => setFolder(f.id)} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 11 }}>{f.name}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                    {files.filter((x) => x.folder_id === f.id).length} items
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         </>
@@ -239,18 +323,27 @@ export default function FilesPage() {
 
       {grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+          {/* Grid used to be the read-only view: renaming or deleting meant
+              switching to the list first. Same handles in both. */}
           {shown.map((f) => (
-            <button key={f.id} onClick={() => open(f)} className="tt" style={folderTile}>
-              <div style={{
-                height: 62, borderRadius: 10, marginBottom: 10,
-                background: `linear-gradient(140deg, color-mix(in srgb, ${KIND[f.kind]?.c ?? PAL.cyan} 38%, var(--card2)), var(--card2))`,
-                display: 'grid', placeItems: 'center',
-              }}>
-                <Icon name={KIND[f.kind]?.ic ?? 'files'} size={18} color={KIND[f.kind]?.c ?? PAL.cyan} />
+            <div key={f.id} className="tt" style={folderTile}>
+              <button onClick={() => open(f)} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
+                <div style={{
+                  height: 62, borderRadius: 10, marginBottom: 10,
+                  background: `linear-gradient(140deg, color-mix(in srgb, ${KIND[f.kind]?.c ?? PAL.cyan} 38%, var(--card2)), var(--card2))`,
+                  display: 'grid', placeItems: 'center',
+                }}>
+                  <Icon name={KIND[f.kind]?.ic ?? 'files'} size={18} color={KIND[f.kind]?.c ?? PAL.cyan} />
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{human(f.size_bytes)}</span>
+                <span style={{ marginLeft: 'auto' }}>
+                  <RowActions label={f.name} onEdit={() => renamePrompt(f)} onDelete={() => removeFile(f)} />
+                </span>
               </div>
-              <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{human(f.size_bytes)}</div>
-            </button>
+            </div>
           ))}
         </div>
       ) : (
@@ -262,14 +355,7 @@ export default function FilesPage() {
                 <div style={{ fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
                 <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{human(f.size_bytes)}</div>
               </button>
-              <button onClick={() => void ask('Rename file', { initial: f.name, placeholder: 'File name' }).then((n) => { if (n && n !== f.name) rename.mutate({ id: f.id, name: n }); })}
-                aria-label="Rename" style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
-                <Icon name="edit" size={13} color="var(--tx3)" />
-              </button>
-              <button onClick={() => { del.mutate({ id: f.id }); toast(`Deleted “${f.name}”`, () => restore.mutate({ id: f.id })); }}
-                aria-label="Delete" style={{ padding: 5, minWidth: 24, minHeight: 24 }}>
-                <Icon name="trash" size={13} color="var(--tx3)" />
-              </button>
+              <RowActions label={f.name} onEdit={() => renamePrompt(f)} onDelete={() => removeFile(f)} />
             </div>
           ))}
         </div>
