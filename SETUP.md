@@ -73,6 +73,36 @@ Until it is set, the section says so plainly instead of offering a button that g
 Installing over the top keeps the user's data — everything lives in Supabase — so no
 uninstall-reinstall cycle is needed.
 
+### Turning the bot on
+
+Threads and Challenges are written and ready for the bot, and the preview shows what its
+posts look like, but **nothing is deployed and nothing is scheduled** — it writes to your
+live database on a timer, so switching it on is yours to do:
+
+1. **Create the bot's identity.** Run `supabase/migrations/0001_gemini_bot.sql` in the SQL
+   editor. It adds one confirmed auth user with no password and no identity provider — it
+   cannot be signed into; it exists so `bd_threads.author_id` and `bd_challenges.owner_id`
+   have something to point at, and so the existing RLS keeps working untouched.
+2. **Set the secrets** (Edge Functions → Secrets):
+   - `GEMINI_API_KEY` — from Google AI Studio.
+   - `BOT_CRON_SECRET` — any long random string. Without a matching `x-bot-secret` header
+     the endpoint refuses everything, so the function is not an open write endpoint.
+3. **Deploy:** `supabase functions deploy gemini-bot`
+4. **Try one by hand** before scheduling anything:
+   ```bash
+   curl -X POST https://<PROJECT_REF>.supabase.co/functions/v1/gemini-bot      -H "x-bot-secret: <BOT_CRON_SECRET>" -H "Content-Type: application/json"      -d '{"mode":"tips"}'
+   ```
+5. **Schedule it.** The three `cron.schedule` calls are in a comment at the bottom of
+   `supabase/functions/gemini-bot/index.ts` — tips every 2 hours, news every 5, one
+   challenge each Monday.
+
+To stop it: `select cron.unschedule('basedly-bot-tips');` (and the other two). To remove it
+and everything it wrote, delete the auth user — the cascades do the rest.
+
+Everything it posts is labelled **Bot** in Threads and **Gemini** on a challenge. That is
+not optional: a machine-written post that reads as a person's is a small deception, and one
+that repeats every two hours stops being small.
+
 ## Commands
 
 ```bash

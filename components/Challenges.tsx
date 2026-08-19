@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 import { useHabits } from '@/lib/habits';
 import { currentUserId, cachedUserId } from '@/lib/supabase';
 import { RowActions } from './MoneyRows';
+import { isBot, BOT_NAME } from '@/lib/bot';
 import { useRankUp, RankUpCard } from './RankUp';
 import { rankOf, standings, rpFor, TIERS, METRICS, RULES, type MetricId, type RuleId } from '@/lib/rank';
 import {
@@ -292,7 +293,18 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
         </span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-.015em', overflowWrap: 'anywhere' }}>{c.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-.015em', overflowWrap: 'anywhere' }}>{c.name}</span>
+            {isBot(c.owner_id) && (
+              <span style={{
+                flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9, fontWeight: 800,
+                letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)',
+                border: '1px solid var(--line2)',
+              }}>
+                {BOT_NAME}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
             {rule?.label}
             {c.target != null && c.rule === 'first_to' && ` ${c.target} ${c.unit}`}

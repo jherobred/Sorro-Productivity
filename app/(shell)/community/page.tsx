@@ -15,6 +15,7 @@ import { ago } from '@/lib/scratch';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { MediaFrame, Lightbox } from '@/components/MediaFrame';
 import { RowActions } from '@/components/MoneyRows';
+import { isBot, BOT_NAME } from '@/lib/bot';
 
 /** Ported from Basedly.dc.html markup 759–869, card styles 5932–6000. */
 
@@ -366,8 +367,9 @@ export default function CommunityPage() {
                       {initials(p.author_id)}
                     </span>
                     <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p.author_id === me ? 'You' : initials(p.author_id)}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, letterSpacing: '-.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.author_id === me ? 'You' : isBot(p.author_id) ? BOT_NAME : initials(p.author_id)}
+                        {isBot(p.author_id) && <BotTag />}
                       </span>
                       <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>{ago(p.created_at)} ago</span>
                     </span>
@@ -548,8 +550,11 @@ function ThreadRow({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
           {t.tag && <span style={{ padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: PAL.sky, background: `color-mix(in srgb, ${PAL.sky} 16%, transparent)` }}>{t.tag}</span>}
           <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
-            {t.author_id === me ? 'You' : initials(t.author_id)} · {ago(t.created_at)} ago
+            {t.author_id === me ? 'You' : isBot(t.author_id) ? BOT_NAME : initials(t.author_id)} · {ago(t.created_at)} ago
           </span>
+          {/* A machine-written post that reads as a person's is a small
+              deception, and one that repeats every two hours is not small. */}
+          {isBot(t.author_id) && <BotTag />}
           {t.author_id === me && !editing && (
             <span style={{ marginLeft: 'auto' }}>
               <RowActions label={short(t.title)} onEdit={onEdit} onDelete={onDelete} />
@@ -601,6 +606,19 @@ function ThreadRow({
         )}
       </div>
     </div>
+  );
+}
+
+/** Says what wrote this. Small, permanent, and never optional. */
+function BotTag() {
+  return (
+    <span style={{
+      flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9,
+      fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
+      color: 'var(--tx3)', border: '1px solid var(--line2)',
+    }}>
+      Bot
+    </span>
   );
 }
 

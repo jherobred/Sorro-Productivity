@@ -52,6 +52,9 @@ const LIST = {
  * *defaults* cannot help — an explicit queryFn always beats a default one. So
  * those queryFns ask here first.
  */
+/** Matches BOT_ID in lib/bot.ts, so the label lights up in the preview too. */
+const BOT = '00000000-0000-4000-8000-00000000b07d';
+
 const store = new Map<string, unknown>();
 
 export function fixture<T>(prefix: string): T | null {
@@ -250,6 +253,10 @@ export function seedDevFixtures() {
     { id: 'th1', author_id: 'me', title: 'Anyone else stuck on the CS 191 proposal scope?', body: 'Alonzo keeps saying one corridor only, but the rubric asks for a network-level evaluation. How are you all squaring that?', tag: 'CS 191', created_at: new Date(Date.now() - 60*60000).toISOString() },
     { id: 'th2', author_id: 'rt', title: 'Best library floor for deep work, ranked', body: 'Fourth floor is silent but freezing. Second has outlets but the aircon drips. Ground floor is a food court with books.', tag: 'Campus', created_at: new Date(Date.now() - 240*60000).toISOString() },
     { id: 'th3', author_id: 'bc', title: 'Selling: OS textbook, 8th ed, barely opened', body: 'Bought it, never used it, the slides were enough. Six hundred pesos or trade for a Math 55 reviewer.', tag: 'Market', created_at: new Date(Date.now() - 1500*60000).toISOString() },
+    // What the bot's output looks like once it is running, so the Bot label
+    // and the empty-room problem it exists to solve are both visible here.
+    { id: 'th4', author_id: BOT, title: 'Drag a task onto an hour to give it a time', body: 'Untimed tasks live in the rail on the left of Calendar. Drop one on a slot and it becomes an event; drag it back out and it is a task again.', tag: 'Tip', created_at: new Date(Date.now() - 95*60000).toISOString() },
+    { id: 'th5', author_id: BOT, title: 'Read the exam paper backwards first', body: 'Spend the first two minutes scanning from the last question up. You will find the marks-heavy ones before you have spent your good hour on question one.', tag: 'Campus', created_at: new Date(Date.now() - 300*60000).toISOString() },
   ]);
   seed(['thread_votes'], [
     { thread_id: 'th1', user_id: 'jl' }, { thread_id: 'th1', user_id: 'rt' },
@@ -275,6 +282,7 @@ export function seedDevFixtures() {
     chal('ch2', 'No-skip gym', 'Three sessions a week, no excuses, for the rest of the term.', 'body', 'most', null, 'sessions', '#FF6B6B', -17, 11),
     chal('ch3', 'Read 20 pages', 'Daily reading. First to a hundred pages takes it.', 'habit', 'first_to', 100, 'pages', '#34D9A0', 2, 30),
     chal('ch4', 'Inbox to zero', 'Whoever clears the most tasks before the midterms.', 'task', 'most', null, 'tasks', '#7C6CFF', -30, -2, iso(-1, 20), 'rt'),
+    { ...chal('ch5', 'Ninety pages, seven days', 'Anything counts as long as it is not a feed. Post what you read.', 'habit', 'first_to', 90, 'pages', '#38D6F2', -1, 6), owner_id: BOT },
   ]);
   const mem = (challenge_id: string, user_id: string, display_name: string, progress: number, rp_delta = 0, placed: number | null = null) =>
     ({ challenge_id, user_id, display_name, habit_id: null, progress, rp_delta, placed, joined_at: iso(-10, 8) });
