@@ -9,7 +9,6 @@ export type Prefs = {
   accent: string;
   motion: boolean;
   navPicks: string[];
-  fabPos: { x: number; y: number } | null;
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
   sidebar: 'open' | 'collapsed';
   lockEvents: boolean;
@@ -42,7 +41,6 @@ export const DEFAULT_PREFS: Prefs = {
   accent: DEFAULT_ACCENT,
   motion: true,
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
-  fabPos: null,
   calView: 'week',
   sidebar: 'open',
   lockEvents: false,

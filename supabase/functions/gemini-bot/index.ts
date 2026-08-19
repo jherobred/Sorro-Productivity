@@ -21,7 +21,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const BOT_ID = '00000000-0000-4000-8000-00000000b07d';
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-3.6-flash';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,12 +39,21 @@ const JOBS: Record<Mode, { every_minutes: number; tag: string; prompt: string }>
   tips: {
     every_minutes: 120,
     tag: 'Tip',
-    prompt: `Write one short tip for using Basedly, a student productivity app with
-notes (Notion-style blocks and an Obsidian-style infinite canvas), tasks, a
-calendar that syncs Canvas LMS and Google Calendar, habits, a money tracker in
-pesos, projects, files, and competitive challenges with a rank ladder.
+    prompt: `Write one short tip for a student using Basedly.
 
-Be concrete and specific — name the actual gesture or button. Not motivational.
+What Basedly actually does:
+- Notes: block editor (slash command for blocks, double square brackets to link
+  a note) and a separate infinite canvas of connected cards.
+- Calendar: month, week and day views. Tasks can sit in a time slot or stay
+  untimed. Connects to Canvas LMS and Google Calendar from Settings.
+- Tasks, habits with streaks, projects with boards, a peso money tracker,
+  a files drive, and ranked challenges against other students.
+
+Rules: describe a capability and why it helps. Do NOT name a specific button,
+tab, menu path or gesture unless it appears in the list above - the interface
+changes and a confidently wrong instruction is worse than a vague one. Not
+motivational.
+
 Return JSON only: {"title": "...", "body": "..."} where title is under 70
 characters and body is one or two sentences.`,
   },
@@ -116,19 +125,34 @@ const str = (v: unknown, max: number): string | null => {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
-  // pg_cron passes this; without it the endpoint is inert to the open internet.
-  const secret = Deno.env.get('BOT_CRON_SECRET');
-  if (!secret || req.headers.get('x-bot-secret') !== secret) return json({ ok: false, message: 'Forbidden' }, 403);
+  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-  const key = Deno.env.get('GEMINI_API_KEY');
+  /**
+   * Secrets live in `app_secrets`, a table with RLS on and no policy — every
+   * client role is denied, and the service role this function holds is the only
+   * thing that can read it. A platform secret of the same name still wins, so
+   * moving to `supabase secrets set` later needs no code change.
+   */
+  const secrets = new Map<string, string>();
+  {
+    const { data } = await db.from('app_secrets').select('name,value');
+    for (const row of data ?? []) secrets.set(row.name, row.value);
+  }
+  const secret = (n: string) => Deno.env.get(n) ?? secrets.get(n) ?? '';
+
+  // pg_cron passes this; without it the endpoint is inert to the open internet.
+  const cronSecret = secret('BOT_CRON_SECRET');
+  if (!cronSecret || req.headers.get('x-bot-secret') !== cronSecret) {
+    return json({ ok: false, message: 'Forbidden' }, 403);
+  }
+
+  const key = secret('GEMINI_API_KEY');
   if (!key) return json({ ok: false, message: 'GEMINI_API_KEY is not set' }, 503);
 
   let mode: Mode = 'tips';
   try { mode = (await req.json()).mode ?? 'tips'; } catch { /* empty body */ }
   const job = JOBS[mode];
   if (!job) return json({ ok: false, message: `Unknown mode ${mode}` }, 400);
-
-  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   // A retrying cron, or two overlapping schedules, must not double-post. The
   // window is the job's own interval, less a couple of minutes of slack.
