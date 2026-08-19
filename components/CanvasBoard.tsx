@@ -169,8 +169,35 @@ export function CanvasBoard() {
     setGesture({ g: 'pan', sx: e.clientX, sy: e.clientY, ox: vp.x, oy: vp.y });
   };
 
+  /**
+   * Touch has no right button, so the context menu — which is where duplicate,
+   * bring-to-front, colour and delete live — was unreachable on a phone. A
+   * press held still for half a second opens the same menu at the same point.
+   * Moving more than a few pixels is a pan, so the timer is cancelled.
+   */
+  const held = useRef<{ t: number; x: number; y: number } | null>(null);
+
+  const armLongPress = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse') return;
+    const { clientX: x, clientY: y } = e;
+    const t = window.setTimeout(() => {
+      held.current = null;
+      openMenuAt(x, y);
+      if (prefs.haptics) navigator.vibrate?.(12);
+    }, 480);
+    held.current = { t, x, y };
+  };
+
+  const cancelLongPress = (e?: React.PointerEvent) => {
+    if (!held.current) return;
+    if (e && Math.hypot(e.clientX - held.current.x, e.clientY - held.current.y) < 8) return;
+    clearTimeout(held.current.t);
+    held.current = null;
+  };
+
   const onBackgroundDown = (e: React.PointerEvent) => {
     if (e.button === 2) return;
+    armLongPress(e);
     setEditing(null);
     if (e.shiftKey) {
       const w = toWorld(e.clientX, e.clientY);
@@ -184,6 +211,7 @@ export function CanvasBoard() {
   const onNodeDown = (e: React.PointerEvent, n: CNode) => {
     e.stopPropagation();
     if (e.button === 2) return;
+    armLongPress(e);
     if (e.button === 1) { beginPan(e); return; }
 
     const already = sel.nodes.includes(n.id);
@@ -201,6 +229,7 @@ export function CanvasBoard() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    cancelLongPress(e);
     if (!gesture) return;
     if (gesture.g === 'pan') {
       setVp((v) => ({ ...v, x: gesture.ox + (e.clientX - gesture.sx), y: gesture.oy + (e.clientY - gesture.sy) }));
@@ -245,6 +274,7 @@ export function CanvasBoard() {
   };
 
   const onPointerUp = () => {
+    cancelLongPress();
     if (!gesture) return;
 
     if (gesture.g === 'move' || gesture.g === 'resize') {
@@ -342,8 +372,28 @@ export function CanvasBoard() {
 
   /* --------------------------------------------------------------- render */
 
+  const HANDLE = phone ? 24 : 10;
+  const GRIP = phone ? 26 : 12;
+
   const selSet = useMemo(() => new Set(sel.nodes), [sel.nodes]);
   const ordered = useMemo(() => [...nodes].sort((a, b) => (a.kind === 'group' ? -1 : 0) - (b.kind === 'group' ? -1 : 0) || a.z - b.z), [nodes]);
+
+  /** Whatever is under (sx, sy): a card's menu, or the canvas's. */
+  const openMenuAt = (sx: number, sy: number) => {
+    const w = toWorld(sx, sy);
+    const hit = nodeAt(w.x, w.y);
+    if (hit) setSel({ nodes: [hit.id], edges: [] });
+    setMenu({
+      x: sx, y: sy, kind: 'node',
+      label: hit ? (hit.text.slice(0, 24) || 'Card') : 'Canvas',
+      items: hit ? cardMenu(hit) : [
+        { label: 'New card', icon: 'plus', run: () => addCard(w.x, w.y) },
+        { label: 'New group', icon: 'layers', run: () => addCard(w.x, w.y, 'group') },
+        { label: 'Zoom to fit', icon: 'zoomOut', run: fit },
+        { label: 'Reset zoom', icon: 'target', run: () => setVp((v) => ({ ...v, z: 1 })) },
+      ],
+    });
+  };
 
   const cardMenu = (n: CNode): CtxItem[] => [
     { label: 'Edit text', icon: 'edit', run: () => setEditing(n.id) },
@@ -410,21 +460,7 @@ export function CanvasBoard() {
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
           onDoubleClick={(e) => { const w = toWorld(e.clientX, e.clientY); addCard(w.x, w.y); }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            const w = toWorld(e.clientX, e.clientY);
-            const hit = nodeAt(w.x, w.y);
-            setMenu({
-              x: e.clientX, y: e.clientY, kind: 'node',
-              label: hit ? (hit.text.slice(0, 24) || 'Card') : 'Canvas',
-              items: hit ? cardMenu(hit) : [
-                { label: 'New card', icon: 'plus', run: () => addCard(w.x, w.y) },
-                { label: 'New group', icon: 'layers', run: () => addCard(w.x, w.y, 'group') },
-                { label: 'Zoom to fit', icon: 'zoomOut', run: fit },
-                { label: 'Reset zoom', icon: 'target', run: () => setVp((v) => ({ ...v, z: 1 })) },
-              ],
-            });
-          }}
+          onContextMenu={(e) => { e.preventDefault(); openMenuAt(e.clientX, e.clientY); }}
           role="application"
           aria-label={`${board.name} canvas`}
           style={{
@@ -561,8 +597,13 @@ export function CanvasBoard() {
                           setGesture({ g: 'link', from: n.id, side, x: w.x, y: w.y, over: null });
                         }}
                         style={{
-                          position: 'absolute', left: p.x - 5, top: p.y - 5, width: 10, height: 10, borderRadius: 5,
-                          background: 'var(--acc)', border: '2px solid var(--card)', cursor: 'crosshair', zIndex: 2,
+                          // A 10px dot is a mouse target. A finger needs about
+                          // twice that (WCAG 2.5.5), so the hit area grows on
+                          // touch while the dot itself stays the same size.
+                          position: 'absolute', left: p.x - HANDLE / 2, top: p.y - HANDLE / 2,
+                          width: HANDLE, height: HANDLE, borderRadius: HANDLE / 2,
+                          background: 'var(--acc)', border: `${phone ? 5 : 2}px solid var(--card)`,
+                          cursor: 'crosshair', zIndex: 2, touchAction: 'none',
                         }} />
                     );
                   })}
@@ -570,8 +611,10 @@ export function CanvasBoard() {
                     <span title="Drag to resize"
                       onPointerDown={(e) => { e.stopPropagation(); setGesture({ g: 'resize', id: n.id, sx: e.clientX, sy: e.clientY, w: n.w, h: n.h }); }}
                       style={{
-                        position: 'absolute', right: -4, bottom: -4, width: 12, height: 12, borderRadius: 3,
-                        background: 'var(--acc)', border: '2px solid var(--card)', cursor: 'nwse-resize', zIndex: 2,
+                        position: 'absolute', right: -GRIP / 3, bottom: -GRIP / 3,
+                        width: GRIP, height: GRIP, borderRadius: phone ? GRIP / 2 : 3,
+                        background: 'var(--acc)', border: `${phone ? 5 : 2}px solid var(--card)`,
+                        cursor: 'nwse-resize', zIndex: 2, touchAction: 'none',
                       }} />
                   )}
 
@@ -596,22 +639,33 @@ export function CanvasBoard() {
         </div>
 
         {sel.nodes.length > 0 && (
-          <div className="k-bloom" style={{
+          <div className="k-bloom hbar" style={{
             position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 14, zIndex: 5,
             display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', borderRadius: 14,
             background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)',
+            // Seven swatches plus the buttons overflow a 375px screen; let the
+            // bar scroll rather than pushing the delete button off the edge.
+            maxWidth: 'calc(100% - 24px)', overflowX: 'auto',
           }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', marginRight: 2 }}>
+            <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', marginRight: 2 }}>
               {sel.nodes.length} selected
             </span>
+            {/* Double-tap to edit is a gamble on a touch screen — it competes
+                with the pinch and the pan. One button, always there. */}
+            {sel.nodes.length === 1 && nodes.find((n) => n.id === sel.nodes[0])?.kind !== 'group' && (
+              <button onClick={() => setEditing(sel.nodes[0])} className="hov k-squish" aria-label="Edit text"
+                style={{ flex: 'none', width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+                <Icon name="edit" size={13} color="var(--tx2)" />
+              </button>
+            )}
             {CANVAS_COLORS.map((c) => (
               <button key={c} onClick={() => sel.nodes.forEach((id) => A.saveNode.mutate({ id, patch: { color: c } }))}
                 aria-label={`Colour ${c}`} className="k-swatch"
-                style={{ width: 20, height: 20, borderRadius: 6, background: c }} />
+                style={{ flex: 'none', width: phone ? 26 : 20, height: phone ? 26 : 20, borderRadius: 6, background: c }} />
             ))}
             <button onClick={() => { A.deleteSelection(sel.nodes, sel.edges); setSel({ nodes: [], edges: [] }); }}
               className="hov k-squish" aria-label="Delete selection"
-              style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', marginLeft: 3 }}>
+              style={{ flex: 'none', width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', marginLeft: 3 }}>
               <Icon name="trash" size={13} color="var(--pal-coral)" />
             </button>
           </div>
@@ -638,8 +692,12 @@ export function CanvasBoard() {
         {nodes.length === 0 && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none', textAlign: 'center' }}>
             <div style={{ fontSize: 12.5, color: 'var(--tx3)', lineHeight: 1.8 }}>
-              Double-click anywhere to drop a card.<br />
-              {!phone && <span style={{ fontSize: 11 }}>Drag to pan · {navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+scroll to zoom · shift-drag to select</span>}
+              {phone ? 'Tap Card to drop one in.' : 'Double-click anywhere to drop a card.'}<br />
+              <span style={{ fontSize: 11 }}>
+                {phone
+                  ? 'Drag to pan · pinch to zoom · press and hold for the menu'
+                  : `Drag to pan · ${navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+scroll to zoom · shift-drag to select`}
+              </span>
             </div>
           </div>
         )}
