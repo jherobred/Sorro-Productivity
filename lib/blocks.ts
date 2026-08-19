@@ -62,6 +62,20 @@ export const SHORTCUTS: [RegExp, BlockKind][] = [
 
 const key = (noteId: string | null) => ['note_blocks', noteId] as const;
 
+/**
+ * Text typed but not yet confirmed by the server, keyed by block id.
+ *
+ * A block's keystrokes live in the query cache during the save debounce. Any
+ * refetch in that window — a settle, window-focus, reconnect, realtime echo —
+ * replaces the cache with server rows that predate the typing and wipes it:
+ * the "notes delete themselves" bug the settler alone cannot close, because a
+ * pending debounce timer is not a mutation and `isMutating()` never sees it.
+ * Overlaying this map in the read keeps in-flight text authoritative until the
+ * write it belongs to lands, so no refetch source can drop a keystroke.
+ */
+const pendingBlockText = new Map<string, string>();
+export const markBlockPending = (id: string, text: string) => { pendingBlockText.set(id, text); };
+
 export function useBlocks(noteId: string | null) {
   return useQuery({
     queryKey: key(noteId),
@@ -70,7 +84,8 @@ export function useBlocks(noteId: string | null) {
       const { data, error } = await supabase.from('bd_note_blocks')
         .select('id,note_id,kind,text,done,position').eq('note_id', noteId!).order('position');
       if (error) throw error;
-      return (data ?? []) as Block[];
+      return ((data ?? []) as Block[]).map((b) =>
+        pendingBlockText.has(b.id) ? { ...b, text: pendingBlockText.get(b.id)! } : b);
     },
   });
 }
@@ -131,8 +146,12 @@ const ADD = defineMutation('block.add', async (v: Block) => {
 const SAVE = defineMutation('block.save', async (v: { id: string; patch: Partial<Block> }) => {
   const { error } = await supabase.from('bd_note_blocks').update(v.patch).eq('id', v.id);
   if (error) throw error;
+  // Drop the overlay only when the text we just persisted is still the latest —
+  // a newer keystroke set a newer pending value and must keep its protection.
+  if (v.patch.text !== undefined && pendingBlockText.get(v.id) === v.patch.text) pendingBlockText.delete(v.id);
 });
 const DEL = defineMutation('block.del', async (v: { id: string }) => {
+  pendingBlockText.delete(v.id);
   const { error } = await supabase.from('bd_note_blocks').delete().eq('id', v.id);
   if (error) throw error;
 });

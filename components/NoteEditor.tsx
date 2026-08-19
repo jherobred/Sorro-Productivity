@@ -11,7 +11,7 @@ import { usePrefs } from '@/lib/prefs';
 import { K, PAL } from '@/lib/pal';
 import { toast } from '@/lib/toast';
 import {
-  useBlocks, useBlockActions, useBacklinks, BLOCK_MENU, SHORTCUTS, spans, wikiTargets,
+  useBlocks, useBlockActions, useBacklinks, markBlockPending, BLOCK_MENU, SHORTCUTS, spans, wikiTargets,
   textToBlocks, type Block, type BlockKind,
 } from '@/lib/blocks';
 import type { Note } from '@/lib/notebooks';
@@ -235,6 +235,7 @@ export function NoteEditor({
 
   const queueSave = (id: string, text: string) => {
     A.patchLocal(id, { text });
+    markBlockPending(id, text);
     latest.current.set(id, text);
     const pending = timers.current;
     clearTimeout(pending.get(id));
@@ -248,17 +249,24 @@ export function NoteEditor({
   /**
    * Closing the note, or switching to another, must not strand the last few
    * characters in a timer that never fires. Flush whatever is still pending.
+   *
+   * Keyed on the note id, not on `A`: `useBlockActions` returns a fresh object
+   * every render, so depending on it fired this cleanup on every keystroke —
+   * flushing the debounce instantly and turning a sentence back into forty
+   * writes. `A` is read through a ref so the flush still calls the live mutation.
    */
+  const aRef = useRef(A);
+  aRef.current = A;
   useEffect(() => {
     const pending = timers.current;
     const unsent = latest.current;
     return () => {
       for (const t of pending.values()) clearTimeout(t);
-      for (const [id, text] of unsent) A.save.mutate({ id, patch: { text } });
+      for (const [id, text] of unsent) aRef.current.save.mutate({ id, patch: { text } });
       pending.clear();
       unsent.clear();
     };
-  }, [A]);
+  }, [note?.id]);
 
   const blockMenu = (b: Block, i: number): CtxItem[] => [
     { label: 'Turn into text', icon: 'text', run: () => setKind(b, 'text') },
@@ -544,7 +552,7 @@ function BlockRow({
               ...style.text,
               ...(b.done ? { textDecoration: 'line-through', color: 'var(--tx3)' } : {}),
             }}>
-            {b.text ? spans(b.text).map((s, i) => {
+            {b.text ? (b.kind === 'code' ? b.text : spans(b.text).map((s, i) => {
               if (s.s === 'link') {
                 const known = linkExists(s.text);
                 return (
@@ -563,7 +571,7 @@ function BlockRow({
               if (s.s === 'italic') return <em key={i}>{s.text}</em>;
               if (s.s === 'code') return <code key={i} style={{ fontFamily: MONO, fontSize: '.92em', padding: '1px 5px', borderRadius: 5, background: 'var(--card2)' }}>{s.text}</code>;
               return <span key={i}>{s.text}</span>;
-            }) : <span style={{ color: 'var(--tx3)' }}>{index === 0 ? 'Start writing, or press / for blocks' : ' '}</span>}
+            })) : <span style={{ color: 'var(--tx3)' }}>{index === 0 ? 'Start writing, or press / for blocks' : ' '}</span>}
           </div>
         )}
 
