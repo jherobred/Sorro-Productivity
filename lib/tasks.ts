@@ -61,11 +61,33 @@ export function useTasks() {
    Registered at module scope so a write queued offline can still be replayed
    after a full app restart, when the original closure is long gone. */
 
-const CREATE = defineMutation('task.create', async (v: { id: string; title: string; listId: string | null }) => {
+/**
+ * Everything the composer can collect, not just a title. Creating a task and
+ * then opening it to set the three things you already knew was two steps for
+ * one intention.
+ */
+export type NewTask = {
+  id: string;
+  title: string;
+  listId: string | null;
+  notes?: string;
+  due_on?: string | null;
+  due_at?: string | null;
+  priority?: 'low' | 'med' | 'high' | null;
+  stars?: number;
+};
+
+const CREATE = defineMutation('task.create', async (v: NewTask) => {
   const user_id = await currentUserId();
-  const { error } = await supabase
-    .from('bd_tasks')
-    .insert({ id: v.id, user_id, title: v.title, list_id: v.listId, position: Date.now() % 2_000_000_000 });
+  const { error } = await supabase.from('bd_tasks').insert({
+    id: v.id, user_id, title: v.title, list_id: v.listId,
+    notes: v.notes ?? '',
+    due_on: v.due_on ?? null,
+    due_at: v.due_at ?? null,
+    priority: v.priority ?? null,
+    stars: v.stars ?? 0,
+    position: Date.now() % 2_000_000_000,
+  });
   if (error) throw error;
 });
 
@@ -113,18 +135,19 @@ export function useTaskActions() {
 
   const create = useMutation({
     mutationKey: CREATE,
-    onMutate: (v: { id: string; title: string; listId: string | null }) =>
+    onMutate: (v: NewTask) =>
       optimistic((prev) => [
         ...prev,
         {
           id: v.id,
           list_id: v.listId,
           title: v.title,
-          notes: '',
+          notes: v.notes ?? '',
           done: false,
-          due_on: null,
-          priority: null,
-          stars: 0,
+          due_on: v.due_on ?? null,
+          due_at: v.due_at ?? null,
+          priority: v.priority ?? null,
+          stars: v.stars ?? 0,
           position: Number.MAX_SAFE_INTEGER,
           deleted_at: null,
         },

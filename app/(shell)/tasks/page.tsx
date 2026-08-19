@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { Page } from '@/components/Page';
+import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
@@ -57,7 +58,6 @@ export default function TasksPage() {
   const { data: tasks = [] } = useTasks();
   const A = useTaskActions();
 
-  const [draft, setDraft] = useState('');
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
   const [starHover, setStarHover] = useState<{ id: string; v: number } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
@@ -97,14 +97,6 @@ export default function TasksPage() {
     { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week' },
   ].filter((g) => g.items.length);
 
-  const add = () => {
-    const t = draft.trim();
-    // Pressing Add on an empty field used to do nothing and say nothing.
-    if (!t) { toast('Type a task first'); return; }
-    A.create.mutate({ id: crypto.randomUUID(), title: t, listId: lists[0]?.id ?? null });
-    setDraft('');
-  };
-
   const complete = (r: Row) => {
     setLeaving((s) => new Set(s).add(r.task.id));
     setTimeout(() => {
@@ -137,22 +129,10 @@ export default function TasksPage() {
       }
     >
 
-      <div style={{ background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '2px 6px 2px' }}>
-          <Icon name="plus" size={15} color="var(--accTx)" />
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && add()}
-            placeholder="Add a task — press Enter"
-            style={{ flex: 1, fontSize: 13, color: 'var(--tx)' }}
-          />
-          <button onClick={add} className="acc"
-            style={{ padding: '6px 13px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800 }}>
-            Add
-          </button>
-        </div>
-      </div>
+      <TaskComposer
+        lists={lists}
+        defaultListId={lists[0]?.id ?? null}
+        onCreate={(t) => { A.create.mutate(t); toast(`Added “${t.title}”`); }} />
 
       {groups.map((g) => (
         <div key={g.n}
