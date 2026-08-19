@@ -10,6 +10,8 @@ import { PAL } from '@/lib/pal';
 import { ymd, lastDays } from '@/lib/habits';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { MediaFrame } from './MediaFrame';
+import { ContextMenu, type CtxGroup } from './ContextMenu';
+import { usePrefs } from '@/lib/prefs';
 import { ask } from '@/lib/ask';
 
 /** Journal / Canvas / Java tabs — Basedly.dc.html markup 1822–2101. */
@@ -171,7 +173,9 @@ function JournalPhotos({ entryId, entryDate, onNeedEntry }: { entryId: string | 
 function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; onOpen: () => void }) {
   const url = useSignedUrl('bd-journal', photo.storage_path);
   const qc = useQueryClient();
+  const { prefs } = usePrefs();
   const [anns, setAnns] = useState<{ id: string; x: number; y: number; text: string }[]>([]);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -194,8 +198,65 @@ function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; on
     void qc.invalidateQueries({ queryKey: ['journal_photos'] });
   };
 
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['journal_photos'] });
+
+  const rename = () =>
+    void ask('Rename photo', { initial: photo.name, placeholder: 'Photo name' }).then(async (n) => {
+      if (!n || n === photo.name) return;
+      const { error } = await supabase.from('bd_journal_photos').update({ name: n }).eq('id', photo.id);
+      if (error) return toast(error.message);
+      refresh();
+      toast('Photo renamed');
+    });
+
+  /**
+   * Delete the row and the object. The file goes second: a storage delete that
+   * succeeds against a row that then fails to delete leaves a photo pointing at
+   * nothing, which is worse than an orphaned file nobody can see.
+   */
+  const remove = async () => {
+    const { error } = await supabase.from('bd_journal_photos').delete().eq('id', photo.id);
+    if (error) return toast(error.message);
+    void supabase.storage.from('bd-journal').remove([photo.storage_path]);
+    refresh();
+    toast(`Deleted “${photo.name}”`);
+  };
+
+  const clearPins = async () => {
+    const { error } = await supabase.from('bd_photo_annotations').delete().eq('photo_id', photo.id);
+    if (error) return toast(error.message);
+    setAnns([]);
+    toast('Pins cleared');
+  };
+
+  const photoMenu = (): CtxGroup[] => [
+    { items: [
+      { label: open ? 'Collapse' : 'Open', icon: open ? 'collapse' : 'expand', run: onOpen },
+      { label: 'Open in a new tab', icon: 'link', disabled: !url,
+        hint: url ? undefined : 'Still loading',
+        run: () => url && window.open(url, '_blank', 'noopener') },
+    ] },
+    { label: 'Photo', items: [
+      { label: 'Rename', icon: 'edit', shortcut: 'F2', run: rename },
+      { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(photo.name); toast('Copied'); } },
+    ] },
+    { label: 'Pins', items: [
+      { label: 'Add a pin', icon: 'pin',
+        disabled: !open, hint: open ? 'Then click the spot' : 'Open the photo first',
+        run: () => toast('Double-click the spot you want to pin') },
+      { label: `Clear ${anns.length} pin${anns.length === 1 ? '' : 's'}`, icon: 'close',
+        disabled: anns.length === 0, hint: anns.length ? undefined : 'Nothing pinned yet',
+        run: () => void clearPins() },
+    ] },
+    { items: [
+      { label: 'Delete photo', icon: 'trash', danger: true, run: () => void remove() },
+    ] },
+  ];
+
   return (
-    <div onClick={onOpen} onDoubleClick={pin} title={open ? 'Double-click to pin a note' : photo.name}
+    <div onClick={onOpen} onDoubleClick={pin}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      title={open ? 'Double-click to pin a note · right-click for more' : photo.name}
       style={{
         position: 'relative', gridColumn: open ? '1 / -1' : 'auto',
         border: `1px solid ${open ? 'var(--acc)' : 'var(--line)'}`,
@@ -205,6 +266,11 @@ function JournalPhoto({ photo, open, onOpen }: { photo: Photo; open: boolean; on
       {/* Journal photos are whiteboards, worked problems and lecture slides —
           exactly the things a cover-crop ruins. Same fitted stage the feed uses;
           opening one just gives it a wider frame, never a tighter crop. */}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} kind="scratch" label={photo.name} items={photoMenu()}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+      )}
+
       <MediaFrame src={url ?? null} alt={photo.name} ratio={open ? 16 / 10 : 1} maxHeight={open ? 520 : 240} rounded={11}>
         {open && anns.map((a) => (
           <span key={a.id} title={a.text} className="pop"

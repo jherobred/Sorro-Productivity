@@ -476,16 +476,24 @@ function Grid({
 
       {/* the scrolling day */}
       <div ref={scroller} className="navsb" style={{ display: 'flex', overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0 }}>
-        {/* hour axis — labels sit on the rule, centred by translateY(-50%) */}
+        {/* Hour axis. Labels sit ON their rule, centred — except the first and
+            last, which would then hang half outside the column and be clipped:
+            12 AM was simply missing, and midnight at the bottom was sheared in
+            half. Those two align to the inside edge instead. */}
         <div style={{ width: GUTTER, flex: 'none', position: 'relative', height: GRID_H }}>
-          {hours.map((h, i) => (
+          {hours.map((h, i) => {
+            const first = i === 0;
+            const last = i === hours.length - 1;
+            return (
             <div key={h} style={{
-              position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`, transform: 'translateY(-50%)',
+              position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`,
+              transform: first ? 'none' : last ? 'translateY(-100%)' : 'translateY(-50%)',
               fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             }}>
               {hhmm(h)}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>

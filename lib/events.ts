@@ -95,7 +95,10 @@ export function at(ws: Date, day: number, hour: number): string {
  * rules"), but the time-format setting wins when the user has chosen 24-hour.
  */
 export function hhmm(hour: number, force24?: boolean): string {
-  const h24 = Math.floor(hour);
+  // Hour 24 is the end of the grid — the next midnight, not noon. Without the
+  // wrap, 24 % 12 === 0 gave 12 and 24 >= 12 gave PM, so the last rule on the
+  // day grid was labelled "12:00 PM".
+  const h24 = Math.floor(hour) % 24;
   const m = Math.round((hour % 1) * 60);
   if (force24 ?? read24h()) return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   const ampm = h24 >= 12 ? 'PM' : 'AM';
