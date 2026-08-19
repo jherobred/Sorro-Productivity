@@ -484,7 +484,7 @@ export default function HomePage() {
               {recent.map((n) => (
                 <div key={n.id}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>{n.title}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{ago(n.updated_at)} ago</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{ago(n.updated_at)}</div>
                 </div>
               ))}
             </div>

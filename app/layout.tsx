@@ -11,7 +11,8 @@ export const viewport: Viewport = {
   themeColor: '#0A0912',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // No maximumScale: Android WebView honours it, and this ships as an APK,
+  // so capping it turned pinch-zoom off on the primary target (WCAG 1.4.4).
   viewportFit: 'cover',
 };
 

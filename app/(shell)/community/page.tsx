@@ -371,7 +371,7 @@ export default function CommunityPage() {
                         {p.author_id === me ? 'You' : isBot(p.author_id) ? BOT_NAME : initials(p.author_id)}
                         {isBot(p.author_id) && <BotTag />}
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>{ago(p.created_at)} ago</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>{ago(p.created_at)}</span>
                     </span>
                     {p.tag && (
                       <span style={{ marginLeft: 'auto', padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: c, background: `color-mix(in srgb, ${c} 16%, transparent)` }}>
@@ -550,7 +550,7 @@ function ThreadRow({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
           {t.tag && <span style={{ padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: PAL.sky, background: `color-mix(in srgb, ${PAL.sky} 16%, transparent)` }}>{t.tag}</span>}
           <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
-            {t.author_id === me ? 'You' : isBot(t.author_id) ? BOT_NAME : initials(t.author_id)} · {ago(t.created_at)} ago
+            {t.author_id === me ? 'You' : isBot(t.author_id) ? BOT_NAME : initials(t.author_id)} · {ago(t.created_at)}
           </span>
           {/* A machine-written post that reads as a person's is a small
               deception, and one that repeats every two hours is not small. */}
@@ -586,7 +586,7 @@ function ThreadRow({
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', marginBottom: 2 }}>
-                    {r.author_id === me ? 'You' : initials(r.author_id)} · {ago(r.created_at)} ago
+                    {r.author_id === me ? 'You' : initials(r.author_id)} · {ago(r.created_at)}
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.55, textWrap: 'pretty' }}>{r.body}</div>
                 </div>

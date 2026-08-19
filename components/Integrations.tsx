@@ -125,7 +125,7 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
             <p style={{ fontSize: 10.5, color: row?.last_error ? 'var(--pal-coral)' : 'var(--tx3)', marginTop: 5 }}>
               {row?.last_error
                 ? `Last sync failed — ${row.last_error}`
-                : row?.last_sync_at ? `Synced ${ago(row.last_sync_at)} ago` : 'Never synced'}
+                : row?.last_sync_at ? `Synced ${ago(row.last_sync_at)}` : 'Never synced'}
             </p>
           )}
         </div>

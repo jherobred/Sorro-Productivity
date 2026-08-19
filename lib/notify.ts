@@ -127,12 +127,20 @@ export function useNotifActions() {
 }
 
 /** "now", "12m", "3h", "yesterday", "4d" — matches the scratchpad stamp. */
+/**
+ * A complete phrase, not a fragment.
+ *
+ * This used to return bare tokens — "now", "yesterday", "3m" — and five call
+ * sites appended " ago" to them, which rendered "yesterday ago" and "now ago"
+ * on the feed and in Settings. Owning the whole phrase is the only version that
+ * cannot be misused: there is nothing left for a caller to add.
+ */
 export function ago(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
   const h = Math.round(mins / 60);
-  if (h < 24) return `${h}h`;
+  if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
-  return d === 1 ? 'yesterday' : `${d}d`;
+  return d === 1 ? 'yesterday' : `${d}d ago`;
 }

@@ -27,7 +27,10 @@
   --line2: rgba(170, 166, 210, .19);
   --tx: #EFEDF5;
   --tx2: #A6A2BE;
-  --tx3: #716D8A;
+  /* 5.27:1 on --card, 4.65:1 on --card2. The old #716D8A measured
+     3.2-4.0:1 and this token carries real reading content — row
+     timestamps, hints, breadcrumbs - not just decoration. */
+  --tx3: #8A86A6;
   --hov: rgba(170, 166, 210, .075);
   --sh: 0 6px 22px rgba(0, 0, 0, .46);
   --shl: 0 18px 48px rgba(0, 0, 0, .6);
@@ -45,7 +48,8 @@
   --line2: rgba(38, 32, 54, .19);
   --tx: #1C1A26;
   --tx2: #5D5875;
-  --tx3: #827D96;
+  /* 5.17:1 on white; the old #827D96 measured 3.95:1. */
+  --tx3: #6F6A82;
   --hov: rgba(38, 32, 54, .05);
   --sh: 0 3px 12px rgba(40, 34, 60, .13);
   --shl: 0 14px 38px rgba(40, 34, 60, .2);
@@ -111,8 +115,18 @@ input, textarea { font: inherit; color: inherit; background: none; border: 0; ou
 .navsb::-webkit-scrollbar-thumb { background: rgba(150, 165, 200, .22); border-radius: 6px; }
 .navsb::-webkit-scrollbar-track { background: transparent; }
 
-.blk .bh { opacity: 0; transition: opacity .15s; }
-.blk:hover .bh { opacity: 1; }
+/* Row actions reveal on hover — but only where hovering exists. On a touch
+   screen there is no :hover, so these sat at opacity 0 while still holding
+   28x28 of live hit area: a Delete you cannot see but can press while
+   scrolling. pointer-events goes with the opacity, and touch gets a visible
+   resting state instead of a hidden one. */
+@media (hover: hover) {
+  .blk .bh { opacity: 0; pointer-events: none; transition: opacity .15s; }
+  .blk:hover .bh, .blk:focus-within .bh { opacity: 1; pointer-events: auto; }
+}
+@media (hover: none) {
+  .blk .bh { opacity: .6; }
+}
 .blk:hover { background: var(--hov, rgba(150, 165, 200, .05)); }
 
 /* ---- Keyframes (verbatim) ---------------------------------------------- */
