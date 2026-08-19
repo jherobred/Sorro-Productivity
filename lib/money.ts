@@ -124,6 +124,11 @@ const DEL_TXN = defineMutation('money.delTxn', async (v: { id: string }) => {
   if (error) throw error;
 });
 
+const EDIT_TXN = defineMutation('money.editTxn', async (v: { id: string; patch: Partial<Txn> }) => {
+  const { error } = await supabase.from('bd_transactions').update(v.patch as never).eq('id', v.id);
+  if (error) throw error;
+});
+
 const RESTORE_TXN = defineMutation('money.restoreTxn', async (v: { id: string }) => {
   const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_transactions', p_id: v.id });
   if (error) throw error;
@@ -189,14 +194,156 @@ export function useMoneyActions() {
     onSettled: settle,
   });
 
-  const restoreTxn = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_TXN, onSettled: settle });
+  const editTxn = useMutation({
+    mutationKey: EDIT_TXN,
+    onMutate: (v: { id: string; patch: Partial<Txn> }) => {
+      const prev = queryClient.getQueryData<Txn[]>(TXN_KEY) ?? [];
+      queryClient.setQueryData<Txn[]>(TXN_KEY, prev.map((t) => (t.id === v.id ? { ...t, ...v.patch } : t)));
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(TXN_KEY, ctx); },
+    onSettled: settle,
+  });
+
+  // Undo puts the row back on screen straight away; the RPC clears deleted_at
+  // server-side. Without the optimistic half, Undo looks like it did nothing
+  // until the refetch lands.
+  const restoreTxn = useMutation<unknown, Error, { id: string; row?: Txn }>({
+    mutationKey: RESTORE_TXN,
+    onMutate: (v) => {
+      if (!v.row) return;
+      const prev = queryClient.getQueryData<Txn[]>(TXN_KEY) ?? [];
+      if (prev.some((t) => t.id === v.id)) return;
+      queryClient.setQueryData<Txn[]>(TXN_KEY, [v.row, ...prev]
+        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+    },
+    onSettled: settle,
+  });
   const addBuy = useMutation<unknown, Error, { id: string; name: string; amount_centavos: number }>({ mutationKey: ADD_BUY, onSettled: settle });
   const logBuy = useMutation<unknown, Error, { item: ToBuy; account_id: string | null }>({ mutationKey: LOG_BUY, onSettled: settle });
 
   const removeWithUndo = (t: Txn) => {
     delTxn.mutate({ id: t.id });
-    toast(`Deleted “${t.name}”`, () => restoreTxn.mutate({ id: t.id }));
+    toast(`Deleted “${t.name}”`, () => restoreTxn.mutate({ id: t.id, row: t }));
   };
 
-  return { addTxn, delTxn, restoreTxn, addBuy, logBuy, removeWithUndo };
+  return { addTxn, editTxn, delTxn, restoreTxn, addBuy, logBuy, removeWithUndo };
 }
+
+/* ==========================================================================
+   Full CRUD for the rest of Money.
+   
+   Transactions had create and delete; budgets, goals, subscriptions and the
+   to-buy list could only be read. Everything on the six tabs can now be
+   created, edited and removed, and every delete is undoable through the toast.
+   ========================================================================== */
+
+export type Goal = { id: string; name: string; target_centavos: number; saved_centavos: number; due_on: string | null };
+export type Sub = { id: string; name: string; amount_centavos: number; next_charge: string | null; period: string };
+
+export const GOALS_KEY = ['goals'] as const;
+export const SUBS_KEY = ['subscriptions'] as const;
+
+export function useGoals() {
+  return useQuery({
+    queryKey: GOALS_KEY,
+    queryFn: async (): Promise<Goal[]> => {
+      const { data, error } = await supabase.from('bd_goals')
+        .select('id,name,target_centavos,saved_centavos,due_on').order('created_at');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useSubs() {
+  return useQuery({
+    queryKey: SUBS_KEY,
+    queryFn: async (): Promise<Sub[]> => {
+      const { data, error } = await supabase.from('bd_subscriptions')
+        .select('id,name,amount_centavos,next_charge,period').order('next_charge');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** One generic row writer — every Money table has the same shape of edit. */
+function crud<T extends { id: string }>(name: string, table: string, key: readonly unknown[]) {
+  const add = defineMutation(`money.add${name}`, async (v: Partial<T> & { id: string }) => {
+    const user_id = await currentUserId();
+    const { error } = await supabase.from(table).insert({ ...v, user_id } as never);
+    if (error) throw error;
+  });
+  const edit = defineMutation(`money.edit${name}`, async (v: { id: string; patch: Partial<T> }) => {
+    // The generic patch is opaque to the generated table types, so it is cast
+    // once here rather than at every call site.
+    const { error } = await supabase.from(table).update(v.patch as never).eq('id', v.id);
+    if (error) throw error;
+  });
+  const del = defineMutation(`money.del${name}`, async (v: { id: string }) => {
+    const { error } = await supabase.from(table).delete().eq('id', v.id);
+    if (error) throw error;
+  });
+  return { add, edit, del, key };
+}
+
+const BUDGET = crud<Budget>('Budget', 'bd_budgets', BUD_KEY);
+const GOAL = crud<Goal>('Goal', 'bd_goals', GOALS_KEY);
+const SUB = crud<Sub>('Sub', 'bd_subscriptions', SUBS_KEY);
+const BUY = crud<ToBuy>('Buy', 'bd_to_buy', BUY_KEY);
+
+/**
+ * Optimistic list edits. Every one of these is a small local list, so patching
+ * the cache and rolling back on failure is both simpler and faster than waiting
+ * for a refetch — a budget slider that lags a round trip feels broken.
+ */
+function useCrud<T extends { id: string }>(
+  c: { add: readonly [string]; edit: readonly [string]; del: readonly [string]; key: readonly unknown[] },
+  label: string,
+) {
+  const qc = useQueryClient();
+  const settle = () => void qc.invalidateQueries({ queryKey: c.key });
+  const patch = (fn: (p: T[]) => T[]) => {
+    const prev = queryClient.getQueryData<T[]>(c.key) ?? [];
+    queryClient.setQueryData<T[]>(c.key, fn(prev));
+    return prev;
+  };
+  const rollback = (_e: unknown, _v: unknown, ctx: T[] | undefined) => {
+    if (ctx) queryClient.setQueryData(c.key, ctx);
+  };
+
+  const add = useMutation<unknown, Error, Partial<T> & { id: string }, T[]>({
+    mutationKey: c.add,
+    onMutate: (v) => patch((p) => [...p, v as T]),
+    onError: rollback,
+    onSettled: settle,
+  });
+  const edit = useMutation<unknown, Error, { id: string; patch: Partial<T> }, T[]>({
+    mutationKey: c.edit,
+    onMutate: (v) => patch((p) => p.map((r) => (r.id === v.id ? { ...r, ...v.patch } : r))),
+    onError: rollback,
+    onSettled: settle,
+  });
+  const del = useMutation<unknown, Error, { id: string }, T[]>({
+    mutationKey: c.del,
+    onMutate: (v) => patch((p) => p.filter((r) => r.id !== v.id)),
+    onError: rollback,
+    onSettled: settle,
+  });
+
+  return {
+    add, edit, del,
+    /** Delete with the row kept in hand, so Undo can put it straight back. */
+    removeWithUndo(row: T, name: string) {
+      del.mutate({ id: row.id });
+      toast(`Deleted “${name}”`, () => add.mutate(row as Partial<T> & { id: string }));
+    },
+    label,
+  };
+}
+
+export const useBudgetActions = () => useCrud<Budget>(BUDGET, 'budget');
+export const useGoalActions = () => useCrud<Goal>(GOAL, 'goal');
+export const useSubActions = () => useCrud<Sub>(SUB, 'subscription');
+export const useBuyActions = () => useCrud<ToBuy>(BUY, 'item');

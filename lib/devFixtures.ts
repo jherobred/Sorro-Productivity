@@ -62,6 +62,12 @@ export function fixture<T>(prefix: string): T | null {
 export function seedDevFixtures() {
   if (!DEV_FIXTURES) return;
 
+  // Fixtures are a static world. Pages call useQuery with an inline queryFn,
+  // which beats the per-key default below, so the first invalidate after a
+  // mutation would refetch from a signed-out Supabase and wipe the screen.
+  // Nothing to revalidate against here, so invalidation is simply off.
+  queryClient.invalidateQueries = (async () => {}) as typeof queryClient.invalidateQueries;
+
   // Pre-seeding the cache alone is not enough: a component that mounts before
   // the seed, or any refetch that slips through, would hit Supabase and get the
   // empty result a signed-out client returns. Overriding the *queryFn* for each
