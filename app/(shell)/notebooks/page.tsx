@@ -30,6 +30,8 @@ export default function NotebooksPage() {
   const [tab, setTab] = useState<Tab>('notes');
 
   const { data: notebooks = [] } = useNotebooks();
+  /** Hide the tree entirely, the way Obsidian and Notion both let you. */
+  const [tree, setTree] = useState(true);
   const { data: sections = [] } = useSections();
   const { data: notes = [] } = useNotes();
   const A = useNotebookActions();
@@ -67,6 +69,17 @@ export default function NotebooksPage() {
         flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
         display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
       }}>
+        {/* Hide the tree and hand its 240px to the note. */}
+        {!phone && tab === 'notes' && (
+          <button onClick={() => setTree((v) => !v)} className="hov k-squish"
+            title={tree ? 'Hide the notebook tree' : 'Show the notebook tree'}
+            aria-label={tree ? 'Hide the notebook tree' : 'Show the notebook tree'}
+            aria-pressed={tree}
+            style={{ width: 34, height: 34, flex: 'none', borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
+            <Icon name={tree ? 'collapse' : 'expand'} size={15} color="var(--tx2)" />
+          </button>
+        )}
+
         {/* Segmented tab bar — the accent pill slides on transform. */}
         <div style={{
           position: 'relative', display: 'flex', flex: phone ? '1 1 auto' : '0 0 auto',
@@ -111,46 +124,79 @@ export default function NotebooksPage() {
             </div>
           )}
 
-          {!phone && (
-            <div style={{ display: 'flex', width: 184, flex: 'none', flexDirection: 'column', gap: 2, transition: 'width .35s cubic-bezier(0.16,1,0.3,1)' }}>
-              <RailHead label="Notebooks" onAdd={() => A.newNotebook.mutate({ id: crypto.randomUUID(), name: 'New notebook', color: PAL.violet })} />
-              {notebooks.map((b) => (
-                <button key={b.id} onClick={() => setNbId(b.id)} className="hov" style={railBtn(b.id === nbId)}>
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: b.color, flex: 'none' }} />
-                  <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-                </button>
-              ))}
+          {/* One tree, not two lists.
+              Notebooks+sections sat in one column and notes in another, so
+              390px of a 1044px area was navigation and the note itself got
+              582px — below a comfortable reading measure, and the reason this
+              page always felt cramped. Obsidian and Notion both use a single
+              nested explorer that collapses; so does this now, which hands the
+              editor 780px open and about a thousand closed. */}
+          {!phone && tree && (
+            <div className="navsb" style={{
+              display: 'flex', width: 240, flex: 'none', flexDirection: 'column', gap: 1,
+              overflowY: 'auto', minHeight: 0, paddingRight: 4,
+            }}>
+              <RailHead label="Notebooks"
+                onAdd={() => A.newNotebook.mutate({ id: crypto.randomUUID(), name: 'New notebook', color: PAL.violet })} />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14 }}>
-                <div style={KICKER}>Sections</div>
-                <button onClick={() => nbId && A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: nbId, name: 'New section' })}
-                  className="hov" title="New section" style={addBtn}>
-                  <Icon name="plus" size={13} color="var(--tx3)" />
-                </button>
-              </div>
-              {mySecs.map((s) => (
-                <button key={s.id} onClick={() => setSecId(s.id)} className="hov" style={railBtn(s.id === secId)}>
-                  <span style={{ flex: 1, textAlign: 'left' }}>{s.name}</span>
-                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{notes.filter((n) => n.section_id === s.id).length}</span>
-                </button>
-              ))}
-            </div>
-          )}
+              {notebooks.map((b) => {
+                const openBook = b.id === nbId;
+                const secs = sections.filter((x) => x.notebook_id === b.id);
+                return (
+                  <div key={b.id}>
+                    <button onClick={() => setNbId(openBook ? null : b.id)} className="hov"
+                      aria-expanded={openBook}
+                      style={{ ...railBtn(openBook), fontWeight: 700 }}>
+                      <Icon name={openBook ? 'collapse' : 'expand'} size={11} color="var(--tx3)" />
+                      <span style={{ width: 7, height: 7, borderRadius: 2, background: b.color, flex: 'none' }} />
+                      <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+                    </button>
 
-          {!phone && (
-            <div style={{ display: 'flex', width: 206, flex: 'none', flexDirection: 'column', gap: 5, transition: 'width .35s cubic-bezier(0.16,1,0.3,1)' }}>
-              <RailHead label="Notes" onAdd={() => secId && A.newNote.mutate({ id: crypto.randomUUID(), section_id: secId, title: 'Untitled' })} />
-              {myNotes.map((n) => (
-                <button key={n.id} onClick={() => setNoteId(n.id)} style={{
-                  padding: '9px 11px', borderRadius: 10, textAlign: 'left', fontSize: 12.5, fontWeight: 600,
-                  background: n.id === noteId ? 'var(--card2)' : 'transparent',
-                  color: n.id === noteId ? 'var(--tx)' : 'var(--tx2)',
-                  border: `1px solid ${n.id === noteId ? 'var(--line2)' : 'transparent'}`,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {n.title}
-                </button>
-              ))}
+                    {openBook && (
+                      <div className="rise" style={{ marginLeft: 10, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
+                        {secs.map((sec) => {
+                          const openSec = sec.id === secId;
+                          const kids = notes.filter((n) => n.section_id === sec.id);
+                          return (
+                            <div key={sec.id}>
+                              <button onClick={() => setSecId(openSec ? null : sec.id)} className="hov"
+                                aria-expanded={openSec} style={railBtn(openSec)}>
+                                <Icon name={openSec ? 'collapse' : 'expand'} size={10} color="var(--tx3)" />
+                                <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sec.name}</span>
+                                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{kids.length}</span>
+                              </button>
+
+                              {openSec && (
+                                <div className="rise" style={{ marginLeft: 8, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
+                                  {kids.map((n) => (
+                                    <button key={n.id} onClick={() => setNoteId(n.id)} style={{
+                                      display: 'block', width: '100%', padding: '7px 9px', borderRadius: 8, textAlign: 'left',
+                                      fontSize: 12, fontWeight: 600,
+                                      background: n.id === noteId ? 'var(--card2)' : 'transparent',
+                                      color: n.id === noteId ? 'var(--tx)' : 'var(--tx2)',
+                                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                    }}>
+                                      {n.title}
+                                    </button>
+                                  ))}
+                                  <button onClick={() => A.newNote.mutate({ id: crypto.randomUUID(), section_id: sec.id, title: 'Untitled' })}
+                                    className="hov" style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 9px', borderRadius: 8, fontSize: 11, color: 'var(--tx3)' }}>
+                                    <Icon name="plus" size={11} color="var(--tx3)" />New note
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <button onClick={() => A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: b.id, name: 'New section' })}
+                          className="hov" style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 9px', borderRadius: 8, fontSize: 11, color: 'var(--tx3)' }}>
+                          <Icon name="plus" size={11} color="var(--tx3)" />New section
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
