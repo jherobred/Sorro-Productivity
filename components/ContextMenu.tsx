@@ -1,11 +1,40 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { lg } from '@/lib/glass';
 import { PAL } from '@/lib/pal';
 
-export type CtxItem = { label: string; icon: IconName; run: () => void; danger?: boolean };
+/**
+ * One row. `run` OR `items` — a row that opens a submenu does not also act,
+ * because a control that both navigates and commits is a control people
+ * trigger by accident.
+ */
+export type CtxItem = {
+  label: string;
+  icon: IconName;
+  run?: () => void;
+  /** Turns the row into a submenu parent. */
+  items?: CtxItem[];
+  /** Shown right-aligned, dimmed. Display only — the owning screen binds it. */
+  shortcut?: string;
+  danger?: boolean;
+  /** Greyed and inert. `hint` says why, so a dead row is never a mystery. */
+  disabled?: boolean;
+  hint?: string;
+  /** A tick on the left, for rows that report a current setting. */
+  checked?: boolean;
+};
+
+/** A labelled run of rows. The label is optional; the rule above it is not. */
+export type CtxGroup = { label?: string; items: CtxItem[] };
+
+/** Either shape is accepted, so existing callers keep working. */
+export type CtxContent = CtxItem[] | CtxGroup[];
+
+const isGroups = (c: CtxContent): c is CtxGroup[] =>
+  c.length > 0 && Array.isArray((c[0] as CtxGroup).items);
 
 /**
  * Context menu on the glass surface (ctxStyle, Basedly.dc.html:6478 — LG at
@@ -20,7 +49,7 @@ export function ContextMenu({
   x, y, kind, label, items, onClose, accent, dark,
 }: {
   x: number; y: number; kind: string; label: string;
-  items: CtxItem[]; onClose: () => void; accent: string; dark: boolean;
+  items: CtxContent; onClose: () => void; accent: string; dark: boolean;
 }) {
   useEffect(() => {
     const close = () => onClose();
@@ -35,15 +64,67 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  const left = Math.min(x, (typeof window !== 'undefined' ? window.innerWidth : 400) - 240);
-  const top = Math.min(y, (typeof window !== 'undefined' ? window.innerHeight : 600) - (items.length * 38 + 60));
+  /**
+   * Measure, then place.
+   *
+   * The old sums guessed the menu's height as `items.length * 38 + 60` and
+   * clamped against the guess. A seven-item menu guessed 326px, so on a short
+   * window the clamp pulled `top` up to 89 no matter where you clicked — the
+   * menu opened a couple of hundred pixels above the pointer. Reading the real
+   * box is both simpler and correct for any number of items, any font scale,
+   * and any wrapped label.
+   *
+   * Below-right of the pointer when it fits, flipped when it does not, and
+   * clamped on both axes so it can never leave the screen.
+   */
+  // Flat lists and grouped lists render the same way; one shape internally.
+  const groups: CtxGroup[] = isGroups(items) ? items : [{ items }];
+  const flat = groups.flatMap((g) => g.items);
 
-  return (
-    <div className="pop" role="menu" aria-label={label}
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const M = 8;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const wantLeft = x + w + M > vw ? x - w : x;
+    const wantTop = y + h + M > vh ? y - h : y;
+
+    setPos({
+      left: Math.min(Math.max(M, wantLeft), Math.max(M, vw - w - M)),
+      top: Math.min(Math.max(M, wantTop), Math.max(M, vh - h - M)),
+    });
+  }, [x, y, flat.length]);
+
+
+/**
+ * Rendered into <body>, not where it is written.
+ *
+ * `main` carries a `zoom` (the font-scale/density preference) and a page-entry
+ * transform. Either makes it the containing block for `position: fixed`
+ * descendants, so a menu asking for viewport coordinates got the main element's
+ * coordinates instead and opened a long way from the pointer — the further down
+ * the page, the further off. A portal puts it back on the viewport, which is
+ * the only frame a pointer position is ever expressed in.
+ */
+  return createPortal(
+    <div ref={ref} className="pop" role="menu" aria-label={label}
       onPointerDown={(e) => e.stopPropagation()}
       style={{
         ...lg({ tint: accent, strength: 0.95, radius: 15, dark }),
-        position: 'fixed', left, top, width: 228, zIndex: 60, overflow: 'hidden', padding: 5,
+        position: 'fixed',
+        left: pos?.left ?? -9999,
+        top: pos?.top ?? -9999,
+        // Hidden until measured, so it never flashes in the wrong place.
+        visibility: pos ? 'visible' : 'hidden',
+        width: 228, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto',
+        zIndex: 60, padding: 5,
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px 8px' }}>
         <span style={{ width: 6, height: 6, borderRadius: 2, flex: 'none', background: KIND_DOT[kind] ?? 'var(--acc)' }} />
@@ -55,17 +136,104 @@ export function ContextMenu({
         </span>
       </div>
 
-      {items.map((it) => (
-        <button key={it.label} role="menuitem" onClick={() => { it.run(); onClose(); }} className="hov lensrow"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px',
-            borderRadius: 9, fontSize: 12.5, fontWeight: 600, textAlign: 'left', minHeight: 36,
-            color: it.danger ? PAL.coral : 'var(--tx)',
-          }}>
-          <Icon name={it.icon} size={14} color={it.danger ? PAL.coral : 'var(--tx3)'} />
-          {it.label}
-        </button>
+      {groups.map((g, gi) => (
+        <div key={g.label ?? gi} role="group" aria-label={g.label}>
+          {gi > 0 && <div aria-hidden style={{ height: 1, background: 'var(--line)', margin: '5px 6px' }} />}
+          {g.label && (
+            <div style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
+              color: 'var(--tx3)', padding: '5px 10px 3px',
+            }}>
+              {g.label}
+            </div>
+          )}
+          {g.items.map((it) => (
+            <Row key={it.label} it={it} onClose={onClose} accent={accent} dark={dark} />
+          ))}
+        </div>
       ))}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * A row, and its submenu when it has one.
+ *
+ * The submenu opens to the right and flips left near the edge, so a menu
+ * already pushed against the window does not push its child off it.
+ */
+function Row({ it, onClose, accent, dark }: {
+  it: CtxItem; onClose: () => void; accent: string; dark: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [side, setSide] = useState<'right' | 'left'>('right');
+  const row = useRef<HTMLDivElement>(null);
+  const shut = useRef<number | undefined>(undefined);
+
+  const has = !!it.items?.length;
+  const colour = it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx)';
+
+  const show = () => {
+    clearTimeout(shut.current);
+    if (it.disabled || !has) return;
+    const r = row.current?.getBoundingClientRect();
+    // 228 wide plus a little air; if it will not fit to the right, go left.
+    if (r) setSide(r.right + 236 > window.innerWidth ? 'left' : 'right');
+    setOpen(true);
+  };
+  // A small delay on leave, so crossing the gap to the submenu does not shut it.
+  const hide = () => { shut.current = window.setTimeout(() => setOpen(false), 120); };
+
+  return (
+    <div ref={row} style={{ position: 'relative' }} onPointerEnter={show} onPointerLeave={hide}>
+      <button
+        role={has ? 'menuitem' : it.checked !== undefined ? 'menuitemcheckbox' : 'menuitem'}
+        aria-haspopup={has || undefined}
+        aria-expanded={has ? open : undefined}
+        aria-checked={it.checked}
+        aria-disabled={it.disabled || undefined}
+        title={it.hint}
+        onClick={() => {
+          if (it.disabled) return;
+          if (has) { setOpen((v) => !v); return; }
+          it.run?.();
+          onClose();
+        }}
+        className={it.disabled ? undefined : 'hov lensrow'}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px',
+          borderRadius: 9, fontSize: 12.5, fontWeight: 600, textAlign: 'left', minHeight: 36,
+          color: colour, opacity: it.disabled ? 0.45 : 1,
+          cursor: it.disabled ? 'default' : 'pointer',
+        }}>
+        <Icon name={it.icon} size={14} color={it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx3)'} />
+        <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {it.label}
+        </span>
+        {it.checked && <Icon name="check" size={13} color="var(--accTx)" />}
+        {it.shortcut && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.03em', flex: 'none' }}>
+            {it.shortcut}
+          </span>
+        )}
+        {has && <Icon name="expand" size={12} color="var(--tx3)" />}
+      </button>
+
+      {has && open && (
+        <div role="menu" aria-label={it.label} className="pop"
+          onPointerEnter={show} onPointerLeave={hide}
+          style={{
+            ...lg({ tint: accent, strength: 0.95, radius: 13, dark }),
+            position: 'absolute', top: -4, zIndex: 61,
+            ...(side === 'right' ? { left: '100%', marginLeft: 4 } : { right: '100%', marginRight: 4 }),
+            width: 200, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto', padding: 5,
+          }}>
+          {it.items!.map((sub) => (
+            <Row key={sub.label} it={sub} onClose={onClose} accent={accent} dark={dark} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

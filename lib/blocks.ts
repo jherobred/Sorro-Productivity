@@ -132,17 +132,36 @@ export function useBlockActions(noteId: string | null) {
   };
 
   return {
+    /**
+     * Put text on screen now, without asking the network.
+     *
+     * The editor calls this on every keystroke and debounces the real write,
+     * so a sentence is one request rather than forty — and no character can be
+     * rolled back by a failure belonging to the character before it.
+     */
+    patchLocal: (id: string, p: Partial<Block>) =>
+      patch((prev) => prev.map((b) => (b.id === id ? { ...b, ...p } : b))),
+
     add: useMutation<unknown, Error, Block, Block[]>({
       mutationKey: ADD,
       onMutate: (v) => patch((p) => [...p, v].sort((a, b) => a.position - b.position)),
       onError: rollback,
       onSettled: settle,
     }),
+    /**
+     * No settle here, on purpose.
+     *
+     * Saving fired an invalidate, so every keystroke queued a refetch that
+     * raced the write it was reporting on. When the read won, the block you
+     * were editing was replaced by whatever the server last stored — the text
+     * disappeared under the cursor. While you are typing, the local cache is
+     * the truth; a refetch can only destroy. Structural changes below still
+     * settle, because those genuinely need the server's ordering back.
+     */
     save: useMutation<unknown, Error, { id: string; patch: Partial<Block> }, Block[]>({
       mutationKey: SAVE,
       onMutate: (v) => patch((p) => p.map((b) => (b.id === v.id ? { ...b, ...v.patch } : b))),
       onError: rollback,
-      onSettled: settle,
     }),
     del: useMutation<unknown, Error, { id: string }, Block[]>({
       mutationKey: DEL,

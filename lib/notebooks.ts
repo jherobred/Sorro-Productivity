@@ -78,6 +78,37 @@ const SAVE_NOTE = defineMutation('nb.saveNote', async (v: { id: string; patch: P
   if (error) throw error;
 });
 
+const EDIT_SEC = defineMutation('nb.editSection', async (v: { id: string; patch: { name?: string; notebook_id?: string } }) => {
+  const { error } = await supabase.from('bd_sections').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+
+/**
+ * Sections and notebooks are hard-deleted — they have no deleted_at, and
+ * adding one would mean teaching every read path to filter. What they hold is
+ * not lost with them: notes move up to the notebook's first remaining section,
+ * or to another notebook, before the container goes. Removing a shelf should
+ * not burn the books on it.
+ */
+const DEL_SEC = defineMutation('nb.delSection', async (v: { id: string; moveTo: string | null }) => {
+  if (v.moveTo) {
+    const { error } = await supabase.from('bd_notes').update({ section_id: v.moveTo }).eq('section_id', v.id);
+    if (error) throw error;
+  }
+  const { error } = await supabase.from('bd_sections').delete().eq('id', v.id);
+  if (error) throw error;
+});
+
+const EDIT_NB = defineMutation('nb.editNotebook', async (v: { id: string; patch: { name?: string; color?: string } }) => {
+  const { error } = await supabase.from('bd_notebooks').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+
+const MOVE_NOTE = defineMutation('nb.moveNote', async (v: { id: string; section_id: string }) => {
+  const { error } = await supabase.from('bd_notes').update({ section_id: v.section_id }).eq('id', v.id);
+  if (error) throw error;
+});
+
 const DEL_NOTE = defineMutation('nb.delNote', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_notes').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
@@ -96,9 +127,48 @@ export function useNotebookActions() {
     void qc.invalidateQueries({ queryKey: NOTE_KEY });
   };
 
-  const newNotebook = useMutation<unknown, Error, { id: string; name: string; color: string }>({ mutationKey: NEW_NB, onSettled: settle });
-  const newSection = useMutation<unknown, Error, { id: string; notebook_id: string; name: string }>({ mutationKey: NEW_SEC, onSettled: settle });
-  const newNote = useMutation<unknown, Error, { id: string; section_id: string; title: string }>({ mutationKey: NEW_NOTE, onSettled: settle });
+  /**
+   * Creates are optimistic, and that is a correctness fix rather than a
+   * nicety.
+   *
+   * None of these put the new row in the cache: they wrote to the server and
+   * waited for the refetch. So a note you had just made did not exist locally,
+   * the editor opened on it anyway, and the first block you typed referenced a
+   * note the cache had never heard of. The block write failed its foreign key,
+   * the rollback undid the optimistic block, and the text vanished as you
+   * typed it.
+   */
+  const patchList = <T,>(key: readonly unknown[], row: T) => {
+    const prev = queryClient.getQueryData<T[]>(key) ?? [];
+    queryClient.setQueryData<T[]>(key, [...prev, row]);
+    return prev;
+  };
+  const rollbackList = <T,>(key: readonly unknown[]) =>
+    (_e: unknown, _v: unknown, ctx: T[] | undefined) => {
+      if (ctx) queryClient.setQueryData(key, ctx);
+    };
+
+  const newNotebook = useMutation<unknown, Error, { id: string; name: string; color: string }, Notebook[]>({
+    mutationKey: NEW_NB,
+    onMutate: (v) => patchList<Notebook>(NB_KEY, { ...v, position: Number.MAX_SAFE_INTEGER }),
+    onError: rollbackList<Notebook>(NB_KEY),
+    onSettled: settle,
+  });
+  const newSection = useMutation<unknown, Error, { id: string; notebook_id: string; name: string }, Sec[]>({
+    mutationKey: NEW_SEC,
+    onMutate: (v) => patchList<Sec>(SEC_KEY, { ...v, position: Number.MAX_SAFE_INTEGER }),
+    onError: rollbackList<Sec>(SEC_KEY),
+    onSettled: settle,
+  });
+  const newNote = useMutation<unknown, Error, { id: string; section_id: string; title: string }, Note[]>({
+    mutationKey: NEW_NOTE,
+    onMutate: (v) => patchList<Note>(NOTE_KEY, {
+      ...v, body: '', position: Number.MAX_SAFE_INTEGER,
+      updated_at: new Date().toISOString(), deleted_at: null,
+    }),
+    onError: rollbackList<Note>(NOTE_KEY),
+    onSettled: settle,
+  });
   const restoreNote = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_NOTE, onSettled: settle });
 
   const saveNote = useMutation({
@@ -109,7 +179,8 @@ export function useNotebookActions() {
       return prev;
     },
     onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(NOTE_KEY, ctx); },
-    onSettled: settle,
+    // Deliberately no settle: refetching the list mid-edit replaces the title
+    // you are typing with the one the server last heard about.
   });
 
   const delNote = useMutation({
@@ -128,5 +199,45 @@ export function useNotebookActions() {
     toast(`Deleted “${n.title}”`, () => restoreNote.mutate({ id: n.id }));
   };
 
-  return { newNotebook, newSection, newNote, saveNote, delNote, restoreNote, removeWithUndo };
+  const editSection = useMutation<unknown, Error, { id: string; patch: { name?: string; notebook_id?: string } }>({
+    mutationKey: EDIT_SEC,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Sec[]>(SEC_KEY) ?? [];
+      queryClient.setQueryData<Sec[]>(SEC_KEY, prev.map((x) => (x.id === v.id ? { ...x, ...v.patch } : x)));
+    },
+    onSettled: settle,
+  });
+  const delSection = useMutation<unknown, Error, { id: string; moveTo: string | null }>({
+    mutationKey: DEL_SEC,
+    onMutate: (v) => {
+      const secs = queryClient.getQueryData<Sec[]>(SEC_KEY) ?? [];
+      queryClient.setQueryData<Sec[]>(SEC_KEY, secs.filter((x) => x.id !== v.id));
+      const ns = queryClient.getQueryData<Note[]>(NOTE_KEY) ?? [];
+      queryClient.setQueryData<Note[]>(NOTE_KEY, v.moveTo
+        ? ns.map((n) => (n.section_id === v.id ? { ...n, section_id: v.moveTo! } : n))
+        : ns.filter((n) => n.section_id !== v.id));
+    },
+    onSettled: settle,
+  });
+  const editNotebook = useMutation<unknown, Error, { id: string; patch: { name?: string; color?: string } }>({
+    mutationKey: EDIT_NB,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Notebook[]>(NB_KEY) ?? [];
+      queryClient.setQueryData<Notebook[]>(NB_KEY, prev.map((x) => (x.id === v.id ? { ...x, ...v.patch } : x)));
+    },
+    onSettled: settle,
+  });
+  const moveNote = useMutation<unknown, Error, { id: string; section_id: string }>({
+    mutationKey: MOVE_NOTE,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Note[]>(NOTE_KEY) ?? [];
+      queryClient.setQueryData<Note[]>(NOTE_KEY, prev.map((n) => (n.id === v.id ? { ...n, section_id: v.section_id } : n)));
+    },
+    onSettled: settle,
+  });
+
+  return {
+    newNotebook, newSection, newNote, saveNote, delNote, restoreNote, removeWithUndo,
+    editSection, delSection, editNotebook, moveNote,
+  };
 }

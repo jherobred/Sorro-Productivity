@@ -1,11 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
-import { useNotebooks, useSections, useNotes, useNotebookActions, type Note } from '@/lib/notebooks';
+import { useNotebooks, useSections, useNotes, useNotebookActions, type Note, type Sec, type Notebook } from '@/lib/notebooks';
+import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
+import { ask } from '@/lib/ask';
+import { toast } from '@/lib/toast';
+
+/** The notebook spine colours, named so the submenu reads as words. */
+const NB_COLOURS = [
+  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
+  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
+];
 import { JournalTab } from '@/components/NotebookTabs';
 import { JavaLab } from '@/components/JavaLab';
 import { CanvasBoard } from '@/components/CanvasBoard';
@@ -32,6 +41,119 @@ export default function NotebooksPage() {
   const { data: notebooks = [] } = useNotebooks();
   /** Hide the tree entirely, the way Obsidian and Notion both let you. */
   const [tree, setTree] = useState(true);
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxGroup[] } | null>(null);
+
+  /**
+   * Right-click menus for the tree.
+   *
+   * Grouped rather than listed: create, then change, then move, then the
+   * destructive one behind a rule of its own. A flat list of nine rows makes
+   * you read all nine to find the one you want, and puts Delete one slip away
+   * from Rename.
+   */
+  const sectionMenu = (sec: Sec): CtxGroup[] => {
+    const kids = notes.filter((n) => n.section_id === sec.id);
+    const siblings = sections.filter((x) => x.notebook_id === sec.notebook_id && x.id !== sec.id);
+    const elsewhere = notebooks.filter((b) => b.id !== sec.notebook_id);
+
+    return [
+      { items: [
+        { label: 'New note', icon: 'bookPlus', shortcut: 'N',
+          run: () => { const id = crypto.randomUUID(); A.newNote.mutate({ id, section_id: sec.id, title: 'Untitled' }); setSecId(sec.id); setNoteId(id); } },
+      ] },
+      { label: 'Section', items: [
+        { label: 'Rename', icon: 'edit', shortcut: 'F2',
+          run: () => void ask('Rename section', { initial: sec.name, placeholder: 'Section name' })
+            .then((n) => { if (n && n !== sec.name) { A.editSection.mutate({ id: sec.id, patch: { name: n } }); toast('Section renamed'); } }) },
+        { label: 'Duplicate', icon: 'copy',
+          run: () => {
+            const id = crypto.randomUUID();
+            A.newSection.mutate({ id, notebook_id: sec.notebook_id, name: `${sec.name} copy` });
+            kids.forEach((n) => A.newNote.mutate({ id: crypto.randomUUID(), section_id: id, title: n.title }));
+            toast(`Duplicated “${sec.name}”`);
+          } },
+        { label: 'Copy section name', icon: 'copy',
+          run: () => { void navigator.clipboard?.writeText(sec.name); toast('Copied'); } },
+      ] },
+      { label: 'Move', items: [
+        { label: 'Move to notebook', icon: 'proj',
+          disabled: elsewhere.length === 0,
+          hint: elsewhere.length === 0 ? 'There is only one notebook' : undefined,
+          items: elsewhere.map((b) => ({
+            label: b.name, icon: 'proj' as IconName,
+            run: () => { A.editSection.mutate({ id: sec.id, patch: { notebook_id: b.id } }); toast(`Moved to ${b.name}`); },
+          })) },
+        { label: 'Move notes into', icon: 'agenda',
+          disabled: kids.length === 0 || siblings.length === 0,
+          hint: kids.length === 0 ? 'This section is empty'
+            : siblings.length === 0 ? 'There is nowhere else in this notebook' : undefined,
+          items: siblings.map((t) => ({
+            label: t.name, icon: 'agenda' as IconName,
+            run: () => { kids.forEach((n) => A.moveNote.mutate({ id: n.id, section_id: t.id })); toast(`Moved ${kids.length} notes`); },
+          })) },
+      ] },
+      { items: [
+        { label: kids.length ? `Delete and keep ${kids.length} notes` : 'Delete section',
+          icon: 'trash', danger: true, shortcut: '⌫',
+          hint: kids.length && siblings.length ? `Notes move to ${siblings[0].name}` : undefined,
+          run: () => {
+            if (kids.length && !siblings.length) return toast('Make another section first — these notes need somewhere to go');
+            A.delSection.mutate({ id: sec.id, moveTo: siblings[0]?.id ?? null });
+            if (secId === sec.id) setSecId(null);
+            toast(kids.length ? `Deleted “${sec.name}” — notes moved to ${siblings[0].name}` : `Deleted “${sec.name}”`);
+          } },
+      ] },
+    ];
+  };
+
+  const notebookMenu = (b: Notebook): CtxGroup[] => [
+    { items: [
+      { label: 'New section', icon: 'plus', run: () => A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: b.id, name: 'New section' }) },
+    ] },
+    { label: 'Notebook', items: [
+      { label: 'Rename', icon: 'edit', shortcut: 'F2',
+        run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
+          .then((n) => { if (n && n !== b.name) { A.editNotebook.mutate({ id: b.id, patch: { name: n } }); toast('Notebook renamed'); } }) },
+      { label: 'Colour', icon: 'palette',
+        items: NB_COLOURS.map((c) => ({
+          label: c.n, icon: 'palette' as IconName, checked: b.color === c.v,
+          run: () => A.editNotebook.mutate({ id: b.id, patch: { color: c.v } }),
+        })) },
+    ] },
+  ];
+
+  const noteMenu = (n: Note): CtxGroup[] => {
+    const targets = sections.filter((x) => x.id !== n.section_id);
+    return [
+      { items: [
+        { label: 'Open', icon: 'book', run: () => setNoteId(n.id) },
+        { label: 'Rename', icon: 'edit', shortcut: 'F2',
+          run: () => void ask('Rename note', { initial: n.title, placeholder: 'Note title' })
+            .then((t) => { if (t && t !== n.title) A.saveNote.mutate({ id: n.id, patch: { title: t } }); }) },
+        { label: 'Duplicate', icon: 'copy',
+          run: () => { A.newNote.mutate({ id: crypto.randomUUID(), section_id: n.section_id, title: `${n.title} copy` }); toast('Duplicated'); } },
+      ] },
+      { label: 'Move', items: [
+        { label: 'Move to section', icon: 'agenda',
+          disabled: targets.length === 0,
+          hint: targets.length === 0 ? 'There is nowhere else to put it' : undefined,
+          items: targets.map((t) => ({
+            label: t.name, icon: 'agenda' as IconName,
+            run: () => { A.moveNote.mutate({ id: n.id, section_id: t.id }); toast(`Moved to ${t.name}`); },
+          })) },
+      ] },
+      { items: [
+        { label: 'Delete note', icon: 'trash', danger: true, shortcut: '⌫',
+          run: () => { A.removeWithUndo(n); if (noteId === n.id) setNoteId(null); } },
+      ] },
+    ];
+  };
+
+  const openMenu = (e: React.MouseEvent, kind: string, label: string, items: CtxGroup[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, kind, label, items });
+  };
   const { data: sections = [] } = useSections();
   const { data: notes = [] } = useNotes();
   const A = useNotebookActions();
@@ -65,6 +187,10 @@ export default function NotebooksPage() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+      )}
       <div style={{
         flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
         display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
@@ -145,6 +271,7 @@ export default function NotebooksPage() {
                 return (
                   <div key={b.id}>
                     <button onClick={() => setNbId(openBook ? null : b.id)} className="hov"
+                      onContextMenu={(e) => openMenu(e, 'project', b.name, notebookMenu(b))}
                       aria-expanded={openBook}
                       style={{ ...railBtn(openBook), fontWeight: 700 }}>
                       <Icon name={openBook ? 'collapse' : 'expand'} size={11} color="var(--tx3)" />
@@ -160,6 +287,7 @@ export default function NotebooksPage() {
                           return (
                             <div key={sec.id}>
                               <button onClick={() => setSecId(openSec ? null : sec.id)} className="hov"
+                                onContextMenu={(e) => openMenu(e, 'node', sec.name, sectionMenu(sec))}
                                 aria-expanded={openSec} style={railBtn(openSec)}>
                                 <Icon name={openSec ? 'collapse' : 'expand'} size={10} color="var(--tx3)" />
                                 <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sec.name}</span>
@@ -169,7 +297,9 @@ export default function NotebooksPage() {
                               {openSec && (
                                 <div className="rise" style={{ marginLeft: 8, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
                                   {kids.map((n) => (
-                                    <button key={n.id} onClick={() => setNoteId(n.id)} style={{
+                                    <button key={n.id} onClick={() => setNoteId(n.id)}
+                                      onContextMenu={(e) => openMenu(e, 'scratch', n.title, noteMenu(n))}
+                                      style={{
                                       display: 'block', width: '100%', padding: '7px 9px', borderRadius: 8, textAlign: 'left',
                                       fontSize: 12, fontWeight: 600,
                                       background: n.id === noteId ? 'var(--card2)' : 'transparent',

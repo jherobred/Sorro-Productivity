@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
 
@@ -54,7 +55,18 @@ export function CalPopover({
     setPos({ left, top });
   }, [x, y, width]);
 
-  return (
+
+/**
+ * Rendered into <body>, not where it is written.
+ *
+ * `main` carries a `zoom` (the font-scale/density preference) and a page-entry
+ * transform. Either makes it the containing block for `position: fixed`
+ * descendants, so a menu asking for viewport coordinates got the main element's
+ * coordinates instead and opened a long way from the pointer — the further down
+ * the page, the further off. A portal puts it back on the viewport, which is
+ * the only frame a pointer position is ever expressed in.
+ */
+  return createPortal(
     <>
       {/* Click-away. Transparent, because a scrim would say "modal" and this
           is not one — the grid behind stays readable and in context. */}
@@ -80,7 +92,8 @@ export function CalPopover({
         }}>
         {children}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 

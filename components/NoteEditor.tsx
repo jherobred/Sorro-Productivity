@@ -1,6 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+/** Quiet period before a block's text is written. Long enough to swallow a
+ *  burst of typing, short enough that a tab-away still lands it. */
+const SAVE_DEBOUNCE_MS = 500;
 import { Icon, type IconName } from './Icon';
 import { ContextMenu, type CtxItem } from './ContextMenu';
 import { usePrefs } from '@/lib/prefs';
@@ -194,8 +198,47 @@ export function NoteEditor({
     if (value.startsWith('/')) setSlash({ id: b.id, query: value.slice(1) });
     else if (slash?.id === b.id) setSlash(null);
 
-    A.save.mutate({ id: b.id, patch: { text: value } });
+    // Optimistic cache first, so the character is on screen this frame; the
+    // network write follows once you pause. Firing a request per keystroke
+    // made a sentence forty round trips, and every one of them could fail
+    // and roll back the letter after it.
+    queueSave(b.id, value);
   };
+
+  /**
+   * One pending write per block, flushed after a short quiet period. The text
+   * is applied to the cache immediately either way, so nothing on screen waits
+   * for the network.
+   */
+  const timers = useRef(new Map<string, number>());
+  const latest = useRef(new Map<string, string>());
+
+  const queueSave = (id: string, text: string) => {
+    A.patchLocal(id, { text });
+    latest.current.set(id, text);
+    const pending = timers.current;
+    clearTimeout(pending.get(id));
+    pending.set(id, window.setTimeout(() => {
+      pending.delete(id);
+      const t = latest.current.get(id);
+      if (t !== undefined) { A.save.mutate({ id, patch: { text: t } }); latest.current.delete(id); }
+    }, SAVE_DEBOUNCE_MS));
+  };
+
+  /**
+   * Closing the note, or switching to another, must not strand the last few
+   * characters in a timer that never fires. Flush whatever is still pending.
+   */
+  useEffect(() => {
+    const pending = timers.current;
+    const unsent = latest.current;
+    return () => {
+      for (const t of pending.values()) clearTimeout(t);
+      for (const [id, text] of unsent) A.save.mutate({ id, patch: { text } });
+      pending.clear();
+      unsent.clear();
+    };
+  }, [A]);
 
   const blockMenu = (b: Block, i: number): CtxItem[] => [
     { label: 'Turn into text', icon: 'text', run: () => setKind(b, 'text') },
