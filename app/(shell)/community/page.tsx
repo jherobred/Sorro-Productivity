@@ -14,6 +14,7 @@ import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { MediaFrame, Lightbox } from '@/components/MediaFrame';
+import { RowActions } from '@/components/MoneyRows';
 
 /** Ported from Basedly.dc.html markup 759–869, card styles 5932–6000. */
 
@@ -47,6 +48,8 @@ const TABS = ['feed', 'threads', 'challenges'] as const;
 type Tab = (typeof TABS)[number];
 
 const initials = (id: string) => id.slice(0, 2).toUpperCase();
+/** A caption is a paragraph; a label is a handle. Trim it to one. */
+const short = (t: string, n = 34) => (t.length > n ? t.slice(0, n).trimEnd() + '…' : t);
 const hueOf = (id: string) => {
   const v = [...id].reduce((a, c) => a + c.charCodeAt(0), 0);
   return Object.values(PAL)[v % 10];
@@ -79,11 +82,70 @@ const VOTE = defineMutation('comm.vote', async (v: { threadId: string; on: boole
     : await supabase.from('bd_thread_votes').delete().eq('thread_id', v.threadId).eq('user_id', user_id);
   if (error) throw error;
 });
+const ADD_THREAD = defineMutation('comm.addThread', async (v: { id: string; title: string; body: string; tag: string }) => {
+  const author_id = await currentUserId();
+  const { error } = await supabase.from('bd_threads').insert({ ...v, author_id });
+  if (error) throw error;
+});
+const EDIT_THREAD = defineMutation('comm.editThread', async (v: { id: string; title: string; body: string }) => {
+  const { error } = await supabase.from('bd_threads').update({ title: v.title, body: v.body }).eq('id', v.id);
+  if (error) throw error;
+});
+// Posts and threads are soft-deleted, which is what makes Undo cheap: the row
+// is still there, only its deleted_at is set.
+const DEL_THREAD = defineMutation('comm.delThread', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_threads').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  if (error) throw error;
+});
+const EDIT_POST = defineMutation('comm.editPost', async (v: { id: string; caption: string }) => {
+  const { error } = await supabase.from('bd_posts').update({ caption: v.caption }).eq('id', v.id);
+  if (error) throw error;
+});
+const DEL_POST = defineMutation('comm.delPost', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_posts').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  if (error) throw error;
+});
+const RESTORE = defineMutation('comm.restore', async (v: { table: 'bd_posts' | 'bd_threads'; id: string }) => {
+  const { error } = await supabase.rpc('bd_restore', { p_table: v.table, p_id: v.id });
+  if (error) throw error;
+});
+
 const REPLY = defineMutation('comm.reply', async (v: { threadId: string; body: string }) => {
   const author_id = await currentUserId();
   const { error } = await supabase.from('bd_thread_replies').insert({ thread_id: v.threadId, author_id, body: v.body });
   if (error) throw error;
 });
+
+/** Optimistically drop a row, then hand Undo the row it captured. */
+function useSoftDelete<T extends { id: string }>(
+  key: readonly unknown[],
+  table: 'bd_posts' | 'bd_threads',
+  delKey: readonly [string],
+  settle: () => void,
+) {
+  const del = useMutation<unknown, Error, { id: string }, T[]>({
+    mutationKey: delKey,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<T[]>(key) ?? [];
+      queryClient.setQueryData<T[]>(key, prev.filter((r) => r.id !== v.id));
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(key, ctx); },
+    onSettled: settle,
+  });
+  const restore = useMutation<unknown, Error, { table: 'bd_posts' | 'bd_threads'; id: string; row: T }>({
+    mutationKey: RESTORE,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<T[]>(key) ?? [];
+      if (!prev.some((r) => r.id === v.id)) queryClient.setQueryData<T[]>(key, [v.row, ...prev]);
+    },
+    onSettled: settle,
+  });
+  return (row: T, name: string) => {
+    del.mutate({ id: row.id });
+    toast(`Deleted “${name}”`, () => restore.mutate({ table, id: row.id, row }));
+  };
+}
 
 export default function CommunityPage() {
   const { phone } = useLayout();
@@ -200,6 +262,39 @@ export default function CommunityPage() {
 
   const [draft, setDraft] = useState('');
 
+  // One editor open at a time: `post:<id>` / `thread:<id>` / 'thread:new'.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [nt, setNt] = useState({ title: '', body: '' });
+
+  const removePost = useSoftDelete<Post>(POSTS, 'bd_posts', DEL_POST, settle);
+  const removeThread = useSoftDelete<Thread>(THREADS, 'bd_threads', DEL_THREAD, settle);
+
+  const patchRow = <T extends { id: string }>(key: readonly unknown[], id: string, p: Partial<T>) => {
+    const prev = queryClient.getQueryData<T[]>(key) ?? [];
+    queryClient.setQueryData<T[]>(key, prev.map((r) => (r.id === id ? { ...r, ...p } : r)));
+  };
+
+  const editPost = useMutation<unknown, Error, { id: string; caption: string }>({
+    mutationKey: EDIT_POST,
+    onMutate: (v) => patchRow<Post>(POSTS, v.id, { caption: v.caption }),
+    onSettled: settle,
+  });
+  const addThread = useMutation<unknown, Error, { id: string; title: string; body: string; tag: string }>({
+    mutationKey: ADD_THREAD,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Thread[]>(THREADS) ?? [];
+      queryClient.setQueryData<Thread[]>(THREADS, [
+        { ...v, author_id: me, created_at: new Date().toISOString() }, ...prev,
+      ]);
+    },
+    onSettled: settle,
+  });
+  const editThread = useMutation<unknown, Error, { id: string; title: string; body: string }>({
+    mutationKey: EDIT_THREAD,
+    onMutate: (v) => patchRow<Thread>(THREADS, v.id, { title: v.title, body: v.body }),
+    onSettled: settle,
+  });
+
   return (
     <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -281,6 +376,14 @@ export default function CommunityPage() {
                         {p.tag}
                       </span>
                     )}
+                    {/* Your own post, and only yours: RLS would refuse anyone else's. */}
+                    {p.author_id === me && (
+                      <span style={{ marginLeft: p.tag ? 0 : 'auto', flex: 'none' }}>
+                        <RowActions label={short(p.caption) || 'post'}
+                          onEdit={() => setEditing(`post:${p.id}`)}
+                          onDelete={() => removePost(p, short(p.caption) || 'post')} />
+                      </span>
+                    )}
                   </div>
 
                   <PostImage path={p.image_path} tint={c} alt={p.caption || 'Post image'} onOpen={() => setViewing(p.id)} />
@@ -296,7 +399,13 @@ export default function CommunityPage() {
                         <Icon name="bookmark" size={15} color="var(--tx3)" />
                       </button>
                     </div>
-                    <div style={{ fontSize: 12.5, lineHeight: 1.6, fontWeight: 500, textWrap: 'pretty' }}>{p.caption}</div>
+                    {editing === `post:${p.id}` ? (
+                      <EditText value={p.caption} placeholder="Caption"
+                        onCancel={() => setEditing(null)}
+                        onSave={(v) => { editPost.mutate({ id: p.id, caption: v }); setEditing(null); toast('Post updated'); }} />
+                    ) : (
+                      <div style={{ fontSize: 12.5, lineHeight: 1.6, fontWeight: 500, textWrap: 'pretty' }}>{p.caption}</div>
+                    )}
                   </div>
                 </div>
               );
@@ -306,12 +415,49 @@ export default function CommunityPage() {
       )}
 
       {tab === 'threads' && (
-        <div>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          {editing === 'thread:new' ? (
+            <div className="k-bloom" style={{ padding: '14px 15px', borderRadius: 16, background: 'var(--card)', boxShadow: 'var(--sh)', border: '1px solid var(--line2)', marginBottom: 12 }}>
+              <input autoFocus value={nt.title} onChange={(e) => setNt((v) => ({ ...v, title: e.target.value }))}
+                placeholder="What is your question?"
+                style={{ width: '100%', minHeight: 40, padding: '9px 0', fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)' }} />
+              <textarea value={nt.body} onChange={(e) => setNt((v) => ({ ...v, body: e.target.value }))}
+                placeholder="Add detail (optional)" rows={3}
+                style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent' }} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="acc k-squish" disabled={!nt.title.trim()}
+                  onClick={() => {
+                    addThread.mutate({ id: crypto.randomUUID(), title: nt.title.trim(), body: nt.body.trim(), tag: 'Ask' });
+                    setNt({ title: '', body: '' });
+                    setEditing(null);
+                    toast('Thread posted');
+                  }}
+                  style={{ minHeight: 38, padding: '0 16px', borderRadius: 10, background: 'var(--acc)', color: '#0A0912', fontSize: 12, fontWeight: 800, opacity: nt.title.trim() ? 1 : 0.45 }}>
+                  Post thread
+                </button>
+                <button onClick={() => { setEditing(null); setNt({ title: '', body: '' }); }} className="hov k-squish"
+                  style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setEditing('thread:new')} className="hov k-squish"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', minHeight: 46, padding: '10px 14px', borderRadius: 14, border: '1.5px dashed var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 12 }}>
+              <Icon name="plus" size={15} color="var(--tx3)" />Start a thread
+            </button>
+          )}
+
           {threads.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No threads yet.</div>}
           {threads.map((t) => (
             <ThreadRow key={t.id} t={t} me={me}
               voted={votes.some((v) => v.thread_id === t.id && v.user_id === me)}
               count={votes.filter((v) => v.thread_id === t.id).length}
+              editing={editing === `thread:${t.id}`}
+              onEdit={() => setEditing(`thread:${t.id}`)}
+              onEditCancel={() => setEditing(null)}
+              onEditSave={(title, body) => { editThread.mutate({ id: t.id, title, body }); setEditing(null); toast('Thread updated'); }}
+              onDelete={() => removeThread(t, short(t.title))}
               onVote={(on) => vote.mutate({ threadId: t.id, on })}
               onReply={(b) => reply.mutate({ threadId: t.id, body: b })} />
           ))}
@@ -369,10 +515,11 @@ function LikeButton({ mine, count, onToggle }: { mine: boolean; count: number; o
 }
 
 function ThreadRow({
-  t, me, voted, count, onVote, onReply,
+  t, me, voted, count, editing, onEdit, onEditCancel, onEditSave, onDelete, onVote, onReply,
 }: {
-  t: Thread; me: string; voted: boolean; count: number;
-  onVote: (on: boolean) => void; onReply: (body: string) => void;
+  t: Thread; me: string; voted: boolean; count: number; editing: boolean;
+  onEdit: () => void; onEditCancel: () => void; onEditSave: (title: string, body: string) => void;
+  onDelete: () => void; onVote: (on: boolean) => void; onReply: (body: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -403,12 +550,23 @@ function ThreadRow({
           <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
             {t.author_id === me ? 'You' : initials(t.author_id)} · {ago(t.created_at)} ago
           </span>
+          {t.author_id === me && !editing && (
+            <span style={{ marginLeft: 'auto' }}>
+              <RowActions label={short(t.title)} onEdit={onEdit} onDelete={onDelete} />
+            </span>
+          )}
         </div>
-        <button onClick={() => setOpen((v) => !v)}
-          style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 14, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.35, textWrap: 'pretty' }}>
-          {t.title}
-        </button>
-        {t.body && <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', marginTop: 6, textWrap: 'pretty' }}>{t.body}</div>}
+        {editing ? (
+          <ThreadEdit title={t.title} body={t.body} onCancel={onEditCancel} onSave={onEditSave} />
+        ) : (
+          <>
+            <button onClick={() => setOpen((v) => !v)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 14, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.35, textWrap: 'pretty' }}>
+              {t.title}
+            </button>
+            {t.body && <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', marginTop: 6, textWrap: 'pretty' }}>{t.body}</div>}
+          </>
+        )}
         <button onClick={() => setOpen((v) => !v)} className="hov"
           style={{ marginTop: 9, padding: '5px 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
           {open ? 'Hide replies' : 'Show replies'}
@@ -441,6 +599,47 @@ function ThreadRow({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** One line of text, edited in place. Used for a post's caption. */
+function EditText({ value, placeholder, onSave, onCancel }: {
+  value: string; placeholder: string; onSave: (v: string) => void; onCancel: () => void;
+}) {
+  const [v, setV] = useState(value);
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder={placeholder}
+        onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) onSave(v.trim()); if (e.key === 'Escape') onCancel(); }}
+        style={{ flex: 1, minWidth: 0, minHeight: 36, padding: '8px 11px', borderRadius: 9, border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5 }} />
+      <button onClick={() => v.trim() && onSave(v.trim())} className="acc k-squish"
+        style={{ flex: 'none', minHeight: 36, padding: '0 13px', borderRadius: 9, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800 }}>Save</button>
+      <button onClick={onCancel} className="hov k-squish"
+        style={{ flex: 'none', minHeight: 36, padding: '0 11px', borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>Cancel</button>
+    </div>
+  );
+}
+
+/** Title and body together, so a thread edit is one save rather than two. */
+function ThreadEdit({ title, body, onSave, onCancel }: {
+  title: string; body: string; onSave: (title: string, body: string) => void; onCancel: () => void;
+}) {
+  const [t, setT] = useState(title);
+  const [b, setB] = useState(body);
+  return (
+    <div className="k-bloom">
+      <input autoFocus value={t} onChange={(e) => setT(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
+        style={{ width: '100%', minHeight: 38, padding: '7px 0', fontSize: 14, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', borderBottom: '1px solid var(--line2)' }} />
+      <textarea value={b} onChange={(e) => setB(e.target.value)} rows={3} placeholder="Add detail (optional)"
+        style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent' }} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => t.trim() && onSave(t.trim(), b.trim())} className="acc k-squish"
+          style={{ minHeight: 36, padding: '0 14px', borderRadius: 9, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800 }}>Save</button>
+        <button onClick={onCancel} className="hov k-squish"
+          style={{ minHeight: 36, padding: '0 12px', borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>Cancel</button>
       </div>
     </div>
   );

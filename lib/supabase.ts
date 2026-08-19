@@ -38,6 +38,10 @@ export const supabase = createClient(
 let cachedUid: string | null = null;
 
 export async function currentUserId(): Promise<string> {
+  // Fixture mode has no session, and the fixtures author their rows as 'me'.
+  // Without this every "is this mine?" check answers no and the owner-only
+  // controls are untestable.
+  if (process.env.NEXT_PUBLIC_DEV_FIXTURES === '1' && process.env.NODE_ENV !== 'production') return 'me';
   if (cachedUid) return cachedUid;
   const { data } = await supabase.auth.getSession();
   const id = data.session?.user?.id;
