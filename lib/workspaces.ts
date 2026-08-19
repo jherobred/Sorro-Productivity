@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 /**
  * Shared spaces.
@@ -69,7 +70,7 @@ const LEAVE = defineMutation('ws.leave', async (v: { id: string }) => {
 
 export function useWorkspaceActions() {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+  const settle = settler(qc, KEY);
   const patch = (fn: (p: Workspace[]) => Workspace[]) => {
     const prev = queryClient.getQueryData<Workspace[]>(KEY) ?? [];
     queryClient.setQueryData<Workspace[]>(KEY, fn(prev));

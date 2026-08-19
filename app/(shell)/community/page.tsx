@@ -16,6 +16,7 @@ import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { MediaFrame, Lightbox } from '@/components/MediaFrame';
 import { RowActions } from '@/components/MoneyRows';
 import { isBot, BOT_NAME } from '@/lib/bot';
+import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 759–869, card styles 5932–6000. */
 
@@ -158,7 +159,7 @@ export default function CommunityPage() {
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
 
   const qc = useQueryClient();
-  const settle = () => { for (const k of [POSTS, LIKES, THREADS, VOTES, CHALS]) void qc.invalidateQueries({ queryKey: k }); };
+  const settle = settler(qc, POSTS, LIKES, THREADS, VOTES, CHALS);
 
   const { data: posts = [] } = useQuery({
     queryKey: POSTS,

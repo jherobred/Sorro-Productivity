@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 /** Obsidian-style canvases: many boards, each with its own remembered viewport. */
 
@@ -140,9 +141,9 @@ export function useCanvasActions(canvasId: string | null) {
   const nk = nodesKey(canvasId);
   const ek = edgesKey(canvasId);
 
-  const settleNodes = () => void qc.invalidateQueries({ queryKey: nk });
-  const settleEdges = () => void qc.invalidateQueries({ queryKey: ek });
-  const settleBoards = () => void qc.invalidateQueries({ queryKey: BOARDS });
+  const settleNodes = settler(qc, nk);
+  const settleEdges = settler(qc, ek);
+  const settleBoards = settler(qc, BOARDS);
 
   const patchNodes = (fn: (p: CNode[]) => CNode[]) => {
     const prev = queryClient.getQueryData<CNode[]>(nk) ?? [];

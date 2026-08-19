@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation } from './offline';
+import { settler } from './settle';
 
 /**
  * Third-party connections.
@@ -133,7 +134,7 @@ export function useAutoSync() {
 
 export function useIntegrationActions() {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+  const settle = settler(qc, KEY);
   return {
     save: useMutation<unknown, Error, { kind: string; config: Record<string, string>; enabled: boolean }>({ mutationKey: SAVE, onSettled: settle }),
     remove: useMutation<unknown, Error, { kind: string }>({ mutationKey: REMOVE, onSettled: settle }),

@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { rpFor, standings, type MetricId, type RuleId } from './rank';
+import { settler } from './settle';
 
 export type Challenge = {
   id: string;
@@ -180,11 +181,7 @@ function cachedUserId(): string | null {
 
 export function useChallengeActions() {
   const qc = useQueryClient();
-  const settle = () => {
-    void qc.invalidateQueries({ queryKey: CHALS });
-    void qc.invalidateQueries({ queryKey: MEMBERS });
-    void qc.invalidateQueries({ queryKey: RANKED });
-  };
+  const settle = settler(qc, CHALS, MEMBERS, RANKED);
   const patchMembers = (fn: (p: Member[]) => Member[]) => {
     const prev = queryClient.getQueryData<Member[]>(MEMBERS) ?? [];
     queryClient.setQueryData<Member[]>(MEMBERS, fn(prev));

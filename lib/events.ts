@@ -6,6 +6,7 @@ import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { K } from './pal';
 import { fixture } from './devFixtures';
+import { settler } from './settle';
 
 export type Ev = {
   id: string;
@@ -216,7 +217,7 @@ const SNOOZE = defineMutation('event.snooze', async (v: { id: string }) => {
 
 export function useEventActions(ws: Date) {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: EVENTS_KEY });
+  const settle = settler(qc, EVENTS_KEY);
 
   /**
    * Patch every cached window, not one guessed key.

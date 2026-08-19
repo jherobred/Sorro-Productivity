@@ -14,6 +14,7 @@ import { useLayout } from '@/lib/useLayout';
 import { useLongPress } from '@/lib/useLongPress';
 import { useDragCard } from '@/lib/useDragCard';
 import { ContextMenu } from '@/components/ContextMenu';
+import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 1549–1702. */
 
@@ -97,7 +98,7 @@ export default function ProjectsPage() {
   /** `proj:<id>` while renaming a folder, 'proj:new' while naming a new one. */
   const [editing, setEditing] = useState<string | null>(null);
 
-  const settle = () => { for (const k of [PROJ, CARDS, CMTS]) void qc.invalidateQueries({ queryKey: k }); };
+  const settle = settler(qc, PROJ, CARDS, CMTS);
 
   const { data: projects = [] } = useQuery({
     queryKey: PROJ,

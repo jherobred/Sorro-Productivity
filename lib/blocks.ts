@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
+import { settler } from './settle';
 
 /**
  * Block-structured notes, the way Notion, OneNote and RemNote model a document:
@@ -152,7 +153,7 @@ const LINKS = defineMutation('block.links', async (v: { note_id: string; targets
 export function useBlockActions(noteId: string | null) {
   const qc = useQueryClient();
   const k = key(noteId);
-  const settle = () => void qc.invalidateQueries({ queryKey: k });
+  const settle = settler(qc, k);
   const patch = (fn: (p: Block[]) => Block[]) => {
     const prev = queryClient.getQueryData<Block[]>(k) ?? [];
     queryClient.setQueryData<Block[]>(k, fn(prev));

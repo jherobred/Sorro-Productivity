@@ -10,6 +10,7 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { ymd, lastDays } from '@/lib/habits';
+import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 870–1019. */
 
@@ -71,9 +72,7 @@ export default function BodyPage() {
   const today = ymd(new Date());
 
   const qc = useQueryClient();
-  const settle = () => {
-    for (const k of [DAY_KEY, MEAL_KEY, GYM_KEY, VITAL_KEY]) void qc.invalidateQueries({ queryKey: k });
-  };
+  const settle = settler(qc, DAY_KEY, MEAL_KEY, GYM_KEY, VITAL_KEY);
 
   const { data: days = [] } = useQuery({
     queryKey: DAY_KEY,

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { PAL } from './pal';
+import { settler } from './settle';
 
 /**
  * The notification feed behind the bell in the top bar and the announcements
@@ -91,7 +92,7 @@ const CLEAR = defineMutation('notif.clear', async (v: { id: string }) => {
 
 export function useNotifActions() {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+  const settle = settler(qc, KEY);
   const patchLocal = (fn: (p: Notif[]) => Notif[]) => {
     const prev = queryClient.getQueryData<Notif[]>(KEY) ?? [];
     queryClient.setQueryData<Notif[]>(KEY, fn(prev));

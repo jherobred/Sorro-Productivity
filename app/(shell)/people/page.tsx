@@ -8,6 +8,7 @@ import { defineMutation, queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
+import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 2351–2420. */
 
@@ -37,7 +38,7 @@ const DEL = defineMutation('people.del', async (v: { id: string }) => {
 export default function PeoplePage() {
   const { phone } = useLayout();
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+  const settle = settler(qc, KEY);
 
   const [sel, setSel] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);

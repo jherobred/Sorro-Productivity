@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 export type Txn = {
   id: string;
@@ -164,10 +165,7 @@ const LOG_BUY = defineMutation('money.logBuy', async (v: { item: ToBuy; account_
 
 export function useMoneyActions() {
   const qc = useQueryClient();
-  const settle = () => {
-    void qc.invalidateQueries({ queryKey: TXN_KEY });
-    void qc.invalidateQueries({ queryKey: BUY_KEY });
-  };
+  const settle = settler(qc, TXN_KEY, BUY_KEY);
 
   const addTxn = useMutation({
     mutationKey: ADD_TXN,
@@ -303,7 +301,7 @@ function useCrud<T extends { id: string }>(
   label: string,
 ) {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: c.key });
+  const settle = settler(qc, c.key);
   const patch = (fn: (p: T[]) => T[]) => {
     const prev = queryClient.getQueryData<T[]>(c.key) ?? [];
     queryClient.setQueryData<T[]>(c.key, fn(prev));

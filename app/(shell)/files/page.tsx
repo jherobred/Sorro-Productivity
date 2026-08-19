@@ -10,6 +10,7 @@ import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { ask } from '@/lib/ask';
+import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 2185–2350 (Basedly Drive). */
 
@@ -81,7 +82,7 @@ const DEL_FOLDER = defineMutation('files.delFolder', async (v: { id: string }) =
 export default function FilesPage() {
   const { phone } = useLayout();
   const qc = useQueryClient();
-  const settle = () => { void qc.invalidateQueries({ queryKey: FILES }); void qc.invalidateQueries({ queryKey: FOLDERS }); };
+  const settle = settler(qc, FILES, FOLDERS);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [q, setQ] = useState('');

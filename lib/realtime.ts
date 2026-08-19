@@ -20,7 +20,14 @@ export function useRealtime(table: string, queryKey: readonly unknown[], filter?
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table, ...(filter ? { filter } : {}) },
-        () => void qc.invalidateQueries({ queryKey })
+        () => {
+          // Your own writes echo back here. Refetching on that echo while you
+          // are still typing replays the same race as onSettled did: the read
+          // lands after later optimistic edits and overwrites them. Someone
+          // else's change is worth a refetch; your own, mid-edit, is not.
+          if (qc.isMutating() > 0) return;
+          void qc.invalidateQueries({ queryKey });
+        }
       )
       .subscribe();
 

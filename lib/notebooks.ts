@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 export type Notebook = { id: string; name: string; color: string; position: number };
 export type Sec = { id: string; notebook_id: string; name: string; position: number };
@@ -121,11 +122,7 @@ const RESTORE_NOTE = defineMutation('nb.restoreNote', async (v: { id: string }) 
 
 export function useNotebookActions() {
   const qc = useQueryClient();
-  const settle = () => {
-    void qc.invalidateQueries({ queryKey: NB_KEY });
-    void qc.invalidateQueries({ queryKey: SEC_KEY });
-    void qc.invalidateQueries({ queryKey: NOTE_KEY });
-  };
+  const settle = settler(qc, NB_KEY, SEC_KEY, NOTE_KEY);
 
   /**
    * Creates are optimistic, and that is a correctness fix rather than a

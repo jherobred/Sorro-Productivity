@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { PAL } from './pal';
+import { settler } from './settle';
 
 export type Scratch = {
   id: string; text: string; tag: string; color: string;
@@ -58,7 +59,7 @@ const RESTORE = defineMutation('scratch.restore', async (v: { id: string }) => {
 
 export function useScratchActions() {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: KEY });
+  const settle = settler(qc, KEY);
   const patchLocal = (fn: (p: Scratch[]) => Scratch[]) => {
     const prev = queryClient.getQueryData<Scratch[]>(KEY) ?? [];
     queryClient.setQueryData<Scratch[]>(KEY, fn(prev));

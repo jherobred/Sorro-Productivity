@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 export type Habit = {
   id: string;
@@ -119,10 +120,7 @@ const SET_KIND = defineMutation('habit.setKind', async (v: { id: string; kind: H
 export function useHabitActions(days: number) {
   const qc = useQueryClient();
   const tKey = [...TICKS_KEY, days];
-  const settle = () => {
-    void qc.invalidateQueries({ queryKey: TICKS_KEY });
-    void qc.invalidateQueries({ queryKey: HABITS_KEY });
-  };
+  const settle = settler(qc, TICKS_KEY, HABITS_KEY);
 
   const tick = useMutation({
     mutationKey: TICK,

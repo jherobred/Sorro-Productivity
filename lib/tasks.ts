@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
+import { settler } from './settle';
 
 export type Task = {
   id: string;
@@ -131,7 +132,7 @@ const rollback = (_e: unknown, _v: unknown, ctx: Task[] | undefined) => {
 
 export function useTaskActions() {
   const qc = useQueryClient();
-  const settle = () => void qc.invalidateQueries({ queryKey: TASKS_KEY });
+  const settle = settler(qc, TASKS_KEY);
 
   const create = useMutation({
     mutationKey: CREATE,
