@@ -7,6 +7,7 @@ import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useNotebooks, useSections, useNotes, useNotebookActions, type Note, type Sec, type Notebook } from '@/lib/notebooks';
 import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
+import { useNotePreviews } from '@/lib/blocks';
 import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 
@@ -157,6 +158,7 @@ export default function NotebooksPage() {
   const { data: sections = [] } = useSections();
   const { data: notes = [] } = useNotes();
   const A = useNotebookActions();
+  const { data: previews = {} } = useNotePreviews();
 
   const [nbId, setNbId] = useState<string | null>(null);
   const [secId, setSecId] = useState<string | null>(null);
@@ -300,13 +302,26 @@ export default function NotebooksPage() {
                                     <button key={n.id} onClick={() => setNoteId(n.id)}
                                       onContextMenu={(e) => openMenu(e, 'scratch', n.title, noteMenu(n))}
                                       style={{
-                                      display: 'block', width: '100%', padding: '7px 9px', borderRadius: 8, textAlign: 'left',
-                                      fontSize: 12, fontWeight: 600,
-                                      background: n.id === noteId ? 'var(--card2)' : 'transparent',
-                                      color: n.id === noteId ? 'var(--tx)' : 'var(--tx2)',
-                                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                    }}>
-                                      {n.title}
+                                        display: 'block', width: '100%', padding: '7px 9px', borderRadius: 8, textAlign: 'left',
+                                        background: n.id === noteId ? 'var(--card2)' : 'transparent',
+                                        color: n.id === noteId ? 'var(--tx)' : 'var(--tx2)',
+                                      }}>
+                                      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {n.title}
+                                      </span>
+                                      {/* One line of the note under its title.
+                                          A list of titles is only findable if you
+                                          named things well months ago; a line of
+                                          the actual text is how you recognise the
+                                          note you half-remember. */}
+                                      {previews[n.id] && (
+                                        <span style={{
+                                          display: 'block', fontSize: 10.5, lineHeight: 1.4, color: 'var(--tx3)',
+                                          marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                        }}>
+                                          {previews[n.id].slice(0, 60)}
+                                        </span>
+                                      )}
                                     </button>
                                   ))}
                                   <button onClick={() => A.newNote.mutate({ id: crypto.randomUUID(), section_id: sec.id, title: 'Untitled' })}

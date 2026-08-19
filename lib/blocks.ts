@@ -74,6 +74,37 @@ export function useBlocks(noteId: string | null) {
   });
 }
 
+/**
+ * One line of each note's real content, for the tree.
+ *
+ * `bd_notes.body` is the pre-block storage and stops updating the moment a note
+ * is migrated, so a preview built from it is either empty or years stale. The
+ * text lives in blocks. One query for every block the user owns, reduced to a
+ * first line per note, is cheaper than a query per row and small enough at a
+ * student's note count; if that ever stops being true this becomes a view.
+ *
+ * ponytail: whole-table scan reduced client-side. Move to a Postgres view with
+ * DISTINCT ON (note_id) if a heavy notebook makes it show.
+ */
+export function useNotePreviews() {
+  return useQuery({
+    queryKey: ['note_previews'],
+    staleTime: 60_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase.from('bd_note_blocks')
+        .select('note_id,text,position').order('position');
+      if (error) throw error;
+      const out: Record<string, string> = {};
+      for (const b of data ?? []) {
+        const t = (b.text ?? '').replace(/\s+/g, ' ').trim();
+        if (!t) continue;
+        if (!out[b.note_id]) out[b.note_id] = t;
+      }
+      return out;
+    },
+  });
+}
+
 /** Every note that links *to* this one — the backlinks pane. */
 export function useBacklinks(noteId: string | null) {
   return useQuery({

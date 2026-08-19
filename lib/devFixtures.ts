@@ -340,6 +340,18 @@ export function seedDevFixtures() {
     blk('c6', 'nt2', 'text', 'Related: [[Sprint planning]]', 5),
   ]);
   seed(['note_blocks', 'nt3'], [blk('d1', 'nt3', 'text', 'Technique as an autonomous force. Compare with the routing work in [[Sprint planning]].', 0)]);
+
+  // The tree's one-line previews read the blocks, not bd_notes.body — the
+  // latter stops updating once a note migrates — so the preview map is seeded
+  // the same way the real query would build it.
+  // Ellul reading links to Sprint planning, so Sprint planning has a backlink.
+  seed(['backlinks', 'nt1'], [{ id: 'nt3', title: 'Ellul reading' }]);
+
+  seed(['note_previews'], {
+    nt1: 'Scope is one corridor. The network-level evaluation goes in future work.',
+    nt2: 'Third normal form: every non-key attribute depends on the key, the whole key, and nothing but the key.',
+    nt3: 'Technique as an autonomous force. Compare with the routing work in Sprint planning.',
+  });
   seed(['note_blocks', 'nt4'], [blk('e1', 'nt4', 'text', 'Papers on offline-first transit routing.', 0)]);
   seed(['backlinks', 'nt1'], [{ id: 'nt2', title: 'Normalisation — 3NF' }, { id: 'nt3', title: 'Ellul reading' }]);
   seed(['backlinks', 'nt4'], [{ id: 'nt1', title: 'Sprint planning' }]);

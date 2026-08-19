@@ -45,6 +45,26 @@ export function NoteEditor({
 }) {
   const { prefs } = usePrefs();
   const { data: blocks = [] } = useBlocks(note?.id ?? null);
+
+  /**
+   * Wide mode, per note, remembered locally.
+   *
+   * 760px is right for prose and wrong for a table or a wide code block, which
+   * is why Notion made this a per-page switch rather than a global setting —
+   * the same notebook holds both kinds of page.
+   */
+  const [wide, setWide] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('bd.noteWide') ?? '{}'); } catch { return {}; }
+  });
+  const isWide = !!(note && wide[note.id]);
+  const toggleWide = () => {
+    if (!note) return;
+    setWide((w) => {
+      const next = { ...w, [note.id]: !w[note.id] };
+      try { localStorage.setItem('bd.noteWide', JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  };
   const { data: backlinks = [] } = useBacklinks(note?.id ?? null);
   const A = useBlockActions(note?.id ?? null);
 
@@ -336,7 +356,7 @@ export function NoteEditor({
         {/* The measure is capped so long prose stays readable — the writing area
             is the point of this screen, and 70-odd characters is where reading
             speed peaks. */}
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+        <div style={{ maxWidth: isWide ? 'none' : 760, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 4 }}>
             <textarea
               value={title}
@@ -350,6 +370,12 @@ export function NoteEditor({
                 fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.028em', lineHeight: 1.25,
                 color: 'var(--tx)', fontFamily: 'inherit',
               }} />
+            <button onClick={toggleWide} className="hov k-squish" aria-pressed={isWide}
+              title={isWide ? 'Back to a reading measure' : 'Use the full width'}
+              aria-label={isWide ? 'Back to a reading measure' : 'Use the full width'}
+              style={{ width: 30, height: 30, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+              <Icon name={isWide ? 'collapse' : 'expand'} size={14} color={isWide ? 'var(--accTx)' : 'var(--tx3)'} />
+            </button>
             <button onClick={onDelete} className="hov k-squish" title="Delete note" aria-label="Delete note"
               style={{ width: 30, height: 30, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
               <Icon name="trash" size={14} color="var(--tx3)" />
