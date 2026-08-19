@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, type IconName } from '@/components/Icon';
-import { ContextMenu, type CtxItem } from '@/components/ContextMenu';
+import { CalPopover, PopoverActions } from '@/components/CalPopover';
 import { K, SECHUE } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
@@ -15,25 +15,25 @@ import {
 } from '@/lib/events';
 
 /**
- * The week/day grid is a fixed 760px band from 07:00 to 22:00 (H0/H1 at
- * Basedly.dc.html:4455). Rules, slots and chips are all positioned by
- * percentage of that band, so the geometry survives any container width.
+ * The week/day grid runs midnight to midnight, at a fixed height per hour, and
+ * scrolls. It used to be a 760px band squeezed from 07:00 to 22:00 — which
+ * fitted on screen without scrolling, at the cost of the fourteen hours it
+ * refused to draw. Anything at 6 a.m. or 11 p.m. was simply invisible.
+ *
+ * A per-hour height rather than a percentage of a fixed band is what makes the
+ * whole day affordable: 24 hours at 48px is 1152px, so the container scrolls
+ * and every hour keeps a usable size. Chips are still positioned by percentage
+ * of the band, so the geometry survives any container width.
  */
-const SPAN = GRID_END - GRID_START;   // 15 intervals, 16 labels
-const GRID_H = 760;
+const SPAN = GRID_END - GRID_START;   // 24 intervals, 25 labels
+const GUTTER = 52;
+const HOUR_H = 48;
+const GRID_H = HOUR_H * SPAN;
+/** Where the day is first parked — early enough to see a 7 a.m. class. */
+const SCROLL_TO_HOUR = 7;
 const pct = (hour: number) => ((hour - GRID_START) / SPAN) * 100;
 
 type View = 'month' | 'week' | 'day' | 'agenda' | 'countdown';
-
-/**
- * The zoom ladder, from widest to tightest. Scrolling moves along it the way
- * Google Earth moves through altitude — one notch, one level. Agenda is the
- * whole week compressed to a list; countdown is a single event filling the
- * screen. Both are on the ladder now, so scrolling never dead-ends.
- */
-const LADDER: View[] = ['agenda', 'month', 'week', 'day', 'countdown'];
-const ZOOM_STEP = 140;      // accumulated wheel delta for one level
-const ZOOM_COOLDOWN = 340;  // ms, so a flick does not fall through three levels
 
 const VIEW_ICON: Record<View, IconName> = {
   month: 'month', week: 'week', day: 'day', agenda: 'agenda', countdown: 'clock',
@@ -45,9 +45,15 @@ export default function CalendarPage() {
   const [ws, setWs] = useState(() => weekStart(new Date(), prefs.weekStart));
   const [focusDay, setFocusDay] = useState(() => dayIndex(new Date().toISOString(), weekStart(new Date(), prefs.weekStart)));
   const [sel, setSel] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxItem[] } | null>(null);
+  /**
+   * One bubble at a time: `event` when you click something, `slot` when you
+   * click empty space. Both carry the click point so the bubble opens there.
+   */
+  const [pop, setPop] = useState<
+    | { kind: 'event'; ev: Ev; x: number; y: number }
+    | { kind: 'slot'; day: number; hour: number; allDay: boolean; x: number; y: number }
+    | null>(null);
   const [edit, setEdit] = useState<Ev | null>(null);
-  const [zooming, setZooming] = useState<'in' | 'out' | null>(null);
 
   // Week is the desktop default, Day the phone-portrait default.
   const [view, setView] = useState<View>(prefs.calView);
@@ -71,91 +77,9 @@ export default function CalendarPage() {
     void update({ calView: v });
   }, [update]);
 
-  /* ------------------------------------------------------------- zooming */
-
-  const stage = useRef<HTMLDivElement>(null);
-  const accum = useRef(0);
-  const lastZoom = useRef(0);
-
-  const step = useCallback((dir: 1 | -1) => {
-    setView((cur) => {
-      const i = LADDER.indexOf(cur);
-      if (i < 0) return cur;                                  // agenda/countdown: not on the ladder
-      const next = LADDER[Math.min(LADDER.length - 1, Math.max(0, i + dir))];
-      if (next === cur) return cur;
-      setZooming(dir > 0 ? 'in' : 'out');
-      void update({ calView: next });
-      return next;
-    });
-  }, [update]);
-
-  /**
-   * One handler covers the scroll wheel, a trackpad two-finger scroll and a
-   * trackpad pinch (which every browser reports as a wheel with ctrlKey set).
-   * Deltas accumulate so a slow scroll still crosses a level, and the cooldown
-   * stops one flick from falling through the whole ladder.
-   *
-   * Non-passive and bound to the stage only, so the page still scrolls
-   * everywhere else.
-   */
-  useEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!LADDER.includes(view)) return;
-      e.preventDefault();
-      const now = performance.now();
-      if (now - lastZoom.current < ZOOM_COOLDOWN) return;
-      accum.current += e.deltaY;
-      if (Math.abs(accum.current) < ZOOM_STEP) return;
-      // Scrolling down zooms out (month is the widest view), like a map.
-      step(accum.current > 0 ? -1 : 1);
-      accum.current = 0;
-      lastZoom.current = now;
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [view, step]);
-
-  /** Two-finger pinch, for the phone. */
-  useEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    let start = 0;
-    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const onStart = (e: TouchEvent) => { if (e.touches.length === 2) start = dist(e.touches); };
-    const onMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || !start) return;
-      e.preventDefault();
-      const ratio = dist(e.touches) / start;
-      const now = performance.now();
-      if (now - lastZoom.current < ZOOM_COOLDOWN) return;
-      if (ratio > 1.3) { step(1); start = dist(e.touches); lastZoom.current = now; }
-      if (ratio < 0.77) { step(-1); start = dist(e.touches); lastZoom.current = now; }
-    };
-    const onEnd = () => { start = 0; };
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('touchmove', onMove, { passive: false });
-    el.addEventListener('touchend', onEnd);
-    return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-    };
-  }, [step]);
-
-  // Clear the crossfade class after it plays so the next one restarts.
-  useEffect(() => {
-    if (!zooming) return;
-    const t = setTimeout(() => setZooming(null), 340);
-    return () => clearTimeout(t);
-  }, [zooming, view]);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (/input|textarea/i.test((e.target as HTMLElement)?.tagName ?? '')) return;
-      if (e.key === '+' || e.key === '=') step(1);
-      if (e.key === '-' || e.key === '_') step(-1);
       if (e.key === 'ArrowLeft') shift(-1);
       if (e.key === 'ArrowRight') shift(1);
       if (e.key.toLowerCase() === 't') goToday();
@@ -214,19 +138,9 @@ export default function CalendarPage() {
     toast(hour === null ? `${t.title} — no set time` : `${t.title} at ${hhmm(hour)}`);
   };
 
-  const openMenu = (ev: Ev, x: number, y: number) => {
-    const locked = isReadOnly(ev);
-    setMenu({
-      x, y, label: ev.title,
-      items: locked
-        ? [{ label: 'Synced from Google', icon: 'lock', run: () => toast('Read-only — edit it in Google Calendar') }]
-        : [
-            { label: 'Edit', icon: 'edit', run: () => setEdit(ev) },
-            { label: 'Duplicate', icon: 'copy', run: () => A.duplicate(ev) },
-            { label: 'Delete', icon: 'trash', run: () => A.removeWithUndo(ev), danger: true },
-          ],
-    });
-  };
+  const openEvent = (ev: Ev, x: number, y: number) => setPop({ kind: 'event', ev, x, y });
+  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false) =>
+    setPop({ kind: 'slot', day, hour, allDay, x, y });
 
   /**
    * The phone header is deliberately thin. Day view already highlights the day
@@ -238,8 +152,11 @@ export default function CalendarPage() {
   const showPager = !phone || view !== 'day';
 
   return (
-    <div style={{ padding: phone ? '6px 12px 20px' : '18px 22px 28px' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: phone ? 9 : 16, flexWrap: 'wrap' }}>
+    <div style={{
+      padding: phone ? '6px 12px 12px' : '18px 22px 20px',
+      height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
+    }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: phone ? 9 : 16, flexWrap: 'wrap', flex: 'none' }}>
         {showHeading && (
           <h1 style={{ fontSize: phone ? 17 : 24, fontWeight: 800, letterSpacing: '-.028em' }}>{heading}</h1>
         )}
@@ -295,21 +212,17 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      {/* touch-action must leave vertical panning alone: `pan-x` here forbade
-          it, so one finger could not scroll the page anywhere over the
-          calendar. `pan-y` keeps the scroll and still lets the two-finger
-          pinch handler take over, since that one calls preventDefault itself. */}
-      <div ref={stage} style={{ touchAction: 'pan-y' }}>
-        <div key={view} className={zooming ? 'k-zoomfade' : undefined}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {view === 'week' && (
             <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
-              sel={sel} setSel={setSel} openMenu={openMenu} onSchedule={schedule} />
+              sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
           )}
           {view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
               <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
-                sel={sel} setSel={setSel} openMenu={openMenu} onSchedule={schedule} />
+                sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
           {view === 'month' && (
@@ -321,7 +234,6 @@ export default function CalendarPage() {
                 const w = weekStart(date, prefs.weekStart);
                 setWs(w);
                 setFocusDay(dayIndex(date.toISOString(), w));
-                setZooming('in');
                 setCalView('day');
               }} />
           )}
@@ -330,9 +242,19 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} kind="event" label={menu.label} items={menu.items}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+      {pop?.kind === 'event' && (
+        <EventPopover ev={pop.ev} x={pop.x} y={pop.y}
+          onClose={() => setPop(null)}
+          onEdit={() => { setEdit(pop.ev); setPop(null); }}
+          onDuplicate={() => { A.duplicate(pop.ev); setPop(null); }}
+          onDelete={() => { A.removeWithUndo(pop.ev); setPop(null); }} />
+      )}
+
+      {pop?.kind === 'slot' && (
+        <QuickCreate x={pop.x} y={pop.y} ws={ws} day={pop.day} hour={pop.hour} allDay={pop.allDay}
+          accent={prefs.accent}
+          onClose={() => setPop(null)}
+          onCreate={(title) => { A.addAt(pop.day, pop.hour, prefs.accent, pop.allDay, title); setPop(null); }} />
       )}
 
       {edit && (
@@ -346,7 +268,7 @@ export default function CalendarPage() {
 /* ---------------------------------------------------------------- week/day */
 
 function Grid({
-  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openMenu, onSchedule,
+  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openSlot, onSchedule,
 }: {
   days: number;
   dayOffset?: number;
@@ -357,16 +279,33 @@ function Grid({
   TA: ReturnType<typeof useTaskActions>;
   sel: string | null;
   setSel: (id: string | null) => void;
-  openMenu: (ev: Ev, x: number, y: number) => void;
+  openEvent: (ev: Ev, x: number, y: number) => void;
+  openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean) => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
 }) {
   const { prefs } = usePrefs();
+  const { phone } = useLayout();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);
   const [resize, setResize] = useState<{ id: string; end: number } | null>(null);
   const [taskDrag, setTaskDrag] = useState<{ task: Task; day: number; hour: number | null } | null>(null);
 
   const hours = Array.from({ length: SPAN + 1 }, (_, i) => GRID_START + i);
+
+  /**
+   * Park the scroll on the morning, once. Opening a full-day grid at midnight
+   * shows eight empty hours and hides the working day; every calendar that
+   * covers 24 hours does this.
+   */
+  const scroller = useRef<HTMLDivElement>(null);
+  const parked = useRef(false);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || parked.current) return;
+    parked.current = true;
+    el.scrollTop = ((SCROLL_TO_HOUR - GRID_START) / SPAN) * GRID_H;
+  }, []);
+
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
 
@@ -392,7 +331,7 @@ function Grid({
     const timer = window.setTimeout(() => {
       if (moved) return;
       if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
-      openMenu(ev, startX, startY);
+      openEvent(ev, startX, startY);
     }, K.longPressMs);
 
     const onMove = (m: PointerEvent) => {
@@ -467,27 +406,14 @@ function Grid({
     tasks.filter((t) => t.due_at && dayIndex(t.due_at, ws) === col);
 
   return (
-    <div style={{ display: 'flex', background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
-      {/* hour axis — labels sit on the rule, centred by translateY(-50%) */}
-      <div style={{ width: 52, flex: 'none', position: 'relative', height: GRID_H, marginTop: 64 }}>
-        <div style={{
-          position: 'absolute', top: -34, right: 0, left: 0, height: 34,
-          fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
-          color: 'var(--tx3)', padding: '6px 7px 0', textAlign: 'right',
-        }}>
-          All-day
-        </div>
-        {hours.map((h, i) => (
-          <div key={h} style={{
-            position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`, transform: 'translateY(-50%)',
-            fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-          }}>
-            {hhmm(h)}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
+    // Header row and all-day strip stay put; only the hours scroll. Google
+    // Calendar's arrangement, and the only one that works once the grid covers
+    // a full day: you must be able to reach 23:00 without losing the date you
+    // are looking at.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
+      <div style={{ display: 'flex', flex: 'none', position: 'relative' }}>
+        <div style={{ width: GUTTER, flex: 'none', borderBottom: '1px solid var(--line)' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
         {/* day headers */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: 30, borderBottom: '1px solid var(--line)' }}>
           {Array.from({ length: days }, (_, i) => {
@@ -505,6 +431,13 @@ function Grid({
 
         {/* all-day strip: whole-day events plus every undated task for that day */}
         <div style={{ display: 'flex', borderBottom: '2px solid var(--line2)', minHeight: 34 }}>
+          <div aria-hidden style={{
+            position: 'absolute', left: 0, width: GUTTER, marginTop: 4,
+            fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+            color: 'var(--tx3)', textAlign: 'right', paddingRight: 8, pointerEvents: 'none',
+          }}>
+            All-day
+          </div>
           {Array.from({ length: days }, (_, i) => {
             const idx = colOf(i);
             const allDay = events.filter((e) => e.all_day && dayIndex(e.starts_at, ws) === idx);
@@ -529,7 +462,7 @@ function Grid({
                   <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} compact />
                 ))}
 
-                <button onClick={() => A.addAt(idx, GRID_START, prefs.accent, true)} className="hov"
+                <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true)} className="hov"
                   title="Add an all-day item" aria-label="Add an all-day item"
                   style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
@@ -538,8 +471,24 @@ function Grid({
             );
           })}
         </div>
+        </div>
+      </div>
 
-        {/* slots */}
+      {/* the scrolling day */}
+      <div ref={scroller} className="navsb" style={{ display: 'flex', overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0 }}>
+        {/* hour axis — labels sit on the rule, centred by translateY(-50%) */}
+        <div style={{ width: GUTTER, flex: 'none', position: 'relative', height: GRID_H }}>
+          {hours.map((h, i) => (
+            <div key={h} style={{
+              position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`, transform: 'translateY(-50%)',
+              fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+            }}>
+              {hhmm(h)}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
         <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: GRID_H }}>
           {hours.map((h, i) => (
             <div key={`r${h}`} aria-hidden style={{
@@ -557,9 +506,13 @@ function Grid({
                 {hours.slice(0, -1).map((h, hi) => (
                   <button
                     key={h}
-                    onClick={() => A.addAt(idx, h, prefs.accent)}
+                    // Clicking used to create "New event" on the spot and leave
+                    // you to find and rename it. It now opens a bubble that
+                    // asks what the thing is, which is the only question worth
+                    // asking at that moment.
+                    onClick={(p) => openSlot(idx, h, p.clientX, p.clientY)}
                     className="hov"
-                    aria-label={`Add event ${hhmm(h)}`}
+                    aria-label={`Add event at ${hhmm(h)}`}
                     style={{
                       position: 'absolute', left: 0, right: 0,
                       top: `${(hi / SPAN) * 100}%`, height: `${(1 / SPAN) * 100}%`,
@@ -581,7 +534,7 @@ function Grid({
                         label={hhmm(start)} lifted={isDrag || isResize} selected={sel === e.id}
                         onPointerDown={(p) => press(p, e, 'move')}
                         onResize={(p) => press(p, e, 'resize')}
-                        onContextMenu={(p) => { p.preventDefault(); openMenu(e, p.clientX, p.clientY); }} />
+                        onOpen={(p) => openEvent(e, p.clientX, p.clientY)} />
                     );
                   })}
 
@@ -619,9 +572,10 @@ function Grid({
           <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {spans.filter((s) => s.days > 1).map((s) => (
               <SpanChip key={s.key} span={s} days={days}
-                onOpen={(x, y) => openMenu(s.ev, x, y)} />
+                onOpen={(x, y) => openEvent(s.ev, x, y)} />
             ))}
           </div>
+        </div>
         </div>
       </div>
     </div>
@@ -629,18 +583,19 @@ function Grid({
 }
 
 function EventChip({
-  ev, top, height, label, lifted, selected, onPointerDown, onResize, onContextMenu,
+  ev, top, height, label, lifted, selected, onPointerDown, onResize, onOpen,
 }: {
   ev: Ev; top: number; height: number; label: string; lifted: boolean; selected: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onOpen: (e: React.MouseEvent) => void;
 }) {
   const locked = isReadOnly(ev);
   return (
     <div
       onPointerDown={onPointerDown}
-      onContextMenu={onContextMenu}
+      onClick={onOpen}
+      onContextMenu={(e) => { e.preventDefault(); onOpen(e); }}
       className={selected ? 'pop' : undefined}
       style={{
         position: 'absolute', left: 3, right: 3, top: `${top}%`, height: `${height}%`,
@@ -1077,3 +1032,112 @@ const LABEL: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '.08em',
   textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 4,
 };
+
+/* ------------------------------------------------------------- the bubbles */
+
+/**
+ * What Google shows when you click an event: the thing itself, then the small
+ * number of actions worth having at that moment. Everything else lives behind
+ * Edit, which opens the full sheet.
+ */
+function EventPopover({
+  ev, x, y, onClose, onEdit, onDuplicate, onDelete,
+}: {
+  ev: Ev; x: number; y: number;
+  onClose: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void;
+}) {
+  const locked = isReadOnly(ev);
+  const start = new Date(ev.starts_at);
+  const end = new Date(ev.ends_at);
+  const when = ev.all_day
+    ? start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    : `${start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(ev.starts_at))} – ${hhmm(hoursOf(ev.ends_at))}`;
+
+  return (
+    <CalPopover x={x} y={y} onClose={onClose} label={ev.title}>
+      <PopoverActions onClose={onClose}>
+        {!locked && (
+          <>
+            <button onClick={onEdit} className="hov k-squish" aria-label="Edit event" title="Edit"
+              style={ACT}><Icon name="edit" size={14} color="var(--tx2)" /></button>
+            <button onClick={onDuplicate} className="hov k-squish" aria-label="Duplicate event" title="Duplicate"
+              style={ACT}><Icon name="copy" size={14} color="var(--tx2)" /></button>
+            <button onClick={onDelete} className="hov k-squish" aria-label="Delete event" title="Delete"
+              style={ACT}><Icon name="trash" size={14} color="var(--pal-coral)" /></button>
+          </>
+        )}
+      </PopoverActions>
+
+      <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+        <span aria-hidden style={{ width: 13, height: 13, borderRadius: 4, background: ev.color, flex: 'none', marginTop: 3 }} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+            {ev.title}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.5 }}>{when}</div>
+          {ev.location && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx2)', marginTop: 7 }}>
+              <Icon name="pin" size={13} color="var(--tx3)" />{ev.location}
+            </div>
+          )}
+          {locked && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 9 }}>
+              <Icon name="lock" size={12} color="var(--tx3)" />Synced — edit it where it came from
+            </div>
+          )}
+        </div>
+      </div>
+    </CalPopover>
+  );
+}
+
+/**
+ * Clicking an empty slot asks the one question worth asking — what is this? —
+ * and gets out of the way. It used to create "New event" immediately and leave
+ * you to hunt for it and rename it.
+ */
+function QuickCreate({
+  x, y, ws, day, hour, allDay, accent, onClose, onCreate,
+}: {
+  x: number; y: number; ws: Date; day: number; hour: number; allDay: boolean;
+  accent: string; onClose: () => void; onCreate: (title: string) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const d = new Date(ws);
+  d.setDate(d.getDate() + day);
+  const when = allDay
+    ? `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`
+    : `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hour)} – ${hhmm(hour + 1)}`;
+
+  return (
+    <CalPopover x={x} y={y} onClose={onClose} label="New event">
+      <PopoverActions onClose={onClose} />
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCreate(title); }}
+        placeholder="Add a title"
+        style={{
+          width: '100%', minHeight: 40, padding: '9px 11px', borderRadius: 10,
+          border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)',
+          fontSize: 14, fontWeight: 600,
+        }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--tx2)', margin: '11px 0 13px' }}>
+        <span aria-hidden style={{ width: 11, height: 11, borderRadius: 3, background: accent, flex: 'none' }} />
+        <Icon name="clock" size={13} color="var(--tx3)" />{when}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => onCreate(title)} className="acc k-squish"
+          style={{ flex: 1, minHeight: 38, borderRadius: 10, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800 }}>
+          Save
+        </button>
+        <button onClick={onClose} className="hov k-squish"
+          style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
+          Cancel
+        </button>
+      </div>
+    </CalPopover>
+  );
+}
+
+const ACT: React.CSSProperties = { width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center' };

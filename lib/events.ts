@@ -28,8 +28,11 @@ export const isReadOnly = (e: Ev) => e.source === 'gcal_ics';
 const EVENTS_KEY = ['events'] as const;
 
 /** Last hour the grid draws. The band is 07:00–22:00 (Basedly.dc.html:4455). */
-export const GRID_START = 7;
-export const GRID_END = 22;
+/** The grid is the whole day. It used to stop at 07:00 and 22:00, which
+  * quietly hid anything early or late — a 6 a.m. gym slot or a midnight
+  * deadline simply had nowhere to be drawn. */
+export const GRID_START = 0;
+export const GRID_END = 24;
 
 /**
  * Start of the week containing `d`, at local midnight. Which day that is comes
@@ -213,16 +216,28 @@ const SNOOZE = defineMutation('event.snooze', async (v: { id: string }) => {
 
 export function useEventActions(ws: Date) {
   const qc = useQueryClient();
-  const key = [...EVENTS_KEY, ws.toISOString()];
   const settle = () => void qc.invalidateQueries({ queryKey: EVENTS_KEY });
 
+  /**
+   * Patch every cached window, not one guessed key.
+   *
+   * The query is keyed [...EVENTS_KEY, weekStart, days] — three parts, because
+   * month needs six weeks and week needs one. This helper used to build a
+   * two-part key and write there, so every optimistic create, move and resize
+   * landed in a cache entry no component was reading: the change only appeared
+   * once the refetch came back, which read as lag rather than as the bug it was.
+   *
+   * Matching on the prefix also keeps the views consistent with each other —
+   * dragging an event in week view updates the month window that is still
+   * cached behind it.
+   */
   const optimistic = (fn: (prev: Ev[]) => Ev[]) => {
-    const prev = queryClient.getQueryData<Ev[]>(key) ?? [];
-    queryClient.setQueryData<Ev[]>(key, fn(prev));
-    return prev;
+    const snapshot = queryClient.getQueriesData<Ev[]>({ queryKey: EVENTS_KEY });
+    for (const [k, prev] of snapshot) queryClient.setQueryData<Ev[]>(k, fn(prev ?? []));
+    return snapshot;
   };
-  const rollback = (_e: unknown, _v: unknown, ctx: Ev[] | undefined) => {
-    if (ctx) queryClient.setQueryData(key, ctx);
+  const rollback = (_e: unknown, _v: unknown, ctx: [readonly unknown[], Ev[] | undefined][] | undefined) => {
+    for (const [k, prev] of ctx ?? []) queryClient.setQueryData(k, prev);
   };
 
   const create = useMutation({
@@ -259,11 +274,11 @@ export function useEventActions(ws: Date) {
    * called from the all-day tray. The tray used to make a 7:00 timed event
    * while its tooltip promised an all-day item.
    */
-  const addAt = (day: number, hour: number, accent: string, allDay = false) => {
+  const addAt = (day: number, hour: number, accent: string, allDay = false, title?: string) => {
     const id = crypto.randomUUID();
     create.mutate({
       id,
-      title: allDay ? 'All-day item' : 'New event',
+      title: title?.trim() || (allDay ? 'All-day item' : 'New event'),
       starts_at: at(ws, day, allDay ? 0 : hour),
       ends_at: at(ws, day, allDay ? 23.98 : hour + 1),
       all_day: allDay,
@@ -280,7 +295,7 @@ export function useEventActions(ws: Date) {
    */
   const moveTo = (ev: Ev, day: number, hour: number) => {
     const len = hoursOf(ev.ends_at) - hoursOf(ev.starts_at);
-    const h = Math.max(K.calStartHour, Math.min(GRID_END - len, hour));
+    const h = Math.max(GRID_START, Math.min(GRID_END - len, hour));
     const prevStart = ev.starts_at;
     const prevEnd = ev.ends_at;
     update.mutate({ id: ev.id, patch: { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) } });
