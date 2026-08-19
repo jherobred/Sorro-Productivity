@@ -53,6 +53,23 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    because debouncing hides it without fixing it. `isMutating() > 1` means
    others are still in flight; the last one out does the refetch.
 
+   **But the settler is necessary, not sufficient — that is why the bug came
+   back.** It only counts in-flight *mutations*; a pending debounce timer is
+   not a mutation, so the ~500ms window where a keystroke lives only in the
+   cache is invisible to it. Any refetch in that window (an `add`/`del`/
+   `reorder` settle, `refetchOnWindowFocus`, reconnect, realtime) still wiped
+   the text. The real closer is `pendingBlockText` in `lib/blocks.ts`: typed
+   text is registered there and overlaid onto every `useBlocks` read, so no
+   refetch source can drop an unconfirmed keystroke. It clears on the block's
+   own successful save (only if a newer keystroke has not replaced it). Do not
+   remove the overlay thinking the settler covers it — it does not.
+
+   Second half of the same bug: the flush effect in `NoteEditor.tsx` depended
+   on `A` (`useBlockActions`, a fresh object every render), so its cleanup ran
+   on *every keystroke* — flushing the debounce instantly and firing one write
+   per character. It is keyed on `note?.id` now, with `A` read through a ref.
+   If a burst of typing turns back into forty writes, that dependency regressed.
+
 2. **`main` has `zoom`** (the font-scale/density pref) **and a page-entry
    transform.** Either makes it the containing block for `position: fixed`, so
    anything fixed rendered inside it is positioned relative to `main`, not the
@@ -141,9 +158,13 @@ Recorded so nobody burns the time again.
 
 In priority order:
 
-1. **Verify the note-loss fix against production**, signed in. Fixture mode
-   cannot prove persistence — there is no server to read back from. Type into a
-   note, hard-reload, confirm the text survives. Do the same on a canvas card.
+1. **Verify the note-loss fix against production**, signed in. The overlay +
+   flush-effect fix (fact 1) is deployed to `master`; what is left is the human
+   check that only a signed-in session can do — fixture mode cannot prove
+   persistence because signed-out writes 400 and roll back. Type into a note,
+   hard-reload, confirm the text survives. Do the same on a canvas card. What
+   *was* verified this session (in `?fx=1`): a 12-char burst now fires one
+   write, not twelve, and typed text no longer vanishes under the cursor.
 2. **Menus replace the row icons** (user-chosen). Tasks rows, Calendar events
    and empty slots, Files rows, Money rows. Every one needs long-press wired
    alongside right-click or touch users lose the only way in — the icons are
