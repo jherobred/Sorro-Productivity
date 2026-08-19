@@ -11,7 +11,7 @@ import { supabase, currentUserId } from './supabase';
  * object goes to `<uid>/<uuid>-<name>` (see the basedly_v1_schema policies).
  */
 
-export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files';
+export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files' | 'bd-avatars';
 
 export async function uploadTo(bucket: Bucket, file: File): Promise<string> {
   const user_id = await currentUserId();
@@ -22,6 +22,28 @@ export async function uploadTo(bucket: Bucket, file: File): Promise<string> {
   });
   if (error) throw error;
   return path;
+}
+
+/**
+ * Your avatar, at a stable path.
+ *
+ * One object per person rather than one per upload: a new photo replaces the
+ * old file instead of leaving every picture you have ever set sitting in the
+ * bucket. The bucket is public, so the URL needs no signing — but it also needs
+ * cache-busting, since the path never changes.
+ */
+export async function uploadAvatar(file: File): Promise<string> {
+  const user_id = await currentUserId();
+  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().slice(0, 5);
+  const path = `${user_id}/avatar.${ext}`;
+  const { error } = await supabase.storage.from('bd-avatars').upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type || undefined,
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from('bd-avatars').getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
 }
 
 /**

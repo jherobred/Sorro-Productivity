@@ -11,6 +11,8 @@ export type Prefs = {
   navPicks: string[];
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
   sidebar: 'open' | 'collapsed';
+  /** Which shared space you are in. null is Personal, which is not a row. */
+  workspace: string | null;
   lockEvents: boolean;
   journalMode: string | null;
 
@@ -43,6 +45,7 @@ export const DEFAULT_PREFS: Prefs = {
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
   calView: 'week',
   sidebar: 'open',
+  workspace: null,
   lockEvents: false,
   journalMode: null,
 

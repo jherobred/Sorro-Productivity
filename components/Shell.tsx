@@ -8,8 +8,10 @@ import { AskHost } from './AskHost';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { usePresence, roomFor, type Peer } from '@/lib/presence';
+import { useWorkspaces, useWorkspaceActions } from '@/lib/workspaces';
+import { ask } from '@/lib/ask';
 import { SECHUE, PAL } from '@/lib/pal';
-import { supabase } from '@/lib/supabase';
+import { supabase, currentUserId } from '@/lib/supabase';
 import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
@@ -82,10 +84,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [search, setSearch] = useState(false);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
   const [wsOpen, setWsOpen] = useState(false);
+  const { data: workspaces = [] } = useWorkspaces();
+  const WA = useWorkspaceActions();
+  const me = useMe();
+  const spaceName = prefs.workspace
+    ? workspaces.find((w) => w.id === prefs.workspace)?.name ?? 'Personal'
+    : 'Personal';
   const [sideMore, setSideMore] = useState(false);
   const [settings, setSettings] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
-  const [workspace, setWorkspace] = useState('Personal');
   const { data: tasks = [] } = useTasks();
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
@@ -373,25 +380,76 @@ export function Shell({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          <div style={{ padding: '8px 14px 0', borderTop: '1px solid var(--line)' }}>
+          {/* Who you are, and which space you are in — the two things every
+              other app puts in this corner, and the two things this corner used
+              to only pretend to do. The switcher listed three invented
+              workspaces and changing it changed a label and nothing else. */}
+          <div style={{ padding: '8px 10px 4px', borderTop: '1px solid var(--line)' }}>
             <button onClick={() => setWsOpen((v) => !v)} className="hov"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 8 }}>
-              <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--tx2)', flex: 'none' }}>MR</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', flex: 1, textAlign: 'left' }}>{workspace}</span>
-              <span style={{ fontSize: 10, color: 'var(--tx3)' }}>▲▼</span>
+              aria-haspopup="menu" aria-expanded={wsOpen}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 9, minHeight: 42 }}>
+              <Face name={me.name} photo={me.photo} size={26} />
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {me.name || 'Your account'}
+                </span>
+                <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {spaceName}
+                </span>
+              </span>
+              <Icon name={wsOpen ? 'collapse' : 'expand'} size={13} color="var(--tx3)" />
             </button>
+
             {wsOpen && (
-              <div className="rise k-stagger" role="menu" aria-label="Switch workspace"
-                style={{ margin: '6px 0 4px', padding: 5, borderRadius: 10, background: 'var(--card)', boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
-                {[{ n: 'Personal', r: 'owner', c: acc }, { n: 'Capstone — Team 4', r: 'member', c: PAL.violet }, { n: 'CSSS Officers', r: 'viewer', c: PAL.mint }].map((w, i) => (
-                  <button key={w.n} role="menuitemradio" aria-checked={workspace === w.n}
-                    onClick={() => { setWorkspace(w.n); setWsOpen(false); toast(`Switched to ${w.n}`); }}
-                    className="hov" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 7, fontSize: 11.5, color: workspace === w.n ? 'var(--tx)' : 'var(--tx2)', '--i': i } as React.CSSProperties}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: w.c, flex: 'none' }} />
-                    <span style={{ flex: 1, textAlign: 'left' }}>{w.n}</span>
-                    <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.r}</span>
+              <div className="rise" role="menu" aria-label="Account and workspaces"
+                style={{ margin: '4px 0 8px', padding: 6, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)' }}>
+
+                <div style={{ ...MENU_KICKER }}>Spaces</div>
+
+                <button role="menuitemradio" aria-checked={prefs.workspace === null}
+                  onClick={() => { void update({ workspace: null }); setWsOpen(false); }}
+                  className="hov" style={MENU_ITEM}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: acc, flex: 'none' }} />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Personal</span>
+                  {prefs.workspace === null && <Icon name="check" size={13} color="var(--accTx)" />}
+                </button>
+
+                {workspaces.map((w) => (
+                  <button key={w.id} role="menuitemradio" aria-checked={prefs.workspace === w.id}
+                    onClick={() => { void update({ workspace: w.id }); setWsOpen(false); toast(`Switched to ${w.name}`); }}
+                    className="hov" style={MENU_ITEM}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: w.color, flex: 'none' }} />
+                    <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.role}</span>
+                    {prefs.workspace === w.id && <Icon name="check" size={13} color="var(--accTx)" />}
                   </button>
                 ))}
+
+                <button onClick={() => {
+                  setWsOpen(false);
+                  void ask('New workspace', { placeholder: 'Team or org name', confirmLabel: 'Create' })
+                    .then((n) => { if (n) WA.add(n, PAL.violet); });
+                }} className="hov" style={{ ...MENU_ITEM, color: 'var(--tx3)' }}>
+                  <Icon name="plus" size={13} color="var(--tx3)" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>New workspace</span>
+                </button>
+
+                <div style={{ height: 1, background: 'var(--line)', margin: '6px 4px' }} />
+                <div style={{ ...MENU_KICKER }}>Account</div>
+
+                <button onClick={() => { setWsOpen(false); go('profile'); }} className="hov" style={MENU_ITEM}>
+                  <Icon name="people" size={13} color="var(--tx3)" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Your profile</span>
+                </button>
+                <button onClick={() => { setWsOpen(false); setSettings(true); }} className="hov" style={MENU_ITEM}>
+                  <Icon name="cog" size={13} color="var(--tx3)" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Settings</span>
+                </button>
+                <button onClick={() => { void supabase.auth.signOut(); toast('Signed out'); }}
+                  className="hov" style={{ ...MENU_ITEM, color: 'var(--pal-coral)' }}>
+                  <Icon name="back" size={13} color="var(--pal-coral)" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Sign out</span>
+                </button>
               </div>
             )}
           </div>
@@ -675,4 +733,46 @@ function PresenceDock({ peers, onOpen }: { peers: Peer[]; onOpen: () => void }) 
 function hueOfId(id: string): string {
   const v = [...id].reduce((a, c) => a + c.charCodeAt(0), 0);
   return Object.values(PAL)[v % 10];
+}
+
+const MENU_ITEM: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+  padding: '7px 8px', borderRadius: 8, minHeight: 34,
+  fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)',
+};
+
+const MENU_KICKER: React.CSSProperties = {
+  fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
+  color: 'var(--tx3)', padding: '4px 8px 3px',
+};
+
+/** Your name and picture, read once. */
+function useMe() {
+  const [me, setMe] = useState<{ name: string; photo: string | null }>({ name: '', photo: null });
+  useEffect(() => {
+    void (async () => {
+      const id = await currentUserId().catch(() => null);
+      if (!id) return;
+      const { data } = await supabase.from('bd_profiles')
+        .select('name,photo_url').eq('user_id', id).maybeSingle();
+      setMe({ name: data?.name ?? '', photo: data?.photo_url ?? null });
+    })();
+  }, []);
+  return me;
+}
+
+/** A photo when there is one, initials when there is not. */
+function Face({ name, photo, size }: { name: string; photo: string | null; size: number }) {
+  if (photo) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={photo} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />;
+  }
+  const initials = (name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: '50%', background: 'var(--card2)', flex: 'none',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.38, fontWeight: 700, color: 'var(--tx2)',
+    }}>{initials}</span>
+  );
 }

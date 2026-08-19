@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
+import { uploadAvatar } from '@/lib/uploads';
+import { ON_ACCENT } from '@/lib/glass';
 import { useLayout } from '@/lib/useLayout';
+import { Icon } from '@/components/Icon';
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered
@@ -86,6 +89,9 @@ export default function ProfilePage() {
   const [campus, setCampus] = useState('');
   const [dirty, setDirty] = useState(false);
   const [uid, setUid] = useState('');
+  /** A real photo, when there is one. It wins over the drawn avatar. */
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -93,15 +99,37 @@ export default function ProfilePage() {
       if (!id) return;
       setUid(id);
       const { data: p } = await supabase.from('bd_profiles')
-        .select('name,handle,bio,course,year,campus,avatar').eq('user_id', id).maybeSingle();
+        .select('name,handle,bio,course,year,campus,avatar,photo_url').eq('user_id', id).maybeSingle();
       if (!p) return;
       setName(p.name ?? ''); setHandle(p.handle ?? ''); setBio(p.bio ?? '');
       setCourse([p.course, p.year].filter(Boolean).join(' · ')); setCampus(p.campus ?? '');
       if (p.avatar && Object.keys(p.avatar).length) setAvatar({ ...DEFAULT_AVATAR, ...p.avatar });
+      setPhoto(p.photo_url ?? null);
     })();
   }, []);
 
   const set = (k: AvKey, id: string) => { setAvatar((a) => ({ ...a, [k]: id })); setDirty(true); };
+
+  /**
+   * A photo replaces the built avatar rather than deleting it — remove the
+   * photo and the drawn one is still exactly as you left it, which is the only
+   * behaviour that makes trying a photo a safe thing to do.
+   */
+  async function pickPhoto(file: File) {
+    if (!uid) return toast('Sign in to change your picture');
+    if (file.size > 5_000_000) return toast('That image is over 5 MB');
+    setBusy(true);
+    try {
+      const url = await uploadAvatar(file);
+      setPhoto(url);
+      setDirty(true);
+      toast('Picture updated — save to keep it');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const surprise = () => {
     const next: Avatar = {};
@@ -116,7 +144,7 @@ export default function ProfilePage() {
     if (!uid) return toast('Sign in to save your profile');
     if (!dirty) return toast('Nothing to save');
     const { error } = await supabase.from('bd_profiles')
-      .update({ name, handle: handle || null, bio, avatar }).eq('user_id', uid);
+      .update({ name, handle: handle || null, bio, avatar, photo_url: photo }).eq('user_id', uid);
     if (error) return toast(error.message);
     setDirty(false);
     toast('Profile saved');
@@ -148,7 +176,13 @@ export default function ProfilePage() {
       <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '1fr 1fr', gap: 12, alignItems: 'start' }}>
         <div style={CARD}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ width: 132, height: 132, flex: 'none', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
+            <div style={{ width: 132, height: 132, flex: 'none', position: 'relative' }}>
+            <div style={{ width: 132, height: 132, borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--sh)', background: 'var(--card2)' }}>
+              {photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photo} alt="Your profile picture" className="fade"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              ) : (
               <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', display: 'block' }}>
                 <defs>
                   <linearGradient id="avbg" x1="0" y1="0" x2="1" y2="1">
@@ -173,6 +207,32 @@ export default function ProfilePage() {
                 <path d={pick(avatar, 'glasses').v} fill="none" stroke="#1C1A26" strokeWidth="2" strokeLinecap="round" />
                 <path d={pick(avatar, 'hat').v} fill={PAL.indigo} />
               </svg>
+              )}
+            </div>
+
+            {/* Upload sits on the picture, where a phone user expects to tap. */}
+            <label title={photo ? 'Change your picture' : 'Upload a picture'}
+              style={{
+                position: 'absolute', right: -6, bottom: -6, width: 38, height: 38, borderRadius: 19,
+                background: 'var(--acc)', border: '3px solid var(--card)', cursor: 'pointer',
+                display: 'grid', placeItems: 'center', opacity: busy ? 0.5 : 1,
+              }}>
+              <Icon name={busy ? 'refresh' : 'photo'} size={16} color={ON_ACCENT} />
+              <input type="file" accept="image/*" hidden disabled={busy}
+                aria-label={photo ? 'Change your picture' : 'Upload a picture'}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void pickPhoto(f); e.target.value = ''; }} />
+            </label>
+
+            {photo && (
+              <button onClick={() => { setPhoto(null); setDirty(true); toast('Back to your drawn avatar'); }}
+                className="hov k-squish" aria-label="Remove your picture" title="Remove your picture"
+                style={{
+                  position: 'absolute', left: -6, bottom: -6, width: 32, height: 32, borderRadius: 16,
+                  background: 'var(--card)', border: '1px solid var(--line2)', display: 'grid', placeItems: 'center',
+                }}>
+                <Icon name="close" size={13} color="var(--tx2)" />
+              </button>
+            )}
             </div>
 
             <div style={{ flex: 1, minWidth: 190 }}>
