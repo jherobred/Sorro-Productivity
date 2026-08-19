@@ -123,6 +123,79 @@ export function Challenges() {
   );
 }
 
+/* -------------------------------------------------------- who is in this */
+
+/**
+ * A person, as a coloured disc with their initials.
+ *
+ * The colour is derived from the id rather than stored, so the same person is
+ * the same colour on every card without a lookup, and a challenge full of
+ * strangers still reads as a group of distinct people.
+ */
+function Bubble({ name, id, size = 24, ring }: {
+  name?: string | null; id: string; size?: number; ring?: string;
+}) {
+  const label = (name ?? '??').trim();
+  const initials = label === 'You'
+    ? 'YOU'
+    : (label.split(/\s+/).map((w) => w[0]).join('').slice(0, 2) || '?').toUpperCase();
+
+  return (
+    <span title={label} aria-hidden style={{
+      width: size, height: size, flex: 'none', borderRadius: '50%',
+      display: 'grid', placeItems: 'center',
+      fontSize: size * (initials.length > 2 ? 0.3 : 0.4), fontWeight: 800, color: '#0C0F16',
+      background: hueOf(id),
+      boxShadow: ring ? `0 0 0 2px var(--card), 0 0 0 3.5px ${ring}` : undefined,
+    }}>
+      {initials}
+    </span>
+  );
+}
+
+/**
+ * Everyone in the challenge, overlapped the way a shared-document avatar stack
+ * is. A name column tells you who is winning; this tells you at a glance how
+ * many people you are up against, which is the thing that decides whether a
+ * challenge feels worth joining.
+ */
+function Faces({ members, me, color }: { members: { user_id: string; display_name: string | null }[]; me: string; color: string }) {
+  if (members.length === 0) return null;
+  const shown = members.slice(0, 8);
+  const rest = members.length - shown.length;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
+      <span style={{ display: 'flex' }}>
+        {shown.map((m, i) => (
+          <span key={m.user_id} style={{ marginLeft: i ? -8 : 0, border: '2px solid var(--card)', borderRadius: '50%', display: 'flex' }}>
+            <Bubble id={m.user_id} name={m.user_id === me ? 'You' : m.display_name} size={24} />
+          </span>
+        ))}
+        {rest > 0 && (
+          <span style={{
+            marginLeft: -8, width: 28, height: 28, borderRadius: '50%', border: '2px solid var(--card)',
+            background: 'var(--card2)', display: 'grid', placeItems: 'center',
+            fontSize: 9.5, fontWeight: 800, color: 'var(--tx2)',
+          }}>
+            +{rest}
+          </span>
+        )}
+      </span>
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)' }}>
+        {members.length} {members.length === 1 ? 'competitor' : 'competitors'}
+      </span>
+      <span aria-hidden style={{ flex: 1, height: 1, background: `color-mix(in srgb, ${color} 22%, transparent)` }} />
+    </div>
+  );
+}
+
+/** Stable per-person colour, so nobody has to store one. */
+function hueOf(id: string): string {
+  const v = [...id].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  return TIERS[v % TIERS.length].hue;
+}
+
 /* ------------------------------------------------------------ rank badge */
 
 function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: number; losses: number; season: string } }) {
@@ -244,6 +317,8 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
         <p style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55, marginBottom: 11 }}>{c.description}</p>
       )}
 
+      <Faces members={rows} me={me} color={c.color} />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {rows.slice(0, 6).map((m) => {
           const you = m.user_id === me || m.display_name === 'You';
@@ -255,11 +330,13 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
               }}>
                 #{m.place}
               </span>
+              <Bubble name={you ? 'You' : m.display_name} id={m.user_id} size={20}
+                ring={m.place === 1 ? c.color : undefined} />
               <span style={{
-                width: 62, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
+                width: 56, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
                 color: you ? 'var(--accTx)' : 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {m.display_name ?? 'You'}
+                {you ? 'You' : m.display_name ?? 'Someone'}
               </span>
               <span style={{ flex: 1, minWidth: 0, height: 8, borderRadius: 4, background: 'var(--card2)', overflow: 'hidden' }}>
                 <span className="k-progress" style={{
