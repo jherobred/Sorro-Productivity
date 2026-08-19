@@ -51,6 +51,28 @@ supabase-js behaviour, not a bug in the sign-in screen.
 The Android scheme is already registered in `android/app/src/main/AndroidManifest.xml` and
 must stay in sync with `NATIVE_REDIRECT` in `lib/nativeAuth.ts`.
 
+### Where the APK lives (Settings → App)
+
+Settings → App can check for a new build and hand the user the APK, but it needs somewhere
+to look. Publish a small JSON manifest alongside each release and point the app at it:
+
+```json
+{
+  "version": "1.1.0",
+  "url": "https://github.com/<you>/basedly/releases/download/v1.1.0/basedly-1.1.0.apk",
+  "notes": "Faster sync, calendar zoom on phone."
+}
+```
+
+Then set `NEXT_PUBLIC_UPDATE_URL` to that file's URL and bump `NEXT_PUBLIC_APP_VERSION` to
+match each build. A GitHub release asset works and costs nothing;
+`releases/latest/download/update.json` is a stable URL that always resolves to the newest
+release, so the app never needs redeploying to learn about one.
+
+Until it is set, the section says so plainly instead of offering a button that goes nowhere.
+Installing over the top keeps the user's data — everything lives in Supabase — so no
+uninstall-reinstall cycle is needed.
+
 ## Commands
 
 ```bash

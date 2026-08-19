@@ -8,6 +8,7 @@ import { ON_ACCENT } from '@/lib/glass';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
 import { Integrations } from './Integrations';
+import { useAppUpdate, useFullscreen, APP_VERSION, UPDATE_URL } from '@/lib/appUpdate';
 
 /**
  * Every user-facing preference in one sheet. Grouped the way people look for
@@ -17,7 +18,7 @@ import { Integrations } from './Integrations';
  * sheet is readable without toggling anything (visibility of system status).
  */
 
-const TABS = ['Appearance', 'Access', 'Behaviour', 'Alerts', 'Connections'] as const;
+const TABS = ['Appearance', 'Access', 'Behaviour', 'Alerts', 'Connections', 'App'] as const;
 type Tab = (typeof TABS)[number];
 
 const ACCENTS = ['#7C6CFF', '#38D6F2', '#34D9A0', '#FFC24B', '#FF6B6B', '#FF6FA8', '#B07CFF', '#A3E635'];
@@ -193,6 +194,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           )}
 
           {tab === 'Connections' && <Integrations />}
+
+          {tab === 'App' && <AppTab />}
         </div>
       </div>
     </div>
@@ -262,5 +265,97 @@ function Toggle({ label, hint, on, onChange, icon }: {
         }} />
       </span>
     </button>
+  );
+}
+
+/**
+ * Settings → App: the two things the Android build cannot do for itself.
+ *
+ * Fullscreen has to be a button rather than a stored preference, because the
+ * Fullscreen API only answers to a user gesture — a toggle that remembered
+ * "on" would come back to a screen that was plainly not fullscreen.
+ *
+ * Updates: the APK is not in a store, so nothing checks on the user's behalf,
+ * and the alternative is uninstall-and-reinstall every time. The manifest at
+ * NEXT_PUBLIC_UPDATE_URL is one small JSON file a release can publish.
+ */
+function AppTab() {
+  const fs = useFullscreen();
+  const { state, check } = useAppUpdate();
+
+  const row: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px',
+    borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--card2)',
+    fontSize: 12.5, fontWeight: 700, minHeight: 48, width: '100%',
+  };
+
+  return (
+    <>
+      <Group label="Display" hint="Hides the browser and system bars. Tap again, or press Escape, to come back.">
+        <button onClick={() => void fs.toggle()} disabled={!fs.supported} className="hov k-squish"
+          style={{ ...row, opacity: fs.supported ? 1 : 0.5, borderColor: fs.on ? 'var(--acc)' : 'var(--line2)' }}>
+          <Icon name={fs.on ? 'collapse' : 'expand'} size={15} color={fs.on ? 'var(--accTx)' : 'var(--tx2)'} />
+          <span style={{ flex: 1, textAlign: 'left' }}>
+            {fs.supported ? (fs.on ? 'Leave fullscreen' : 'Go fullscreen') : 'Fullscreen is unavailable here'}
+          </span>
+          {fs.on && <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accTx)' }}>ON</span>}
+        </button>
+      </Group>
+
+      <Group label="Version">
+        <div style={{ ...row, fontWeight: 600, color: 'var(--tx2)' }}>
+          <Icon name="files" size={15} color="var(--tx3)" />
+          <span style={{ flex: 1 }}>Basedly {APP_VERSION}</span>
+        </div>
+      </Group>
+
+      <Group label="Updates"
+        hint={UPDATE_URL
+          ? 'Downloads the new APK and installs over the top. Your data lives in Supabase, so nothing is lost.'
+          : undefined}>
+        {state.kind === 'unconfigured' ? (
+          <p style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.65 }}>
+            No update server is set for this build. Point <code style={KBD}>NEXT_PUBLIC_UPDATE_URL</code> at a
+            JSON file — <code style={KBD}>{'{ "version", "url", "notes" }'}</code> — and this becomes a one-tap
+            update. A GitHub release asset works.
+          </p>
+        ) : (
+          <>
+            <button onClick={() => void check()} disabled={state.kind === 'checking'} className="hov k-squish"
+              style={{ ...row, opacity: state.kind === 'checking' ? 0.6 : 1 }}>
+              <Icon name="refresh" size={15} color="var(--tx2)" />
+              <span style={{ flex: 1, textAlign: 'left' }}>
+                {state.kind === 'checking' ? 'Checking…' : 'Check for updates'}
+              </span>
+            </button>
+
+            {state.kind === 'current' && (
+              <p style={{ marginTop: 9, fontSize: 11.5, color: 'var(--tx3)' }}>
+                You are on the latest build.
+              </p>
+            )}
+            {state.kind === 'failed' && (
+              <p style={{ marginTop: 9, fontSize: 11.5, color: 'var(--pal-coral)' }}>{state.message}</p>
+            )}
+            {state.kind === 'available' && (
+              <div className="k-bloom" style={{ marginTop: 10, padding: '13px 14px', borderRadius: 12, border: '1px solid var(--acc)', background: 'color-mix(in srgb, var(--acc) 8%, transparent)' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800 }}>Version {state.release.version} is out</div>
+                {state.release.notes && (
+                  <p style={{ marginTop: 5, fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.6 }}>{state.release.notes}</p>
+                )}
+                <a href={state.release.url} download className="k-squish"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 11,
+                    minHeight: 44, borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)',
+                    fontSize: 12.5, fontWeight: 800, textDecoration: 'none',
+                  }}>
+                  <Icon name="download" size={15} color="var(--ink)" />Download and install
+                </a>
+              </div>
+            )}
+          </>
+        )}
+      </Group>
+    </>
   );
 }
