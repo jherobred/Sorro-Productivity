@@ -170,15 +170,20 @@ function Scene({
   const { data: cards = [] } = useAllNodes();
   const { data: cardEdges = [] } = useAllEdges();
 
-  const { nodes, edges } = useMemo(() => buildGraph({
-    boards: boards.map((b) => ({ id: b.id, name: b.name, color: b.color })),
-    cards,
-    cardEdges,
-    notes: notes.map((n) => ({ id: n.id, title: n.title, notebook_id: n.notebook_id })),
-    noteLinks: linkGraph(notes),
-    notebookColor: Object.fromEntries(notebooks.map((b) => [b.id, b.color])),
-  }, { canvases: s.canvases, cards: s.cards, notes: s.notes, orphans: s.orphans }),
-  [boards, cards, cardEdges, notes, notebooks, s.canvases, s.cards, s.notes, s.orphans]);
+  const { nodes, edges } = useMemo(() => {
+    // Cards outlive their board: deleting a canvas only stamps deleted_at, and
+    // the cards are still there to be read. Drawing them would put a cluster of
+    // orphans on the graph for a board nobody can open.
+    const live = new Set(boards.map((b) => b.id));
+    return buildGraph({
+      boards: boards.map((b) => ({ id: b.id, name: b.name, color: b.color })),
+      cards: cards.filter((c) => live.has(c.canvas_id)),
+      cardEdges,
+      notes: notes.map((n) => ({ id: n.id, title: n.title, notebook_id: n.notebook_id })),
+      noteLinks: linkGraph(notes),
+      notebookColor: Object.fromEntries(notebooks.map((b) => [b.id, b.color])),
+    }, { canvases: s.canvases, cards: s.cards, notes: s.notes, orphans: s.orphans });
+  }, [boards, cards, cardEdges, notes, notebooks, s.canvases, s.cards, s.notes, s.orphans]);
 
   const degree = useMemo(() => degrees(edges), [edges]);
   const lit = useMemo(() => (hover ? neighbours(edges, hover) : null), [edges, hover]);
