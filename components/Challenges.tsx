@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { useHabits } from '@/lib/habits';
+import { currentUserId, cachedUserId } from '@/lib/supabase';
+import { RowActions } from './MoneyRows';
 import { rankOf, standings, rpFor, TIERS, METRICS, RULES, type MetricId, type RuleId } from '@/lib/rank';
 import {
   useChallenges, useMembers, useRanked, useChallengeActions, phaseOf, daysLeft,
@@ -24,7 +26,16 @@ import {
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)', border: '1px solid var(--line)' };
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
-const ME = 'me';   // stands in for the signed-in id in the preview fixtures
+/**
+ * The signed-in id. It was hard-coded to the fixture's 'me', which meant that
+ * outside the preview nothing was ever "yours": your own row never highlighted
+ * and your own challenge never offered its controls.
+ */
+function useMe(): string {
+  const [me, setMe] = useState(() => cachedUserId() ?? '');
+  useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
+  return me;
+}
 
 export function Challenges() {
   const { prefs } = usePrefs();
@@ -33,6 +44,8 @@ export function Challenges() {
   const { data: ranked } = useRanked();
   const A = useChallengeActions();
   const [composing, setComposing] = useState(false);
+  /** The challenge being edited, if any. The composer doubles as the editor. */
+  const [editing, setEditing] = useState<Challenge | null>(null);
   const [filter, setFilter] = useState<'live' | 'upcoming' | 'over'>('live');
 
   const byChallenge = useMemo(() => {
@@ -83,12 +96,25 @@ export function Challenges() {
       <div className="k-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12, alignItems: 'start' }}>
         {shown.map((c, i) => (
           <div key={c.id} style={{ '--i': i } as React.CSSProperties}>
-            <ChallengeCard challenge={c} members={byChallenge.get(c.id) ?? []} A={A} accent={prefs.accent} />
+            <ChallengeCard challenge={c} members={byChallenge.get(c.id) ?? []} A={A} accent={prefs.accent}
+              onEdit={() => setEditing(c)} />
           </div>
         ))}
       </div>
 
-      {composing && <Composer onClose={() => setComposing(false)} onCreate={(c) => { A.create.mutate(c); setComposing(false); toast(`${c.name} created`); }} />}
+      {composing && (
+        <Composer onClose={() => setComposing(false)}
+          onCreate={(c) => { A.create.mutate(c); setComposing(false); toast(`${c.name} created`); }} />
+      )}
+      {editing && (
+        <Composer initial={editing} onClose={() => setEditing(null)}
+          onCreate={(c) => {
+            const { id, ...patch } = c;
+            A.edit.mutate({ id, patch });
+            setEditing(null);
+            toast(`${c.name} updated`);
+          }} />
+      )}
     </div>
   );
 }
@@ -163,12 +189,14 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
 
 /* --------------------------------------------------------- one challenge */
 
-function ChallengeCard({ challenge: c, members, A, accent }: {
-  challenge: Challenge; members: Member[]; A: ReturnType<typeof useChallengeActions>; accent: string;
+function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
+  challenge: Challenge; members: Member[]; A: ReturnType<typeof useChallengeActions>;
+  accent: string; onEdit: () => void;
 }) {
   const phase = phaseOf(c, members);
   const { rows, winner } = standings(members, c.rule, c.target);
-  const mine = members.find((m) => m.user_id === ME || m.display_name === 'You');
+  const me = useMe();
+  const mine = members.find((m) => m.user_id === me || m.display_name === 'You');
   const joined = !!mine;
   const leader = rows[0];
   const metric = METRICS.find((m) => m.id === c.metric);
@@ -200,6 +228,12 @@ function ChallengeCard({ challenge: c, members, A, accent }: {
         <JoinButton phase={phase} joined={joined} color={c.color}
           onJoin={() => A.join.mutate({ challenge_id: c.id }, { onSuccess: () => toast(`Joined ${c.name}`) })}
           onLeave={() => A.leave.mutate({ challenge_id: c.id }, { onSuccess: () => toast(`Left ${c.name}`) })} />
+
+        {/* Only the owner's, and only theirs: RLS refuses anyone else's write,
+            so offering the button to everybody is offering a failure. */}
+        {c.owner_id === me && (
+          <RowActions label={c.name} onEdit={onEdit} onDelete={() => A.removeWithUndo(c, members)} />
+        )}
       </div>
 
       {c.description && (
@@ -208,7 +242,7 @@ function ChallengeCard({ challenge: c, members, A, accent }: {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {rows.slice(0, 6).map((m) => {
-          const you = m.user_id === ME || m.display_name === 'You';
+          const you = m.user_id === me || m.display_name === 'You';
           return (
             <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{
@@ -337,9 +371,11 @@ const PILL: React.CSSProperties = {
 
 /* ------------------------------------------------------------- composer */
 
-function Composer({ onClose, onCreate }: {
+function Composer({ onClose, onCreate, initial }: {
   onClose: () => void;
   onCreate: (c: Partial<Challenge> & { id: string; name: string }) => void;
+  /** Present when editing. The same form, prefilled, saving instead of creating. */
+  initial?: Challenge;
 }) {
   const { prefs } = usePrefs();
   const { data: habits = [] } = useHabits();
@@ -348,17 +384,17 @@ function Composer({ onClose, onCreate }: {
   const today = new Date().toISOString().slice(0, 10);
   const inTwoWeeks = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [metric, setMetric] = useState<MetricId>('habit');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [metric, setMetric] = useState<MetricId>(initial?.metric ?? 'habit');
   const [habitId, setHabitId] = useState<string>('');
-  const [rule, setRule] = useState<RuleId>('most');
-  const [target, setTarget] = useState('14');
-  const [starts, setStarts] = useState(today);
-  const [ends, setEnds] = useState(inTwoWeeks);
-  const [visibility, setVisibility] = useState<'public' | 'invite'>('public');
-  const [ranked, setRanked] = useState(true);
-  const [color, setColor] = useState(prefs.accent);
+  const [rule, setRule] = useState<RuleId>(initial?.rule ?? 'most');
+  const [target, setTarget] = useState(initial?.target != null ? String(initial.target) : '14');
+  const [starts, setStarts] = useState(initial?.starts_on ?? today);
+  const [ends, setEnds] = useState(initial?.ends_on ?? inTwoWeeks);
+  const [visibility, setVisibility] = useState<'public' | 'invite'>(initial?.visibility ?? 'public');
+  const [ranked, setRanked] = useState(initial?.ranked ?? true);
+  const [color, setColor] = useState(initial?.color ?? prefs.accent);
 
   const unit = METRICS.find((m) => m.id === metric)?.unit ?? 'times';
   const swatches = ['#7C6CFF', '#FF6B6B', '#FFC24B', '#34D9A0', '#38D6F2', '#FF6FA8', '#B07CFF'];
@@ -367,7 +403,7 @@ function Composer({ onClose, onCreate }: {
   const submit = () => {
     if (!valid) return;
     onCreate({
-      id: crypto.randomUUID(),
+      id: initial?.id ?? crypto.randomUUID(),
       name: name.trim(),
       description: description.trim(),
       metric, rule, unit, color, visibility, ranked,
@@ -375,17 +411,25 @@ function Composer({ onClose, onCreate }: {
       target: rule === 'first_to' ? Number(target) : null,
       starts_on: starts,
       ends_on: ends,
-      join_code: visibility === 'invite' ? Math.random().toString(36).slice(2, 8).toUpperCase() : null,
+      // Keep a code that people may already have written down.
+      join_code: visibility === 'invite'
+        ? (initial?.join_code ?? Math.random().toString(36).slice(2, 8).toUpperCase())
+        : null,
     });
   };
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="New challenge" className="k-bloom navsb"
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
+        aria-label={initial ? `Edit ${initial.name}` : 'New challenge'} className="k-bloom navsb"
         style={{ ...CARD, width: 560, maxWidth: '100%', maxHeight: '88dvh', overflowY: 'auto', padding: 20 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>New challenge</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>
+          {initial ? 'Edit challenge' : 'New challenge'}
+        </h2>
         <p style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 16, lineHeight: 1.6 }}>
-          Pick something the app already counts, decide how it is won, and set a window.
+          {initial
+            ? 'Changing the rule or the window re-reads the standings from what everyone has already logged.'
+            : 'Pick something the app already counts, decide how it is won, and set a window.'}
         </p>
 
         <Field label="Name">
@@ -523,7 +567,7 @@ function Composer({ onClose, onCreate }: {
           </button>
           <button onClick={submit} disabled={!valid} className="k-squish"
             style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800, opacity: valid ? 1 : 0.45 }}>
-            Create
+            {initial ? 'Save changes' : 'Create'}
           </button>
         </div>
       </div>

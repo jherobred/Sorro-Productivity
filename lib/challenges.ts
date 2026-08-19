@@ -37,6 +37,14 @@ export type Member = {
   joined_at: string;
 };
 
+/** Every column a Challenge has, so an optimistic insert is not half a row. */
+const BLANK: Challenge = {
+  id: '', owner_id: '', name: '', description: '', habit_label: '',
+  metric: 'habit', rule: 'most', target: null, unit: 'times',
+  starts_on: '', ends_on: '', color: '#7C6CFF', visibility: 'public',
+  join_code: null, ranked: false, settled_at: null, winner_id: null,
+};
+
 const CHALS = ['challenges'] as const;
 const MEMBERS = ['challenge_members'] as const;
 const RANKED = ['ranked'] as const;
@@ -83,6 +91,23 @@ const CREATE = defineMutation('chal.create', async (v: Partial<Challenge> & { id
   if (error) throw error;
   // The owner is always a competitor — a challenge with nobody in it is a note.
   await supabase.from('bd_challenge_members').insert({ challenge_id: v.id, user_id: owner_id, progress: 0 });
+});
+
+const EDIT = defineMutation('chal.edit', async (v: { id: string; patch: Partial<Challenge> }) => {
+  const { error } = await supabase.from('bd_challenges').update(v.patch as never).eq('id', v.id);
+  if (error) throw error;
+});
+
+/**
+ * Deleting takes the members with it — a challenge's standings mean nothing
+ * without the challenge. Only the owner can, and RLS enforces that; the button
+ * is hidden for everyone else so the refusal never has to happen.
+ */
+const DELETE = defineMutation('chal.delete', async (v: { id: string }) => {
+  const { error: e1 } = await supabase.from('bd_challenge_members').delete().eq('challenge_id', v.id);
+  if (e1) throw e1;
+  const { error } = await supabase.from('bd_challenges').delete().eq('id', v.id);
+  if (error) throw error;
 });
 
 const JOIN = defineMutation('chal.join', async (v: { challenge_id: string; habit_id?: string | null }) => {
@@ -169,7 +194,38 @@ export function useChallengeActions() {
     if (ctx) queryClient.setQueryData(MEMBERS, ctx);
   };
 
-  const create = useMutation<unknown, Error, Partial<Challenge> & { id: string; name: string }>({ mutationKey: CREATE, onSettled: settle });
+  const patchChals = (fn: (p: Challenge[]) => Challenge[]) => {
+    const prev = queryClient.getQueryData<Challenge[]>(CHALS) ?? [];
+    queryClient.setQueryData<Challenge[]>(CHALS, fn(prev));
+    return prev;
+  };
+
+  const create = useMutation<unknown, Error, Partial<Challenge> & { id: string; name: string }>({
+    mutationKey: CREATE,
+    onMutate: (v) => {
+      const me = cachedUserId() ?? 'me';
+      patchChals((p) => [...p, { ...BLANK, ...v, owner_id: me } as Challenge]);
+      patchMembers((p) => [...p, {
+        challenge_id: v.id, user_id: me, display_name: 'You',
+        habit_id: null, progress: 0, rp_delta: 0, placed: null, joined_at: new Date().toISOString(),
+      }]);
+    },
+    onSettled: settle,
+  });
+  const edit = useMutation<unknown, Error, { id: string; patch: Partial<Challenge> }>({
+    mutationKey: EDIT,
+    onMutate: (v) => patchChals((p) => p.map((c) => (c.id === v.id ? { ...c, ...v.patch } : c))),
+    onSettled: settle,
+  });
+  const remove = useMutation<unknown, Error, { id: string }, Challenge[]>({
+    mutationKey: DELETE,
+    onMutate: (v) => {
+      patchMembers((p) => p.filter((m) => m.challenge_id !== v.id));
+      return patchChals((p) => p.filter((c) => c.id !== v.id));
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(CHALS, ctx); },
+    onSettled: settle,
+  });
   const join = useMutation<unknown, Error, { challenge_id: string; habit_id?: string | null }>({ mutationKey: JOIN, onSettled: settle });
   const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
   const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({
@@ -186,7 +242,16 @@ export function useChallengeActions() {
   });
 
   return {
-    create, join, leave, bump, settleUp, patchMembers,
+    create, edit, remove, join, leave, bump, settleUp, patchMembers,
+    /** Delete, with the challenge and its members kept for Undo. */
+    removeWithUndo(c: Challenge, mem: Member[]) {
+      remove.mutate({ id: c.id });
+      toast(`Deleted \u201C${c.name}\u201D`, () => {
+        patchChals((p) => (p.some((x) => x.id === c.id) ? p : [...p, c]));
+        patchMembers((p) => [...p.filter((m) => m.challenge_id !== c.id), ...mem]);
+        create.mutate({ ...c });
+      });
+    },
     /** Work out places and RP, then bank them. */
     finish(c: Challenge, members: Member[]) {
       const { rows } = standings(members, c.rule, c.target);
