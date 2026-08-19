@@ -1,220 +1,119 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
-import { useNotebooks, useSections, useNotes, useNotebookActions, type Note, type Sec, type Notebook } from '@/lib/notebooks';
-import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
-import { useNotePreviews } from '@/lib/blocks';
-import { ask } from '@/lib/ask';
+import { useOverlayBack } from '@/lib/nav';
+import { confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
-
-/** The notebook spine colours, named so the submenu reads as words. */
-const NB_COLOURS = [
-  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
-  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
-];
-import { JournalTab } from '@/components/NotebookTabs';
+import { preview } from '@/lib/md';
+import {
+  useNotebooks, useNotes, useTrash, useTags, useMe, useNoteActions, whenLabel, type Note,
+} from '@/lib/notes';
+import { NotebookTable } from '@/components/notes/NotebookTable';
+import { NoteList } from '@/components/notes/NoteList';
+import { NoteEditor } from '@/components/notes/NoteEditor';
+import { GraphView } from '@/components/notes/GraphView';
+import { Journal } from '@/components/notes/Journal';
 import { JavaLab } from '@/components/JavaLab';
 import { CanvasBoard } from '@/components/CanvasBoard';
-import { NoteEditor } from '@/components/NoteEditor';
 
 /**
- * Ported from Basedly.dc.html — markup 1703–1762, styles 5472–5486 (tab bar +
- * sliding pill), 5815–5851 (doc shell, rail, notes column, toolbar).
+ * Notebooks, rebuilt on Evernote's model.
+ *
+ * You land on the shelf — every notebook, with its count and when it last
+ * changed — and open one. Inside, the note list is on the left and the note
+ * fills the rest, which is the layout Evernote, Bear and Apple Notes all
+ * settled on because it puts the writing surface where the eye already is.
+ *
+ * The other tabs are Obsidian's: Graph draws the `[[links]]` between notes,
+ * Canvas is the infinite board. Journal and Java are unchanged.
  */
 
-const TABS = ['notes', 'journal', 'canvas', 'code'] as const;
+const TABS = ['notebooks', 'graph', 'canvas', 'journal', 'code'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = { notes: 'Notes', journal: 'Journal', canvas: 'Canvas', code: 'Java' };
-
-const KICKER: React.CSSProperties = {
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
+const TAB_LABEL: Record<Tab, string> = {
+  notebooks: 'Notebooks', graph: 'Graph', canvas: 'Canvas', journal: 'Journal', code: 'Java',
 };
 
 export default function NotebooksPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
-  const [tab, setTab] = useState<Tab>('notes');
+  const [tab, setTab] = useState<Tab>('notebooks');
 
   const { data: notebooks = [] } = useNotebooks();
-  /** Hide the tree entirely, the way Obsidian and Notion both let you. */
-  const [tree, setTree] = useState(true);
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxGroup[] } | null>(null);
-
-  /**
-   * Right-click menus for the tree.
-   *
-   * Grouped rather than listed: create, then change, then move, then the
-   * destructive one behind a rule of its own. A flat list of nine rows makes
-   * you read all nine to find the one you want, and puts Delete one slip away
-   * from Rename.
-   */
-  const sectionMenu = (sec: Sec): CtxGroup[] => {
-    const kids = notes.filter((n) => n.section_id === sec.id);
-    const siblings = sections.filter((x) => x.notebook_id === sec.notebook_id && x.id !== sec.id);
-    const elsewhere = notebooks.filter((b) => b.id !== sec.notebook_id);
-
-    return [
-      { items: [
-        { label: 'New note', icon: 'bookPlus', shortcut: 'N',
-          run: () => { const id = crypto.randomUUID(); A.newNote.mutate({ id, section_id: sec.id, title: 'Untitled' }); setSecId(sec.id); setNoteId(id); } },
-      ] },
-      { label: 'Section', items: [
-        { label: 'Rename', icon: 'edit', shortcut: 'F2',
-          run: () => void ask('Rename section', { initial: sec.name, placeholder: 'Section name' })
-            .then((n) => { if (n && n !== sec.name) { A.editSection.mutate({ id: sec.id, patch: { name: n } }); toast('Section renamed'); } }) },
-        { label: 'Duplicate', icon: 'copy',
-          run: () => {
-            const id = crypto.randomUUID();
-            A.newSection.mutate({ id, notebook_id: sec.notebook_id, name: `${sec.name} copy` });
-            kids.forEach((n) => A.newNote.mutate({ id: crypto.randomUUID(), section_id: id, title: n.title }));
-            toast(`Duplicated “${sec.name}”`);
-          } },
-        { label: 'Copy section name', icon: 'copy',
-          run: () => { void navigator.clipboard?.writeText(sec.name); toast('Copied'); } },
-      ] },
-      { label: 'Move', items: [
-        { label: 'Move to notebook', icon: 'proj',
-          disabled: elsewhere.length === 0,
-          hint: elsewhere.length === 0 ? 'There is only one notebook' : undefined,
-          items: elsewhere.map((b) => ({
-            label: b.name, icon: 'proj' as IconName,
-            run: () => { A.editSection.mutate({ id: sec.id, patch: { notebook_id: b.id } }); toast(`Moved to ${b.name}`); },
-          })) },
-        { label: 'Move notes into', icon: 'agenda',
-          disabled: kids.length === 0 || siblings.length === 0,
-          hint: kids.length === 0 ? 'This section is empty'
-            : siblings.length === 0 ? 'There is nowhere else in this notebook' : undefined,
-          items: siblings.map((t) => ({
-            label: t.name, icon: 'agenda' as IconName,
-            run: () => { kids.forEach((n) => A.moveNote.mutate({ id: n.id, section_id: t.id })); toast(`Moved ${kids.length} notes`); },
-          })) },
-      ] },
-      { items: [
-        { label: kids.length ? `Delete and keep ${kids.length} notes` : 'Delete section',
-          icon: 'trash', danger: true, shortcut: '⌫',
-          hint: kids.length && siblings.length ? `Notes move to ${siblings[0].name}` : undefined,
-          run: () => {
-            if (kids.length && !siblings.length) return toast('Make another section first — these notes need somewhere to go');
-            A.delSection.mutate({ id: sec.id, moveTo: siblings[0]?.id ?? null });
-            if (secId === sec.id) setSecId(null);
-            toast(kids.length ? `Deleted “${sec.name}” — notes moved to ${siblings[0].name}` : `Deleted “${sec.name}”`);
-          } },
-      ] },
-    ];
-  };
-
-  const notebookMenu = (b: Notebook): CtxGroup[] => [
-    { items: [
-      { label: 'New section', icon: 'plus', run: () => A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: b.id, name: 'New section' }) },
-    ] },
-    { label: 'Notebook', items: [
-      { label: 'Rename', icon: 'edit', shortcut: 'F2',
-        run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
-          .then((n) => { if (n && n !== b.name) { A.editNotebook.mutate({ id: b.id, patch: { name: n } }); toast('Notebook renamed'); } }) },
-      { label: 'Colour', icon: 'palette',
-        items: NB_COLOURS.map((c) => ({
-          label: c.n, icon: 'palette' as IconName, checked: b.color === c.v,
-          run: () => A.editNotebook.mutate({ id: b.id, patch: { color: c.v } }),
-        })) },
-    ] },
-  ];
-
-  const noteMenu = (n: Note): CtxGroup[] => {
-    const targets = sections.filter((x) => x.id !== n.section_id);
-    return [
-      { items: [
-        { label: 'Open', icon: 'book', run: () => setNoteId(n.id) },
-        { label: 'Rename', icon: 'edit', shortcut: 'F2',
-          run: () => void ask('Rename note', { initial: n.title, placeholder: 'Note title' })
-            .then((t) => { if (t && t !== n.title) A.saveNote.mutate({ id: n.id, patch: { title: t } }); }) },
-        { label: 'Duplicate', icon: 'copy',
-          run: () => { A.newNote.mutate({ id: crypto.randomUUID(), section_id: n.section_id, title: `${n.title} copy` }); toast('Duplicated'); } },
-      ] },
-      { label: 'Move', items: [
-        { label: 'Move to section', icon: 'agenda',
-          disabled: targets.length === 0,
-          hint: targets.length === 0 ? 'There is nowhere else to put it' : undefined,
-          items: targets.map((t) => ({
-            label: t.name, icon: 'agenda' as IconName,
-            run: () => { A.moveNote.mutate({ id: n.id, section_id: t.id }); toast(`Moved to ${t.name}`); },
-          })) },
-      ] },
-      { items: [
-        { label: 'Delete note', icon: 'trash', danger: true, shortcut: '⌫',
-          run: () => { A.removeWithUndo(n); if (noteId === n.id) setNoteId(null); } },
-      ] },
-    ];
-  };
-
-  const openMenu = (e: React.MouseEvent, kind: string, label: string, items: CtxGroup[]) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu({ x: e.clientX, y: e.clientY, kind, label, items });
-  };
-  const { data: sections = [] } = useSections();
   const { data: notes = [] } = useNotes();
-  const A = useNotebookActions();
-  const { data: previews = {} } = useNotePreviews();
+  const { data: trash = [] } = useTrash();
+  const { data: tags = {} } = useTags();
+  const { data: me = 'you' } = useMe();
+  const A = useNoteActions();
 
   const [nbId, setNbId] = useState<string | null>(null);
-  const [secId, setSecId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
+  const [inTrash, setInTrash] = useState(false);
 
-  useEffect(() => { if (!nbId && notebooks.length) setNbId(notebooks[0].id); }, [notebooks, nbId]);
-  const mySecs = useMemo(() => sections.filter((s) => s.notebook_id === nbId), [sections, nbId]);
-  useEffect(() => { if (mySecs.length && !mySecs.some((s) => s.id === secId)) setSecId(mySecs[0].id); }, [mySecs, secId]);
-  const myNotes = useMemo(() => notes.filter((n) => n.section_id === secId), [notes, secId]);
-  useEffect(() => { if (!myNotes.some((n) => n.id === noteId)) setNoteId(myNotes[0]?.id ?? null); }, [myNotes, noteId]);
+  // Back closes the note, then the notebook, before it changes section.
+  useOverlayBack(!!nbId, () => { setNbId(null); setNoteId(null); });
+  useOverlayBack(!!noteId && phone, () => setNoteId(null));
+  useOverlayBack(inTrash, () => setInTrash(false));
 
-  const book = notebooks.find((b) => b.id === nbId);
-  const sec = mySecs.find((s) => s.id === secId);
-  const note = myNotes.find((n) => n.id === noteId) ?? null;
+  const notebook = notebooks.find((b) => b.id === nbId) ?? null;
+  const mine = useMemo(() => notes.filter((n) => n.notebook_id === nbId), [notes, nbId]);
+  const note = mine.find((n) => n.id === noteId) ?? null;
 
-  /**
-   * Open a note wherever it lives. A `[[wiki link]]` can point into another
-   * notebook entirely, so the rails have to follow it — setting noteId alone
-   * would be undone by the effect above the moment the section did not match.
-   */
+  // A notebook that goes away (deleted, or the last note moved out from under
+  // the selection) must not leave the screen pointing at nothing.
+  useEffect(() => { if (nbId && !notebook) { setNbId(null); setNoteId(null); } }, [nbId, notebook]);
+  useEffect(() => { if (!phone && !note && mine.length) setNoteId(mine[0].id); }, [phone, note, mine]);
+
+  const openNotebook = (id: string, pick?: string) => {
+    setNbId(id);
+    setNoteId(pick ?? null);
+    setInTrash(false);
+  };
+
+  const newNotebook = () => {
+    const id = crypto.randomUUID();
+    A.newNotebook.mutate({ id, name: 'New notebook', color: PAL.violet, position: notebooks.length });
+    setNbId(id);
+    setNoteId(null);
+  };
+
+  const newNote = (title = 'Untitled') => {
+    if (!nbId) return;
+    const id = crypto.randomUUID();
+    A.newNote.mutate({ id, notebook_id: nbId, title, body: '' });
+    setNoteId(id);
+  };
+
+  /** Open a note wherever it lives — a `[[link]]` can point into another notebook. */
   const goToNote = (id: string) => {
     const target = notes.find((n) => n.id === id);
     if (!target) return;
-    const section = sections.find((s) => s.id === target.section_id);
-    if (section) { setNbId(section.notebook_id); setSecId(section.id); }
+    setNbId(target.notebook_id);
     setNoteId(id);
+  };
+
+  const removeNote = (n: Note) => {
+    A.deleteWithUndo(n);
+    if (noteId === n.id) setNoteId(null);
   };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
-      )}
       <div style={{
         flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
         display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
       }}>
-        {/* Hide the tree and hand its 240px to the note. */}
-        {!phone && tab === 'notes' && (
-          <button onClick={() => setTree((v) => !v)} className="hov k-squish"
-            title={tree ? 'Hide the notebook tree' : 'Show the notebook tree'}
-            aria-label={tree ? 'Hide the notebook tree' : 'Show the notebook tree'}
-            aria-pressed={tree}
-            style={{ width: 34, height: 34, flex: 'none', borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
-            <Icon name={tree ? 'collapse' : 'expand'} size={15} color="var(--tx2)" />
-          </button>
-        )}
-
-        {/* Segmented tab bar — the accent pill slides on transform. */}
-        <div style={{
+        <div className="hbar" style={{
           position: 'relative', display: 'flex', flex: phone ? '1 1 auto' : '0 0 auto',
           width: phone ? '100%' : 'auto', padding: 3, borderRadius: 12, background: 'var(--card)',
+          overflowX: 'auto',
         }}>
-          <div style={{
-            position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc((100% - 6px)/4)',
+          <div aria-hidden style={{
+            position: 'absolute', top: 3, bottom: 3, left: 3, width: `calc((100% - 6px)/${TABS.length})`,
             borderRadius: 9, background: prefs.accent,
             transform: `translateX(${TABS.indexOf(tab) * 100}%)`,
             transition: 'transform .34s cubic-bezier(0.16,1,0.3,1)',
@@ -222,8 +121,8 @@ export default function NotebooksPage() {
           {TABS.map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
               position: 'relative', zIndex: 1, flex: phone ? '1 1 0' : '0 0 auto', minWidth: 0,
-              padding: phone ? '7px 6px' : '6px 17px', borderRadius: 9, textAlign: 'center',
-              fontSize: phone ? 11.5 : 12, fontWeight: 700, whiteSpace: 'nowrap',
+              padding: phone ? '7px 6px' : '6px 15px', borderRadius: 9, textAlign: 'center',
+              fontSize: phone ? 11 : 12, fontWeight: 700, whiteSpace: 'nowrap',
               color: tab === t ? '#0C0F16' : 'var(--tx2)', transition: 'color .24s',
             }}>
               {TAB_LABEL[t]}
@@ -231,194 +130,168 @@ export default function NotebooksPage() {
           ))}
         </div>
 
-        {!phone && (
-          <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {book?.name ?? '—'} › {sec?.name ?? '—'} › {note?.title ?? '—'}
+        {!phone && tab === 'notebooks' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>
+            <Crumbs
+              notebook={notebook?.name ?? null}
+              note={note?.title ?? null}
+              inTrash={inTrash}
+              onRoot={() => { setNbId(null); setNoteId(null); setInTrash(false); }} />
+            <button onClick={() => { setInTrash((v) => !v); setNbId(null); }} className="hov"
+              aria-pressed={inTrash} title="Trash"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
+                borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
+                fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)',
+              }}>
+              <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
+              Trash{trash.length ? ` ${trash.length}` : ''}
+            </button>
           </div>
         )}
       </div>
 
-      {tab === 'notes' ? (
-        <div style={phone
-          ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '0 14px 20px', gap: 10 }
-          : { flex: 1, minHeight: 0, display: 'flex', padding: '0 22px 20px', gap: 14 }}>
-
-          {phone && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <ChipRow items={notebooks.map((b) => ({ id: b.id, n: b.name, c: b.color }))} sel={nbId} onPick={setNbId}
-                onAdd={() => A.newNotebook.mutate({ id: crypto.randomUUID(), name: 'New notebook', color: PAL.violet })} />
-              <ChipRow items={mySecs.map((s) => ({ id: s.id, n: s.name }))} sel={secId} onPick={setSecId}
-                onAdd={() => nbId && A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: nbId, name: 'New section' })} />
-            </div>
-          )}
-
-          {/* One tree, not two lists.
-              Notebooks+sections sat in one column and notes in another, so
-              390px of a 1044px area was navigation and the note itself got
-              582px — below a comfortable reading measure, and the reason this
-              page always felt cramped. Obsidian and Notion both use a single
-              nested explorer that collapses; so does this now, which hands the
-              editor 780px open and about a thousand closed. */}
-          {!phone && tree && (
-            <div className="navsb" style={{
-              display: 'flex', width: 240, flex: 'none', flexDirection: 'column', gap: 1,
-              overflowY: 'auto', minHeight: 0, paddingRight: 4,
-            }}>
-              <RailHead label="Notebooks"
-                onAdd={() => A.newNotebook.mutate({ id: crypto.randomUUID(), name: 'New notebook', color: PAL.violet })} />
-
-              {notebooks.map((b) => {
-                const openBook = b.id === nbId;
-                const secs = sections.filter((x) => x.notebook_id === b.id);
-                return (
-                  <div key={b.id}>
-                    <button onClick={() => setNbId(openBook ? null : b.id)} className="hov"
-                      onContextMenu={(e) => openMenu(e, 'project', b.name, notebookMenu(b))}
-                      aria-expanded={openBook}
-                      style={{ ...railBtn(openBook), fontWeight: 700 }}>
-                      <Icon name={openBook ? 'collapse' : 'expand'} size={11} color="var(--tx3)" />
-                      <span style={{ width: 7, height: 7, borderRadius: 2, background: b.color, flex: 'none' }} />
-                      <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-                    </button>
-
-                    {openBook && (
-                      <div className="rise" style={{ marginLeft: 10, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
-                        {secs.map((sec) => {
-                          const openSec = sec.id === secId;
-                          const kids = notes.filter((n) => n.section_id === sec.id);
-                          return (
-                            <div key={sec.id}>
-                              <button onClick={() => setSecId(openSec ? null : sec.id)} className="hov"
-                                onContextMenu={(e) => openMenu(e, 'node', sec.name, sectionMenu(sec))}
-                                aria-expanded={openSec} style={railBtn(openSec)}>
-                                <Icon name={openSec ? 'collapse' : 'expand'} size={10} color="var(--tx3)" />
-                                <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sec.name}</span>
-                                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{kids.length}</span>
-                              </button>
-
-                              {openSec && (
-                                <div className="rise" style={{ marginLeft: 8, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
-                                  {kids.map((n) => (
-                                    <button key={n.id} onClick={() => setNoteId(n.id)}
-                                      onContextMenu={(e) => openMenu(e, 'scratch', n.title, noteMenu(n))}
-                                      style={{
-                                        display: 'block', width: '100%', padding: '7px 9px', borderRadius: 8, textAlign: 'left',
-                                        background: n.id === noteId ? 'var(--card2)' : 'transparent',
-                                        color: n.id === noteId ? 'var(--tx)' : 'var(--tx2)',
-                                      }}>
-                                      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {n.title}
-                                      </span>
-                                      {/* One line of the note under its title.
-                                          A list of titles is only findable if you
-                                          named things well months ago; a line of
-                                          the actual text is how you recognise the
-                                          note you half-remember. */}
-                                      {previews[n.id] && (
-                                        <span style={{
-                                          display: 'block', fontSize: 10.5, lineHeight: 1.4, color: 'var(--tx3)',
-                                          marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                        }}>
-                                          {previews[n.id].slice(0, 60)}
-                                        </span>
-                                      )}
-                                    </button>
-                                  ))}
-                                  <button onClick={() => A.newNote.mutate({ id: crypto.randomUUID(), section_id: sec.id, title: 'Untitled' })}
-                                    className="hov" style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 9px', borderRadius: 8, fontSize: 11, color: 'var(--tx3)' }}>
-                                    <Icon name="plus" size={11} color="var(--tx3)" />New note
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                        <button onClick={() => A.newSection.mutate({ id: crypto.randomUUID(), notebook_id: b.id, name: 'New section' })}
-                          className="hov" style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 9px', borderRadius: 8, fontSize: 11, color: 'var(--tx3)' }}>
-                          <Icon name="plus" size={11} color="var(--tx3)" />New section
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <NoteEditor
-            note={note}
-            phone={phone}
-            notes={notes}
-            onPickNote={goToNote}
-            onNewNote={(title) => {
-              if (!secId) return;
-              const id = crypto.randomUUID();
-              A.newNote.mutate({ id, section_id: secId, title });
-              setNoteId(id);
-            }}
-            onSave={(p) => note && A.saveNote.mutate({ id: note.id, patch: p })}
-            onDelete={() => note && A.removeWithUndo(note)} />
-        </div>
-      ) : (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: phone ? '0 14px 20px' : '0 22px 20px' }}>
-          {tab === 'journal' && <JournalTab />}
-          {tab === 'canvas' && <CanvasBoard />}
-          {tab === 'code' && <JavaLab />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const addBtn: React.CSSProperties = {
-  marginLeft: 'auto', width: 20, height: 20, borderRadius: 6,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-};
-
-const railBtn = (on: boolean): React.CSSProperties => ({
-  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 9px',
-  borderRadius: 8, fontSize: 12, fontWeight: on ? 700 : 500,
-  color: on ? 'var(--tx)' : 'var(--tx2)',
-  background: on ? 'var(--hov)' : 'transparent',
-});
-
-function RailHead({ label, onAdd }: { label: string; onAdd: () => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={KICKER}>{label}</div>
-      <button onClick={onAdd} className="hov" title={`New ${label.toLowerCase()}`} style={addBtn}>
-        <Icon name="plus" size={13} color="var(--tx3)" />
-      </button>
-    </div>
-  );
-}
-
-function ChipRow({
-  items, sel, onPick, onAdd,
-}: {
-  items: { id: string; n: string; c?: string }[];
-  sel: string | null; onPick: (id: string) => void; onAdd: () => void;
-}) {
-  return (
-    <div className="hbar" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 1, minWidth: 0 }}>
-      {items.map((it) => (
-        <button key={it.id} onClick={() => onPick(it.id)} style={{
-          flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
-          fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
-          border: `1px solid ${it.id === sel ? 'var(--acc)' : 'var(--line2)'}`,
-          background: it.id === sel ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
-          color: it.id === sel ? 'var(--accTx)' : 'var(--tx2)',
-        }}>
-          {it.c && <span style={{ width: 6, height: 6, borderRadius: '50%', background: it.c }} />}
-          {it.n}
-        </button>
-      ))}
-      <button onClick={onAdd} className="hov" title="Add" style={{
-        flex: 'none', width: 28, height: 28, borderRadius: 999, border: '1px dashed var(--line2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      <div style={{
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+        padding: phone ? '0 14px 20px' : '0 22px 20px',
       }}>
-        <Icon name="plus" size={13} color="var(--tx3)" />
-      </button>
+        {tab === 'notebooks' && (
+          inTrash ? (
+            <TrashList
+              notes={trash}
+              onRestore={(n) => { A.restoreNote.mutate({ id: n.id }); toast(`Restored “${n.title || 'Untitled'}”`); }}
+              onEmpty={() => void confirmAsk('Empty the trash?', {
+                message: `${trash.length} note${trash.length === 1 ? '' : 's'} will be gone for good.`,
+                confirmLabel: 'Delete forever', danger: true,
+              }).then((yes) => { if (yes) { A.purge.mutate({ ids: trash.map((n) => n.id) }); toast('Trash emptied'); } })} />
+          ) : !notebook ? (
+            <>
+              {phone && (
+                <button onClick={() => setInTrash(true)} className="hov" style={{
+                  display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8,
+                  padding: '6px 11px', minHeight: 32, borderRadius: 9, border: '1px solid var(--line2)',
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+                }}>
+                  <Icon name="trash" size={13} color="var(--tx3)" />Trash{trash.length ? ` ${trash.length}` : ''}
+                </button>
+              )}
+              <NotebookTable
+                notebooks={notebooks} notes={notes} me={me}
+                onOpen={(id) => openNotebook(id)}
+                onOpenNote={(bid, nid) => openNotebook(bid, nid)}
+                onNew={newNotebook}
+                onRename={(b, name) => { A.editNotebook.mutate({ id: b.id, patch: { name } }); toast('Renamed'); }}
+                onRecolour={(b, color) => A.editNotebook.mutate({ id: b.id, patch: { color } })}
+                onDelete={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }} />
+            </>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14 }}>
+              {(!phone || !note) && (
+                <NoteList
+                  notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
+                  selected={noteId} phone={phone}
+                  onPick={setNoteId}
+                  onNew={() => newNote()}
+                  onDelete={removeNote}
+                  onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
+                  onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />
+              )}
+
+              {note ? (
+                <NoteEditor
+                  key={note.id}
+                  note={note} notes={notes} tags={tags[note.id] ?? []} phone={phone}
+                  onSave={(v) => A.saveNote.mutate({ id: note.id, notebook_id: note.notebook_id, ...v })}
+                  onDelete={() => removeNote(note)}
+                  onPickNote={goToNote}
+                  onNewNote={(title) => newNote(title)}
+                  onSetTags={(t) => A.setTags.mutate({ note_id: note.id, tags: t })}
+                  onBack={() => setNoteId(null)} />
+              ) : !phone && (
+                <div style={{
+                  flex: 1, display: 'grid', placeItems: 'center', background: 'var(--card)',
+                  borderRadius: 14, boxShadow: 'var(--sh)', fontSize: 12.5, color: 'var(--tx3)',
+                }}>
+                  Pick a note, or make one.
+                </div>
+              )}
+            </div>
+          )
+        )}
+
+        {tab === 'graph' && (
+          <GraphView notes={notes} notebooks={notebooks} phone={phone}
+            onOpen={(id) => { setTab('notebooks'); goToNote(id); }} />
+        )}
+        {tab === 'canvas' && <CanvasBoard />}
+        {tab === 'journal' && <Journal />}
+        {tab === 'code' && <JavaLab />}
+      </div>
+    </div>
+  );
+}
+
+function Crumbs({
+  notebook, note, inTrash, onRoot,
+}: { notebook: string | null; note: string | null; inTrash: boolean; onRoot: () => void }) {
+  const s: React.CSSProperties = {
+    fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', minWidth: 0,
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+  };
+  if (inTrash) return <div style={s}>Trash</div>;
+  if (!notebook) return <div style={s}>All notebooks</div>;
+  return (
+    <div style={{ ...s, display: 'flex', gap: 6, alignItems: 'center' }}>
+      <button onClick={onRoot} className="k-underline" style={{ font: 'inherit', color: 'var(--tx2)' }}>Notebooks</button>
+      <span>›</span><span>{notebook}</span>
+      {note && <><span>›</span><span style={{ color: 'var(--tx2)' }}>{note}</span></>}
+    </div>
+  );
+}
+
+function TrashList({
+  notes, onRestore, onEmpty,
+}: { notes: Note[]; onRestore: (n: Note) => void; onEmpty: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>
+          {notes.length ? `${notes.length} deleted note${notes.length === 1 ? '' : 's'}` : 'The trash is empty.'}
+        </div>
+        {notes.length > 0 && (
+          <button onClick={onEmpty} className="hov" style={{
+            marginLeft: 'auto', padding: '6px 12px', minHeight: 32, borderRadius: 9,
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: PAL.coral,
+          }}>
+            Empty trash
+          </button>
+        )}
+      </div>
+
+      <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {notes.map((n) => (
+          <div key={n.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12,
+            background: 'var(--card)', boxShadow: 'var(--sh)', flex: 'none',
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>{n.title || 'Untitled'}</div>
+              <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {preview(n.body, 90) || 'Empty'}
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--tx3)', flex: 'none' }}>
+              {n.deleted_at ? whenLabel(n.deleted_at) : ''}
+            </div>
+            <button onClick={() => onRestore(n)} className="hov" style={{
+              flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
+              borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+            }}>
+              <Icon name="undo" size={13} color="var(--tx3)" />Restore
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

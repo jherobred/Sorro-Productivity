@@ -39,14 +39,21 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       const like = `%${term}%`;
       const [tasks, notes, events, people] = await Promise.all([
         supabase.from('bd_tasks').select('id,title').is('deleted_at', null).ilike('title', like).limit(5),
-        supabase.from('bd_notes').select('id,title').is('deleted_at', null).ilike('title', like).limit(5),
+        // Notes match on their text as well as their title: the body is where
+        // the thing you half-remember actually is.
+        supabase.from('bd_notes').select('id,title,body').is('deleted_at', null)
+          .or(`title.ilike.${like},body.ilike.${like}`).limit(5),
         supabase.from('bd_events').select('id,title,starts_at').is('deleted_at', null).ilike('title', like).limit(5),
         supabase.from('bd_people').select('id,name,category').ilike('name', like).limit(5),
       ]);
       const g: Group[] = [];
       const jump = (path: string) => () => { router.push(path); onClose(); };
       if (tasks.data?.length) g.push({ g: 'Tasks', items: tasks.data.map((r) => ({ id: r.id, n: r.title, m: 'Task', ic: 'task', go: jump('/tasks/') })) });
-      if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({ id: r.id, n: r.title, m: 'Note', ic: 'book', go: jump('/notebooks/') })) });
+      if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({
+        id: r.id, n: r.title || 'Untitled',
+        m: r.title.toLowerCase().includes(term.toLowerCase()) ? 'Note' : 'In the text',
+        ic: 'book', go: jump('/notebooks/'),
+      })) });
       if (events.data?.length) g.push({ g: 'Events', items: events.data.map((r) => ({ id: r.id, n: r.title, m: new Date(r.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), ic: 'cal', go: jump('/calendar/') })) });
       if (people.data?.length) g.push({ g: 'People', items: people.data.map((r) => ({ id: r.id, n: r.name, m: r.category, ic: 'people', go: jump('/people/') })) });
       setHits(g);
