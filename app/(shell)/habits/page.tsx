@@ -43,7 +43,7 @@ export default function HabitsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
         <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>Habits</div>
         <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
-          {week[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {week[6].toLocaleDateString(undefined, { day: 'numeric', year: 'numeric' })}
+          {weekLabel(week[0], week[6])}
         </div>
         <button onClick={() => setYear((v) => !v)} className="hov" title="Switch week / year view"
           style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -182,4 +182,20 @@ export default function HabitsPage() {
       )}
     </div>
   );
+}
+
+/**
+ * "Aug 13 – 19, 2026", or "Aug 30 – Sep 5, 2026" across a month boundary.
+ *
+ * Built from parts rather than a second toLocaleDateString call: asking for
+ * `{ day, year }` without a month is a combination most locales have no pattern
+ * for, and Chrome falls back to its field-listing style — the heading read
+ * "Aug 13 – 2026 (day: 19)".
+ */
+function weekLabel(from: Date, to: Date): string {
+  const md = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const tail = `${to.getDate()}, ${to.getFullYear()}`;
+  return from.getMonth() === to.getMonth()
+    ? `${md(from)} – ${tail}`
+    : `${md(from)} – ${md(to)}, ${to.getFullYear()}`;
 }

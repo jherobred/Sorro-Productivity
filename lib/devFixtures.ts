@@ -220,6 +220,13 @@ export function seedDevFixtures() {
   ]);
   seed(['project_comments'], []);
 
+  seed(['people'], [
+    { id: 'pe1', name: 'Jules Lopez', category: 'Groupmate', color: '#7C6CFF', email: 'jules@up.edu.ph', note: 'Handles the GTFS import. Answers fastest on Messenger.' },
+    { id: 'pe2', name: 'Rain Tolentino', category: 'Classmate', color: '#34D9A0', email: '', note: 'Sits front row in CS 191. Has every handout.' },
+    { id: 'pe3', name: 'Prof. Alonzo', category: 'Prof', color: '#38D6F2', email: 'alonzo@up.edu.ph', note: 'Consultation Tue 2–4, room 304. Wants the scope narrowed.' },
+    { id: 'pe4', name: 'Bea Cruz', category: 'Friend', color: '#FF6FA8', email: '', note: '' },
+  ]);
+
   seed(['folders'], [
     { id: 'f1', name: 'CS 191', parent_id: null },
     { id: 'f2', name: 'Scans', parent_id: null },

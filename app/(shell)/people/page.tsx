@@ -20,7 +20,7 @@ const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpac
 const hueFor = (c: string) =>
   ({ Classmate: PAL.indigo, Groupmate: PAL.violet, Friend: PAL.mint, Family: PAL.amber, Prof: PAL.cyan }[c] ?? PAL.indigo);
 
-const ADD = defineMutation('people.add', async (v: { name: string; category: string; color: string; email: string }) => {
+const ADD = defineMutation('people.add', async (v: { id: string; name: string; category: string; color: string; email: string }) => {
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_people').insert({ ...v, user_id });
   if (error) throw error;
@@ -57,7 +57,16 @@ export default function PeoplePage() {
 
   useEffect(() => { if (!sel && people.length && !phone) setSel(people[0].id); }, [people, sel, phone]);
 
-  const add = useMutation<unknown, Error, { name: string; category: string; color: string; email: string }>({ mutationKey: ADD, onSettled: settle });
+  // The id comes from the client so the row that appears now is the same row
+  // the server ends up with — and so it can be selected before the write lands.
+  const add = useMutation<unknown, Error, { id: string; name: string; category: string; color: string; email: string }>({
+    mutationKey: ADD,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Person[]>(KEY) ?? [];
+      queryClient.setQueryData<Person[]>(KEY, [...prev, { ...v, note: '' }]);
+    },
+    onSettled: settle,
+  });
   const save = useMutation({
     mutationKey: SAVE,
     onMutate: (v: { id: string; patch: Partial<Person> }) => {
@@ -84,7 +93,9 @@ export default function PeoplePage() {
   const create = () => {
     const n = dName.trim();
     if (!n) return;
-    add.mutate({ name: n, category: dCat, color: hueFor(dCat), email: dEmail.trim() });
+    const id = crypto.randomUUID();
+    add.mutate({ id, name: n, category: dCat, color: hueFor(dCat), email: dEmail.trim() });
+    setSel(id);
     setDName(''); setDEmail(''); setAdding(false);
   };
 
@@ -92,7 +103,7 @@ export default function PeoplePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <div style={KICKER}>All people</div>
-        <button onClick={() => setAdding((v) => !v)} className="hov" title="Add someone"
+        <button onClick={() => setAdding((v) => !v)} className="hov" aria-label="Add someone" aria-expanded={adding} title="Add someone"
           style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
           <Icon name="plus" size={13} color="var(--tx3)" />
         </button>
@@ -160,7 +171,7 @@ export default function PeoplePage() {
           </div>
         </div>
         <button onClick={() => { del.mutate({ id: person.id }); setSel(null); toast(`Removed ${person.name}`); }}
-          className="hov" title="Remove" style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+          className="hov" aria-label={`Remove ${person.name}`} title="Remove" style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
           <Icon name="trash" size={14} color="var(--tx2)" />
         </button>
       </div>

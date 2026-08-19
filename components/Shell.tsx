@@ -295,6 +295,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     </button>
                     <button
                       onClick={() => setOpenKids((k) => ({ ...k, [sec.id]: !open }))}
+                      // Twelve identical "Show or hide sub-items" in a row tells
+                      // a screen-reader user nothing about which one they are on.
+                      aria-label={`${open ? 'Hide' : 'Show'} items under ${sec.name}`}
+                      aria-expanded={open}
                       title="Show or hide sub-items"
                       style={{
                         width: 22, height: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',

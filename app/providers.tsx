@@ -8,6 +8,12 @@ import { queryClient, persister } from '@/lib/offline';
 import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // Seed before anything below can mount and fire a query. Seeding after the
+  // first paint lost the race: a page's useQuery had already gone to a
+  // signed-out Supabase, and its empty answer landed on top of the fixture a
+  // moment later, so half the preview came up blank depending on timing.
+  if (devFixturesOn()) seedDevFixtures();
+
   // The *persister* needs `window`, so it is null during the static export's
   // prerender pass — but the QueryClient itself is fine there, and the shell
   // now reads queries, so it must always have a provider above it. Rendering
@@ -15,22 +21,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
 
-  if (!ready || !persister) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
-
   // Dev preview: restoring the persisted cache is asynchronous and lands *after*
   // mount effects, so it would overwrite the fixtures with whatever a signed-out
   // client last stored — usually nothing. Skip persistence entirely here.
-  if (devFixturesOn()) {
-    seedDevFixtures();
+  if (!ready || !persister || devFixturesOn()) {
     return (
       <QueryClientProvider client={queryClient}>
-        <ReconnectBridge />
+        {ready && <ReconnectBridge />}
         {children}
       </QueryClientProvider>
     );
