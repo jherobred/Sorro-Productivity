@@ -7,6 +7,13 @@ import { settler } from './settle';
 import { toast } from './toast';
 
 /**
+ * The pure half lives next door so a check can run it without React. Everything
+ * that used to import geometry from here still can.
+ */
+export * from './canvasGeom';
+import type { Box, Side } from './canvasGeom';
+
+/**
  * Canvases — Obsidian's infinite board, rewritten.
  *
  * What the old version got wrong, and what this file exists to keep right:
@@ -29,8 +36,6 @@ import { toast } from './toast';
  *    colour and a remembered viewport, which is precisely this table. `kind`
  *    says which it is; `settings` carries what the graph draws.
  */
-
-export type Side = 'top' | 'right' | 'bottom' | 'left';
 
 /** Must match bd_canvas_nodes_kind_check. See rule 1 above. */
 export const KINDS = ['text', 'note', 'canvas', 'group'] as const;
@@ -389,53 +394,6 @@ export function useCanvasActions(canvasId: string | null) {
     addEdges, saveEdge, delEdges,
     newBoard, saveBoard, delBoard, restoreBoard,
   };
-}
-
-/* --------------------------------------------------------------- geometry */
-
-/** Where an edge leaves a card, in world coordinates. */
-export function anchor(n: { x: number; y: number; w: number; h: number }, side: Side): { x: number; y: number } {
-  switch (side) {
-    case 'top': return { x: n.x + n.w / 2, y: n.y };
-    case 'bottom': return { x: n.x + n.w / 2, y: n.y + n.h };
-    case 'left': return { x: n.x, y: n.y + n.h / 2 };
-    case 'right': return { x: n.x + n.w, y: n.y + n.h / 2 };
-  }
-}
-
-const OUT: Record<Side, [number, number]> = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
-
-/**
- * A cubic bezier whose control points push straight out of each side — what
- * makes Obsidian's edges leave a card perpendicular rather than cutting
- * diagonally across it. Control distance grows with the gap, capped so a long
- * edge does not balloon.
- */
-export function edgePath(a: { x: number; y: number }, aSide: Side, b: { x: number; y: number }, bSide: Side): string {
-  const dist = Math.hypot(b.x - a.x, b.y - a.y);
-  const pull = Math.min(Math.max(dist * 0.4, 30), 180);
-  const [ax, ay] = OUT[aSide];
-  const [bx, by] = OUT[bSide];
-  return `M ${a.x} ${a.y} C ${a.x + ax * pull} ${a.y + ay * pull}, ${b.x + bx * pull} ${b.y + by * pull}, ${b.x} ${b.y}`;
-}
-
-/** The pair of sides that gives the shortest, least-crossing connection. */
-export function bestSides(a: CNode, b: CNode): [Side, Side] {
-  const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
-  const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
-  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? ['right', 'left'] : ['left', 'right'];
-  return dy > 0 ? ['bottom', 'top'] : ['top', 'bottom'];
-}
-
-/** Bounding box of every card, for zoom-to-fit. */
-export function bounds(nodes: { x: number; y: number; w: number; h: number }[]) {
-  if (!nodes.length) return null;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const n of nodes) {
-    x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y);
-    x1 = Math.max(x1, n.x + n.w); y1 = Math.max(y1, n.y + n.h);
-  }
-  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
 }
 
 /** Card defaults per kind, so "new card" is one call everywhere. */

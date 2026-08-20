@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, type IconName } from '@/components/Icon';
+import { ScheduleImport } from '@/components/ScheduleImport';
 import { CalPopover, PopoverActions } from '@/components/CalPopover';
 import { K, SECHUE } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
@@ -57,6 +58,7 @@ export default function CalendarPage() {
 
   // Week is the desktop default, Day the phone-portrait default.
   const [view, setView] = useState<View>(prefs.calView);
+  const [importing, setImporting] = useState(false);
   useEffect(() => { if (phone && prefs.calView === 'week') setView('day'); }, [phone, prefs.calView]);
 
   // Month needs six weeks of events, not one — the window follows the view.
@@ -197,6 +199,19 @@ export default function CalendarPage() {
             <Icon name="lock" size={15} color={prefs.lockEvents ? 'var(--accTx)' : 'var(--tx3)'} />
           </button>
 
+          {/* A timetable arrives as a photograph far more often than as a
+              calendar file. This reads one and shows you what it read. */}
+          <button onClick={() => setImporting(true)} className="hov k-squish"
+            title="Read a schedule from a photo" aria-label="Import a schedule from a photo"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: phone ? 0 : '0 11px',
+              width: phone ? 34 : undefined, justifyContent: 'center',
+              borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+            }}>
+            <Icon name="spark" size={15} color="var(--tx3)" />
+            {!phone && 'Import'}
+          </button>
+
           <div className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', marginLeft: 'auto' }}>
             {(['month', 'week', 'day', 'agenda', 'countdown'] as View[]).map((v) => (
               <button key={v} onClick={() => setCalView(v)} className="k-chip"
@@ -211,6 +226,8 @@ export default function CalendarPage() {
           </div>
         </div>
       </header>
+
+      {importing && <ScheduleImport onClose={() => setImporting(false)} />}
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

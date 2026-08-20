@@ -71,7 +71,21 @@ export function useBackGuard() {
   }, [pathname]);
 
   useEffect(() => {
+    /**
+     * One back gesture, one step — however many handlers heard it.
+     *
+     * The mouse's side button fires `mousedown`, and Chrome navigates on it
+     * anyway despite the preventDefault, which lands a `popstate` a few
+     * milliseconds later. Both called goBack, so one press popped two entries
+     * off the stack: from a note you did not land on the notebook, you landed
+     * on Home. Anything inside this window is the same gesture arriving twice.
+     */
+    let lastAt = 0;
     const goBack = () => {
+      const now = Date.now();
+      if (now - lastAt < 400) return;
+      lastAt = now;
+
       if (closeTopOverlay()) return;
       // stack ends with the current path; the one before it is the target.
       if (stack.length > 1) {

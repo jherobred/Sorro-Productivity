@@ -10,7 +10,7 @@ import { preview } from '@/lib/md';
 import type { Note } from '@/lib/notes';
 import {
   useBoards, useNodes, useEdges, useCanvasActions, anchor, edgePath, bestSides, bounds, blankNode,
-  CANVAS_COLORS, type Board, type CNode, type CEdge, type Kind, type Side,
+  resized, CANVAS_COLORS, SNAP, type Board, type CNode, type CEdge, type Handle, type Kind, type Side,
 } from '@/lib/canvas';
 
 /**
@@ -35,17 +35,22 @@ import {
  * That is what makes a set of boards a graph rather than a pile of drawings,
  * and it is what the graph view reads.
  *
- * Gestures are Obsidian's: drag empty space to pan, wheel to pan, ctrl/⌘+wheel
- * or pinch to zoom about the pointer, drag a card to move, drag its corner to
- * resize, drag a side dot to connect, shift-drag to marquee, double-click empty
- * space for a card, double-click a card to open or edit it, ⌘/Ctrl+Z to undo.
+ * Gestures, as asked for: **the wheel zooms**, about the pointer, the way it
+ * does in Figma and in Obsidian's canvas with the setting flipped. Shift+wheel
+ * pans sideways and a two-finger pinch zooms. Drag empty space to pan, drag a
+ * card to move it, drag any edge or corner to resize it, drag a side dot to
+ * connect — and if you let that dot go over nothing, you get a new card there,
+ * already joined on, which is the move that makes an Obsidian canvas fast to
+ * think in. Shift-drag marquees, double-click empty space makes a card,
+ * double-click a card opens it, ⌘/Ctrl+Z undoes.
  */
 
 const MIN_Z = 0.1;
 const MAX_Z = 4;
 const GRID = 40;
-const SNAP = 10;
 const SAVE_MS = 600;
+
+const HANDLES: Handle[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
 type VP = { x: number; y: number; z: number };
 type Sel = { nodes: string[]; edges: string[] };
@@ -54,7 +59,7 @@ type Draft = { x: number; y: number; w?: number; h?: number };
 type Gesture =
   | { g: 'pan'; sx: number; sy: number; ox: number; oy: number }
   | { g: 'move'; sx: number; sy: number; start: Record<string, Draft> }
-  | { g: 'resize'; id: string; sx: number; sy: number; x: number; y: number; w: number; h: number }
+  | { g: 'resize'; id: string; handle: Handle; sx: number; sy: number; x: number; y: number; w: number; h: number }
   | { g: 'link'; from: string; side: Side; x: number; y: number; over: string | null }
   | { g: 'marquee'; sx: number; sy: number; x: number; y: number }
   | null;
@@ -313,8 +318,16 @@ function Board({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0025));
-      else setVp((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+      // Shift is the sideways-scroll modifier every OS already uses, so it is
+      // the one gesture that stays a pan. Everything else zooms about the
+      // pointer: 0.0025 puts one mouse notch (~100px) at about 1.28x, the step
+      // Figma and Obsidian settled on, and a trackpad's small deltas land on
+      // the same curve so both feel like one control.
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        setVp((v) => ({ ...v, x: v.x - (e.deltaX || e.deltaY) }));
+        return;
+      }
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0025));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -426,14 +439,7 @@ function Board({
     if (gesture.g === 'resize') {
       const dx = (e.clientX - gesture.sx) / vp.z;
       const dy = (e.clientY - gesture.sy) / vp.z;
-      setDrafts((d) => ({
-        ...d,
-        [gesture.id]: {
-          x: gesture.x, y: gesture.y,
-          w: Math.max(100, Math.round((gesture.w + dx) / SNAP) * SNAP),
-          h: Math.max(60, Math.round((gesture.h + dy) / SNAP) * SNAP),
-        },
-      }));
+      setDrafts((d) => ({ ...d, [gesture.id]: resized(gesture, dx, dy, !e.altKey) }));
       return;
     }
     if (gesture.g === 'link') {
@@ -446,6 +452,23 @@ function Board({
       const w = toWorld(e.clientX, e.clientY);
       setGesture({ ...gesture, x: w.x, y: w.y });
     }
+  };
+
+  /**
+   * A blank card at the end of a connection that landed on nothing, nudged so
+   * the drop point is the middle of the side facing back at its parent.
+   */
+  const blankAt = (g: { side: Side; x: number; y: number }, from: CNode): CNode => {
+    const n = blankNode(board.id, 'text', g.x, g.y, from.color || accent, nodes.length);
+    const off = 0.5;
+    if (g.side === 'right') n.x = Math.round(g.x);
+    if (g.side === 'left') n.x = Math.round(g.x - n.w);
+    if (g.side === 'bottom') n.y = Math.round(g.y);
+    if (g.side === 'top') n.y = Math.round(g.y - n.h);
+    if (g.side === 'left' || g.side === 'right') n.y = Math.round(g.y - n.h * off);
+    if (g.side === 'top' || g.side === 'bottom') n.x = Math.round(g.x - n.w * off);
+    A.addNodes.mutate({ nodes: [n] });
+    return n;
   };
 
   const onPointerUp = () => {
@@ -470,18 +493,29 @@ function Board({
       setDrafts({});
     }
 
-    if (gesture.g === 'link' && gesture.over) {
+    if (gesture.g === 'link') {
       const from = byId.get(gesture.from);
-      const to = byId.get(gesture.over);
-      if (from && to) {
-        const [, toSide] = bestSides(view(from), view(to));
-        const edge: CEdge = {
-          id: crypto.randomUUID(), canvas_id: board.id,
-          from_node: from.id, to_node: to.id, from_side: gesture.side, to_side: toSide,
-          label: '', color: from.color || accent,
-        };
-        A.addEdges.mutate({ edges: [edge] });
-        pushUndo('the connection', () => A.delEdges.mutate({ ids: [edge.id] }));
+      if (from) {
+        // Dropped on a card: join them. Dropped on nothing: make the card you
+        // were reaching for, where you let go, already connected. That second
+        // case is the one that makes an Obsidian canvas quick — the thought
+        // and the card that holds it are one gesture.
+        const to = gesture.over ? byId.get(gesture.over) ?? null : blankAt(gesture, from);
+        if (to) {
+          const [, toSide] = bestSides(view(from), to);
+          const edge: CEdge = {
+            id: crypto.randomUUID(), canvas_id: board.id,
+            from_node: from.id, to_node: to.id, from_side: gesture.side, to_side: toSide,
+            label: '', color: from.color || accent,
+          };
+          A.addEdges.mutate({ edges: [edge] });
+          const fresh = !gesture.over;
+          pushUndo(fresh ? 'the new card' : 'the connection', () => {
+            A.delEdges.mutate({ ids: [edge.id] });
+            if (fresh) A.delNodes.mutate({ ids: [to.id] });
+          });
+          if (fresh) { setSel({ nodes: [to.id], edges: [] }); setEditing(to.id); }
+        }
       }
     }
 
@@ -616,8 +650,10 @@ function Board({
 
   /* ------------------------------------------------------------- render */
 
+  // A 10px dot is a mouse target; a finger needs about twice that (WCAG
+  // 2.5.5), so the hit area grows on touch while the dot itself does not.
   const HANDLE = phone ? 24 : 11;
-  const GRIP = phone ? 26 : 12;
+  const EDGE = phone ? 16 : 8;
   const selSet = useMemo(() => new Set(sel.nodes), [sel.nodes]);
   const ordered = useMemo(
     () => [...nodes].sort((a, b) => (a.kind === 'group' ? -1 : 0) - (b.kind === 'group' ? -1 : 0) || a.z - b.z),
@@ -737,7 +773,7 @@ function Board({
                   note={n.note_id ? noteById.get(n.note_id) ?? null : null}
                   target={n.ref_canvas ? boardById.get(n.ref_canvas) ?? null : null}
                   linking={gesture?.g === 'link' && gesture.over === n.id}
-                  handle={HANDLE} grip={GRIP}
+                  handle={HANDLE} edge={EDGE}
                   onDown={(e) => onNodeDown(e, raw)}
                   onActivate={() => activate(n)}
                   onEdited={(text) => A.saveNode.mutate({ id: n.id, patch: { text } })}
@@ -746,7 +782,10 @@ function Board({
                     const w = toWorld(e.clientX, e.clientY);
                     setGesture({ g: 'link', from: n.id, side, x: w.x, y: w.y, over: null });
                   }}
-                  onResize={(e) => setGesture({ g: 'resize', id: n.id, sx: e.clientX, sy: e.clientY, x: n.x, y: n.y, w: n.w, h: n.h })} />
+                  onResize={(h, e) => setGesture({
+                    g: 'resize', id: n.id, handle: h,
+                    sx: e.clientX, sy: e.clientY, x: n.x, y: n.y, w: n.w, h: n.h,
+                  })} />
               );
             })}
           </div>
@@ -837,24 +876,30 @@ function Board({
 /* ------------------------------------------------------------------- card */
 
 function Card({
-  node: n, selected, editing, note, target, linking, handle, grip,
+  node: n, selected, editing, note, target, linking, handle, edge,
   onDown, onActivate, onEdited, onDoneEditing, onLink, onResize,
 }: {
   node: CNode; selected: boolean; editing: boolean;
   note: Note | null; target: Board | null; linking: boolean;
-  handle: number; grip: number;
+  handle: number; edge: number;
   onDown: (e: React.PointerEvent) => void;
   onActivate: () => void;
   onEdited: (text: string) => void;
   onDoneEditing: () => void;
   onLink: (side: Side, e: React.PointerEvent) => void;
-  onResize: (e: React.PointerEvent) => void;
+  onResize: (h: Handle, e: React.PointerEvent) => void;
 }) {
   const isGroup = n.kind === 'group';
+  const [hover, setHover] = useState(false);
+  // Obsidian shows a card's connection dots on hover, not only once it is
+  // selected — reaching for one should not cost a click first.
+  const showDots = (selected || hover) && !isGroup;
 
   return (
     <div
       onPointerDown={onDown}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       onDoubleClick={(e) => { e.stopPropagation(); onActivate(); }}
       style={{
         position: 'absolute', left: n.x, top: n.y, width: n.w, height: n.h,
@@ -862,7 +907,7 @@ function Card({
         background: isGroup ? `color-mix(in srgb, ${n.color} 7%, transparent)` : 'var(--card2)',
         border: `${selected ? 2 : 1}px solid ${selected ? 'var(--acc)' : isGroup ? `color-mix(in srgb, ${n.color} 50%, transparent)` : 'var(--line2)'}`,
         boxShadow: selected ? 'var(--shl)' : isGroup ? 'none' : 'var(--sh)',
-        cursor: 'grab', userSelect: 'none', overflow: 'hidden',
+        cursor: 'grab', userSelect: 'none',
       }}>
 
       {isGroup ? (
@@ -890,31 +935,37 @@ function Card({
         <span aria-hidden style={{ position: 'absolute', left: 0, top: 9, bottom: 9, width: 3, borderRadius: 2, background: n.color }} />
       )}
 
-      {/* Side dots start a connection; the corner grip resizes. A 10px dot is a
-          mouse target — a finger needs about twice that (WCAG 2.5.5), so the hit
-          area grows on touch while the dot stays the same size. */}
-      {selected && !isGroup && (['top', 'right', 'bottom', 'left'] as Side[]).map((side) => {
+      {/* Every edge and every corner resizes — the whole box is the handle,
+          which is what people try first and what every other canvas allows. */}
+      {(selected || hover) && HANDLES.map((h) => (
+        <span key={h} aria-hidden
+          onPointerDown={(e) => { e.stopPropagation(); onResize(h, e); }}
+          style={{ ...edgeBox(h, edge), position: 'absolute', zIndex: 3, touchAction: 'none', cursor: CURSOR[h] }} />
+      ))}
+      {selected && !isGroup && (
+        <span aria-hidden style={{
+          position: 'absolute', right: -1, bottom: -1, width: 9, height: 9,
+          borderBottom: '2px solid var(--acc)', borderRight: '2px solid var(--acc)',
+          borderBottomRightRadius: 4, pointerEvents: 'none',
+        }} />
+      )}
+
+      {/* The four circles do one job: start a connection. Let go over another
+          card to join them, or over empty space for a new card already on the
+          end of the line. */}
+      {showDots && (['top', 'right', 'bottom', 'left'] as Side[]).map((side) => {
         const p = anchor({ x: 0, y: 0, w: n.w, h: n.h }, side);
         return (
-          <span key={side} title={`Drag to connect (${side})`}
+          <span key={side} title="Drag to connect — or to empty space for a new card"
             onPointerDown={(e) => { e.stopPropagation(); onLink(side, e); }}
             style={{
               position: 'absolute', left: p.x - handle / 2, top: p.y - handle / 2,
               width: handle, height: handle, borderRadius: handle / 2,
               background: 'var(--acc)', border: '2px solid var(--card)',
-              cursor: 'crosshair', zIndex: 2, touchAction: 'none',
+              cursor: 'crosshair', zIndex: 4, touchAction: 'none',
             }} />
         );
       })}
-      {selected && (
-        <span title="Drag to resize"
-          onPointerDown={(e) => { e.stopPropagation(); onResize(e); }}
-          style={{
-            position: 'absolute', right: 0, bottom: 0, width: grip, height: grip,
-            borderRadius: `${grip / 2}px 0 0 0`, background: 'var(--acc)',
-            cursor: 'nwse-resize', zIndex: 2, touchAction: 'none',
-          }} />
-      )}
 
       {linking && (
         <span aria-hidden style={{ position: 'absolute', inset: -3, borderRadius: 13, border: '2px dashed var(--acc)' }} />
@@ -991,6 +1042,33 @@ function CardEditor({ text, onChange, onDone }: { text: string; onChange: (t: st
       }} />
   );
 }
+
+/**
+ * Where a resize handle sits and how far it reaches. Edges are thin strips down
+ * the whole side; corners are squares that overlap them and win, because they
+ * are declared after. Everything is inset by half its thickness so the grab
+ * area straddles the border rather than sitting inside the card, which is what
+ * makes the cursor change exactly where the edge looks like it is.
+ */
+function edgeBox(h: Handle, t: number): React.CSSProperties {
+  const half = -t / 2;
+  const corner = { width: t, height: t };
+  switch (h) {
+    case 'n': return { top: half, left: t, right: t, height: t };
+    case 's': return { bottom: half, left: t, right: t, height: t };
+    case 'w': return { left: half, top: t, bottom: t, width: t };
+    case 'e': return { right: half, top: t, bottom: t, width: t };
+    case 'nw': return { top: half, left: half, ...corner };
+    case 'ne': return { top: half, right: half, ...corner };
+    case 'sw': return { bottom: half, left: half, ...corner };
+    case 'se': return { bottom: half, right: half, ...corner };
+  }
+}
+
+const CURSOR: Record<Handle, string> = {
+  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+  ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize',
+};
 
 export const PANEL: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)' };
 export const BTN: React.CSSProperties = {

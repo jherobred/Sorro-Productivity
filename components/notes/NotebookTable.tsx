@@ -9,6 +9,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
+import type { Board } from '@/lib/canvas';
 
 /**
  * The notebook shelf — Evernote's landing screen.
@@ -20,6 +21,10 @@ import { whenLabel, type Note, type Notebook } from '@/lib/notes';
  *
  * A row expands in place to show what is inside it, so "which notebook was that
  * in?" is answered without leaving the list.
+ *
+ * Canvases and graph views sit on the same shelf. They are a kind of notebook —
+ * a place your work lives — and hiding them behind a tab meant you had to
+ * remember they existed before you could find them.
  */
 
 const COLOURS = [
@@ -33,10 +38,13 @@ const HEAD: React.CSSProperties = {
 };
 
 export function NotebookTable({
-  notebooks, notes, me, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
+  notebooks, notes, boards, me, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
+  onNewBoard, onOpenBoard, onRenameBoard, onDeleteBoard,
 }: {
   notebooks: Notebook[];
   notes: Note[];
+  /** Canvases and graph views — the other two kinds of notebook. */
+  boards: Board[];
   me: string;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -44,6 +52,10 @@ export function NotebookTable({
   onRecolour: (b: Notebook, color: string) => void;
   onDelete: (b: Notebook) => void;
   onOpenNote: (notebookId: string, noteId: string) => void;
+  onNewBoard: (kind: 'canvas' | 'graph') => void;
+  onOpenBoard: (b: Board) => void;
+  onRenameBoard: (b: Board) => void;
+  onDeleteBoard: (b: Board) => void;
 }) {
   const { prefs } = usePrefs();
   const { phone } = useLayout();
@@ -67,6 +79,12 @@ export function NotebookTable({
     const list = notebooks.filter((b) => !term || b.name.toLowerCase().includes(term));
     return [...list].sort((a, b) => (desc ? -1 : 1) * a.name.localeCompare(b.name));
   }, [notebooks, q, desc]);
+
+  const boardRows = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = boards.filter((b) => !term || b.name.toLowerCase().includes(term));
+    return [...list].sort((a, b) => (desc ? -1 : 1) * a.name.localeCompare(b.name));
+  }, [boards, q, desc]);
 
   const rowMenu = (b: Notebook): CtxGroup[] => [
     { items: [
@@ -108,6 +126,13 @@ export function NotebookTable({
           minHeight: 36, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 700,
         }}>
           <Icon name="bookPlus" size={15} color="var(--ink)" />New notebook
+        </button>
+
+        <button onClick={() => onNewBoard('canvas')} className="hov tap" style={NEW_BTN}>
+          <Icon name="grid" size={14} color="var(--tx3)" />New canvas
+        </button>
+        <button onClick={() => onNewBoard('graph')} className="hov tap" style={NEW_BTN}>
+          <Icon name="link" size={14} color="var(--tx3)" />New graph
         </button>
 
         <button onClick={() => setDesc((v) => !v)} className="hov tap"
@@ -156,10 +181,26 @@ export function NotebookTable({
               );
             })}
 
-            {rows.length === 0 && (
+            {boardRows.map((b) => (
+              <BoardRow key={b.id} board={b} phone={phone}
+                onOpen={() => onOpenBoard(b)}
+                onMenu={(x, y) => setMenu({
+                  x, y, label: b.name,
+                  items: [
+                    { items: [{ label: 'Open', icon: b.kind === 'graph' ? 'link' : 'grid', run: () => onOpenBoard(b) }] },
+                    { items: [
+                      { label: 'Rename', icon: 'edit', run: () => onRenameBoard(b) },
+                      { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },
+                    ] },
+                    { items: [{ label: `Delete ${b.kind === 'graph' ? 'graph' : 'canvas'}`, icon: 'trash', danger: true, run: () => onDeleteBoard(b) }] },
+                  ],
+                })} />
+            ))}
+
+            {rows.length + boardRows.length === 0 && (
               <tr>
                 <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
-                  {q ? `Nothing called “${q}”.` : 'No notebooks yet. Make one.'}
+                  {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook, a canvas or a graph.'}
                 </td>
               </tr>
             )}
@@ -169,6 +210,59 @@ export function NotebookTable({
     </div>
   );
 }
+
+/**
+ * A canvas or a graph view on the shelf. No expander: what is inside a canvas
+ * is a picture, and a list of card titles would not tell you anything a glance
+ * at the board would not tell you faster.
+ */
+function BoardRow({
+  board: b, phone, onOpen, onMenu,
+}: { board: Board; phone: boolean; onOpen: () => void; onMenu: (x: number, y: number) => void }) {
+  const cell: React.CSSProperties = { padding: '10px 12px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
+  const kind = b.kind === 'graph' ? 'Graph' : 'Canvas';
+
+  return (
+    <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
+      onDoubleClick={onOpen}
+      onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}>
+      <td style={{ ...cell, paddingRight: 0 }}>
+        <span style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+          <Icon name={b.kind === 'graph' ? 'link' : 'grid'} size={13} color="var(--tx3)" />
+        </span>
+      </td>
+      <td style={cell}>
+        <button onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 9, textAlign: 'left', width: '100%', minHeight: 30 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 3, background: b.color, flex: 'none' }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {b.name}
+          </span>
+          <span style={{
+            flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9.5, fontWeight: 800,
+            letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', border: '1px solid var(--line2)',
+          }}>
+            {kind}
+          </span>
+        </button>
+      </td>
+      {!phone && <td style={cell}>—</td>}
+      {!phone && <td style={{ ...cell, fontWeight: 600 }}>—</td>}
+      <td style={{ ...cell, color: 'var(--tx3)' }}>{b.updated_at ? whenLabel(b.updated_at) : '—'}</td>
+      <td style={{ ...cell, paddingLeft: 0 }}>
+        <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
+          className="hov" aria-label={`Actions for ${b.name}`}
+          style={{ width: 28, height: 28, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+          <Icon name="dots" size={15} color="var(--tx3)" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+const NEW_BTN: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 999,
+  minHeight: 36, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
+};
 
 function BookRow({
   book: b, kids, last, me, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,

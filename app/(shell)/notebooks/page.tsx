@@ -6,7 +6,7 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
-import { confirmAsk } from '@/lib/ask';
+import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import {
@@ -19,6 +19,7 @@ import { GraphView } from '@/components/notes/GraphView';
 import { Canvas } from '@/components/notes/Canvas';
 import { Journal } from '@/components/notes/Journal';
 import { JavaLab } from '@/components/JavaLab';
+import { useBoards, useCanvasActions, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
 /**
  * Notebooks, rebuilt on Evernote's model.
@@ -53,6 +54,11 @@ export default function NotebooksPage() {
   const { data: me = 'you' } = useMe();
   const A = useNoteActions();
 
+  // Canvases and graph views are notebooks too, so the shelf lists them and the
+  // page owns making one — a tab is a place to work, not the only door in.
+  const { data: boards = [] } = useBoards();
+  const B = useCanvasActions(null);
+
   const [nbId, setNbId] = useState<string | null>(null);
   /** Which canvas is open. Here rather than in Canvas, so a dot in the graph
       can open the board it belongs to. */
@@ -73,6 +79,37 @@ export default function NotebooksPage() {
   // the selection) must not leave the screen pointing at nothing.
   useEffect(() => { if (nbId && !notebook) { setNbId(null); setNoteId(null); } }, [nbId, notebook]);
   useEffect(() => { if (!phone && !note && mine.length) setNoteId(mine[0].id); }, [phone, note, mine]);
+
+  const newBoard = (kind: 'canvas' | 'graph') => {
+    const id = crypto.randomUUID();
+    const mine = boards.filter((b) => b.kind === kind);
+    B.newBoard.mutate({
+      id, kind,
+      name: kind === 'graph'
+        ? (mine.length ? `Graph ${mine.length + 1}` : 'Everything')
+        : `Canvas ${mine.length + 1}`,
+      color: CANVAS_COLORS[(mine.length + (kind === 'graph' ? 2 : 0)) % CANVAS_COLORS.length],
+      position: mine.length,
+      viewport: { x: 0, y: 0, z: 1 },
+      settings: kind === 'graph' ? DEFAULT_GRAPH : {},
+    });
+    if (kind === 'canvas') setBoardId(id);
+    setTab(kind === 'graph' ? 'graph' : 'canvas');
+  };
+
+  const openBoard = (b: Board) => {
+    if (b.kind === 'graph') { setTab('graph'); return; }
+    setBoardId(b.id);
+    setTab('canvas');
+  };
+
+  // What "back" means on this screen, in the order things were opened.
+  const canGoBack = inTrash || !!nbId || !!(phone && noteId);
+  const stepBack = () => {
+    if (inTrash) { setInTrash(false); return; }
+    if (noteId && phone) { setNoteId(null); return; }
+    if (nbId) { setNbId(null); setNoteId(null); return; }
+  };
 
   const openNotebook = (id: string, pick?: string) => {
     setNbId(id);
@@ -113,6 +150,19 @@ export default function NotebooksPage() {
         flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
         display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
       }}>
+        {/* Back out of wherever you are, one step at a time: the open note,
+            then the notebook, then the shelf. The mouse's side button does the
+            same thing; this is the one you can see. */}
+        {canGoBack && (
+          <button onClick={stepBack} className="hov k-squish" aria-label="Back"
+            style={{
+              flex: 'none', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center',
+              border: '1px solid var(--line2)', marginRight: 2,
+            }}>
+            <Icon name="back" size={15} color="var(--tx2)" />
+          </button>
+        )}
+
         {/* The old bar slid one accent pill behind the labels, positioned as
             `index * 100%` of an equal share of the width. That is only ever
             aligned when every tab is the same width, which is true on a phone
@@ -192,13 +242,21 @@ export default function NotebooksPage() {
                 </button>
               )}
               <NotebookTable
-                notebooks={notebooks} notes={notes} me={me}
+                notebooks={notebooks} notes={notes} boards={boards} me={me}
                 onOpen={(id) => openNotebook(id)}
                 onOpenNote={(bid, nid) => openNotebook(bid, nid)}
                 onNew={newNotebook}
                 onRename={(b, name) => { A.editNotebook.mutate({ id: b.id, patch: { name } }); toast('Renamed'); }}
                 onRecolour={(b, color) => A.editNotebook.mutate({ id: b.id, patch: { color } })}
-                onDelete={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }} />
+                onDelete={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }}
+                onNewBoard={newBoard}
+                onOpenBoard={openBoard}
+                onRenameBoard={(b) => void ask(`Rename ${b.kind === 'graph' ? 'graph' : 'canvas'}`, { initial: b.name, placeholder: 'Name' })
+                  .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
+                onDeleteBoard={(b) => {
+                  B.delBoard.mutate({ id: b.id });
+                  toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+                }} />
             </>
           ) : (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14 }}>
