@@ -3,7 +3,7 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-19 (canvas + graph rewrite, journal photos).
+Last updated: 2026-08-20 (schedule scanner, community merge, canvas gestures).
 
 ---
 
@@ -113,6 +113,66 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-20 (schedule scanner, community merge, canvas gestures)
+
+**The schedule scanner.** Calendar → Import reads a timetable out of a photo.
+`supabase/functions/schedule-scan` (deployed, `verify_jwt` on) calls Gemini with
+`responseSchema` — day names are an enum, so "TTh" can never reach the client —
+at temperature 0, then hands its own answer back to the model *with the image*
+and asks it to correct itself. Every row comes back with the literal text it was
+read from and a per-row confidence. The model never writes: `components/
+ScheduleImport.tsx` shows a review table, flags what it could not read, and only
+then builds the term's events as one insert. `lib/schedule.ts` is pure
+(`node lib/schedule.check.ts`), including the rule that a bare "1:00" on a
+timetable is the afternoon.
+
+Two model names are tried in order, `gemini-3.6-pro` then `gemini-3.6-flash`,
+falling through only on a 404/"not found" — flash is the name the bot already
+uses in production, so the chain ends somewhere known to work.
+
+**Community is one feed.** `lib/community.ts` merges `bd_posts` and
+`bd_threads` into one `Item` list with New/Top and a photo/discussion filter.
+The tables are untouched; only the read shape is new. `lib/people.ts` reads
+`bd_profiles` (world-readable by design) so authors have handles instead of
+`id.slice(0, 2)` — that fix applies to replies and challenge standings too.
+`components/Composer.tsx` replaces the one-line input, and a caption-less photo
+now has no caption rather than being labelled `IMG_1234.jpg`.
+
+**Canvas gestures, as asked.** The wheel zooms about the pointer (shift+wheel
+pans); every edge and corner resizes; the four side dots only connect, and
+dropping one on empty space creates a card already joined to the parent.
+`lib/canvasGeom.ts` holds the resize maths with a check
+(`node lib/canvasGeom.check.ts`) — a card cannot be turned inside out.
+
+**One tab rail.** `components/TabRail.tsx`. Every screen used to slide an accent
+pill positioned as `index * 100%` of an equal share, which is only aligned when
+every tab is the same width. The active tab carries its own background now.
+Notebooks, Community, Body and PhoneHome all use it; Calendar's icon switcher
+was already built this way.
+
+**Back fired twice.** The mouse's side button fires `mousedown`, Chrome
+navigates on it despite the preventDefault, and the `popstate` a few
+milliseconds later called `goBack()` again — one press, two steps, so you
+landed on Home. `lib/nav.ts` now ignores a second call inside 400ms. Notebooks
+also has a visible chevron.
+
+**Also**: canvases and graph views are listed on the notebook shelf with New
+canvas / New graph beside New notebook; challenges gained a star (the like, one
+row per person, `bd_challenge_stars`) and Duplicate beside Edit and Delete.
+
+**Migrations applied to production**: `0004_challenge_stars.sql`.
+
+**Verified in the browser (fixture mode)**: the merged feed with real handles,
+its sort and filters, no tilt, the composer, challenge stars and duplicate, all
+four tab rails at 1280px and 375px, the canvas wheel-zoom / 8-handle resize /
+drag-to-empty-space, opening a canvas from the shelf, and the notebooks chevron.
+The Import sheet opens and the function is deployed (an unauthenticated call
+returns 401, not 404) — but **the Gemini round-trip has not been run against a
+real timetable**, because fixture mode is signed out and the function requires a
+user JWT. That is the first thing to try signed in.
 
 ---
 
@@ -271,6 +331,10 @@ In priority order:
      note card, a canvas card, a connection, and a graph view that shows them.
    - *Journal photos*: upload, replace, archive, delete, undo, and "Forever"
      from the drawer (the last one is the only path that touches storage).
+   - *Schedule import*: a real timetable through Calendar → Import. Check that
+     a model name resolves (the response says which one it used), that the
+     times land on the right days, and that the review table catches anything
+     it misread. This is the only path in the app that spends money per use.
 2. **The Journal's skipped bits**, if wanted: a rotating daily prompt above the
    page (a constant list, no schema), and weather chips (needs an API key, so it
    is a real decision rather than a small one). The window pane above the heat
