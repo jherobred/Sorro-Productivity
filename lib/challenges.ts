@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
-import { rpFor, standings, type MetricId, type RuleId } from './rank';
+import { rpFor, standings, type RuleId } from './rank';
 import { settler } from './settle';
+import { normaliseMetric, type MetricId } from './metrics';
+import { diffSeries, totalOf, bestStreak, type Series } from './series';
 
 export type Challenge = {
   id: string;
@@ -25,7 +27,12 @@ export type Challenge = {
   ranked: boolean;
   settled_at: string | null;
   winner_id: string | null;
+  /** RP each competitor puts in. The winner takes the pot. 0 is a friendly. */
+  stake_rp: number;
 };
+
+/** One person, one day, one number — what the sparkline and the arena read. */
+export type Day = { challenge_id: string; user_id: string; on_date: string; value: number };
 
 export type Member = {
   challenge_id: string;
@@ -43,11 +50,12 @@ const BLANK: Challenge = {
   id: '', owner_id: '', name: '', description: '', habit_label: '',
   metric: 'habit', rule: 'most', target: null, unit: 'times',
   starts_on: '', ends_on: '', color: '#7C6CFF', visibility: 'public',
-  join_code: null, ranked: false, settled_at: null, winner_id: null,
+  join_code: null, ranked: false, settled_at: null, winner_id: null, stake_rp: 0,
 };
 
 const CHALS = ['challenges'] as const;
 const MEMBERS = ['challenge_members'] as const;
+const DAYS = ['challenge_days'] as const;
 const RANKED = ['ranked'] as const;
 const STARS = ['challenge_stars'] as const;
 
@@ -56,7 +64,7 @@ export function useChallenges() {
     queryKey: CHALS,
     queryFn: async (): Promise<Challenge[]> => {
       const { data, error } = await supabase.from('bd_challenges')
-        .select('id,owner_id,name,description,habit_label,metric,rule,target,unit,starts_on,ends_on,color,visibility,join_code,ranked,settled_at,winner_id')
+        .select('id,owner_id,name,description,habit_label,metric,rule,target,unit,starts_on,ends_on,color,visibility,join_code,ranked,settled_at,winner_id,stake_rp')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Challenge[];
@@ -72,6 +80,26 @@ export function useMembers() {
         .select('challenge_id,user_id,display_name,habit_id,progress,rp_delta,placed,joined_at');
       if (error) throw error;
       return (data ?? []) as Member[];
+    },
+  });
+}
+
+/**
+ * Every competitor's day-by-day numbers, for every challenge on screen.
+ *
+ * Readable by everyone (0006_arena_body_money.sql) because a leaderboard
+ * nobody can see is not a leaderboard — but each row is written only by the
+ * person it belongs to, from their own private tables. The count travels; the
+ * data does not.
+ */
+export function useChallengeDays() {
+  return useQuery({
+    queryKey: DAYS,
+    queryFn: async (): Promise<Day[]> => {
+      const { data, error } = await supabase.from('bd_challenge_days')
+        .select('challenge_id,user_id,on_date,value');
+      if (error) throw error;
+      return (data ?? []) as Day[];
     },
   });
 }
@@ -147,6 +175,26 @@ const LEAVE = defineMutation('chal.leave', async (v: { challenge_id: string }) =
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_challenge_members')
     .delete().eq('challenge_id', v.challenge_id).eq('user_id', user_id);
+  if (error) throw error;
+});
+
+/**
+ * Publish my own day series for one challenge.
+ *
+ * Only the days that changed are written — a challenge whose numbers have not
+ * moved costs nothing to open, and a fortnight's window does not rewrite
+ * fourteen rows every time the tab is shown.
+ */
+const SYNC = defineMutation('chal.sync', async (v: { challenge_id: string; days: { on_date: string; value: number }[]; total: number }) => {
+  const user_id = await currentUserId();
+  if (v.days.length) {
+    const { error } = await supabase.from('bd_challenge_days')
+      .upsert(v.days.map((d) => ({ ...d, challenge_id: v.challenge_id, user_id })),
+              { onConflict: 'challenge_id,user_id,on_date' });
+    if (error) throw error;
+  }
+  const { error } = await supabase.from('bd_challenge_members')
+    .update({ progress: v.total }).eq('challenge_id', v.challenge_id).eq('user_id', user_id);
   if (error) throw error;
 });
 
@@ -262,6 +310,22 @@ export function useChallengeActions() {
     onSettled: settle,
   });
 
+  const sync = useMutation<unknown, Error, { challenge_id: string; days: { on_date: string; value: number }[]; total: number }>({
+    mutationKey: SYNC,
+    onMutate: (v) => {
+      const me = cachedUserId() ?? 'me';
+      const prev = queryClient.getQueryData<Day[]>(DAYS) ?? [];
+      const touched = new Set(v.days.map((d) => `${v.challenge_id}|${d.on_date}`));
+      queryClient.setQueryData<Day[]>(DAYS, [
+        ...prev.filter((d) => !(d.user_id === me && touched.has(`${d.challenge_id}|${d.on_date}`))),
+        ...v.days.map((d) => ({ ...d, challenge_id: v.challenge_id, user_id: me })),
+      ]);
+      patchMembers((p) => p.map((m) =>
+        (m.challenge_id === v.challenge_id && isMine(m) ? { ...m, progress: v.total } : m)));
+    },
+    onSettled: settle,
+  });
+
   const join = useMutation<unknown, Error, { challenge_id: string; habit_id?: string | null }>({ mutationKey: JOIN, onSettled: settle });
   const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
   const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({
@@ -278,7 +342,7 @@ export function useChallengeActions() {
   });
 
   return {
-    create, edit, remove, join, leave, bump, settleUp, patchMembers, star,
+    create, edit, remove, join, leave, bump, settleUp, patchMembers, star, sync,
     /** The same challenge again, dates shifted to start today. */
     duplicate(c: Challenge) {
       const span = Math.max(1, Math.round(
@@ -306,7 +370,9 @@ export function useChallengeActions() {
     /** Work out places and RP, then bank them. */
     finish(c: Challenge, members: Member[]) {
       const { rows } = standings(members, c.rule, c.target);
-      const awards = rows.map((r) => ({ user_id: r.user_id, place: r.place, rp: c.ranked ? rpFor(r.place, rows.length) : 0 }));
+      const awards = rows.map((r) => ({
+        user_id: r.user_id, place: r.place, rp: payout(c, r.place, rows.length),
+      }));
       settleUp.mutate({ challenge_id: c.id, winner_id: rows[0]?.user_id ?? null, awards });
       toast(`${c.name} settled — ${rows[0]?.display_name ?? 'nobody'} took it`);
     },
@@ -325,6 +391,31 @@ export function phaseOf(c: Challenge, members: Member[]): 'upcoming' | 'live' | 
   if (c.rule === 'first_to' && c.target != null && members.some((m) => m.progress >= c.target!)) return 'over';
   return 'live';
 }
+
+/**
+ * What each place walks away with.
+ *
+ * With a stake, the challenge is its own economy: everyone puts in, the winner
+ * takes the pot and the rest are out what they wagered — which is what makes
+ * the last day matter. Without one it falls back to the ladder's own curve, so
+ * a friendly challenge still counts for something.
+ */
+export function payout(c: Challenge, place: number, field: number): number {
+  if (c.stake_rp > 0) {
+    const pot = c.stake_rp * field;
+    return place === 1 ? pot - c.stake_rp : -c.stake_rp;
+  }
+  return c.ranked ? rpFor(place, field) : 0;
+}
+
+/** The total a rule actually scores: a streak challenge counts its best run. */
+export function scoreOf(rule: RuleId, series: Series): number {
+  return rule === 'streak' ? bestStreak(series) : totalOf(series);
+}
+
+/** Only the days that moved, so a sync writes as little as it can. */
+export { diffSeries, normaliseMetric };
+export type { MetricId };
 
 export function daysLeft(c: Challenge): number {
   const end = new Date(`${c.ends_on}T23:59:59`).getTime();

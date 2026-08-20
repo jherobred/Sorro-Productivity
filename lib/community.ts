@@ -224,6 +224,17 @@ const COMMENT = defineMutation('cm2.comment', async (v: { kind: Kind; id: string
   if (error) throw error;
 });
 
+/**
+ * Put a picture in the feed without going through the composer — what a
+ * settled challenge does with its result card.
+ */
+export async function postImage(caption: string, tag: string, image_path: string) {
+  const author_id = await currentUserId();
+  const { error } = await supabase.from('bd_posts').insert({ author_id, caption, tag, image_path });
+  if (error) throw error;
+  void queryClient.invalidateQueries({ queryKey: POSTS });
+}
+
 /* ----------------------------------------------------------------- actions */
 
 export function useCommunityActions(me: string) {

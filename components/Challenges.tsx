@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
@@ -10,20 +10,38 @@ import { currentUserId, cachedUserId } from '@/lib/supabase';
 import { RowActions } from './MoneyRows';
 import { isBot, BOT_NAME } from '@/lib/bot';
 import { useRankUp, RankUpCard } from './RankUp';
-import { rankOf, standings, rpFor, TIERS, METRICS, RULES, type MetricId, type RuleId } from '@/lib/rank';
+import { rankOf, standings, rpFor, TIERS, RULES, type RuleId } from '@/lib/rank';
+import { METRICS, TEMPLATES, DUEL, metricDef, useMyMetric, type MetricId, type Template } from '@/lib/metrics';
+import { totalOf, bestStreak, tail, normalise, ymd, type Series } from '@/lib/series';
+import { Arena, type Racer } from './challenges/Arena';
+import { TrophyRoom, type Won } from './challenges/TrophyRoom';
+import { uploadResult } from './challenges/resultCard';
 import {
-  useChallenges, useMembers, useRanked, useStars, useChallengeActions, phaseOf, daysLeft,
-  type Challenge, type Member,
+  useChallenges, useMembers, useRanked, useStars, useChallengeDays, useChallengeActions,
+  phaseOf, daysLeft, payout, scoreOf, normaliseMetric,
+  type Challenge, type Member, type Day,
 } from '@/lib/challenges';
+import { postImage } from '@/lib/community';
 import { useProfiles, displayOf } from '@/lib/people';
 
 /**
  * Community → Challenges: accountability as a competitive mode.
  *
- * A challenge names a metric the app already tracks (a habit, tasks, project
- * progress, gym days, study hours), a rule for deciding it (most, first to a
- * target, longest streak) and a window. Everyone in it accrues progress; when
- * it settles, places convert to rank points on a Marvel-Rivals-shaped ladder.
+ * A challenge names something the app already counts, a rule for deciding it,
+ * and a window. Everyone in it accrues progress; when it settles, places
+ * convert to rank points on a Marvel-Rivals-shaped ladder.
+ *
+ * **Nobody types their score in.** That was the whole problem: a `+` per task,
+ * per gym day, per push-up is a second to-do list about your first one, and it
+ * is why a challenge died on day three. Each person's own session reads their
+ * own private tables — RLS means it can read no one else's — works out a day
+ * by day series, and publishes the numbers to `bd_challenge_days`. The count
+ * travels; the data never does. `manual` survives for the one challenge in ten
+ * that is about something the app cannot see.
+ *
+ * The card shows those days as bars rather than one total, because a total
+ * tells you who is ahead and the bars tell you who is *moving*, which is the
+ * thing that decides whether you go tomorrow.
  */
 
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)', border: '1px solid var(--line)' };
@@ -47,10 +65,12 @@ export function Challenges() {
   const { data: ranked } = useRanked();
   const { data: stars = [] } = useStars();
   const { data: profiles = {} } = useProfiles();
+  const { data: days = [] } = useChallengeDays();
   const A = useChallengeActions();
   const me = useMe();
   const { move, dismiss } = useRankUp(ranked?.rp, me);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState<Template | null>(null);
+  const [picking, setPicking] = useState(false);
   /** The challenge being edited, if any. The composer doubles as the editor. */
   const [editing, setEditing] = useState<Challenge | null>(null);
   const [filter, setFilter] = useState<'live' | 'upcoming' | 'over'>('live');
@@ -62,6 +82,21 @@ export function Challenges() {
   }, [members]);
 
   const shown = challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === filter);
+
+  /** Everything you placed in, for the shelf. */
+  const won: Won[] = useMemo(() => challenges
+    .filter((c) => c.settled_at)
+    .map((c) => ({ challenge: c, member: members.find((m) => m.challenge_id === c.id && m.user_id === me) }))
+    .filter((x): x is { challenge: Challenge; member: Member } => !!x.member && x.member.placed != null)
+    .map(({ challenge, member }) => ({ challenge, place: member.placed ?? 0, rp: member.rp_delta ?? 0 }))
+    .sort((a, b) => a.place - b.place), [challenges, members, me]);
+
+  /** Days, grouped once, rather than filtered per card per render. */
+  const daysByChallenge = useMemo(() => {
+    const m = new Map<string, Day[]>();
+    for (const d of days) m.set(d.challenge_id, [...(m.get(d.challenge_id) ?? []), d]);
+    return m;
+  }, [days]);
   const counts = {
     live: challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === 'live').length,
     upcoming: challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === 'upcoming').length,
@@ -86,7 +121,7 @@ export function Challenges() {
           </button>
         ))}
 
-        <button onClick={() => setComposing(true)} className="k-squish"
+        <button onClick={() => setPicking(true)} className="k-squish"
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px',
             borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, minHeight: 38,
@@ -105,7 +140,7 @@ export function Challenges() {
         {shown.map((c, i) => (
           <div key={c.id} style={{ '--i': i } as React.CSSProperties}>
             <ChallengeCard challenge={c} members={byChallenge.get(c.id) ?? []} A={A} accent={prefs.accent}
-              profiles={profiles}
+              profiles={profiles} days={daysByChallenge.get(c.id) ?? []}
               stars={stars.filter((x) => x.challenge_id === c.id).length}
               starred={stars.some((x) => x.challenge_id === c.id && x.user_id === me)}
               onEdit={() => setEditing(c)} />
@@ -113,9 +148,17 @@ export function Challenges() {
         ))}
       </div>
 
+      <TrophyRoom won={won} rp={ranked?.rp ?? 0} />
+
+      {picking && (
+        <TemplatePicker
+          onClose={() => setPicking(false)}
+          onPick={(t) => { setPicking(false); setComposing(t); }} />
+      )}
+
       {composing && (
-        <Composer onClose={() => setComposing(false)}
-          onCreate={(c) => { A.create.mutate(c); setComposing(false); toast(`${c.name} created`); }} />
+        <Composer template={composing} onClose={() => setComposing(null)}
+          onCreate={(c) => { A.create.mutate(c); setComposing(null); toast(`${c.name} created`); }} />
       )}
       {editing && (
         <Composer initial={editing} onClose={() => setEditing(null)}
@@ -126,6 +169,79 @@ export function Challenges() {
             toast(`${c.name} updated`);
           }} />
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- templates */
+
+/**
+ * Three taps, not a form.
+ *
+ * The old flow opened a nine-field dialog before you had decided anything, and
+ * the nine fields are the reason people made one challenge and never a second.
+ * A template carries the metric, the rule, the window and a stake; the form is
+ * still there, prefilled, for the tenth challenge that is genuinely different.
+ */
+function TemplatePicker({ onClose, onPick }: { onClose: () => void; onPick: (t: Template) => void }) {
+  useOverlayBack(true, onClose);
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.55)',
+      display: 'grid', placeItems: 'center', padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="New challenge"
+        className="k-bloom navsb" style={{
+          width: 560, maxWidth: '100%', maxHeight: '86dvh', overflowY: 'auto',
+          background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 18, padding: 18,
+          boxShadow: 'var(--shl)',
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <Icon name="trophy" size={16} color="var(--accTx)" />
+          <h2 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', flex: 1 }}>Pick a challenge</h2>
+          <button onClick={onClose} className="hov k-squish" aria-label="Close"
+            style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
+            <Icon name="close" size={14} color="var(--tx2)" />
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8 }}>
+          {[DUEL, ...TEMPLATES].map((t) => {
+            const def = metricDef(t.metric);
+            return (
+              <button key={t.id} onClick={() => onPick(t)} className="hov k-squish"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13,
+                  border: `1px solid ${t.id === 'duel' ? t.color : 'var(--line)'}`,
+                  background: t.id === 'duel' ? `color-mix(in srgb, ${t.color} 10%, transparent)` : 'var(--card2)',
+                  textAlign: 'left', minHeight: 62,
+                }}>
+                <span style={{
+                  width: 36, height: 36, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center',
+                  background: `color-mix(in srgb, ${t.color} 22%, transparent)`,
+                }}>
+                  <Icon name={(def.icon ?? 'trophy') as IconName} size={16} color={t.color} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 800, letterSpacing: '-.01em' }}>{t.name}</span>
+                  <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{t.blurb}</span>
+                </span>
+                <span style={{ flex: 'none', textAlign: 'right' }}>
+                  <span style={{ display: 'block', fontSize: 10.5, fontWeight: 800, color: 'var(--accTx)', fontVariantNumeric: 'tabular-nums' }}>
+                    {t.stake ? `${t.stake} RP` : 'friendly'}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 9.5, color: 'var(--tx3)' }}>{t.days} days</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.7, margin: '14px 0 0' }}>
+          Every one of these counts itself from what you already do in the app. Nothing to tick off twice.
+        </p>
+      </div>
     </div>
   );
 }
@@ -301,10 +417,11 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
 
 /* --------------------------------------------------------- one challenge */
 
-function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, starred, onEdit }: {
+function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars, starred, onEdit }: {
   challenge: Challenge; members: Member[]; A: ReturnType<typeof useChallengeActions>;
   accent: string;
   profiles: Record<string, import('@/lib/people').Person>;
+  days: Day[];
   stars: number; starred: boolean;
   onEdit: () => void;
 }) {
@@ -314,10 +431,80 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
   const mine = members.find((m) => m.user_id === me || m.display_name === 'You');
   const joined = !!mine;
   const leader = rows[0];
-  const metric = METRICS.find((m) => m.id === c.metric);
+  const kind = normaliseMetric(c.metric);
+  const metric = metricDef(kind);
   const rule = RULES.find((r) => r.id === c.rule);
   const max = Math.max(c.target ?? 0, ...rows.map((r) => r.progress), 1);
   const left = daysLeft(c);
+  const [arena, setArena] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  /* ------------------------------------------------------------- the sync
+     My own numbers, read from my own tables and published as a count. Runs
+     while the challenge is live and I am in it; writes only the days that
+     moved, so opening the tab on a quiet afternoon costs nothing. */
+  const auto = metric.auto && joined && phase !== 'upcoming';
+  const { data: series } = useMyMetric(kind, c.starts_on, c.ends_on, null, auto);
+  const syncRef = useRef(A.sync);
+  syncRef.current = A.sync;
+
+  const storedMine = useMemo(() => {
+    const out: Series = {};
+    for (const d of days) if (d.user_id === me) out[d.on_date] = d.value;
+    return out;
+  }, [days, me]);
+
+  useEffect(() => {
+    if (!auto || !series) return;
+    const changed = Object.entries(series)
+      .filter(([day, v]) => (storedMine[day] ?? 0) !== v)
+      .map(([on_date, value]) => ({ on_date, value }));
+    const total = scoreOf(c.rule, series);
+    if (!changed.length && total === (mine?.progress ?? 0)) return;
+    syncRef.current.mutate({ challenge_id: c.id, days: changed, total });
+    // Only the computed series drives this; re-running on every render would
+    // be a write loop, which is why `storedMine` is read but not depended on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, series, c.id, c.rule]);
+
+  /** Everyone's series, for the bars and for the track. */
+  const seriesOf = (userId: string): Series => {
+    const out: Series = {};
+    for (const d of days) if (d.user_id === userId) out[d.on_date] = d.value;
+    return out;
+  };
+
+  const nameOf = (m: { user_id: string; display_name: string | null }) =>
+    (m.user_id === me ? 'You' : displayOf(profiles, m.user_id, me).label);
+
+  const racers: Racer[] = rows.slice(0, 6).map((r) => ({
+    id: r.user_id,
+    label: nameOf(r),
+    color: r.place === 1 ? c.color : `color-mix(in srgb, ${c.color} 60%, #8892A6)`,
+    at: max > 0 ? r.progress / max : 0,
+    score: r.progress,
+    you: r.user_id === me,
+  }));
+
+  const share = async () => {
+    setSharing(true);
+    try {
+      const path = await uploadResult(
+        c.name,
+        `${metric.label} · ${rule?.label ?? ''}`,
+        rows.map((r) => ({
+          label: nameOf(r), score: r.progress, place: r.place,
+          color: r.place === 1 ? c.color : '#5A6178', you: r.user_id === me,
+        })),
+        accent,
+      );
+      if (!path) throw new Error('Could not draw it');
+      await postImage(`${c.name} — ${nameOf(rows[0])} took it`, 'Win', path);
+      toast('Posted to the feed');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not post it');
+    } finally { setSharing(false); }
+  };
 
   return (
     <div style={{ ...CARD, padding: '14px 15px 15px', borderColor: phase === 'live' ? `color-mix(in srgb, ${c.color} 34%, transparent)` : 'var(--line)' }}>
@@ -347,7 +534,15 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
             {c.target != null && c.rule === 'first_to' && ` ${c.target} ${c.unit}`}
             {' · '}
             {phase === 'live' ? `${left} day${left === 1 ? '' : 's'} left` : phase === 'upcoming' ? `starts ${c.starts_on}` : 'finished'}
-            {c.ranked && ' · ranked'}
+            {c.stake_rp > 0 && ` · ${c.stake_rp} RP each`}
+          </div>
+          {/* Where the number comes from, said plainly. A score nobody can
+              trace is a score nobody trusts. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
+            <Icon name={metric.auto ? 'spark' : 'plus'} size={10} color={c.color} />
+            <span style={{ fontSize: 10, color: 'var(--tx3)' }}>
+              {metric.auto ? `counts itself — ${metric.hint.toLowerCase()}` : 'you count this one yourself'}
+            </span>
           </div>
         </div>
 
@@ -376,40 +571,66 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
           onToggle={() => A.star.mutate({ challenge_id: c.id, on: !starred })} />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {rows.slice(0, 6).map((m) => {
-          const you = m.user_id === me || m.display_name === 'You';
-          return (
-            <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{
-                width: 22, flex: 'none', fontSize: 10, fontWeight: 800, textAlign: 'right',
-                color: m.place === 1 ? c.color : 'var(--tx3)', fontVariantNumeric: 'tabular-nums',
-              }}>
-                #{m.place}
-              </span>
-              <Bubble name={you ? 'You' : displayOf(profiles, m.user_id, me).label} id={m.user_id} size={20}
-                ring={m.place === 1 ? c.color : undefined} />
-              <span style={{
-                width: 56, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
-                color: you ? 'var(--accTx)' : 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {you ? 'You' : displayOf(profiles, m.user_id, me).label}
-              </span>
-              <span style={{ flex: 1, minWidth: 0, height: 8, borderRadius: 4, background: 'var(--card2)', overflow: 'hidden' }}>
-                <span className="k-progress" style={{
-                  display: 'block', height: '100%', borderRadius: 4,
-                  width: `${Math.min(100, (m.progress / max) * 100)}%`,
-                  background: m.place === 1 ? c.color : `color-mix(in srgb, ${c.color} 55%, transparent)`,
-                }} />
-              </span>
-              <span style={{ width: 26, flex: 'none', fontSize: 11.5, fontWeight: 800, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {m.progress}
-              </span>
-            </div>
-          );
-        })}
-        {rows.length === 0 && <p style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Nobody has joined yet.</p>}
-      </div>
+      {arena ? (
+        <Arena racers={racers} unit={c.unit || metric.unit} target={c.rule === 'first_to' ? c.target : null} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {rows.slice(0, 6).map((m) => {
+            const you = m.user_id === me || m.display_name === 'You';
+            const bars = normalise(tail(seriesOf(m.user_id), 7));
+            return (
+              <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0' }}>
+                <span style={{
+                  width: 18, flex: 'none', fontSize: 10, fontWeight: 800, textAlign: 'right',
+                  color: m.place === 1 ? c.color : 'var(--tx3)', fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {m.place}
+                </span>
+                <Bubble name={you ? 'You' : displayOf(profiles, m.user_id, me).label} id={m.user_id} size={22}
+                  ring={m.place === 1 ? c.color : undefined} />
+                <span style={{
+                  width: 62, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
+                  color: you ? 'var(--accTx)' : 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {you ? 'You' : displayOf(profiles, m.user_id, me).label}
+                </span>
+
+                {/* Seven days, one bar each. A total says who is ahead; this
+                    says who is moving, which is the part that decides whether
+                    you go tomorrow. */}
+                <span style={{ flex: 1, minWidth: 40, display: 'flex', alignItems: 'flex-end', gap: 3, height: 26 }}
+                  role="img" aria-label={`${you ? 'You' : displayOf(profiles, m.user_id, me).label}: ${m.progress}`}>
+                  {bars.map((h, i) => (
+                    <span key={i} style={{
+                      flex: 1, height: `${Math.max(14, h * 100)}%`, borderRadius: '2px 2px 0 0',
+                      background: h > 0
+                        ? (m.place === 1 ? c.color : `color-mix(in srgb, ${c.color} 62%, transparent)`)
+                        : 'var(--card2)',
+                    }} />
+                  ))}
+                </span>
+
+                <span style={{ width: 26, flex: 'none', fontSize: 12.5, fontWeight: 800, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {m.progress}
+                </span>
+              </div>
+            );
+          })}
+          {rows.length === 0 && <p style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Nobody has joined yet.</p>}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <button onClick={() => setArena((v) => !v)} className="hov k-squish"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '5px 11px',
+            borderRadius: 999, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700,
+            color: arena ? 'var(--accTx)' : 'var(--tx3)',
+          }}>
+          <Icon name={arena ? 'list' : 'focus'} size={12} color={arena ? 'var(--accTx)' : 'var(--tx3)'} />
+          {arena ? 'Standings' : 'Arena'}
+        </button>
+      )}
 
       {c.target != null && (
         <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 9, textAlign: 'right' }}>
@@ -419,10 +640,10 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
 
       {/* Logging is manual here because the metric sources are per-user and
           private; the counters the app already keeps drive the suggestion. */}
-      {phase === 'live' && joined && (
+      {phase === 'live' && joined && !metric.auto && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--line)' }}>
           <span style={{ fontSize: 10.5, color: 'var(--tx3)', flex: 1 }}>
-            {metric?.hint}
+            {metric.hint}
           </span>
           <button
             onClick={() => A.bump.mutate({ challenge_id: c.id, progress: Math.max(0, (mine?.progress ?? 0) - 1) })}
@@ -443,6 +664,16 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
         </div>
       )}
 
+      {phase === 'live' && joined && metric.auto && (
+        <p style={{
+          display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 11,
+          borderTop: '1px solid var(--line)', fontSize: 10.5, color: 'var(--tx3)',
+        }}>
+          <Icon name="check" size={11} color={c.color} />
+          Nothing to do here — go and {metric.label.toLowerCase()}.
+        </p>
+      )}
+
       {phase === 'over' && !c.settled_at && rows.length > 0 && (
         <button onClick={() => A.finish(c, members)} className="k-squish"
           style={{
@@ -451,7 +682,20 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, star
             border: `1px solid color-mix(in srgb, ${c.color} 45%, transparent)`,
             fontSize: 12, fontWeight: 800, color: c.color,
           }}>
-          Settle and award RP
+          {c.stake_rp > 0 ? `Settle — pot is ${c.stake_rp * Math.max(1, rows.length)} RP` : 'Settle and award RP'}
+        </button>
+      )}
+
+      {c.settled_at && rows.length > 0 && (
+        <button onClick={() => void share()} disabled={sharing} className="hov k-squish"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            width: '100%', marginTop: 10, minHeight: 38, borderRadius: 11,
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+            opacity: sharing ? 0.5 : 1,
+          }}>
+          <Icon name="share" size={13} color="var(--tx3)" />
+          {sharing ? 'Drawing…' : 'Post the result'}
         </button>
       )}
 
@@ -509,32 +753,37 @@ const PILL: React.CSSProperties = {
 
 /* ------------------------------------------------------------- composer */
 
-function Composer({ onClose, onCreate, initial }: {
+function Composer({ onClose, onCreate, initial, template }: {
   onClose: () => void;
   onCreate: (c: Partial<Challenge> & { id: string; name: string }) => void;
   /** Present when editing. The same form, prefilled, saving instead of creating. */
   initial?: Challenge;
+  /** Present when a template was picked — the form opens already answered. */
+  template?: Template;
 }) {
   const { prefs } = usePrefs();
   const { data: habits = [] } = useHabits();
   useOverlayBack(true, onClose);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const inTwoWeeks = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+  const today = ymd(new Date());
+  const runsFor = template?.days ?? 14;
+  const until = ymd(new Date(Date.now() + runsFor * 864e5));
 
-  const [name, setName] = useState(initial?.name ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
-  const [metric, setMetric] = useState<MetricId>(initial?.metric ?? 'habit');
+  const [name, setName] = useState(initial?.name ?? template?.name ?? '');
+  const [description, setDescription] = useState(initial?.description ?? template?.blurb ?? '');
+  const [metric, setMetric] = useState<MetricId>(normaliseMetric(initial?.metric ?? template?.metric));
   const [habitId, setHabitId] = useState<string>('');
-  const [rule, setRule] = useState<RuleId>(initial?.rule ?? 'most');
-  const [target, setTarget] = useState(initial?.target != null ? String(initial.target) : '14');
+  const [rule, setRule] = useState<RuleId>(initial?.rule ?? template?.rule ?? 'most');
+  const [target, setTarget] = useState(
+    initial?.target != null ? String(initial.target) : String(template?.target ?? 14));
   const [starts, setStarts] = useState(initial?.starts_on ?? today);
-  const [ends, setEnds] = useState(initial?.ends_on ?? inTwoWeeks);
+  const [ends, setEnds] = useState(initial?.ends_on ?? until);
   const [visibility, setVisibility] = useState<'public' | 'invite'>(initial?.visibility ?? 'public');
   const [ranked, setRanked] = useState(initial?.ranked ?? true);
-  const [color, setColor] = useState(initial?.color ?? prefs.accent);
+  const [color, setColor] = useState(initial?.color ?? template?.color ?? prefs.accent);
+  const [stake, setStake] = useState(String(initial?.stake_rp ?? template?.stake ?? 0));
 
-  const unit = METRICS.find((m) => m.id === metric)?.unit ?? 'times';
+  const unit = metricDef(metric).unit;
   const swatches = ['#7C6CFF', '#FF6B6B', '#FFC24B', '#34D9A0', '#38D6F2', '#FF6FA8', '#B07CFF'];
   const valid = name.trim().length > 1 && ends >= starts && (rule !== 'first_to' || Number(target) > 0);
 
@@ -545,7 +794,8 @@ function Composer({ onClose, onCreate, initial }: {
       name: name.trim(),
       description: description.trim(),
       metric, rule, unit, color, visibility, ranked,
-      habit_label: habits.find((h) => h.id === habitId)?.name ?? METRICS.find((m) => m.id === metric)?.label ?? '',
+      stake_rp: Math.max(0, Math.min(500, Number(stake) || 0)),
+      habit_label: habits.find((h) => h.id === habitId)?.name ?? metricDef(metric).label,
       target: rule === 'first_to' ? Number(target) : null,
       starts_on: starts,
       ends_on: ends,
@@ -604,6 +854,28 @@ function Composer({ onClose, onCreate, initial }: {
               {habits.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
           )}
+          <p style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.6, margin: '8px 0 0' }}>
+            {metricDef(metric).auto
+              ? `Counts itself: ${metricDef(metric).hint.toLowerCase()}. Nobody types a number in.`
+              : 'This one you count yourself — the card gets a counter.'}
+          </p>
+        </Field>
+
+        <Field label="Stake" hint="Rank points each competitor puts in. The winner takes the pot; everyone else is out what they wagered. Zero is a friendly.">
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {['0', '10', '20', '40', '80'].map((v) => (
+              <button key={v} onClick={() => setStake(v)} aria-pressed={stake === v} className="k-chip"
+                style={{
+                  padding: '8px 15px', borderRadius: 10, minHeight: 38, fontSize: 11.5, fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  border: `1px solid ${stake === v ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: stake === v ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent',
+                  color: stake === v ? 'var(--accTx)' : 'var(--tx2)',
+                }}>
+                {v === '0' ? 'None' : `${v} RP`}
+              </button>
+            ))}
+          </div>
         </Field>
 
         <Field label="How it is won">

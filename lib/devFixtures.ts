@@ -330,6 +330,7 @@ export function seedDevFixtures() {
     id, owner_id: 'me', name, description, habit_label: '', metric, rule, target, unit,
     starts_on: ymdOf(startOff), ends_on: ymdOf(endOff), color,
     visibility: 'public', join_code: null, ranked: true, settled_at: settled, winner_id: winner,
+    stake_rp: 20,
   });
   seed(['challenges'], [
     chal('ch1', '6 a.m. club', 'Wake before six. Photo of the clock or it did not happen.', 'habit', 'most', null, 'days', '#FFC24B', -10, 4),
@@ -345,6 +346,48 @@ export function seedDevFixtures() {
     mem('ch2', 'jl', 'Jules L.', 9), mem('ch2', 'me', 'You', 8), mem('ch2', 'rt', 'Rain T.', 5),
     mem('ch3', 'bc', 'Bea C.', 0), mem('ch3', 'csss', 'CSSS', 0),
     mem('ch4', 'rt', 'Rain T.', 41, 88, 1), mem('ch4', 'me', 'You', 37, 40, 2), mem('ch4', 'jl', 'Jules L.', 22, 14, 3),
+  ]);
+
+  // Day-by-day numbers, so the bars and the arena have something to draw.
+  // Deterministic rather than random: a preview that reshuffles every reload
+  // is a preview you cannot compare against yesterday's screenshot.
+  const dayRows: { challenge_id: string; user_id: string; on_date: string; value: number }[] = [];
+  const pattern: Record<string, number[]> = {
+    rt: [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+    me: [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1],
+    jl: [0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1],
+    bc: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+  };
+  for (const [cid, who] of [['ch1', ['rt', 'me', 'jl', 'bc']], ['ch2', ['jl', 'me', 'rt']]] as const) {
+    for (const u of who) {
+      pattern[u].forEach((v, i) => {
+        if (v) dayRows.push({ challenge_id: cid, user_id: u, on_date: ymdOf(-13 + i), value: v });
+      });
+    }
+  }
+  seed(['challenge_days'], dayRows);
+
+  // What "my own tables" would answer for each metric, so the auto-count path
+  // renders without a signed-in session behind it.
+  const mineSeries = (bits: number[]) => {
+    const out: Record<string, number> = {};
+    bits.forEach((v, i) => { out[ymdOf(-13 + i)] = v; });
+    return out;
+  };
+  seed(['metric'], {
+    task: mineSeries([2, 0, 3, 1, 0, 4, 2, 1, 0, 3, 2, 0, 1, 2]),
+    habit: mineSeries(pattern.me),
+    body: mineSeries([1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0]),
+    steps: mineSeries([6, 9, 4, 11, 8, 3, 7, 10, 5, 9, 6, 2, 8, 7]),
+    study: mineSeries([2, 1, 0, 3, 2, 0, 1, 2, 3, 0, 1, 2, 0, 2]),
+    nospend: mineSeries([1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1]),
+    written: mineSeries([1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0]),
+  });
+
+  seed(['workouts'], [
+    { id: 'w1', on_date: ymdOf(-1), name: 'Push day', groups: ['chest', 'arms'], minutes: 55 },
+    { id: 'w2', on_date: ymdOf(-3), name: 'Pull day', groups: ['back', 'arms'], minutes: 48 },
+    { id: 'w3', on_date: ymdOf(-4), name: 'Run', groups: ['cardio'], minutes: 32 },
   ]);
 
   seed(['notebooks'], [
