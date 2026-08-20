@@ -256,6 +256,23 @@ export function seedDevFixtures() {
     { post_id: 'po2', user_id: 'me' }, { post_id: 'po2', user_id: 'jl' }, { post_id: 'po2', user_id: 'bc' },
   ]);
   seed(['post_saves'], []);
+
+  // Everybody in the feed has a handle now, so the preview needs profiles to
+  // read one out of. bd_profiles is world-readable by design.
+  seed(['profiles'], {
+    me: { user_id: 'me', name: 'Jhems Reduta', handle: 'jhemsreduta07', photo_url: null },
+    jl: { user_id: 'jl', name: 'Jules Lopez', handle: 'juleslopez', photo_url: null },
+    rt: { user_id: 'rt', name: 'Rain Tolentino', handle: 'raintol', photo_url: null },
+    bc: { user_id: 'bc', name: 'Bea Cruz', handle: null, photo_url: null },
+    csss: { user_id: 'csss', name: 'CS Student Society', handle: 'csss', photo_url: null },
+  });
+
+  seed(['comment_counts'], { 'discussion:th1': 2, 'photo:po1': 1 });
+  seed(['challenge_stars'], [
+    { challenge_id: 'ch1', user_id: 'rt' },
+    { challenge_id: 'ch1', user_id: 'bc' },
+    { challenge_id: 'ch2', user_id: 'me' },
+  ]);
   seed(['threads'], [
     { id: 'th1', author_id: 'me', title: 'Anyone else stuck on the CS 191 proposal scope?', body: 'Alonzo keeps saying one corridor only, but the rubric asks for a network-level evaluation. How are you all squaring that?', tag: 'CS 191', created_at: new Date(Date.now() - 60*60000).toISOString() },
     { id: 'th2', author_id: 'rt', title: 'Best library floor for deep work, ranked', body: 'Fourth floor is silent but freezing. Second has outlets but the aircon drips. Ground floor is a food court with books.', tag: 'Campus', created_at: new Date(Date.now() - 240*60000).toISOString() },

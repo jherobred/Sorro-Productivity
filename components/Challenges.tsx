@@ -12,9 +12,10 @@ import { isBot, BOT_NAME } from '@/lib/bot';
 import { useRankUp, RankUpCard } from './RankUp';
 import { rankOf, standings, rpFor, TIERS, METRICS, RULES, type MetricId, type RuleId } from '@/lib/rank';
 import {
-  useChallenges, useMembers, useRanked, useChallengeActions, phaseOf, daysLeft,
+  useChallenges, useMembers, useRanked, useStars, useChallengeActions, phaseOf, daysLeft,
   type Challenge, type Member,
 } from '@/lib/challenges';
+import { useProfiles, displayOf } from '@/lib/people';
 
 /**
  * Community → Challenges: accountability as a competitive mode.
@@ -44,6 +45,8 @@ export function Challenges() {
   const { data: challenges = [] } = useChallenges();
   const { data: members = [] } = useMembers();
   const { data: ranked } = useRanked();
+  const { data: stars = [] } = useStars();
+  const { data: profiles = {} } = useProfiles();
   const A = useChallengeActions();
   const me = useMe();
   const { move, dismiss } = useRankUp(ranked?.rp, me);
@@ -102,6 +105,9 @@ export function Challenges() {
         {shown.map((c, i) => (
           <div key={c.id} style={{ '--i': i } as React.CSSProperties}>
             <ChallengeCard challenge={c} members={byChallenge.get(c.id) ?? []} A={A} accent={prefs.accent}
+              profiles={profiles}
+              stars={stars.filter((x) => x.challenge_id === c.id).length}
+              starred={stars.some((x) => x.challenge_id === c.id && x.user_id === me)}
               onEdit={() => setEditing(c)} />
           </div>
         ))}
@@ -197,6 +203,34 @@ function hueOf(id: string): string {
   return TIERS[v % TIERS.length].hue;
 }
 
+/**
+ * A star: the like, for a thing you back rather than enjoy. Same one-row-per-
+ * person shape as a post's like, so the count is honest and pressing it twice
+ * takes it back rather than counting twice.
+ */
+function StarButton({ on, count, color, onToggle }: {
+  on: boolean; count: number; color: string; onToggle: () => void;
+}) {
+  return (
+    <button onClick={onToggle} aria-pressed={on} className="tap k-squish"
+      aria-label={on ? 'Remove your star' : 'Star this challenge'}
+      title={on ? 'Starred' : 'Star this challenge'}
+      style={{
+        flex: 'none', display: 'flex', alignItems: 'center', gap: 6, minHeight: 30,
+        padding: '4px 10px', borderRadius: 999, marginBottom: 11,
+        border: `1px solid ${on ? color : 'var(--line2)'}`,
+        background: on ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
+        fontSize: 11.5, fontWeight: 800, color: on ? color : 'var(--tx3)',
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+      <span className={on ? 'heartpop' : undefined} style={{ display: 'flex' }}>
+        <Icon name="star" size={13} color={on ? color : 'var(--tx3)'} />
+      </span>
+      {count}
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------ rank badge */
 
 function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: number; losses: number; season: string } }) {
@@ -267,9 +301,12 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
 
 /* --------------------------------------------------------- one challenge */
 
-function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
+function ChallengeCard({ challenge: c, members, A, accent, profiles, stars, starred, onEdit }: {
   challenge: Challenge; members: Member[]; A: ReturnType<typeof useChallengeActions>;
-  accent: string; onEdit: () => void;
+  accent: string;
+  profiles: Record<string, import('@/lib/people').Person>;
+  stars: number; starred: boolean;
+  onEdit: () => void;
 }) {
   const phase = phaseOf(c, members);
   const { rows, winner } = standings(members, c.rule, c.target);
@@ -321,7 +358,9 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
         {/* Only the owner's, and only theirs: RLS refuses anyone else's write,
             so offering the button to everybody is offering a failure. */}
         {c.owner_id === me && (
-          <RowActions label={c.name} onEdit={onEdit} onDelete={() => A.removeWithUndo(c, members)} />
+          <RowActions label={c.name} onEdit={onEdit}
+            onDuplicate={() => A.duplicate(c)}
+            onDelete={() => A.removeWithUndo(c, members)} />
         )}
       </div>
 
@@ -329,7 +368,13 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
         <p style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55, marginBottom: 11 }}>{c.description}</p>
       )}
 
-      <Faces members={rows} me={me} color={c.color} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Faces members={rows} me={me} color={c.color} />
+        </div>
+        <StarButton on={starred} count={stars} color={c.color}
+          onToggle={() => A.star.mutate({ challenge_id: c.id, on: !starred })} />
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {rows.slice(0, 6).map((m) => {
@@ -342,13 +387,13 @@ function ChallengeCard({ challenge: c, members, A, accent, onEdit }: {
               }}>
                 #{m.place}
               </span>
-              <Bubble name={you ? 'You' : m.display_name} id={m.user_id} size={20}
+              <Bubble name={you ? 'You' : displayOf(profiles, m.user_id, me).label} id={m.user_id} size={20}
                 ring={m.place === 1 ? c.color : undefined} />
               <span style={{
                 width: 56, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
                 color: you ? 'var(--accTx)' : 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {you ? 'You' : m.display_name ?? 'Someone'}
+                {you ? 'You' : displayOf(profiles, m.user_id, me).label}
               </span>
               <span style={{ flex: 1, minWidth: 0, height: 8, borderRadius: 4, background: 'var(--card2)', overflow: 'hidden' }}>
                 <span className="k-progress" style={{

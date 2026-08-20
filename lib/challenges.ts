@@ -49,6 +49,7 @@ const BLANK: Challenge = {
 const CHALS = ['challenges'] as const;
 const MEMBERS = ['challenge_members'] as const;
 const RANKED = ['ranked'] as const;
+const STARS = ['challenge_stars'] as const;
 
 export function useChallenges() {
   return useQuery({
@@ -71,6 +72,22 @@ export function useMembers() {
         .select('challenge_id,user_id,display_name,habit_id,progress,rp_delta,placed,joined_at');
       if (error) throw error;
       return (data ?? []) as Member[];
+    },
+  });
+}
+
+/**
+ * Who has starred what. A star is a like — the same one row per person per
+ * thing — drawn as a star because a challenge is something you back rather
+ * than something you enjoy.
+ */
+export function useStars() {
+  return useQuery({
+    queryKey: STARS,
+    queryFn: async (): Promise<{ challenge_id: string; user_id: string }[]> => {
+      const { data, error } = await supabase.from('bd_challenge_stars').select('challenge_id,user_id');
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }
@@ -108,6 +125,14 @@ const DELETE = defineMutation('chal.delete', async (v: { id: string }) => {
   const { error: e1 } = await supabase.from('bd_challenge_members').delete().eq('challenge_id', v.id);
   if (e1) throw e1;
   const { error } = await supabase.from('bd_challenges').delete().eq('id', v.id);
+  if (error) throw error;
+});
+
+const STAR = defineMutation('chal.star', async (v: { challenge_id: string; on: boolean }) => {
+  const user_id = await currentUserId();
+  const { error } = v.on
+    ? await supabase.from('bd_challenge_stars').insert({ challenge_id: v.challenge_id, user_id })
+    : await supabase.from('bd_challenge_stars').delete().eq('challenge_id', v.challenge_id).eq('user_id', user_id);
   if (error) throw error;
 });
 
@@ -181,7 +206,7 @@ function cachedUserId(): string | null {
 
 export function useChallengeActions() {
   const qc = useQueryClient();
-  const settle = settler(qc, CHALS, MEMBERS, RANKED);
+  const settle = settler(qc, CHALS, MEMBERS, RANKED, STARS);
   const patchMembers = (fn: (p: Member[]) => Member[]) => {
     const prev = queryClient.getQueryData<Member[]>(MEMBERS) ?? [];
     queryClient.setQueryData<Member[]>(MEMBERS, fn(prev));
@@ -223,6 +248,20 @@ export function useChallengeActions() {
     onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(CHALS, ctx); },
     onSettled: settle,
   });
+  const star = useMutation<unknown, Error, { challenge_id: string; on: boolean }, { challenge_id: string; user_id: string }[]>({
+    mutationKey: STAR,
+    onMutate: (v) => {
+      const me = cachedUserId() ?? 'me';
+      const prev = queryClient.getQueryData<{ challenge_id: string; user_id: string }[]>(STARS) ?? [];
+      queryClient.setQueryData(STARS, v.on
+        ? [...prev, { challenge_id: v.challenge_id, user_id: me }]
+        : prev.filter((r) => !(r.challenge_id === v.challenge_id && r.user_id === me)));
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(STARS, ctx); },
+    onSettled: settle,
+  });
+
   const join = useMutation<unknown, Error, { challenge_id: string; habit_id?: string | null }>({ mutationKey: JOIN, onSettled: settle });
   const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
   const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({
@@ -239,7 +278,22 @@ export function useChallengeActions() {
   });
 
   return {
-    create, edit, remove, join, leave, bump, settleUp, patchMembers,
+    create, edit, remove, join, leave, bump, settleUp, patchMembers, star,
+    /** The same challenge again, dates shifted to start today. */
+    duplicate(c: Challenge) {
+      const span = Math.max(1, Math.round(
+        (new Date(c.ends_on).getTime() - new Date(c.starts_on).getTime()) / 86_400_000));
+      const from = new Date();
+      const to = new Date(from.getTime() + span * 86_400_000);
+      const ymd = (d: Date) => d.toISOString().slice(0, 10);
+      const copy = {
+        ...c, id: crypto.randomUUID(), name: `${c.name} (copy)`,
+        starts_on: ymd(from), ends_on: ymd(to),
+        settled_at: null, winner_id: null,
+      };
+      create.mutate(copy);
+      toast(`Copied \u201C${c.name}\u201D — it runs again from today`);
+    },
     /** Delete, with the challenge and its members kept for Undo. */
     removeWithUndo(c: Challenge, mem: Member[]) {
       remove.mutate({ id: c.id });

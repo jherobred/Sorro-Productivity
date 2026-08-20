@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { TabRail } from '@/components/TabRail';
 import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
@@ -163,38 +164,7 @@ export default function NotebooksPage() {
           </button>
         )}
 
-        {/* The old bar slid one accent pill behind the labels, positioned as
-            `index * 100%` of an equal share of the width. That is only ever
-            aligned when every tab is the same width, which is true on a phone
-            and false on a desktop, where the pill sat under "Notebooks" while
-            "Java" was lit. The active tab now carries its own background, so
-            the highlight cannot drift from the label it belongs to. */}
-        <div className="hbar" role="tablist" aria-label="Notebook views" style={{
-          display: 'flex', gap: 2, flex: phone ? '1 1 auto' : '0 0 auto',
-          width: phone ? '100%' : 'auto', padding: 3, borderRadius: 12,
-          background: 'var(--card)', overflowX: 'auto',
-        }}>
-          {TABS.map((t) => {
-            const on = tab === t.id;
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)} role="tab" aria-selected={on}
-                className={on ? undefined : 'hov'} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  flex: phone ? '1 1 auto' : '0 0 auto', minWidth: 0, minHeight: 32,
-                  padding: phone ? '7px 8px' : '6px 14px', borderRadius: 9,
-                  fontSize: phone ? 11 : 12, fontWeight: 700, whiteSpace: 'nowrap',
-                  background: on ? prefs.accent : 'transparent',
-                  color: on ? '#0C0F16' : 'var(--tx2)',
-                  transition: 'background-color .2s, color .2s',
-                }}>
-                {/* Icon and label on a desktop; the label alone on a phone,
-                    where five icons in 345px would be five guesses. */}
-                {!phone && <Icon name={t.icon} size={13} color={on ? '#0C0F16' : 'var(--tx3)'} />}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
 
         {!phone && tab === 'notebooks' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>

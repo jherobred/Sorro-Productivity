@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { TabRail } from './TabRail';
 import { Icon, type IconName } from './Icon';
 import { PAL, K } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
@@ -93,20 +94,8 @@ export function PhoneHome({ name }: { name: string }) {
         </button>
       </div>
 
-      <div style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 13, background: 'var(--card)', marginBottom: 16 }}>
-        <div style={{
-          position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc((100% - 6px)/3)',
-          borderRadius: 10, background: prefs.accent,
-          transform: `translateX(${TABS.indexOf(tab) * 100}%)`,
-          transition: 'transform .34s cubic-bezier(0.16,1,0.3,1)',
-        }} />
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            position: 'relative', zIndex: 1, flex: '1 1 0', padding: '7px 6px', borderRadius: 10,
-            fontSize: 11.5, fontWeight: 700, textAlign: 'center',
-            color: tab === t ? '#0C0F16' : 'var(--tx2)', transition: 'color .24s',
-          }}>{t}</button>
-        ))}
+      <div style={{ marginBottom: 16 }}>
+        <TabRail tabs={TABS.map((t) => ({ id: t, label: t }))} value={tab} onChange={setTab} phone label="Home sections" />
       </div>
 
       {tab === 'Dashboard' && (

@@ -79,13 +79,23 @@ export function AddButton({ label, onClick }: { label: string; onClick: () => vo
 }
 
 /** Edit and delete, shown on hover on a pointer device and always on touch. */
-export function RowActions({ onEdit, onDelete, label }: { onEdit: () => void; onDelete: () => void; label: string }) {
+export function RowActions({ onEdit, onDelete, onDuplicate, label }: {
+  onEdit: () => void; onDelete: () => void; label: string;
+  /** Optional third verb. Copying a row is the most-asked-for one after these two. */
+  onDuplicate?: () => void;
+}) {
   return (
     <span className="bh" style={{ display: 'flex', gap: 2, flex: 'none' }}>
       <button onClick={onEdit} className="hov k-squish" aria-label={`Edit ${label}`} title="Edit"
         style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
         <Icon name="edit" size={13} color="var(--tx3)" />
       </button>
+      {onDuplicate && (
+        <button onClick={onDuplicate} className="hov k-squish" aria-label={`Duplicate ${label}`} title="Duplicate"
+          style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+          <Icon name="copy" size={13} color="var(--tx3)" />
+        </button>
+      )}
       <button onClick={onDelete} className="hov k-squish" aria-label={`Delete ${label}`} title="Delete"
         style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
         <Icon name="trash" size={13} color="var(--tx3)" />

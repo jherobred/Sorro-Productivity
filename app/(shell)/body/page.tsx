@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { TabRail } from '@/components/TabRail';
 import { Icon, type IconName } from '@/components/Icon';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
@@ -143,21 +144,8 @@ export default function BodyPage() {
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 className="sronly">Body</h1>
-        <div style={{ position: 'relative', display: 'flex', padding: 3, borderRadius: 12, background: 'var(--card)' }}>
-          <div style={{
-            position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc((100% - 6px)/3)',
-            borderRadius: 9, background: prefs.accent,
-            transform: `translateX(${TABS.indexOf(tab) * 100}%)`,
-            transition: 'transform .34s cubic-bezier(0.16,1,0.3,1)',
-          }} />
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              position: 'relative', zIndex: 1, padding: '6px 17px', borderRadius: 9,
-              fontSize: 12, fontWeight: 700, textTransform: 'capitalize',
-              color: tab === t ? '#0C0F16' : 'var(--tx2)', transition: 'color .24s',
-            }}>{t}</button>
-          ))}
-        </div>
+        <TabRail tabs={TABS.map((t) => ({ id: t, label: t[0].toUpperCase() + t.slice(1) }))}
+          value={tab} onChange={setTab} phone={phone} label="Body sections" />
         <div style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
           {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
