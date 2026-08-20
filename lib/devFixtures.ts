@@ -268,6 +268,36 @@ export function seedDevFixtures() {
   });
 
   seed(['comment_counts'], { 'discussion:th1': 2, 'photo:po1': 1 });
+
+  // Messages. One direct chat and one group, with a shared post in each, so
+  // the panel, the bubbles and the shared-post card all have something to draw.
+  const mAgo = (n: number) => new Date(Date.now() - n * 60000).toISOString();
+  seed(['conversations'], [
+    { id: 'cv1', created_by: 'me', title: '', is_group: false, updated_at: mAgo(4) },
+    { id: 'cv2', created_by: 'rt', title: 'Capstone crew', is_group: true, updated_at: mAgo(90) },
+  ]);
+  seed(['conversation_members'], [
+    { conversation_id: 'cv1', user_id: 'me', last_read_at: mAgo(0) },
+    { conversation_id: 'cv1', user_id: 'jl', last_read_at: mAgo(3) },
+    { conversation_id: 'cv2', user_id: 'me', last_read_at: mAgo(200) },
+    { conversation_id: 'cv2', user_id: 'rt', last_read_at: mAgo(80) },
+    { conversation_id: 'cv2', user_id: 'bc', last_read_at: mAgo(85) },
+  ]);
+  const msg = (id: string, conversation_id: string, author_id: string, body: string, n: number,
+               share?: { kind: string; id: string }) =>
+    ({ id, conversation_id, author_id, body, share_kind: share?.kind ?? null,
+       share_id: share?.id ?? null, created_at: mAgo(n) });
+  seed(['messages', 'cv1'], [
+    msg('m1', 'cv1', 'jl', 'did you push the GTFS fix?', 30),
+    msg('m2', 'cv1', 'me', 'yeah, it is on master. screenshot below', 22),
+    msg('m3', 'cv1', 'me', '', 21, { kind: 'photo', id: 'po1' }),
+    msg('m4', 'cv1', 'jl', 'beautiful. alonzo will love it', 4),
+  ]);
+  seed(['messages', 'cv2'], [
+    msg('m5', 'cv2', 'rt', 'anyone free to review the limitations section?', 120),
+    msg('m6', 'cv2', 'bc', '', 95, { kind: 'discussion', id: 'th1' }),
+    msg('m7', 'cv2', 'bc', 'this thread has the answer', 90),
+  ]);
   seed(['challenge_stars'], [
     { challenge_id: 'ch1', user_id: 'rt' },
     { challenge_id: 'ch1', user_id: 'bc' },

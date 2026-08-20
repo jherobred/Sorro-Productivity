@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
 
@@ -65,6 +66,12 @@ export function MediaFrame({
 /**
  * Full-screen viewer. Same rule — the whole picture, fitted — with room to
  * breathe and arrow keys between items.
+ *
+ * It portals to `document.body`, and it has to: `main` carries the font-scale
+ * `zoom` and a page-entry transform, either of which makes it the containing
+ * block for `position: fixed`. Rendered in place, this "full screen" overlay
+ * was positioned against `main` — covering part of the page, offset wrongly,
+ * with the feed showing through underneath. HANDOFF fact 2.
  */
 export function Lightbox({
   items, index, onClose, onIndex,
@@ -93,7 +100,7 @@ export function Lightbox({
   const item = items[i];
   if (!item) return null;
 
-  return (
+  const body = (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={item.alt}
       style={{
         position: 'fixed', inset: 0, zIndex: 130, background: 'rgba(4,4,8,.93)',
@@ -137,4 +144,6 @@ export function Lightbox({
       )}
     </div>
   );
+
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }

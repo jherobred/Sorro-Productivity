@@ -44,7 +44,7 @@ const SECTIONS: Section[] = [
   { id: 'body', name: 'Body', ic: 'heart', kids: [{ n: 'Health', c: PAL.pink }, { n: 'Food', c: PAL.amber }, { n: 'Gym', c: PAL.mint }] },
   { id: 'money', name: 'Money', ic: 'money', lock: true },
   { id: 'profile', name: 'Profile', ic: 'focus' },
-  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Threads', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
+  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
   { id: 'files', name: 'Files', ic: 'files' },
   { id: 'people', name: 'People', ic: 'people' },
 ];

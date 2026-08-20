@@ -5,7 +5,10 @@ import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
 import { Composer } from '@/components/Composer';
 import { Challenges } from '@/components/Challenges';
-import { MediaFrame, Lightbox } from '@/components/MediaFrame';
+import { MediaFrame } from '@/components/MediaFrame';
+import { PostView } from '@/components/PostView';
+import { ShareSheet } from '@/components/ShareSheet';
+import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
 import { currentUserId } from '@/lib/supabase';
 import { useRealtime } from '@/lib/realtime';
@@ -50,12 +53,13 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function CommunityPage() {
   const { phone } = useLayout();
-  const [tab, setTab] = useState<'feed' | 'challenges'>('feed');
+  const [tab, setTab] = useState<'feed' | 'messages' | 'challenges'>('feed');
   const [me, setMe] = useState('');
   const [sort, setSort] = useState<Sort>('new');
   const [filter, setFilter] = useState<Filter>('all');
   const [composing, setComposing] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<Item | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -88,14 +92,21 @@ export default function CommunityPage() {
   }, [likes, votes, me]);
 
   const items = useFeed(sort, filter, reactions);
+  // The arrows in the opened post step through the pictures, the way a gallery
+  // does; a discussion opens on its own.
   const photos = items.filter((i) => i.image_path);
+  const open_ = viewing ? items.find((i) => key(i) === viewing) ?? null : null;
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 className="sronly">Community</h1>
         <TabRail
-          tabs={[{ id: 'feed', label: 'Feed', icon: 'chat' }, { id: 'challenges', label: 'Challenges', icon: 'trophy' }]}
+          tabs={[
+            { id: 'feed', label: 'Feed', icon: 'chat' },
+            { id: 'messages', label: 'Messages', icon: 'send' },
+            { id: 'challenges', label: 'Challenges', icon: 'trophy' },
+          ]}
           value={tab} onChange={setTab} phone={phone} label="Community sections" />
       </div>
 
@@ -150,10 +161,13 @@ export default function CommunityPage() {
               onEditCancel={() => setEditing(null)}
               onEditSave={(title, body) => { A.edit.mutate({ kind: item.kind, id: item.id, title, body }); setEditing(null); toast('Updated'); }}
               onDelete={() => A.remove(item)}
-              onOpenImage={() => setViewing(item.id)} />
+              onOpen={() => setViewing(key(item))}
+              onShare={() => setSharing(item)} />
           ))}
         </div>
       )}
+
+      {tab === 'messages' && <Messages me={me} />}
 
       {tab === 'challenges' && <Challenges />}
 
@@ -164,7 +178,20 @@ export default function CommunityPage() {
           onDiscussion={(v) => { A.addThread.mutate({ id: crypto.randomUUID(), ...v }); toast('Posted'); }} />
       )}
 
-      {viewing && <PhotoViewer items={photos} startId={viewing} onClose={() => setViewing(null)} />}
+      {open_ && (
+        <PostView
+          item={open_} items={photos} me={me} profiles={profiles}
+          reactions={reactions[key(open_)] ?? 0}
+          reacted={mine.has(key(open_))}
+          comments={counts[key(open_)] ?? 0}
+          onIndex={(id) => { const n = photos.find((p) => p.id === id); if (n) setViewing(key(n)); }}
+          onReact={(on) => A.react.mutate({ kind: open_.kind, id: open_.id, on })}
+          onComment={(body) => { A.comment.mutate({ kind: open_.kind, id: open_.id, body }); toast('Posted'); }}
+          onShare={() => setSharing(open_)}
+          onClose={() => setViewing(null)} />
+      )}
+
+      {sharing && <ShareSheet item={sharing} me={me} onClose={() => setSharing(null)} />}
     </div>
   );
 }
@@ -173,7 +200,7 @@ export default function CommunityPage() {
 
 function FeedCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
-  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpenImage,
+  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare,
 }: {
   item: Item;
   me: string;
@@ -190,7 +217,9 @@ function FeedCard({
   onEditCancel: () => void;
   onEditSave: (title: string, body: string) => void;
   onDelete: () => void;
-  onOpenImage: () => void;
+  /** Opens the post on its own, picture beside the conversation. */
+  onOpen: () => void;
+  onShare: () => void;
 }) {
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
@@ -238,15 +267,15 @@ function FeedCard({
       ) : (
         <>
           {item.title && (
-            <h2 style={{
+            <h2 onClick={onOpen} style={{
               padding: '0 13px 8px', fontSize: 15.5, fontWeight: 800, letterSpacing: '-.02em',
-              lineHeight: 1.35, textWrap: 'pretty',
+              lineHeight: 1.35, textWrap: 'pretty', cursor: 'pointer',
             }}>
               {item.title}
             </h2>
           )}
 
-          {item.image_path && <PostImage path={item.image_path} tint={who.hue} alt={item.body || 'Post image'} onOpen={onOpenImage} />}
+          {item.image_path && <PostImage path={item.image_path} tint={who.hue} alt={item.body || 'Post image'} onOpen={onOpen} />}
 
           {item.body && (
             <div style={{ padding: '11px 13px 0', fontSize: 12.5, lineHeight: 1.6, fontWeight: 500, textWrap: 'pretty' }}>
@@ -262,9 +291,12 @@ function FeedCard({
           style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: open ? 'var(--accTx)' : 'var(--tx2)' }}>
           <Icon name="chat" size={15} color={open ? 'var(--accTx)' : 'var(--tx2)'} />{comments}
         </button>
-        <button className="tap" aria-label="Copy a link to this post"
-          onClick={() => { void navigator.clipboard?.writeText(`${location.origin}/community/#${item.kind}-${item.id}`); toast('Link copied'); }}>
-          <Icon name="share" size={15} color="var(--tx3)" />
+        <button onClick={onShare} className="tap" aria-label="Share this post">
+          <Icon name="send" size={15} color="var(--tx3)" />
+        </button>
+        <button onClick={onOpen} className="tap" aria-label="Open this post"
+          style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
+          Open
         </button>
       </div>
 
@@ -468,27 +500,6 @@ function ItemEdit({ item, onSave, onCancel }: { item: Item; onSave: (t: string, 
         </button>
       </div>
     </div>
-  );
-}
-
-/**
- * The feed's photos full-screen, in feed order. Storage paths need signing and
- * hooks cannot be called in a loop, so each slide resolves its own URL and the
- * viewer only ever holds one at a time.
- */
-function PhotoViewer({ items, startId, onClose }: { items: Item[]; startId: string; onClose: () => void }) {
-  const [i, setI] = useState(() => Math.max(0, items.findIndex((p) => p.id === startId)));
-  const current = items[i];
-  const url = useSignedUrl('bd-feed', current?.image_path ?? null);
-  if (!current) return null;
-  return (
-    <Lightbox
-      items={items.map((p, n) => ({
-        src: n === i ? (url ?? null) : null,
-        alt: p.body || 'Post image',
-        caption: p.body,
-      }))}
-      index={i} onIndex={setI} onClose={onClose} />
   );
 }
 
