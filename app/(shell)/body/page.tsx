@@ -1,310 +1,285 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
-import { Icon, type IconName } from '@/components/Icon';
-import { supabase, currentUserId } from '@/lib/supabase';
-import { defineMutation, queryClient } from '@/lib/offline';
-import { toast } from '@/lib/toast';
+import { Rings, Vessel, SleepArc, BodyMap, Ribbon } from '@/components/body/Instruments';
+import { MealSheet } from '@/components/body/MealSheet';
 import { PAL } from '@/lib/pal';
-import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
-import { ymd, lastDays } from '@/lib/habits';
-import { settler } from '@/lib/settle';
+import { toast } from '@/lib/toast';
+import { ask } from '@/lib/ask';
+import { ymd } from '@/lib/series';
+import {
+  useBodyDays, useMeals, useWorkouts, useBodyActions,
+  sleepHours, heatOf, dayOf, GOALS, GROUP_LABEL, type Group, type Meal,
+} from '@/lib/body';
 
-/** Ported from Basedly.dc.html markup 870–1019. */
+/**
+ * Body, as instruments.
+ *
+ * What was here: six rows of numbers, each with a minus and a plus. It held the
+ * right data and asked you to read it as a spreadsheet, so nobody read it.
+ *
+ * What is here now answers the three questions a body screen is for. **Today**
+ * is one object — three rings, a glass you tap, an arc you drag. **Trained** is
+ * a silhouette that warms where you worked, so cold legs on a Thursday is an
+ * argument you can see rather than a row you have to compare. **Eaten** is a
+ * plate you photograph.
+ *
+ * Every control here is the picture itself. There is not a stepper on the page.
+ */
 
-type Day = { on_date: string; sleep_h: number | null; water: number | null; steps: number | null; weight: number | null };
-type Meal = { id: string; on_date: string; name: string; slot: string; kcal: number; protein: number; carbs: number; fat: number };
-type GymDay = { id: string; weekday: number; name: string; done: boolean };
-type Vital = { id: string; name: string; kind: string; at: string; color: string };
-
-const DAY_KEY = ['body_days'] as const;
-const MEAL_KEY = ['meals'] as const;
-const GYM_KEY = ['gym'] as const;
-const VITAL_KEY = ['vitals'] as const;
-
-const TABS = ['health', 'food', 'gym'] as const;
-type Tab = (typeof TABS)[number];
-const SLOTS = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
-const DAYS_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-
-const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
-const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
-const STEP: React.CSSProperties = {
-  width: 24, height: 24, borderRadius: 7, border: '1px solid var(--line2)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  fontSize: 14, fontWeight: 700, color: 'var(--tx2)',
+const CARD: React.CSSProperties = {
+  background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)', border: '1px solid var(--line)',
+};
+const KICKER: React.CSSProperties = {
+  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
 };
 
-const SAVE_DAY = defineMutation('body.saveDay', async (v: { patch: Partial<Day> & { on_date: string } }) => {
-  const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_body_days').upsert({ user_id, ...v.patch }, { onConflict: 'user_id,on_date' });
-  if (error) throw error;
-});
-const ADD_MEAL = defineMutation('body.addMeal', async (v: Omit<Meal, 'id'>) => {
-  const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_meals').insert({ ...v, user_id });
-  if (error) throw error;
-});
-const DEL_MEAL = defineMutation('body.delMeal', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_meals').delete().eq('id', v.id);
-  if (error) throw error;
-});
-const TOGGLE_GYM = defineMutation('body.toggleGym', async (v: { id: string; done: boolean }) => {
-  const { error } = await supabase.from('bd_gym_days').update({ done: v.done }).eq('id', v.id);
-  if (error) throw error;
-});
-const ADD_VITAL = defineMutation('body.addVital', async (v: { name: string }) => {
-  const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_vitals').insert({ user_id, name: v.name, kind: 'note', color: PAL.mint });
-  if (error) throw error;
-});
-const DEL_VITAL = defineMutation('body.delVital', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_vitals').delete().eq('id', v.id);
-  if (error) throw error;
-});
+const TABS = [
+  { id: 'today' as const, label: 'Today', icon: 'focus' as const },
+  { id: 'trained' as const, label: 'Trained', icon: 'gym' as const },
+  { id: 'eaten' as const, label: 'Eaten', icon: 'food' as const },
+];
 
 export default function BodyPage() {
   const { phone } = useLayout();
-  const { prefs } = usePrefs();
-  const [tab, setTab] = useState<Tab>('health');
   const today = ymd(new Date());
+  const [tab, setTab] = useState<'today' | 'trained' | 'eaten'>('today');
+  const [adding, setAdding] = useState(false);
 
-  const qc = useQueryClient();
-  const settle = settler(qc, DAY_KEY, MEAL_KEY, GYM_KEY, VITAL_KEY);
+  const { data: days = [] } = useBodyDays(30);
+  const { data: meals = [] } = useMeals(today);
+  const { data: workouts = [] } = useWorkouts(28);
+  const A = useBodyActions(30, today);
 
-  const { data: days = [] } = useQuery({
-    queryKey: DAY_KEY,
-    queryFn: async (): Promise<Day[]> => {
-      const from = ymd(lastDays(7)[0]);
-      const { data, error } = await supabase.from('bd_body_days')
-        .select('on_date,sleep_h,water,steps,weight').gte('on_date', from).order('on_date');
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const { data: meals = [] } = useQuery({
-    queryKey: [...MEAL_KEY, today],
-    queryFn: async (): Promise<Meal[]> => {
-      const { data, error } = await supabase.from('bd_meals')
-        .select('id,on_date,name,slot,kcal,protein,carbs,fat').eq('on_date', today);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const { data: gym = [] } = useQuery({
-    queryKey: GYM_KEY,
-    queryFn: async (): Promise<GymDay[]> => {
-      const { data, error } = await supabase.from('bd_gym_days').select('id,weekday,name,done').order('weekday');
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const { data: vitals = [] } = useQuery({
-    queryKey: VITAL_KEY,
-    queryFn: async (): Promise<Vital[]> => {
-      const { data, error } = await supabase.from('bd_vitals').select('id,name,kind,at,color').order('at', { ascending: false }).limit(12);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const saveDay = useMutation<unknown, Error, { patch: Partial<Day> & { on_date: string } }>({ mutationKey: SAVE_DAY, onSettled: settle });
-  const addMeal = useMutation<unknown, Error, Omit<Meal, 'id'>>({ mutationKey: ADD_MEAL, onSettled: settle });
-  const delMeal = useMutation<unknown, Error, { id: string }>({ mutationKey: DEL_MEAL, onSettled: settle });
-  const addVital = useMutation<unknown, Error, { name: string }>({ mutationKey: ADD_VITAL, onSettled: settle });
-  const delVital = useMutation<unknown, Error, { id: string }>({ mutationKey: DEL_VITAL, onSettled: settle });
-  const toggleGym = useMutation({
-    mutationKey: TOGGLE_GYM,
-    onMutate: (v: { id: string; done: boolean }) => {
-      const prev = queryClient.getQueryData<GymDay[]>(GYM_KEY) ?? [];
-      queryClient.setQueryData<GymDay[]>(GYM_KEY, prev.map((g) => (g.id === v.id ? { ...g, done: v.done } : g)));
-      return prev;
-    },
-    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(GYM_KEY, ctx); },
-    onSettled: settle,
-  });
-
-  const d = days.find((x) => x.on_date === today);
-  const set = (patch: Partial<Day>) => saveDay.mutate({ patch: { on_date: today, ...patch } });
-
-  const stats: { n: string; ic: IconName; v: number; unit: string; target: number; step: number; c: string; meta: string; onSet: (v: number) => void }[] = [
-    { n: 'Sleep', ic: 'moon', v: Number(d?.sleep_h ?? 0), unit: 'h', target: 8, step: 0.5, c: PAL.violet, meta: 'Target 8h', onSet: (v) => set({ sleep_h: v }) },
-    { n: 'Water', ic: 'drop', v: Number(d?.water ?? 0), unit: 'glasses', target: 8, step: 1, c: PAL.cyan, meta: 'Target 8 glasses', onSet: (v) => set({ water: v }) },
-    { n: 'Steps', ic: 'steps', v: Number(d?.steps ?? 0), unit: '', target: 10000, step: 500, c: PAL.mint, meta: 'Target 10,000', onSet: (v) => set({ steps: v }) },
-    { n: 'Weight', ic: 'scale', v: Number(d?.weight ?? 0), unit: 'kg', target: 0, step: 0.1, c: PAL.amber, meta: 'Logged today', onSet: (v) => set({ weight: v }) },
-  ];
+  const day = dayOf(days, today);
+  const water = day?.water ?? 0;
+  const steps = day?.steps ?? 0;
+  const from = day?.sleep_from ?? '23:00';
+  const to = day?.sleep_to ?? '07:00';
+  const slept = sleepHours(from, to) ?? day?.sleep_h ?? 0;
 
   const kcal = meals.reduce((s, m) => s + m.kcal, 0);
-  const macro = { p: meals.reduce((s, m) => s + m.protein, 0), c: meals.reduce((s, m) => s + m.carbs, 0), f: meals.reduce((s, m) => s + m.fat, 0) };
+  const macro = {
+    p: meals.reduce((s, m) => s + m.protein, 0),
+    c: meals.reduce((s, m) => s + m.carbs, 0),
+    f: meals.reduce((s, m) => s + m.fat, 0),
+  };
+
+  const heat = useMemo(() => heatOf(workouts, 7), [workouts]);
+  // Sorted here rather than trusted from the query: the ribbon's last point is
+  // "now", and a source that hands them back newest-first would draw the month
+  // backwards and label the oldest reading as today's.
+  const weights = days.filter((d) => d.weight)
+    .map((d) => ({ day: d.on_date, value: Number(d.weight) }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+
+  const set = (patch: Parameters<typeof A.setDay.mutate>[0]['patch']) =>
+    A.setDay.mutate({ on_date: today, patch });
+
+  const logWorkout = (g: Group) => {
+    A.addWorkout.mutate({
+      id: crypto.randomUUID(), on_date: today,
+      name: GROUP_LABEL[g], groups: [g], minutes: 45,
+    });
+    toast(`${GROUP_LABEL[g]} logged`);
+  };
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 className="sronly">Body</h1>
-        <TabRail tabs={TABS.map((t) => ({ id: t, label: t[0].toUpperCase() + t.slice(1) }))}
-          value={tab} onChange={setTab} phone={phone} label="Body sections" />
+        <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Body sections" />
         <div style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
           {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
       </div>
 
-      {tab === 'health' && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-            {stats.map((h) => (
-              <div key={h.n} style={CARD}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon name={h.ic} size={14} color={h.c} />
-                  <div style={KICKER}>{h.n}</div>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
-                    <button onClick={() => h.onSet(Math.max(0, +(h.v - h.step).toFixed(1)))} className="hov" title="Less" style={STEP}>−</button>
-                    <button onClick={() => h.onSet(+(h.v + h.step).toFixed(1))} className="hov" title="More" style={STEP}>+</button>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, margin: '10px 0 9px' }}>
-                  <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.035em', fontVariantNumeric: 'tabular-nums' }}>
-                    {h.n === 'Steps' ? h.v.toLocaleString() : h.v}
-                  </div>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>{h.unit}</div>
-                </div>
-                <div style={{ height: 6, borderRadius: 3, background: 'var(--line2)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 3, background: h.c,
-                    width: `${h.target ? Math.min(100, (h.v / h.target) * 100) : 0}%`,
-                    transition: 'width .4s cubic-bezier(0.16,1,0.3,1)',
-                  }} />
-                </div>
-                <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 8 }}>{h.meta}</div>
-              </div>
-            ))}
+      {/* ------------------------------------------------------------ today */}
+      {tab === 'today' && (
+        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, alignItems: 'start' }}>
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', placeItems: 'center', gap: 12 }}>
+            <div style={{ ...KICKER, justifySelf: 'start' }}>Today</div>
+            <Rings rings={[
+              { label: 'Move', value: steps, goal: GOALS.steps, color: PAL.pink, unit: 'steps' },
+              { label: 'Fuel', value: kcal, goal: GOALS.kcal, color: PAL.amber, unit: 'kcal' },
+              { label: 'Rest', value: slept, goal: GOALS.sleep, color: PAL.cyan, unit: 'hours' },
+            ]} />
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Stat label="Move" value={steps.toLocaleString()} unit="steps" color={PAL.pink} />
+              <Stat label="Fuel" value={String(kcal)} unit="kcal" color={PAL.amber} />
+              <Stat label="Rest" value={String(slept)} unit="hours" color={PAL.cyan} />
+            </div>
+            <button
+              onClick={() => void ask('Steps today', { initial: String(steps), placeholder: 'e.g. 8400' })
+                .then((v) => { if (v !== null) set({ steps: Math.max(0, Math.round(Number(v) || 0)) }); })}
+              className="hov k-squish"
+              style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
+              Set steps
+            </button>
           </div>
 
-          <div style={{ ...CARD, marginTop: 12 }}>
-            <div style={KICKER}>Sleep — last seven nights</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 110, marginTop: 14 }}>
-              {lastDays(7).map((day) => {
-                const key = ymd(day);
-                const row = days.find((x) => x.on_date === key);
-                const h = Number(row?.sleep_h ?? 0);
-                return (
-                  <div key={key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 6, height: '100%' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{h || ''}</div>
-                    <div style={{
-                      width: '100%', height: `${Math.min(100, (h / 10) * 100)}%`, minHeight: h ? 4 : 0,
-                      borderRadius: 6, background: `color-mix(in srgb, ${PAL.violet} ${h >= 7 ? 100 : 55}%, transparent)`,
-                      transition: 'height .4s cubic-bezier(0.16,1,0.3,1)',
-                    }} />
-                    <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>{DAYS_SHORT[(day.getDay() + 6) % 7]}</div>
-                  </div>
-                );
-              })}
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12, justifyItems: 'center' }}>
+            <div style={{ ...KICKER, justifySelf: 'start' }}>Water — tap a cup</div>
+            <Vessel cups={water} goal={GOALS.water} onSet={(n) => set({ water: n })} />
+          </div>
+
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 10 }}>
+            <div style={KICKER}>Sleep — drag the ends</div>
+            <SleepArc from={from} to={to}
+              onChange={(f, t) => set({ sleep_from: f, sleep_to: t, sleep_h: sleepHours(f, t) })} />
+            <div style={{ textAlign: 'center', fontSize: 19, fontWeight: 800, letterSpacing: '-.02em', color: PAL.cyan }}>
+              {slept}<span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}> hours</span>
             </div>
           </div>
 
-          <div style={{ ...CARD, marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <div style={KICKER}>Symptoms and meds</div>
-              <div style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>{vitals.length} logged</div>
-            </div>
-            {vitals.map((v) => (
-              <div key={v.id} className="row" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 2px', borderBottom: '1px solid var(--line)' }}>
-                <span style={{ width: 7, height: 7, borderRadius: 2, background: v.color, flex: 'none' }} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, textWrap: 'pretty' }}>{v.name}</span>
-                <span style={{ flex: 'none', fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
-                  {new Date(v.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </span>
-                <button onClick={() => { delVital.mutate({ id: v.id }); toast('Entry deleted'); }} className="hov" title="Delete entry"
-                  style={{ flex: 'none', width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="trash" size={13} color="var(--tx3)" />
-                </button>
-              </div>
-            ))}
-            <InlineAdd placeholder="Log a symptom, dose or reading" cta="Log" onAdd={(v) => addVital.mutate({ name: v })} />
-          </div>
-        </>
-      )}
-
-      {tab === 'food' && (
-        <>
-          <div style={CARD}>
-            <div style={KICKER}>Today</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '10px 0 12px' }}>
-              <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.035em', fontVariantNumeric: 'tabular-nums' }}>{kcal.toLocaleString()}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>kcal</div>
-            </div>
-            <div style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
-              <span>P {macro.p}g</span><span>C {macro.c}g</span><span>F {macro.f}g</span>
-            </div>
-          </div>
-
-          {SLOTS.map((slot) => {
-            const items = meals.filter((m) => m.slot === slot);
-            return (
-              <div key={slot} style={{ ...CARD, marginTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <div style={KICKER}>{slot}</div>
-                  <div style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>
-                    {items.reduce((s, m) => s + m.kcal, 0)} kcal
-                  </div>
-                </div>
-                {items.map((m) => (
-                  <div key={m.id} className="row" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 2px', borderBottom: '1px solid var(--line)' }}>
-                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>{m.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{m.kcal}</span>
-                    <button onClick={() => { delMeal.mutate({ id: m.id }); toast(`Removed “${m.name}”`); }} className="hov" title="Delete"
-                      style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="trash" size={13} color="var(--tx3)" />
-                    </button>
-                  </div>
-                ))}
-                <InlineAdd placeholder={`Add to ${slot.toLowerCase()}`} cta="Add"
-                  onAdd={(v) => addMeal.mutate({ on_date: today, name: v, slot, kcal: 0, protein: 0, carbs: 0, fat: 0 })} />
-              </div>
-            );
-          })}
-        </>
-      )}
-
-      {tab === 'gym' && (
-        <div style={CARD}>
-          <div style={KICKER}>Week plan</div>
-          <div style={{ marginTop: 10 }}>
-            {gym.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '10px 2px' }}>No plan yet.</div>}
-            {gym.map((g) => (
-              <button key={g.id} onClick={() => toggleGym.mutate({ id: g.id, done: !g.done })} className="row"
-                style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '12px 2px', borderBottom: '1px solid var(--line)', minHeight: 48, textAlign: 'left' }}>
-                <span style={{ width: 30, fontSize: 9.5, fontWeight: 700, letterSpacing: '.08em', color: 'var(--tx3)' }}>{DAYS_SHORT[g.weekday]}</span>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, opacity: g.done ? 0.55 : 1 }}>{g.name}</span>
-                <span className={g.done ? 'cellpop' : undefined} style={{
-                  width: 24, height: 24, borderRadius: 8, display: 'grid', placeItems: 'center',
-                  border: g.done ? 'none' : '1.5px solid var(--line2)',
-                  background: g.done ? PAL.mint : 'transparent',
-                  color: '#0C0F16', fontSize: 11, fontWeight: 700,
-                }}>{g.done ? '✓' : ''}</span>
-              </button>
-            ))}
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 10 }}>
+            <div style={KICKER}>Weight, this month</div>
+            <Ribbon points={weights} />
+            <button
+              onClick={() => void ask('Weight today', { initial: String(day?.weight ?? ''), placeholder: 'kg' })
+                .then((v) => { if (v) set({ weight: Number(v) || null }); })}
+              className="hov k-squish"
+              style={{ justifySelf: 'start', padding: '7px 13px', borderRadius: 999, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
+              Log today's
+            </button>
           </div>
         </div>
+      )}
+
+      {/* ---------------------------------------------------------- trained */}
+      {tab === 'trained' && (
+        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '340px minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12 }}>
+            <div style={KICKER}>This week — tap where you trained</div>
+            <BodyMap heat={heat} onTap={logWorkout} />
+          </div>
+
+          <div style={{ ...CARD, padding: '16px 16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={KICKER}>Sessions</div>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>
+                {workouts.length} in four weeks
+              </span>
+            </div>
+
+            {workouts.length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: 0 }}>
+                Nothing logged yet. Tap a muscle group on the body and it goes in with today's date —
+                that is also what the gym challenges count.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {workouts.map((w) => (
+                <div key={w.id} className="row" style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 4px',
+                  borderBottom: '1px solid var(--line)',
+                }}>
+                  <Icon name="gym" size={14} color={PAL.mint} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{w.name || 'Session'}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>
+                      {w.groups.map((g) => GROUP_LABEL[g as Group] ?? g).join(' · ') || '—'} · {w.minutes} min
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{w.on_date}</span>
+                  <button onClick={() => A.delWorkout.mutate({ id: w.id })} className="hov" aria-label={`Delete ${w.name}`}
+                    style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+                    <Icon name="close" size={12} color="var(--tx3)" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------ eaten */}
+      {tab === 'eaten' && (
+        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '300px minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
+          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12, justifyItems: 'center' }}>
+            <div style={{ ...KICKER, justifySelf: 'start' }}>Fuel today</div>
+            <Rings size={150} rings={[
+              { label: 'Calories', value: kcal, goal: GOALS.kcal, color: PAL.amber, unit: 'kcal' },
+              { label: 'Protein', value: macro.p, goal: 110, color: PAL.coral, unit: 'g' },
+              { label: 'Carbs', value: macro.c, goal: 260, color: PAL.mint, unit: 'g' },
+            ]} />
+            <div style={{ display: 'flex', gap: 14 }}>
+              <Stat label="kcal" value={String(kcal)} unit={`of ${GOALS.kcal}`} color={PAL.amber} />
+              <Stat label="protein" value={`${macro.p}g`} unit="" color={PAL.coral} />
+              <Stat label="carbs" value={`${macro.c}g`} unit="" color={PAL.mint} />
+              <Stat label="fat" value={`${macro.f}g`} unit="" color={PAL.violet} />
+            </div>
+          </div>
+
+          <div style={{ ...CARD, padding: '16px 16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={KICKER}>Meals</div>
+              <button onClick={() => setAdding(true)} className="k-squish"
+                style={{
+                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px',
+                  borderRadius: 10, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800, minHeight: 34,
+                }}>
+                <Icon name="photo" size={13} color="var(--ink)" />Photograph one
+              </button>
+            </div>
+
+            {meals.length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: 0 }}>
+                Nothing today. Point the camera at a plate — it estimates the numbers and you check them
+                before anything is saved.
+              </p>
+            )}
+
+            {meals.map((m) => <MealRow key={m.id} meal={m} onDelete={() => A.delMeal.mutate({ id: m.id })} />)}
+          </div>
+        </div>
+      )}
+
+      {adding && (
+        <MealSheet on={today} onClose={() => setAdding(false)}
+          onSave={(m) => { A.addMeal.mutate(m); toast(`${m.name} added`); }} />
       )}
     </div>
   );
 }
 
-function InlineAdd({ placeholder, cta, onAdd }: { placeholder: string; cta: string; onAdd: (v: string) => void }) {
-  const [v, setV] = useState('');
-  const submit = () => { const t = v.trim(); if (!t) return; onAdd(t); setV(''); };
+function MealRow({ meal: m, onDelete }: { meal: Meal; onDelete: () => void }) {
   return (
-    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-      <input value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()}
-        placeholder={placeholder}
-        style={{ flex: 1, minHeight: 36, padding: '9px 12px', borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5 }} />
-      <button onClick={submit} className="acc"
-        style={{ flex: 'none', padding: '0 15px', minHeight: 36, borderRadius: 10, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
-        {cta}
+    <div className="row" style={{
+      display: 'flex', alignItems: 'center', gap: 11, padding: '9px 4px', borderBottom: '1px solid var(--line)',
+    }}>
+      <span style={{
+        width: 34, height: 34, flex: 'none', borderRadius: 10, display: 'grid', placeItems: 'center',
+        background: 'var(--card2)',
+      }}>
+        <Icon name="food" size={15} color={PAL.amber} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{m.name}</span>
+        <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>
+          {m.slot} · {m.protein}p {m.carbs}c {m.fat}f
+        </span>
+      </span>
+      <span style={{ fontSize: 12.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{m.kcal}</span>
+      <button onClick={onDelete} className="hov" aria-label={`Delete ${m.name}`}
+        style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+        <Icon name="close" size={12} color="var(--tx3)" />
       </button>
+    </div>
+  );
+}
+
+function Stat({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color, letterSpacing: '-.02em', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+      <div style={{ ...KICKER, marginTop: 2 }}>{label}{unit ? ` ${unit}` : ''}</div>
     </div>
   );
 }

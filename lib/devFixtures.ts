@@ -162,8 +162,8 @@ export function seedDevFixtures() {
   ]);
 
   seed(['accounts'], [
-    { id: 'a1', name: 'Cash', kind: 'cash', color: '#34D9A0' },
-    { id: 'a2', name: 'Maribank', kind: 'ewallet', color: '#7C8CFF' },
+    { id: 'a1', name: 'Cash', kind: 'cash', color: '#34D9A0', opening_centavos: 450000 },
+    { id: 'a2', name: 'Maribank', kind: 'ewallet', color: '#7C8CFF', opening_centavos: 1250000 },
   ]);
   seed(['budgets'], [
     { id: 'b1', category: 'Food', period: 'monthly', amount_centavos: 600000 },
@@ -383,6 +383,31 @@ export function seedDevFixtures() {
     nospend: mineSeries([1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1]),
     written: mineSeries([1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0]),
   });
+
+  // Body: a month of days so the rings, the ribbon and the arc all have
+  // something, and enough sessions that the map runs warm in places.
+  const bodyDay = (back: number, water: number, steps: number, weight: number, from: string, to: string) => ({
+    on_date: ymdOf(-back), water, steps, weight,
+    sleep_from: from, sleep_to: to,
+    sleep_h: Math.round(((Number(to.slice(0, 2)) + 24 - Number(from.slice(0, 2))) % 24) * 10) / 10,
+  });
+  seed(['body_days'], [
+    bodyDay(0, 5, 6820, 68.2, '23:40', '07:10'),
+    bodyDay(1, 8, 11240, 68.4, '23:10', '06:50'),
+    bodyDay(2, 6, 4310, 68.4, '00:20', '08:00'),
+    bodyDay(3, 7, 9870, 68.6, '22:50', '06:40'),
+    bodyDay(5, 4, 7220, 68.9, '01:10', '08:30'),
+    bodyDay(8, 6, 8410, 69.1, '23:30', '07:00'),
+    bodyDay(12, 7, 10120, 69.4, '23:00', '06:30'),
+    bodyDay(18, 5, 5980, 69.8, '00:40', '08:10'),
+    bodyDay(25, 6, 7640, 70.2, '23:20', '07:20'),
+  ]);
+
+  seed(['meals'], [
+    { id: 'ml1', on_date: ymdOf(0), name: 'Tapsilog', slot: 'Breakfast', kcal: 620, protein: 34, carbs: 68, fat: 22, photo_path: null },
+    { id: 'ml2', on_date: ymdOf(0), name: 'Chicken rice, canteen', slot: 'Lunch', kcal: 540, protein: 38, carbs: 62, fat: 14, photo_path: null },
+    { id: 'ml3', on_date: ymdOf(0), name: 'Iced coffee and a pandesal', slot: 'Snack', kcal: 260, protein: 6, carbs: 40, fat: 8, photo_path: null },
+  ]);
 
   seed(['workouts'], [
     { id: 'w1', on_date: ymdOf(-1), name: 'Push day', groups: ['chest', 'arms'], minutes: 55 },

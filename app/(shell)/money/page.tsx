@@ -9,22 +9,36 @@ import { PAL } from '@/lib/pal';
 import {
   useTransactions, useAccounts, useBudgets, useToBuy, useMoneyActions,
   useGoals, useSubs, useBudgetActions, useGoalActions, useSubActions, useBuyActions,
-  peso, parseAmount, verifyPin, lockedSections,
+  peso, verifyPin, lockedSections,
 } from '@/lib/money';
 import { InlineForm, AddButton, RowActions, toCentavos, fromCentavos } from '@/components/MoneyRows';
+import { TabRail } from '@/components/TabRail';
+import { RunwayGauge, Stacks, Jars, colourOf } from '@/components/money/Instruments';
+import { QuickAdd } from '@/components/money/QuickAdd';
+import { burnPerDay, runwayDays, runwayFill, byCategory, monthStart } from '@/lib/runway';
 import { toast } from '@/lib/toast';
 
 /** Ported from Basedly.dc.html markup 2102–2183. */
 
 /**
- * Six tabs for one student's money was more navigation than content: four of
- * them held a single list, and Overview restated numbers that Budgets already
- * showed. Three now, grouped by the question being asked.
+ * Three tabs, grouped by the question being asked.
  *
- *   Overview  where do I stand — accounts, this month, budgets against actuals
+ *   Overview  how long can I keep going — the runway, where it went, what is
+ *             left in each jar
  *   Activity  what happened, and what is about to — transactions and the
  *             to-buy list, which is only a transaction that has not happened
  *   Plan      money already spoken for — goals and subscriptions
+ *
+ * Overview used to open on three account balances and a month total, which is
+ * a bank statement: true, and no help. A student does not need a ledger, they
+ * need to know whether they can eat out on Thursday. So it leads with days of
+ * runway at their own rate of spending, then the month as stacks you can
+ * compare at a glance, then budgets as jars that drain.
+ *
+ * Adding a transaction is a number pad and six buttons — the shape of every
+ * card machine, which is where you are standing when you use it — or a
+ * photograph of the receipt, read by the same scanner as the timetable and the
+ * dinner plate.
  */
 const TABS = ['Overview', 'Activity', 'Plan'] as const;
 type Tab = (typeof TABS)[number];
@@ -32,7 +46,6 @@ type Tab = (typeof TABS)[number];
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
 const MINT = '#2FDCA6';
-const CATS = ['Food', 'Transport', 'School', 'Other'];
 
 export default function MoneyPage() {
   const [locked, setLocked] = useState<boolean | null>(null);
@@ -71,8 +84,7 @@ function PinGate({ onPass }: { onPass: () => void }) {
 function Money() {
   const { phone } = useLayout();
   const [tab, setTab] = useState<Tab>('Overview');
-  const [amt, setAmt] = useState('');
-  const [cat, setCat] = useState(CATS[0]);
+  const [adding, setAdding] = useState(false);
 
   const { data: txns = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
@@ -96,85 +108,83 @@ function Money() {
   const monthOut = monthTx.reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
 
   const balances = new Map<string, number>();
-  for (const a of accounts) balances.set(a.id, 0);
+  for (const a of accounts) balances.set(a.id, a.opening_centavos ?? 0);
   for (const t of txns) if (t.account_id) balances.set(t.account_id, (balances.get(t.account_id) ?? 0) - Math.abs(t.amount_centavos));
 
   const spentBy = (c: string) => monthTx.filter((t) => t.category === c).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
+
+  /* The one number the screen is for, and the two pictures under it. */
+  const balance = [...balances.values()].reduce((s, v) => s + v, 0);
+  const burn = burnPerDay(txns, 30);
+  const days = runwayDays(balance, burn);
+  const spend = byCategory(txns, monthStart(), Date.now());
+  const jars = budgets.map((b) => ({ category: b.category, budget: b.amount_centavos, spent: spentBy(b.category) }));
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 820, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 className="sronly">Money</h1>
-        <div className="hbar" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', overflowX: 'auto' }}>
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              flex: 'none', padding: '6px 13px', borderRadius: 9, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
-              background: tab === t ? 'var(--acc)' : 'transparent',
-              color: tab === t ? '#0C0F16' : 'var(--tx2)', transition: 'background .24s, color .24s',
-            }}>{t}</button>
-          ))}
-        </div>
+        <TabRail tabs={TABS.map((t) => ({ id: t, label: t }))} value={tab} onChange={setTab}
+          phone={phone} label="Money sections" />
+
+        <button onClick={() => setAdding(true)} className="k-squish"
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px',
+            borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, minHeight: 38,
+          }}>
+          <Icon name="plus" size={14} color="var(--ink)" />Spent
+        </button>
       </div>
 
       {tab === 'Overview' && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-            {accounts.map((a) => (
-              <div key={a.id} style={CARD}>
-                <div style={KICKER}>{a.name}</div>
-                <div style={{ fontSize: 25, fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '8px 0 3px' }}>
-                  {peso(balances.get(a.id) ?? 0)}
+          {/* The one number the screen is for. Balance divided by your own
+              rate of spending, which is a question a bank statement never
+              answers however many rows it has. */}
+          <div style={{ ...CARD, display: 'grid', gap: 6 }}>
+            <div style={KICKER}>How long you can keep going</div>
+            <RunwayGauge days={days} fill={runwayFill(days)} burn={burn} />
+            <div style={{
+              display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
+              paddingTop: 6, borderTop: '1px solid var(--line)',
+            }}>
+              {accounts.map((a) => (
+                <div key={a.id} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                    {peso(balances.get(a.id) ?? 0)}
+                  </div>
+                  <div style={KICKER}>{a.name}</div>
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{a.kind}</div>
-              </div>
-            ))}
-            <div style={CARD}>
-              <div style={KICKER}>This month</div>
-              <div style={{ display: 'flex', gap: 18, marginTop: 9 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>In</div>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: MINT, fontVariantNumeric: 'tabular-nums' }}>{peso(0)}</div>
+              ))}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral, fontVariantNumeric: 'tabular-nums' }}>
+                  {peso(monthOut)}
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>Out</div>
-                  <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{peso(monthOut)}</div>
-                </div>
+                <div style={KICKER}>out this month</div>
               </div>
             </div>
           </div>
 
+          {/* Height is money. Four stacks says in a second what four rows of
+              pesos says in ten. */}
           <div style={{ ...CARD, marginTop: 12 }}>
-            <div style={KICKER}>Quick add</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--tx3)' }}>₱</span>
-              <input value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" placeholder="75"
-                style={{ width: 110, fontSize: 26, fontWeight: 800, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums', borderBottom: '1px solid var(--line2)' }} />
-              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                {CATS.map((c) => (
-                  <button key={c} onClick={() => setCat(c)} style={{
-                    padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 600,
-                    border: `1px solid ${cat === c ? 'var(--acc)' : 'var(--line2)'}`,
-                    color: cat === c ? 'var(--acc)' : 'var(--tx2)',
-                  }}>{c}</button>
-                ))}
-              </div>
-              <button onClick={() => {
-                A.addTxn.mutate({ id: crypto.randomUUID(), name: cat, amount_centavos: parseAmount(amt), category: cat, account_id: accounts[0]?.id ?? null });
-                setAmt('');
-              }} className="acc"
-                style={{ marginLeft: 'auto', padding: '10px 18px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 13, fontWeight: 800 }}>
-                Add
-              </button>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 4 }}>
+              <div style={KICKER}>Where it went</div>
+              <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>this month</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', borderRadius: 12, border: '1.5px dashed var(--line2)' }}>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--card2)', display: 'grid', placeItems: 'center' }}>
-                <Icon name="photo" size={16} color="var(--tx3)" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700 }}>Scan a receipt</div>
-                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>Pre-fills amount, merchant and date for you to confirm</div>
+            <Stacks spend={spend} />
+          </div>
+
+          {/* A budget is an envelope that drains — how much is left is the
+              thing you act on, not what percentage has gone. */}
+          <div style={{ ...CARD, marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
+              <div style={KICKER}>What is left in each jar</div>
+              <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>
+                {jars.length ? `${jars.filter((j) => j.spent < j.budget).length} of ${jars.length} still have room` : ''}
               </div>
             </div>
+            <Jars jars={jars} />
           </div>
 
           {/* Budgets belong next to what was actually spent. On their own tab
@@ -454,6 +464,16 @@ function Money() {
           )}
         </div>
         </>
+      )}
+      {adding && (
+        <QuickAdd onClose={() => setAdding(false)}
+          onAdd={(d) => {
+            A.addTxn.mutate({
+              id: crypto.randomUUID(), name: d.name, amount_centavos: d.amount_centavos,
+              category: d.category, account_id: accounts[0]?.id ?? null,
+            });
+            toast(`${peso(d.amount_centavos)} on ${d.category}`);
+          }} />
       )}
     </div>
   );

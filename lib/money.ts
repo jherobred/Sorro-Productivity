@@ -16,7 +16,7 @@ export type Txn = {
   deleted_at: string | null;
 };
 
-export type Account = { id: string; name: string; kind: string; color: string };
+export type Account = { id: string; name: string; kind: string; color: string; opening_centavos: number };
 export type Budget = { id: string; category: string; period: string; amount_centavos: number };
 export type ToBuy = { id: string; name: string; amount_centavos: number; bought_at: string | null };
 
@@ -60,7 +60,7 @@ export function useAccounts() {
   return useQuery({
     queryKey: ACC_KEY,
     queryFn: async (): Promise<Account[]> => {
-      const { data, error } = await supabase.from('bd_accounts').select('id,name,kind,color').order('position');
+      const { data, error } = await supabase.from('bd_accounts').select('id,name,kind,color,opening_centavos').order('position');
       if (error) throw error;
       return data ?? [];
     },

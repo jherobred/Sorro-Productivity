@@ -125,8 +125,12 @@ export function useMyMetric(
           return sumByDay(rows, from, to);
         }
         case 'nospend': {
+          // Every row in bd_transactions is money going out — the amount is
+          // stored positive and the whole app abs()es it. Filtering on a
+          // negative amount, which is what "spend" looks like in most ledgers,
+          // would have matched nothing here and scored every day a clean one.
           const { data } = await supabase.from('bd_transactions').select('occurred_at,amount_centavos')
-            .is('deleted_at', null).lt('amount_centavos', 0)
+            .is('deleted_at', null).neq('amount_centavos', 0)
             .gte('occurred_at', startISO).lte('occurred_at', endISO);
           return absentByDay((data ?? []).map((r) => localDay(r.occurred_at as string)), from, to);
         }
