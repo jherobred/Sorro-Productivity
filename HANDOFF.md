@@ -3,7 +3,7 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-20 (messaging, post view, schedule scanner, community merge).
+Last updated: 2026-08-20 (challenges rebuilt, Body and Money redrawn).
 
 ---
 
@@ -113,6 +113,54 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-20 (challenges, Body, Money)
+
+**Challenges count themselves.** This is the change everything else hangs off.
+A challenge names a source and reads it — `lib/metrics.ts` has one query per
+metric (tasks ticked, habits kept, workouts, steps, study blocks, no-spend
+days, days written) and every one of them touches **only the signed-in user's
+own rows**, because RLS means it can touch no one else's. Your session works
+out your own day series and publishes the counts to `bd_challenge_days`; the
+count travels, the data does not. `manual` is the fallback, not the default.
+
+`lib/series.ts` is the day arithmetic (pure, `node lib/series.check.ts`).
+`components/challenges/Arena.tsx` is the track — CSS `rotateX` on the floor and
+an equal and opposite one on each token. Templates, duels, RP stakes, and a
+podium the settled challenge draws on a canvas and posts to the feed.
+
+**Three.js is in the app, in exactly one place.** `TrophyRoom.tsx` medals are
+CSS; tapping one `import()`s three and lights a real cup. Verified after a
+build: it lands in its own 676 KB chunk that nothing else references, so
+/community's first load is 220 kB and only someone who opens the room pays.
+There is a flat-medal fallback if the import fails.
+
+**Body**: `lib/body.ts` + `components/body/`. Rings, a glass you tap, a sleep
+arc you drag by its ends, a silhouette that warms where you trained. Schema
+(0006): `bd_workouts` is a dated log with muscle groups — `bd_gym_days` is a
+weekly *plan* with no dates and could never answer "sessions this fortnight" —
+and `bd_body_days` gained `sleep_from` / `sleep_to`.
+
+**Money**: `lib/runway.ts` (pure, checked) + `components/money/`. Days of
+runway at your own burn rate, the month as isometric coin stacks, budgets as
+jars that drain, and a number pad instead of a form.
+
+**`photo-read`** (deployed) is the third use of the scanner pipeline: a plate
+becomes a dish with macros, a receipt becomes merchant/total/date. One pass
+rather than schedule-scan's two, and the same rule — it fills in fields, a
+person presses the button.
+
+**A bug worth remembering**: my own `nospend` metric filtered
+`amount_centavos < 0`. Every row in `bd_transactions` is money *out*, stored
+positive, and the whole app `abs()`es it — so the filter matched nothing and
+would have scored every day a clean one. If you add anything that reads
+transactions, that is the convention.
+
+**Still not run signed in**: all three scanners (timetable, plate, receipt) and
+every write in this batch. Fixture mode is signed out, so what was verified is
+rendering and optimistic behaviour, not persistence.
 
 ---
 
@@ -426,14 +474,18 @@ In priority order:
      note card, a canvas card, a connection, and a graph view that shows them.
    - *Journal photos*: upload, replace, archive, delete, undo, and "Forever"
      from the drawer (the last one is the only path that touches storage).
-   - *Schedule import*: a real timetable through Calendar → Import. Check that
-     a model name resolves (the response says which one it used), that the
-     times land on the right days, and that the review table catches anything
-     it misread. This is the only path in the app that spends money per use.
-   - *Schedule import*: a real timetable through Calendar → Import. Check that
-     a model name resolves (the response says which one it used), that the
-     times land on the right days, and that the review table catches anything
-     it misread. This is the only path in the app that spends money per use.
+   - *The three scanners*: a real timetable through Calendar → Import, a plate
+     through Body → Eaten, a receipt through Money → Spent. Each response says
+     which model answered, so a fallback from `gemini-3.6-pro` to flash is
+     visible. These are the only paths in the app that spend money per use.
+   - *Challenges*: join one with an auto metric, tick a task, and check the bar
+     for today appears — that is the whole `bd_challenge_days` loop.
+   - *The three scanners*: a real timetable through Calendar → Import, a plate
+     through Body → Eaten, a receipt through Money → Spent. Each response says
+     which model answered, so a fallback from `gemini-3.6-pro` to flash is
+     visible. These are the only paths in the app that spend money per use.
+   - *Challenges*: join one with an auto metric, tick a task, and check the bar
+     for today appears — that is the whole `bd_challenge_days` loop.
 2. **The Journal's skipped bits**, if wanted: a rotating daily prompt above the
    page (a constant list, no schema), and weather chips (needs an API key, so it
    is a real decision rather than a small one). The window pane above the heat
