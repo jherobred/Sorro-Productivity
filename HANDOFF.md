@@ -3,7 +3,8 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-20 (challenges rebuilt, Body and Money redrawn).
+Last updated: 2026-08-23 (the gym log, the trail, and the constraint that was
+eating every import).
 
 ---
 
@@ -108,11 +109,111 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    production build. `.claude/launch.json` has `autoPort: true` so a second
    server does not fight over 3000.
 
-7. **The browser pane does not composite when hidden** — CSS animations sit at
+7. **`bd_events.source` is a CHECK constraint, and the app writes values it
+   did not list.** It allowed `('manual','timetable','task')` while the
+   timetable scanner wrote `'schedule_scan'` and the Google sync wrote
+   `'gcal_ics'` — so every row either of them inserted was refused, the whole
+   batch with it, and production held 31 events all of them `'manual'`.
+   Widened in `0007`. If you add a fifth writer, add its name there in the same
+   commit, and remember that a Postgres check failure takes down the *entire*
+   multi-row insert, not the offending row.
+
+8. **The browser pane does not composite when hidden** — CSS animations sit at
    `currentTime: 0`, so `getBoundingClientRect()` on anything with an entry
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-23 (gym log, mascots, the trail, calendar repairs)
+
+**The timetable import never once worked, and neither did the Google sync.**
+Two bugs stacked on the same insert, both fatal, neither visible. `source:
+'schedule_scan'` failed the check constraint above; and every occurrence of one
+class carried the *same* `external_id` (`sched:<batch>:<row>`), which collided
+on the unique index `bd_events_ext` from the second Tuesday onward. Either one
+kills the whole batch. `ScheduleImport.save()` then fired the mutation
+unawaited, announced "84 events added" and closed the sheet — so a refusal and
+a success looked identical. It is `await mutateAsync` now, the sheet stays open
+on failure, and the occurrence index is part of the id. Verified against
+production in a rolled-back transaction: 15 weekly occurrences insert in one
+statement.
+
+**A multi-day run is draggable.** `spanRuns` merges same-title, same-hour
+events on consecutive days into one bar, and the bar had `stopPropagation` on
+pointerdown and no drag — the only thing on the grid you could look at and not
+move. `A.moveRun(evs, dayDelta, hourDelta)` patches every member with one
+shared offset and one Undo. The run is clamped by its own ends so half a bar
+cannot walk off the week.
+
+**Clear all events** is in the calendar toolbar behind three doors: a count, a
+second confirmation, and a typed `CLEAR`. It is the same soft delete a single
+event gets — `deleted_at`, with the ids read first so the toast can offer Undo.
+The update itself carries no id list, because RLS already scopes it to you and
+four hundred uuids in a URL is a request no proxy forwards.
+
+**Every submenu in the app was invisible.** `ContextMenu`'s submenu was
+`position: absolute; left: 100%` inside the menu, and the menu is
+`overflowY: auto` — one axis not `visible` makes the other `auto` too, so the
+child was laid out outside a box that clips. It portals to `document.body` now
+with a measured position (measured, not `items.length * 38` — that guess is
+already in “Things tried that did NOT work” and it has burned a session once), stops pointerdown so the
+window's close listener does not unmount it before the click lands, and opens
+on tap as well as hover because the APK has no mouse.
+
+**The journal could not reach line twenty.** The textarea was `flex: 1` in a
+column with an `autosize` helper writing `style.height` on every keystroke —
+which the flex algorithm ignores, because it sizes flex items. So the box
+stayed at whatever the leaf gave it, `overflow: hidden` cut the rest, and no
+ancestor scrolled because none ever overflowed. It scrolls itself now;
+`background-attachment: local` is what keeps the ruled lines under the words.
+
+**The gym.** `lib/lift.ts` is the arithmetic (pure, `node lib/lift.check.ts`):
+a forty-movement catalogue, Epley's 1RM, volume, and what you did last time.
+`lib/gym.ts` is the rows, `0007` adds `bd_workout_sets`, and
+`components/body/Gym.tsx` is the screen — a session you fill while standing at
+the rack, the next set prefilled from the last, a rest clock on the tick, an
+estimated max, a four-week heat grid. `GROUPS` in `lib/body.ts` now re-exports
+`MUSCLES` from `lift.ts` so the catalogue and the body map cannot drift.
+`numeric(6,2)` arrives from PostgREST as a *string*: `useSets` casts it, and
+without that every volume concatenates instead of adding.
+
+**Challenges have faces.** `lib/mascot.ts` (pure, `node lib/mascot.check.ts`)
+picks one of eight animals from a user id and works out its mood.
+`components/challenges/Mascot.tsx` draws it; `app/kinetics.css` gives it a
+sub-two-pixel bob and a blink, both on `--anim` so the motion preference stops
+them. **The rule the moods are built on is that position never makes a face
+worse** — mood comes from whether that person moved recently, so somebody last
+on the board who went this morning looks exactly like the leader. The check
+file asserts it. The Arena is gone: a `rotateX` floor foreshortens, so equal
+gaps looked unequal depending where they were, and it drew a race with nobody
+in it. `Trail.tsx` is flat lanes with a creature on each, and the name pill
+flips to the animal's left past halfway or the leader's name falls off the card.
+
+**Also**: Gemini can be hidden from the feed (`prefs.hideBot`, a chip beside
+the filters — its challenges stay); messaging picks people from a list instead
+of asking you to spell a handle (`components/PeoplePicker.tsx`, used for a DM,
+a group with its members chosen up front, and adding to an existing group).
+
+**Migrations applied to production**: `0007_gym_and_import.sql`.
+
+**Verified in the browser (fixture mode)**: the gym's routine start, prefill
+(60 kg x 8 from last week), volume, TOP badge and rest clock; the mascots
+rendering with distinct animals and moods; the trail's lane geometry measured
+to stay inside the card; the hide-Gemini chip (9 posts to 7) and its pref; the
+people picker and its search; the multi-day span drag (committed, with the
+right toast); all three clear-all confirmations, including that a wrong word
+aborts. Both check files pass, and `npx tsc --noEmit` and `next build` are
+clean. **Not run signed in**: the writes, as always in fixture mode — but the
+import's insert was proved against production inside a transaction that rolled
+back.
+
+**One environment note**: `three` was missing from the local `node_modules`
+even though it is in `package-lock.json`, which fails `tsc` and the build at
+`TrophyRoom.tsx:115` with no code change to blame. `npm i three@0.170.0
+@types/three@0.170.0 --no-save` fixes it locally; Vercel's `npm ci` never had
+the problem.
 
 ---
 

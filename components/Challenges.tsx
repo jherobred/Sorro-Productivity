@@ -13,7 +13,9 @@ import { useRankUp, RankUpCard } from './RankUp';
 import { rankOf, standings, rpFor, TIERS, RULES, type RuleId } from '@/lib/rank';
 import { METRICS, TEMPLATES, DUEL, metricDef, useMyMetric, type MetricId, type Template } from '@/lib/metrics';
 import { totalOf, bestStreak, tail, normalise, ymd, type Series } from '@/lib/series';
-import { Arena, type Racer } from './challenges/Arena';
+import { Trail, type Walker } from './challenges/Trail';
+import { Mascot } from './challenges/Mascot';
+import { moodOf, daysSince, streakOf, nudge, type Mood } from '@/lib/mascot';
 import { TrophyRoom, type Won } from './challenges/TrophyRoom';
 import { uploadResult } from './challenges/resultCard';
 import {
@@ -249,40 +251,20 @@ function TemplatePicker({ onClose, onPick }: { onClose: () => void; onPick: (t: 
 /* -------------------------------------------------------- who is in this */
 
 /**
- * A person, as a coloured disc with their initials.
+ * Everyone in the challenge, shoulder to shoulder.
  *
- * The colour is derived from the id rather than stored, so the same person is
- * the same colour on every card without a lookup, and a challenge full of
- * strangers still reads as a group of distinct people.
+ * These used to be coloured discs holding two letters of a name. A challenge is
+ * other people, and the reason you go on a Tuesday is that somebody else did —
+ * which needs faces, not initials. Each person gets a creature derived from
+ * their id (so it costs no column and never changes) wearing a headband in
+ * their own colour, and its expression comes from whether *they* have been
+ * moving, never from where they sit on the board.
  */
-function Bubble({ name, id, size = 24, ring }: {
-  name?: string | null; id: string; size?: number; ring?: string;
+function Faces({ members, me, color, moodFor }: {
+  members: { user_id: string; display_name: string | null }[];
+  me: string; color: string;
+  moodFor: (id: string) => Mood;
 }) {
-  const label = (name ?? '??').trim();
-  const initials = label === 'You'
-    ? 'YOU'
-    : (label.split(/\s+/).map((w) => w[0]).join('').slice(0, 2) || '?').toUpperCase();
-
-  return (
-    <span title={label} aria-hidden style={{
-      width: size, height: size, flex: 'none', borderRadius: '50%',
-      display: 'grid', placeItems: 'center',
-      fontSize: size * (initials.length > 2 ? 0.3 : 0.4), fontWeight: 800, color: '#0C0F16',
-      background: hueOf(id),
-      boxShadow: ring ? `0 0 0 2px var(--card), 0 0 0 3.5px ${ring}` : undefined,
-    }}>
-      {initials}
-    </span>
-  );
-}
-
-/**
- * Everyone in the challenge, overlapped the way a shared-document avatar stack
- * is. A name column tells you who is winning; this tells you at a glance how
- * many people you are up against, which is the thing that decides whether a
- * challenge feels worth joining.
- */
-function Faces({ members, me, color }: { members: { user_id: string; display_name: string | null }[]; me: string; color: string }) {
   if (members.length === 0) return null;
   const shown = members.slice(0, 8);
   const rest = members.length - shown.length;
@@ -291,8 +273,9 @@ function Faces({ members, me, color }: { members: { user_id: string; display_nam
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
       <span style={{ display: 'flex' }}>
         {shown.map((m, i) => (
-          <span key={m.user_id} style={{ marginLeft: i ? -8 : 0, border: '2px solid var(--card)', borderRadius: '50%', display: 'flex' }}>
-            <Bubble id={m.user_id} name={m.user_id === me ? 'You' : m.display_name} size={24} />
+          <span key={m.user_id} title={m.user_id === me ? 'You' : m.display_name ?? ''}
+            style={{ marginLeft: i ? -9 : 0, display: 'flex' }}>
+            <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={28} />
           </span>
         ))}
         {rest > 0 && (
@@ -436,7 +419,7 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
   const rule = RULES.find((r) => r.id === c.rule);
   const max = Math.max(c.target ?? 0, ...rows.map((r) => r.progress), 1);
   const left = daysLeft(c);
-  const [arena, setArena] = useState(false);
+  const [onTrail, setOnTrail] = useState(false);
   const [sharing, setSharing] = useState(false);
 
   /* ------------------------------------------------------------- the sync
@@ -477,13 +460,28 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
   const nameOf = (m: { user_id: string; display_name: string | null }) =>
     (m.user_id === me ? 'You' : displayOf(profiles, m.user_id, me).label);
 
-  const racers: Racer[] = rows.slice(0, 6).map((r) => ({
+  /**
+   * How each person is doing *by their own account*, which is the only input
+   * to how their animal looks. See lib/mascot.ts: the person at the back who
+   * went this morning gets the same bright face as the leader, because they
+   * did the same thing this morning.
+   */
+  const today = ymd(new Date());
+  const moodFor = (userId: string): Mood => moodOf({
+    daysSince: daysSince(seriesOf(userId), today),
+    leading: leader?.user_id === userId,
+  });
+
+  const walkers: Walker[] = rows.slice(0, 6).map((r) => ({
     id: r.user_id,
     label: nameOf(r),
-    color: r.place === 1 ? c.color : `color-mix(in srgb, ${c.color} 60%, #8892A6)`,
+    // Their own colour, not the challenge's: a lane of identical animals in
+    // identical colours is a chart again.
+    color: hueOf(r.user_id),
     at: max > 0 ? r.progress / max : 0,
     score: r.progress,
     you: r.user_id === me,
+    mood: moodFor(r.user_id),
   }));
 
   const share = async () => {
@@ -565,14 +563,14 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Faces members={rows} me={me} color={c.color} />
+          <Faces members={rows} me={me} color={c.color} moodFor={moodFor} />
         </div>
         <StarButton on={starred} count={stars} color={c.color}
           onToggle={() => A.star.mutate({ challenge_id: c.id, on: !starred })} />
       </div>
 
-      {arena ? (
-        <Arena racers={racers} unit={c.unit || metric.unit} target={c.rule === 'first_to' ? c.target : null} />
+      {onTrail ? (
+        <Trail walkers={walkers} unit={c.unit || metric.unit} target={c.rule === 'first_to' ? c.target : null} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {rows.slice(0, 6).map((m) => {
@@ -586,8 +584,8 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
                 }}>
                   {m.place}
                 </span>
-                <Bubble name={you ? 'You' : displayOf(profiles, m.user_id, me).label} id={m.user_id} size={22}
-                  ring={m.place === 1 ? c.color : undefined} />
+                <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={26}
+                  crown={m.place === 1} />
                 <span style={{
                   width: 62, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
                   color: you ? 'var(--accTx)' : 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -620,15 +618,36 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
         </div>
       )}
 
+      {/* One line, to you, about the next day rather than the gap. The gap is
+          on the board already; saying it again in words is only a second way of
+          telling somebody they are losing. */}
+      {joined && phase === 'live' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 9, marginTop: 10, padding: '8px 11px',
+          borderRadius: 11, background: 'var(--card2)', border: '1px solid var(--line)',
+        }}>
+          <Mascot id={me} mood={moodFor(me)} hue={hueOf(me)} size={30} />
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', lineHeight: 1.5 }}>
+            {nudge({
+              mood: moodFor(me),
+              streak: streakOf(seriesOf(me), today),
+              leading: leader?.user_id === me,
+              leader: leader ? nameOf(leader) : null,
+              daysLeft: left,
+            })}
+          </span>
+        </div>
+      )}
+
       {rows.length > 0 && (
-        <button onClick={() => setArena((v) => !v)} className="hov k-squish"
+        <button onClick={() => setOnTrail((v) => !v)} className="hov k-squish"
           style={{
             display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '5px 11px',
             borderRadius: 999, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700,
-            color: arena ? 'var(--accTx)' : 'var(--tx3)',
+            color: onTrail ? 'var(--accTx)' : 'var(--tx3)',
           }}>
-          <Icon name={arena ? 'list' : 'focus'} size={12} color={arena ? 'var(--accTx)' : 'var(--tx3)'} />
-          {arena ? 'Standings' : 'Arena'}
+          <Icon name={onTrail ? 'list' : 'walk'} size={12} color={onTrail ? 'var(--accTx)' : 'var(--tx3)'} />
+          {onTrail ? 'Standings' : 'The trail'}
         </button>
       )}
 
@@ -670,7 +689,7 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
           borderTop: '1px solid var(--line)', fontSize: 10.5, color: 'var(--tx3)',
         }}>
           <Icon name="check" size={11} color={c.color} />
-          Nothing to do here — go and {metric.label.toLowerCase()}.
+          Nothing to log here — it counts {metric.hint.toLowerCase()}.
         </p>
       )}
 

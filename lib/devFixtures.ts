@@ -415,6 +415,19 @@ export function seedDevFixtures() {
     { id: 'w3', on_date: ymdOf(-4), name: 'Run', groups: ['cardio'], minutes: 32 },
   ]);
 
+  // Enough history for the gym screen to have something to prefill from and a
+  // best to beat. Bench climbs 55 → 60 across the two push days on purpose.
+  seed(['workout_sets'], [
+    { id: 'ws1', workout_id: 'w1', exercise: 'Bench press', position: 0, weight_kg: 60, reps: 8, done: true },
+    { id: 'ws2', workout_id: 'w1', exercise: 'Bench press', position: 1, weight_kg: 60, reps: 7, done: true },
+    { id: 'ws3', workout_id: 'w1', exercise: 'Overhead press', position: 2, weight_kg: 35, reps: 8, done: true },
+    { id: 'ws4', workout_id: 'w1', exercise: 'Cable pushdown', position: 3, weight_kg: 25, reps: 12, done: true },
+    { id: 'ws5', workout_id: 'w2', exercise: 'Deadlift', position: 0, weight_kg: 100, reps: 5, done: true },
+    { id: 'ws6', workout_id: 'w2', exercise: 'Barbell row', position: 1, weight_kg: 50, reps: 10, done: true },
+    { id: 'ws7', workout_id: 'w2', exercise: 'Pull-up', position: 2, weight_kg: 0, reps: 8, done: true },
+    { id: 'ws8', workout_id: 'w3', exercise: 'Run', position: 0, weight_kg: 0, reps: 32, done: true },
+  ]);
+
   seed(['notebooks'], [
     { id: 'nb1', name: '3rd year', color: '#7C8CFF', position: 0, created_at: iso(-40, 9) },
     { id: 'nb2', name: 'Capstone research', color: '#B07CFF', position: 1, created_at: iso(-20, 9) },

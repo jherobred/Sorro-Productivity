@@ -157,33 +157,43 @@ export function ContextMenu({
   );
 }
 
+const SUB_W = 200;
+
 /**
  * A row, and its submenu when it has one.
  *
- * The submenu opens to the right and flips left near the edge, so a menu
- * already pushed against the window does not push its child off it.
+ * **The submenu is a portal, not a child.** It used to be `position: absolute;
+ * left: 100%` inside the menu — and the menu is a scroll container
+ * (`overflowY: auto`, because a fifteen-item menu has to be reachable on a
+ * short window). CSS makes the other axis `auto` too the moment one axis is
+ * not `visible`, so the whole submenu was laid out *outside* a box that clips:
+ * you hovered a row with an arrow on it and nothing appeared. Every submenu in
+ * the app was invisible for that one reason.
+ *
+ * On the viewport it cannot be clipped by anything, and each level portals in
+ * turn, so a submenu of a submenu behaves the same. It opens to the right of
+ * its row and flips left near the edge.
  */
 function Row({ it, onClose, accent, dark }: {
   it: CtxItem; onClose: () => void; accent: string; dark: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [side, setSide] = useState<'right' | 'left'>('right');
+  /** The row's own box, in viewport coordinates. Null while shut. */
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const shut = useRef<number | undefined>(undefined);
 
   const has = !!it.items?.length;
+  const open = !!anchor;
   const colour = it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx)';
 
   const show = () => {
     clearTimeout(shut.current);
     if (it.disabled || !has) return;
     const r = row.current?.getBoundingClientRect();
-    // 228 wide plus a little air; if it will not fit to the right, go left.
-    if (r) setSide(r.right + 236 > window.innerWidth ? 'left' : 'right');
-    setOpen(true);
+    if (r) setAnchor(r);
   };
   // A small delay on leave, so crossing the gap to the submenu does not shut it.
-  const hide = () => { shut.current = window.setTimeout(() => setOpen(false), 120); };
+  const hide = () => { shut.current = window.setTimeout(() => setAnchor(null), 120); };
 
   return (
     <div ref={row} style={{ position: 'relative' }} onPointerEnter={show} onPointerLeave={hide}>
@@ -196,7 +206,9 @@ function Row({ it, onClose, accent, dark }: {
         title={it.hint}
         onClick={() => {
           if (it.disabled) return;
-          if (has) { setOpen((v) => !v); return; }
+          // Tap opens it too — the APK has no hover, so a submenu that only
+          // answered the mouse was a dead row on the phone.
+          if (has) { if (open) setAnchor(null); else show(); return; }
           it.run?.();
           onClose();
         }}
@@ -220,20 +232,63 @@ function Row({ it, onClose, accent, dark }: {
         {has && <Icon name="expand" size={12} color="var(--tx3)" />}
       </button>
 
-      {has && open && (
-        <div role="menu" aria-label={it.label} className="pop"
-          onPointerEnter={show} onPointerLeave={hide}
-          style={{
-            ...lg({ tint: accent, strength: 0.95, radius: 13, dark }),
-            position: 'absolute', top: -4, zIndex: 61,
-            ...(side === 'right' ? { left: '100%', marginLeft: 4 } : { right: '100%', marginRight: 4 }),
-            width: 200, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto', padding: 5,
-          }}>
-          {it.items!.map((sub) => (
-            <Row key={sub.label} it={sub} onClose={onClose} accent={accent} dark={dark} />
-          ))}
-        </div>
+      {has && anchor && (
+        <SubMenu anchor={anchor} label={it.label} items={it.items!}
+          onEnter={show} onLeave={hide} onClose={onClose} accent={accent} dark={dark} />
       )}
     </div>
+  );
+}
+
+/**
+ * The submenu itself, on the viewport.
+ *
+ * Measured and then placed, never guessed: a menu clamped against
+ * `items.length * 38` once opened two hundred pixels away from the row that
+ * owned it, because a wrapped label or a font-scale of 1.375 makes that sum a
+ * fiction. It renders hidden, reads its own box, and only then takes a
+ * position — the same two-step the parent menu uses.
+ */
+function SubMenu({
+  anchor, label, items, onEnter, onLeave, onClose, accent, dark,
+}: {
+  anchor: DOMRect; label: string; items: CtxItem[];
+  onEnter: () => void; onLeave: () => void; onClose: () => void; accent: string; dark: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const M = 8;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const want = anchor.right + w + M > window.innerWidth ? anchor.left - w - 4 : anchor.right + 4;
+    setPos({
+      left: Math.min(Math.max(M, want), Math.max(M, window.innerWidth - w - M)),
+      top: Math.min(Math.max(M, anchor.top - 4), Math.max(M, window.innerHeight - h - M)),
+    });
+  }, [anchor, items.length]);
+
+  return createPortal(
+    <div ref={ref} role="menu" aria-label={label} className="pop"
+      onPointerEnter={onEnter} onPointerLeave={onLeave}
+      // Outside the parent menu's box now, so it needs its own guard: the
+      // window pointerdown that closes the menu fires before click, and a
+      // submenu that unmounts on pointerdown never receives the click that was
+      // choosing one of its rows.
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{
+        ...lg({ tint: accent, strength: 0.95, radius: 13, dark }),
+        position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999,
+        visibility: pos ? 'visible' : 'hidden',
+        width: SUB_W, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', padding: 5, zIndex: 61,
+      }}>
+      {items.map((sub) => (
+        <Row key={sub.label} it={sub} onClose={onClose} accent={accent} dark={dark} />
+      ))}
+    </div>,
+    document.body,
   );
 }

@@ -6,6 +6,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { settler } from './settle';
 import { toast } from './toast';
+import { isBot } from './bot';
 
 /**
  * One feed.
@@ -145,8 +146,15 @@ export function useComments(kind: Kind, id: string, enabled: boolean) {
 export type Sort = 'new' | 'top';
 export type Filter = 'all' | 'photo' | 'discussion';
 
-/** The stream: both tables, one order. */
-export function useFeed(sort: Sort, filter: Filter, reactions: Record<string, number>) {
+/**
+ * The stream: both tables, one order.
+ *
+ * `hideBot` drops the resident bot out of it. Its posts arrive on a timer —
+ * every two hours, five hours, Monday mornings — which is fine until it is the
+ * only thing in a quiet feed, and then a room of real people reads like a
+ * noticeboard. One switch, kept in prefs, so it follows you between devices.
+ */
+export function useFeed(sort: Sort, filter: Filter, reactions: Record<string, number>, hideBot = false) {
   const { data: posts = [] } = usePosts();
   const { data: threads = [] } = useThreads();
 
@@ -160,14 +168,14 @@ export function useFeed(sort: Sort, filter: Filter, reactions: Record<string, nu
         id: t.id, kind: 'discussion', author_id: t.author_id, title: t.title,
         body: t.body, tag: t.tag, image_path: null, created_at: t.created_at,
       })),
-    ].filter((i) => filter === 'all' || i.kind === filter);
+    ].filter((i) => (filter === 'all' || i.kind === filter) && !(hideBot && isBot(i.author_id)));
 
     // "Top" is by reactions, then recency — a tie on nought is still a feed,
     // not an arbitrary shuffle.
     return items.sort((a, b) => (sort === 'top'
       ? (reactions[key(b)] ?? 0) - (reactions[key(a)] ?? 0) || b.created_at.localeCompare(a.created_at)
       : b.created_at.localeCompare(a.created_at)));
-  }, [posts, threads, sort, filter, reactions]);
+  }, [posts, threads, sort, filter, reactions, hideBot]);
 }
 
 export const key = (i: Item | { kind: Kind; id: string }) => `${i.kind}:${i.id}`;

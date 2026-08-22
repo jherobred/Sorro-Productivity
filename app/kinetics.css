@@ -320,3 +320,64 @@
   animation: none;
 }
 .nomo .rankup-spark { display: none; }
+
+/* ---------------------------------------------------------------- mascots */
+/*
+ * The challenge animals, alive.
+ *
+ * Everything here is deliberately tiny: the bob is under two pixels, the blink
+ * is a few frames every six seconds, the ears twitch once in a while. A
+ * competitor that reads as breathing is the whole trick; one that bounces is a
+ * cartoon you stop being able to read the numbers next to.
+ *
+ * `--anim` is what the motion preference sets to `paused`, and `.nomo` is the
+ * belt to its braces — a person who asked the app to hold still gets a picture
+ * that holds still, and the drawing is complete without any of this.
+ */
+.mc { animation: mcbob 3.4s ease-in-out infinite; animation-play-state: var(--anim, running); }
+.mc.quick { animation-duration: 2.1s; }
+.mc.slow  { animation-duration: 5.4s; }
+@keyframes mcbob {
+  0%, 100% { transform: translateY(.6px) scaleY(.995); }
+  50%      { transform: translateY(-1.1px) scaleY(1.005); }
+}
+
+/* Four frames of eyelid out of six seconds, which is roughly a real blink. */
+.mc-eyes { transform-box: fill-box; transform-origin: center; animation: mcblink 6.2s infinite; animation-play-state: var(--anim, running); }
+@keyframes mcblink {
+  0%, 95%, 100% { transform: scaleY(1); }
+  96.5%, 98%    { transform: scaleY(.08); }
+}
+
+.mc-ears { transform-box: fill-box; transform-origin: bottom center; animation: mcear 7.5s ease-in-out infinite; animation-play-state: var(--anim, running); }
+@keyframes mcear {
+  0%, 82%, 100% { transform: rotate(0deg); }
+  86%           { transform: rotate(-3.5deg); }
+  92%           { transform: rotate(2.5deg); }
+}
+
+.mc-spark { transform-box: fill-box; transform-origin: center; animation: mcspark 2.4s ease-in-out infinite; animation-play-state: var(--anim, running); }
+@keyframes mcspark {
+  0%, 100% { transform: scale(.75) rotate(0deg); opacity: .55; }
+  50%      { transform: scale(1.12) rotate(22deg); opacity: 1; }
+}
+
+.mc-z { animation: mcz 3.6s ease-out infinite; animation-play-state: var(--anim, running); }
+@keyframes mcz {
+  0%       { opacity: 0; transform: translate(0, 2px); }
+  30%      { opacity: .6; }
+  100%     { opacity: 0; transform: translate(3px, -9px); }
+}
+
+.mc-crown { transform-box: fill-box; transform-origin: bottom center; animation: mccrown 4.2s ease-in-out infinite; animation-play-state: var(--anim, running); }
+@keyframes mccrown {
+  0%, 100% { transform: rotate(-3deg); }
+  50%      { transform: rotate(3deg); }
+}
+
+/* The trail: the ground each competitor has covered, and the walk along it. */
+.tr-walk { transition: left .9s cubic-bezier(.2, .8, .2, 1), right .9s cubic-bezier(.2, .8, .2, 1); }
+.tr-fill { transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+
+.nomo :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown) { animation: none; }
+.nomo :is(.tr-walk, .tr-fill) { transition: none; }

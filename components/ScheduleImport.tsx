@@ -139,7 +139,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
     // found and undone as a batch rather than event by event.
     const batch = crypto.randomUUID().slice(0, 8);
     const payload = chosen.flatMap((r) =>
-      occurrences(r, range.from, range.to).map((o) => ({
+      occurrences(r, range.from, range.to).map((o, i) => ({
         title: eventTitle(r),
         starts_at: o.starts_at,
         ends_at: o.ends_at,
@@ -147,13 +147,23 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
         location: r.location,
         color: r.color,
         source: 'schedule_scan',
-        external_id: `sched:${batch}:${r.id}`,
+        // The occurrence index is part of the id, not just the batch and the
+        // row. `bd_events_ext` is unique on (user_id, source, external_id), so
+        // stamping all fifteen Tuesdays of one class with the same id made the
+        // fifteenth collide with the first and Postgres refused the *whole*
+        // insert — one bad key, nought events.
+        external_id: `sched:${batch}:${r.id}:${i}`,
       })));
 
+    // Awaited, and the sheet stays open when it fails. It used to fire the
+    // mutation, announce "84 events added" and close, so an insert the
+    // database refused looked exactly like one it accepted.
     try {
-      write.mutate({ rows: payload });
+      await write.mutateAsync({ rows: payload });
       toast(`${payload.length} event${payload.length === 1 ? '' : 's'} added`);
       onClose();
+    } catch (e) {
+      toast(e instanceof Error ? `Not added — ${e.message}` : 'Could not add those');
     } finally {
       setSaving(false);
     }

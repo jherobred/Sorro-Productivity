@@ -211,6 +211,40 @@ const RESTORE = defineMutation('event.restore', async (v: { id: string }) => {
   if (error) throw error;
 });
 
+/**
+ * Empty the calendar.
+ *
+ * No id list on the wire: RLS already scopes every row to the signed-in user,
+ * so "everything of mine that is not already deleted" is one statement and
+ * cannot be defeated by a URL length limit at four hundred classes. The ids are
+ * read first anyway, because Undo needs them — this is the same soft delete a
+ * single event gets, so nothing is actually gone.
+ */
+const CLEAR_ALL = defineMutation('event.clearAll', async () => {
+  const { error } = await supabase.from('bd_events')
+    .update({ deleted_at: new Date().toISOString() }).is('deleted_at', null);
+  if (error) throw error;
+});
+
+const RESTORE_MANY = defineMutation('event.restoreMany', async (v: { ids: string[] }) => {
+  // Chunked: a thousand uuids in an `in.(...)` filter is a request no proxy
+  // will forward.
+  for (let i = 0; i < v.ids.length; i += 200) {
+    const { error } = await supabase.from('bd_events')
+      .update({ deleted_at: null }).in('id', v.ids.slice(i, i + 200));
+    if (error) throw error;
+  }
+});
+
+/** Every live event id of yours, for the count on the confirmation and for Undo. */
+export async function liveEventIds(): Promise<string[]> {
+  const fx = fixture<Ev[]>('events');
+  if (fx) return fx.map((e) => e.id);
+  const { data, error } = await supabase.from('bd_events').select('id').is('deleted_at', null);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.id as string);
+}
+
 // Snooze pushes the *reminder* 10 minutes, not the event.
 const SNOOZE = defineMutation('event.snooze', async (v: { id: string }) => {
   const until = new Date(Date.now() + 10 * 60_000).toISOString();
@@ -264,6 +298,14 @@ export function useEventActions(ws: Date) {
   });
 
   const restore = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE, onSettled: settle });
+  const restoreMany = useMutation<unknown, Error, { ids: string[] }>({ mutationKey: RESTORE_MANY, onSettled: settle });
+
+  const clearAll = useMutation<unknown, Error, void, [readonly unknown[], Ev[] | undefined][]>({
+    mutationKey: CLEAR_ALL,
+    onMutate: () => optimistic(() => []),
+    onError: rollback,
+    onSettled: settle,
+  });
   const snooze = useMutation<unknown, Error, { id: string }>({ mutationKey: SNOOZE, onSettled: settle });
 
   const remove = useMutation({
@@ -309,6 +351,30 @@ export function useEventActions(ws: Date) {
     );
   };
 
+  /**
+   * Move a whole run — the bar drawn over a class that meets at the same hour
+   * on consecutive days. It is N rows underneath, so this is N patches with one
+   * shared offset, and one Undo that puts all of them back.
+   *
+   * Without this a repeating class was the only thing on the grid you could not
+   * drag: the moment `spanRuns` merged it into a bar, the bar swallowed the
+   * pointer and no chip underneath was left to grab.
+   */
+  const moveRun = (evs: Ev[], dayDelta: number, hourDelta: number) => {
+    if (!evs.length || (dayDelta === 0 && hourDelta === 0)) return;
+    const len = hoursOf(evs[0].ends_at) - hoursOf(evs[0].starts_at);
+    const h = Math.max(GRID_START, Math.min(GRID_END - len, hoursOf(evs[0].starts_at) + hourDelta));
+    const before = evs.map((e) => ({ id: e.id, starts_at: e.starts_at, ends_at: e.ends_at }));
+
+    for (const e of evs) {
+      const day = dayIndex(e.starts_at, ws) + dayDelta;
+      update.mutate({ id: e.id, patch: { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) } });
+    }
+    toast(`Moved ${evs.length} day${evs.length === 1 ? '' : 's'} to ${hhmm(h)}`, () => {
+      for (const b of before) update.mutate({ id: b.id, patch: { starts_at: b.starts_at, ends_at: b.ends_at } });
+    });
+  };
+
   const resizeTo = (ev: Ev, endHour: number) => {
     const start = hoursOf(ev.starts_at);
     const h = Math.max(start + 0.5, Math.min(GRID_END, endHour));
@@ -337,5 +403,14 @@ export function useEventActions(ws: Date) {
     toast(`Deleted “${ev.title}”`, () => restore.mutate({ id: ev.id }));
   };
 
-  return { create, update, remove, restore, snooze, addAt, moveTo, resizeTo, duplicate, removeWithUndo };
+  /** Everything, soft-deleted, with the ids kept so Undo is one restore. */
+  const wipe = (ids: string[]) => {
+    clearAll.mutate(undefined);
+    toast(`${ids.length} event${ids.length === 1 ? '' : 's'} cleared`, () => restoreMany.mutate({ ids }));
+  };
+
+  return {
+    create, update, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
+    duplicate, removeWithUndo, wipe,
+  };
 }

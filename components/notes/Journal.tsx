@@ -180,17 +180,34 @@ export function Journal() {
         </div>
       </div>
 
+      {/**
+        * The page scrolls.
+        *
+        * It used to grow instead: an autosize helper set the textarea's height
+        * to its own scrollHeight on every keystroke. That never worked, and
+        * could not — the textarea is `flex: 1` in a column, and the flex
+        * algorithm sizes a flex item, not the `height` property. So the box
+        * stayed at whatever the leaf gave it (495px here, nineteen lines),
+        * `overflow: hidden` cut the rest off, and no ancestor scrolled because
+        * none of them ever overflowed. Everything past line nineteen was
+        * written, saved, and unreachable.
+        *
+        * `background-attachment: local` is what keeps the ruled lines under the
+        * words as they move; the default paints them on the box, so they would
+        * sit still while the text slid over them.
+        */}
       <textarea
-        ref={(el) => { if (el) autosize(el); }}
+        className="navsb"
         value={text}
-        onChange={(e) => { write(e.target.value); autosize(e.target); }}
+        onChange={(e) => write(e.target.value)}
         placeholder="How was today?"
         aria-label={`Journal entry for ${dateLong}`}
         style={{
-          width: '100%', flex: 1, minHeight: LINE_H * 8, resize: 'none', overflow: 'hidden',
+          width: '100%', flex: 1, minHeight: LINE_H * 8, resize: 'none', overflowY: 'auto',
           fontFamily: SERIF, fontSize: 13.5, lineHeight: `${LINE_H}px`, color: 'var(--tx)',
           padding: 0, background: 'transparent',
           backgroundImage: `repeating-linear-gradient(180deg, transparent 0 ${LINE_H - 1}px, var(--line) ${LINE_H - 1}px ${LINE_H}px)`,
+          backgroundAttachment: 'local',
         }} />
     </div>
   );
@@ -358,8 +375,3 @@ const navChip: React.CSSProperties = {
   minHeight: 30, padding: '0 12px', borderRadius: 9, border: '1px solid var(--line2)',
   fontSize: 11, fontWeight: 700, color: 'var(--tx2)',
 };
-
-function autosize(el: HTMLTextAreaElement) {
-  el.style.height = 'auto';
-  el.style.height = `${Math.max(el.scrollHeight, LINE_H * 8)}px`;
-}

@@ -9,10 +9,11 @@ import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
+import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels,
-  isReadOnly, GRID_START, GRID_END, type Ev, type Span,
+  isReadOnly, liveEventIds, GRID_START, GRID_END, type Ev, type Span,
 } from '@/lib/events';
 
 /**
@@ -140,6 +141,39 @@ export default function CalendarPage() {
     toast(hour === null ? `${t.title} — no set time` : `${t.title} at ${hhmm(hour)}`);
   };
 
+  /**
+   * Empty the calendar, behind three doors.
+   *
+   * This is the one control on the screen that can undo a whole term of
+   * imports, so it asks three times and the last one wants the word typed —
+   * a fat thumb cannot get through that, and a person who means it barely
+   * notices. It is still a soft delete with an Undo in the toast.
+   */
+  const clearEverything = async () => {
+    const ids = await liveEventIds().catch(() => null);
+    if (!ids) { toast('Could not read your calendar'); return; }
+    if (!ids.length) { toast('Nothing to clear'); return; }
+
+    const first = await confirmAsk(`Clear all ${ids.length} event${ids.length === 1 ? '' : 's'}?`, {
+      message: 'Everything on your calendar, in every week — not only what is on screen.',
+      confirmLabel: 'Continue', danger: true,
+    });
+    if (!first) return;
+
+    const second = await confirmAsk('Are you sure?', {
+      message: 'Imported classes, things you typed in, all of it. Undo is offered once, in the toast that follows.',
+      confirmLabel: 'Yes, clear them', danger: true,
+    });
+    if (!second) return;
+
+    const typed = await ask('Last check', {
+      message: 'Type CLEAR to empty the calendar.', placeholder: 'CLEAR', confirmLabel: 'Clear everything',
+    });
+    if ((typed ?? '').trim().toUpperCase() !== 'CLEAR') { toast('Left as it was'); return; }
+
+    A.wipe(ids);
+  };
+
   const openEvent = (ev: Ev, x: number, y: number) => setPop({ kind: 'event', ev, x, y });
   const openSlot = (day: number, hour: number, x: number, y: number, allDay = false) =>
     setPop({ kind: 'slot', day, hour, allDay, x, y });
@@ -210,6 +244,15 @@ export default function CalendarPage() {
             }}>
             <Icon name="spark" size={15} color="var(--tx3)" />
             {!phone && 'Import'}
+          </button>
+
+          <button onClick={() => void clearEverything()} className="hov k-squish"
+            title="Clear every event" aria-label="Clear every event"
+            style={{
+              width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center',
+              border: '1px solid var(--line2)',
+            }}>
+            <Icon name="trash" size={15} color="var(--pal-coral)" />
           </button>
 
           <div className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', marginLeft: 'auto' }}>
@@ -305,6 +348,8 @@ function Grid({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);
   const [resize, setResize] = useState<{ id: string; end: number } | null>(null);
+  /** A whole run being dragged, as an offset in days and hours from where it is. */
+  const [spanDrag, setSpanDrag] = useState<{ key: string; day: number; hour: number } | null>(null);
   const [taskDrag, setTaskDrag] = useState<{ task: Task; day: number; hour: number | null } | null>(null);
 
   const hours = Array.from({ length: SPAN + 1 }, (_, i) => GRID_START + i);
@@ -377,6 +422,61 @@ function Grid({
       // Commit on drop, not per frame.
       setDrag((d) => { if (d && d.id === ev.id) A.moveTo(ev, d.day, d.hour); return null; });
       setResize((r) => { if (r && r.id === ev.id) A.resizeTo(ev, r.end); return null; });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  /**
+   * The same gesture on a run of days.
+   *
+   * A class that meets Mon–Fri at 09:00 is five rows drawn as one bar, and the
+   * bar used to swallow the pointer without offering anything in return — the
+   * one thing on the grid you could look at and not move. It drags by the same
+   * rules as a single chip and commits as one patch per member.
+   */
+  const pressSpan = (e: React.PointerEvent, s: Span) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSel(s.ev.id);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
+    const locked = isReadOnly(s.ev) || prefs.lockEvents;
+    let moved = false;
+
+    const timer = window.setTimeout(() => {
+      if (moved) return;
+      if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
+      openEvent(s.ev, startX, startY);
+    }, K.longPressMs);
+
+    const onMove = (m: PointerEvent) => {
+      const dx = m.clientX - startX;
+      const dy = m.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) > K.longPressCancelPx) { moved = true; clearTimeout(timer); }
+      if (!moved || locked) return;
+      const steps = Math.round(dy / (GRID_H / SPAN / 2));
+      // The run keeps its length, so it may only slide as far as its own ends
+      // allow — otherwise half a bar walks off the week and stops being drawn.
+      const dayStep = Math.max(-s.firstDay, Math.min(days - (s.firstDay + s.days), Math.round(dx / colW)));
+      setSpanDrag({ key: s.key, day: dayStep, hour: steps * 0.5 });
+    };
+
+    const onUp = () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (locked) {
+        if (moved) toast(isReadOnly(s.ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        return;
+      }
+      setSpanDrag((d) => {
+        if (d && d.key === s.key) A.moveRun(events.filter((e2) => s.ids.includes(e2.id)), d.day, d.hour);
+        return null;
+      });
     };
 
     window.addEventListener('pointermove', onMove);
@@ -597,6 +697,8 @@ function Grid({
           <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {spans.filter((s) => s.days > 1).map((s) => (
               <SpanChip key={s.key} span={s} days={days}
+                offset={spanDrag?.key === s.key ? spanDrag : null}
+                onPointerDown={(p) => pressSpan(p, s)}
                 onOpen={(x, y) => openEvent(s.ev, x, y)} />
             ))}
           </div>
@@ -649,23 +751,33 @@ function EventChip({
 }
 
 /** The horizontal bar Google draws for a run of identical days. */
-function SpanChip({ span: s, days, onOpen }: { span: Span; days: number; onOpen: (x: number, y: number) => void }) {
-  const start = hoursOf(s.ev.starts_at);
-  const end = hoursOf(s.ev.ends_at);
+function SpanChip({ span: s, days, offset, onPointerDown, onOpen }: {
+  span: Span; days: number;
+  offset: { day: number; hour: number } | null;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onOpen: (x: number, y: number) => void;
+}) {
+  const lifted = !!offset;
+  const shift = offset?.hour ?? 0;
+  const start = hoursOf(s.ev.starts_at) + shift;
+  const end = hoursOf(s.ev.ends_at) + shift;
+  const firstDay = s.firstDay + (offset?.day ?? 0);
   return (
     <div
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={onPointerDown}
+      onClick={(e) => onOpen(e.clientX, e.clientY)}
       onContextMenu={(e) => { e.preventDefault(); onOpen(e.clientX, e.clientY); }}
       style={{
         position: 'absolute',
-        left: `calc(${(s.firstDay / days) * 100}% + 3px)`,
+        left: `calc(${(firstDay / days) * 100}% + 3px)`,
         width: `calc(${(s.days / days) * 100}% - 6px)`,
         top: `${pct(start)}%`, height: `${Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}%`,
         borderRadius: 8, padding: '4px 9px', overflow: 'hidden', pointerEvents: 'auto',
         background: `color-mix(in srgb, ${s.ev.color} 26%, var(--card))`,
         borderLeft: `2px solid ${s.ev.color}`,
-        boxShadow: 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
-        zIndex: 2, cursor: 'pointer',
+        boxShadow: lifted ? 'var(--shl)' : 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
+        transform: lifted ? 'scale(1.01)' : undefined,
+        zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title}

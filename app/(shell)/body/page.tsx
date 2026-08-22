@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
-import { Rings, Vessel, SleepArc, BodyMap, Ribbon } from '@/components/body/Instruments';
+import { Rings, Vessel, SleepArc, Ribbon } from '@/components/body/Instruments';
+import { Gym } from '@/components/body/Gym';
 import { MealSheet } from '@/components/body/MealSheet';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
@@ -12,7 +13,7 @@ import { ask } from '@/lib/ask';
 import { ymd } from '@/lib/series';
 import {
   useBodyDays, useMeals, useWorkouts, useBodyActions,
-  sleepHours, heatOf, dayOf, GOALS, GROUP_LABEL, type Group, type Meal,
+  sleepHours, dayOf, GOALS, type Meal,
 } from '@/lib/body';
 
 /**
@@ -68,7 +69,6 @@ export default function BodyPage() {
     f: meals.reduce((s, m) => s + m.fat, 0),
   };
 
-  const heat = useMemo(() => heatOf(workouts, 7), [workouts]);
   // Sorted here rather than trusted from the query: the ribbon's last point is
   // "now", and a source that hands them back newest-first would draw the month
   // backwards and label the oldest reading as today's.
@@ -78,14 +78,6 @@ export default function BodyPage() {
 
   const set = (patch: Parameters<typeof A.setDay.mutate>[0]['patch']) =>
     A.setDay.mutate({ on_date: today, patch });
-
-  const logWorkout = (g: Group) => {
-    A.addWorkout.mutate({
-      id: crypto.randomUUID(), on_date: today,
-      name: GROUP_LABEL[g], groups: [g], minutes: 45,
-    });
-    toast(`${GROUP_LABEL[g]} logged`);
-  };
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
@@ -151,50 +143,11 @@ export default function BodyPage() {
 
       {/* ---------------------------------------------------------- trained */}
       {tab === 'trained' && (
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '340px minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12 }}>
-            <div style={KICKER}>This week — tap where you trained</div>
-            <BodyMap heat={heat} onTap={logWorkout} />
-          </div>
-
-          <div style={{ ...CARD, padding: '16px 16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={KICKER}>Sessions</div>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>
-                {workouts.length} in four weeks
-              </span>
-            </div>
-
-            {workouts.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: 0 }}>
-                Nothing logged yet. Tap a muscle group on the body and it goes in with today's date —
-                that is also what the gym challenges count.
-              </p>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {workouts.map((w) => (
-                <div key={w.id} className="row" style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 4px',
-                  borderBottom: '1px solid var(--line)',
-                }}>
-                  <Icon name="gym" size={14} color={PAL.mint} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{w.name || 'Session'}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>
-                      {w.groups.map((g) => GROUP_LABEL[g as Group] ?? g).join(' · ') || '—'} · {w.minutes} min
-                    </span>
-                  </span>
-                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{w.on_date}</span>
-                  <button onClick={() => A.delWorkout.mutate({ id: w.id })} className="hov" aria-label={`Delete ${w.name}`}
-                    style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-                    <Icon name="close" size={12} color="var(--tx3)" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Gym
+          today={today} workouts={workouts} phone={phone}
+          addWorkout={(w) => A.addWorkout.mutate(w)}
+          editWorkout={(id, patch) => A.editWorkout.mutate({ id, patch })}
+          delWorkout={(id) => A.delWorkout.mutate({ id })} />
       )}
 
       {/* ------------------------------------------------------------ eaten */}

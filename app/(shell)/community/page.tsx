@@ -12,6 +12,8 @@ import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
 import { currentUserId } from '@/lib/supabase';
 import { useRealtime } from '@/lib/realtime';
+import { usePrefs } from '@/lib/prefs';
+import { BOT_NAME } from '@/lib/bot';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
@@ -53,6 +55,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export default function CommunityPage() {
   const { phone } = useLayout();
+  const { prefs, update } = usePrefs();
   const [tab, setTab] = useState<'feed' | 'messages' | 'challenges'>('feed');
   const [me, setMe] = useState('');
   const [sort, setSort] = useState<Sort>('new');
@@ -91,7 +94,7 @@ export default function CommunityPage() {
     return out;
   }, [likes, votes, me]);
 
-  const items = useFeed(sort, filter, reactions);
+  const items = useFeed(sort, filter, reactions, prefs.hideBot);
   // The arrows in the opened post step through the pictures, the way a gallery
   // does; a discussion opens on its own.
   const photos = items.filter((i) => i.image_path);
@@ -137,6 +140,15 @@ export default function CommunityPage() {
             {FILTERS.map((f) => (
               <Chip key={f.id} on={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</Chip>
             ))}
+
+            {/* The bot posts on a timer. On a quiet week it is most of what is
+                here, which is when a room of people starts reading like a
+                noticeboard — so it can be switched off, and the switch says
+                whose posts it is hiding. */}
+            <Chip on={prefs.hideBot} icon={prefs.hideBot ? 'eye' : 'spark'}
+              onClick={() => { void update({ hideBot: !prefs.hideBot }); toast(prefs.hideBot ? `${BOT_NAME} is back in the feed` : `${BOT_NAME} hidden`); }}>
+              {prefs.hideBot ? `${BOT_NAME} hidden` : BOT_NAME}
+            </Chip>
           </div>
 
           {items.length === 0 && (
@@ -445,7 +457,7 @@ function ReactButton({ kind, mine, count, onToggle }: { kind: Item['kind']; mine
 
 function Chip({
   on, onClick, icon, children,
-}: { on: boolean; onClick: () => void; icon?: 'flame' | 'spark'; children: React.ReactNode }) {
+}: { on: boolean; onClick: () => void; icon?: 'flame' | 'spark' | 'eye'; children: React.ReactNode }) {
   return (
     <button onClick={onClick} aria-pressed={on} className="k-chip" style={{
       display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 999, minHeight: 32,

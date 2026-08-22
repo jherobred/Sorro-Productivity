@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from './Icon';
 import { useLayout } from '@/lib/useLayout';
 import { useRealtime } from '@/lib/realtime';
 import { toast } from '@/lib/toast';
-import { ask, confirmAsk } from '@/lib/ask';
+import { confirmAsk } from '@/lib/ask';
+import { PeoplePicker } from './PeoplePicker';
 import { ago } from '@/lib/scratch';
 import { useSignedUrl } from '@/lib/uploads';
 import { useProfiles, displayOf, type Person } from '@/lib/people';
 import {
   useConversations, useMembers, useMessages, useMessageActions,
   startDm, startGroup, titleOf, unreadOf,
-  CONVOS, messagesKey, type Conversation, type Member, type Message,
+  CONVOS, MEMBERS, messagesKey, type Conversation, type Member, type Message,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
 
@@ -36,6 +38,8 @@ export function Messages({ me }: { me: string }) {
   const A = useMessageActions(me);
 
   const [openId, setOpenId] = useState<string | null>(null);
+  /** Which picker is up: one person for a chat, several for a group. */
+  const [picking, setPicking] = useState<'dm' | 'group' | null>(null);
   const convo = convos.find((c) => c.id === openId) ?? null;
 
   useRealtime('bd_conversations', CONVOS);
@@ -47,42 +51,48 @@ export function Messages({ me }: { me: string }) {
 
   const nameOf = (id: string) => displayOf(profiles, id, me).label;
 
-  const newChat = async () => {
-    const who = Object.values(profiles).filter((p) => p.user_id !== me);
-    if (!who.length) { toast('Nobody else here yet'); return; }
-    // No people-picker dialog exists yet, so this asks for a handle and matches
-    // it. ponytail: swap for a proper picker when there is one to reuse.
-    const typed = await ask('Message who?', {
-      message: who.slice(0, 8).map((p) => (p.handle ? `@${p.handle}` : p.name)).join(', '),
-      placeholder: 'handle or name',
-      confirmLabel: 'Start',
-    });
-    if (!typed) return;
-    const t = typed.trim().replace(/^@/, '').toLowerCase();
-    const hit = who.find((p) => (p.handle ?? '').toLowerCase() === t || p.name.toLowerCase().includes(t));
-    if (!hit) { toast(`No one called “${typed}”`); return; }
-    const id = await startDm(hit.user_id);
+  /**
+   * Both of these used to be a text box that wanted a handle spelled right.
+   * You pick a face now, and a group is named and filled in the same pass
+   * rather than created empty and populated from a header button nobody found.
+   */
+  const startChat = async (ids: string[]) => {
+    setPicking(null);
+    const id = await startDm(ids[0]);
     if (id) setOpenId(id);
   };
 
-  const newGroup = async () => {
-    const name = await ask('Name the group', { placeholder: 'Capstone crew', confirmLabel: 'Create' });
-    if (!name) return;
-    const id = await startGroup(name, []);
-    if (id) { setOpenId(id); toast('Group made — add people from the header'); }
+  const makeGroup = async (ids: string[], name: string) => {
+    setPicking(null);
+    const id = await startGroup(name, ids);
+    if (id) { setOpenId(id); toast(`${name} started with ${ids.length + 1}`); }
   };
 
   const list = (
     <ChatList
       convos={convos} members={members} profiles={profiles} me={me} selected={openId} phone={phone}
-      onPick={setOpenId} onNew={() => void newChat()} onNewGroup={() => void newGroup()} nameOf={nameOf} />
+      onPick={setOpenId} onNew={() => setPicking('dm')} onNewGroup={() => setPicking('group')} nameOf={nameOf} />
+  );
+
+  const picker = picking && (
+    <PeoplePicker
+      title={picking === 'dm' ? 'Message who?' : 'New group'}
+      me={me} multi={picking === 'group'} askName={picking === 'group'}
+      confirmLabel="Create"
+      onClose={() => setPicking(null)}
+      onPick={(ids, name) => void (picking === 'dm' ? startChat(ids) : makeGroup(ids, name))} />
   );
 
   if (phone) {
-    return convo
-      ? <Thread key={convo.id} convo={convo} members={members} profiles={profiles} me={me} A={A}
-          onBack={() => setOpenId(null)} nameOf={nameOf} />
-      : <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{list}</div>;
+    return (
+      <>
+        {convo
+          ? <Thread key={convo.id} convo={convo} members={members} profiles={profiles} me={me} A={A}
+              onBack={() => setOpenId(null)} nameOf={nameOf} />
+          : <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{list}</div>}
+        {picker}
+      </>
+    );
   }
 
   return (
@@ -98,6 +108,7 @@ export function Messages({ me }: { me: string }) {
           </div>
         </div>
       )}
+      {picker}
     </div>
   );
 }
@@ -180,6 +191,8 @@ function Thread({
 }) {
   const { data: messages = [] } = useMessages(convo.id);
   const [draft, setDraft] = useState('');
+  const [adding, setAdding] = useState(false);
+  const qc = useQueryClient();
   const foot = useRef<HTMLDivElement>(null);
 
   useRealtime('bd_messages', messagesKey(convo.id), `conversation_id=eq.${convo.id}`);
@@ -197,16 +210,15 @@ function Thread({
     setDraft('');
   };
 
-  const addPerson = async () => {
-    const typed = await ask('Add who?', { placeholder: 'handle or name', confirmLabel: 'Add' });
-    if (!typed) return;
-    const t = typed.trim().replace(/^@/, '').toLowerCase();
-    const hit = Object.values(profiles).find((p) => (p.handle ?? '').toLowerCase() === t || p.name.toLowerCase().includes(t));
-    if (!hit) { toast(`No one called “${typed}”`); return; }
+  const here = members.filter((m) => m.conversation_id === convo.id).map((m) => m.user_id);
+
+  const addPeople = async (ids: string[]) => {
+    setAdding(false);
     const { supabase } = await import('@/lib/supabase');
     const { error } = await supabase.from('bd_conversation_members')
-      .insert({ conversation_id: convo.id, user_id: hit.user_id });
-    toast(error ? error.message : `Added ${nameOf(hit.user_id)}`);
+      .insert(ids.map((user_id) => ({ conversation_id: convo.id, user_id })));
+    toast(error ? error.message : ids.length === 1 ? `Added ${nameOf(ids[0])}` : `Added ${ids.length} people`);
+    if (!error) void qc.invalidateQueries({ queryKey: MEMBERS });
   };
 
   return (
@@ -227,7 +239,7 @@ function Thread({
           </div>
         </div>
         {convo.is_group && (
-          <button onClick={() => void addPerson()} className="hov" aria-label="Add someone"
+          <button onClick={() => setAdding(true)} className="hov" aria-label="Add someone"
             style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
             <Icon name="plus" size={14} color="var(--tx2)" />
           </button>
@@ -271,6 +283,11 @@ function Thread({
           <Icon name="send" size={15} color="#0A0912" />
         </button>
       </div>
+
+      {adding && (
+        <PeoplePicker title="Add to this chat" me={me} exclude={here} multi askName={false}
+          confirmLabel="Add" onClose={() => setAdding(false)} onPick={(ids) => void addPeople(ids)} />
+      )}
     </div>
   );
 }

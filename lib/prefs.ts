@@ -15,6 +15,8 @@ export type Prefs = {
   workspace: string | null;
   lockEvents: boolean;
   journalMode: string | null;
+  /** Hide the resident bot's posts from the feed. Its challenges stay. */
+  hideBot: boolean;
 
   /* Accessibility. Each of these maps to a WCAG success criterion:
      fontScale → 1.4.4 Resize Text, contrast → 1.4.6, underlineLinks → 1.4.1
@@ -48,6 +50,7 @@ export const DEFAULT_PREFS: Prefs = {
   workspace: null,
   lockEvents: false,
   journalMode: null,
+  hideBot: false,
 
   fontScale: 1,
   density: 'comfortable',

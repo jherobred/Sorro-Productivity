@@ -7,6 +7,7 @@ import { settler } from './settle';
 import { toast } from './toast';
 import { fixture } from './devFixtures';
 import { ymd } from './series';
+import { MUSCLES, type Muscle } from './lift';
 
 /**
  * Body, as instruments rather than rows.
@@ -41,9 +42,15 @@ export type Workout = {
   id: string; on_date: string; name: string; groups: string[]; minutes: number;
 };
 
-/** What the body map can warm. Order is top to bottom, which is how it is drawn. */
-export const GROUPS = ['chest', 'back', 'arms', 'core', 'legs', 'cardio'] as const;
-export type Group = (typeof GROUPS)[number];
+/**
+ * What the body map can warm, top to bottom, which is how it is drawn.
+ *
+ * Defined in `lib/lift.ts` and re-exported here: the exercise catalogue files
+ * every movement under one of these, and two copies of the same list is one
+ * copy that goes stale.
+ */
+export const GROUPS = MUSCLES;
+export type Group = Muscle;
 
 export const GROUP_LABEL: Record<Group, string> = {
   chest: 'Chest', back: 'Back', arms: 'Arms', core: 'Core', legs: 'Legs', cardio: 'Cardio',
@@ -131,6 +138,12 @@ const ADD_WORKOUT = defineMutation('body2.addWorkout', async (v: Workout) => {
   if (error) throw error;
 });
 
+/** A session grows while you are in it: its muscles and its length both follow the sets. */
+const EDIT_WORKOUT = defineMutation('body2.editWorkout', async (v: { id: string; patch: Partial<Workout> }) => {
+  const { error } = await supabase.from('bd_workouts').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+
 const DEL_WORKOUT = defineMutation('body2.delWorkout', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_workouts').delete().eq('id', v.id);
   if (error) throw error;
@@ -195,6 +208,17 @@ export function useBodyActions(back = 30, on = ymd(new Date())) {
     onSettled: settle,
   });
 
+  const editWorkout = useMutation<unknown, Error, { id: string; patch: Partial<Workout> }, Workout[]>({
+    mutationKey: EDIT_WORKOUT,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Workout[]>(workKey) ?? [];
+      queryClient.setQueryData<Workout[]>(workKey, prev.map((w) => (w.id === v.id ? { ...w, ...v.patch } : w)));
+      return prev;
+    },
+    onError: (e, _v, ctx) => { if (ctx) queryClient.setQueryData(workKey, ctx); toast(e.message); },
+    onSettled: settle,
+  });
+
   const delWorkout = useMutation<unknown, Error, { id: string }, Workout[]>({
     mutationKey: DEL_WORKOUT,
     onMutate: (v) => {
@@ -206,7 +230,7 @@ export function useBodyActions(back = 30, on = ymd(new Date())) {
     onSettled: settle,
   });
 
-  return { setDay, addMeal, delMeal, addWorkout, delWorkout };
+  return { setDay, addMeal, delMeal, addWorkout, editWorkout, delWorkout };
 }
 
 /* --------------------------------------------------------------- reckoning */
