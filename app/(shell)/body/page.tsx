@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { TabRail } from '@/components/TabRail';
-import { Rings, Vessel, SleepArc, Ribbon } from '@/components/body/Instruments';
-import { Gym } from '@/components/body/Gym';
+import { Rings, Vessel, SleepArc } from '@/components/body/Instruments';
+import { useTraining, TrainCard, ProgressCards, TrainingOverlays } from '@/components/body/Gym';
 import { MealSheet } from '@/components/body/MealSheet';
-import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { toast } from '@/lib/toast';
 import { ask } from '@/lib/ask';
@@ -17,43 +15,44 @@ import {
 } from '@/lib/body';
 
 /**
- * Body, as instruments.
+ * Body — one page, one ground.
  *
- * What was here: six rows of numbers, each with a minus and a plus. It held the
- * right data and asked you to read it as a spreadsheet, so nobody read it.
+ * What was here: a tab rail over three panes. Today and Eaten were Basedly's
+ * lavender cards; Trained was openGym's black tracker rendered inside a
+ * rounded, bordered box. So the section that mattered most looked like a
+ * different app viewed through a window cut into this one, and switching to it
+ * changed the palette, the type and the shape of every control on screen.
  *
- * What is here now answers the three questions a body screen is for. **Today**
- * is one object — three rings, a glass you tap, an arc you drag. **Trained** is
- * a silhouette that warms where you worked, so cold legs on a Thursday is an
- * argument you can see rather than a row you have to compare. **Eaten** is a
- * plate you photograph.
+ * There are no tabs now, and no pane. The whole tab is openGym's black ground
+ * and everything is laid on it in one scroll, in the order a day is actually
+ * lived: what today looks like, what you drank and slept, what you are
+ * training, what you ate, and what all of it adds up to. `app/gym.css` maps
+ * Basedly's own --card / --line / --tx / --acc onto openGym's surfaces inside
+ * `.ogym`, so the rings, the glass and the sleep arc came across without being
+ * rewritten — they are simply on the black now.
  *
- * Every control here is the picture itself. There is not a stepper on the page.
+ * Every control here is still the picture itself: you tap the glass, you drag
+ * the arc, you tick a set. There is not a stepper on the page.
  */
 
-const CARD: React.CSSProperties = {
-  background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)', border: '1px solid var(--line)',
-};
-const KICKER: React.CSSProperties = {
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
-};
-
-const TABS = [
-  { id: 'today' as const, label: 'Today', icon: 'focus' as const },
-  { id: 'trained' as const, label: 'Trained', icon: 'gym' as const },
-  { id: 'eaten' as const, label: 'Eaten', icon: 'food' as const },
-];
+const KICKER = 'og-h2';
 
 export default function BodyPage() {
   const { phone } = useLayout();
   const today = ymd(new Date());
-  const [tab, setTab] = useState<'today' | 'trained' | 'eaten'>('today');
   const [adding, setAdding] = useState(false);
 
   const { data: days = [] } = useBodyDays(30);
   const { data: meals = [] } = useMeals(today);
   const { data: workouts = [] } = useWorkouts(28);
   const A = useBodyActions(30, today);
+
+  const T = useTraining({
+    today, workouts,
+    addWorkout: (w) => A.addWorkout.mutate(w),
+    editWorkout: (id, patch) => A.editWorkout.mutate({ id, patch }),
+    delWorkout: (id) => A.delWorkout.mutate({ id }),
+  });
 
   const day = dayOf(days, today);
   const water = day?.water ?? 0;
@@ -69,132 +68,118 @@ export default function BodyPage() {
     f: meals.reduce((s, m) => s + m.fat, 0),
   };
 
-  // Sorted here rather than trusted from the query: the ribbon's last point is
-  // "now", and a source that hands them back newest-first would draw the month
-  // backwards and label the oldest reading as today's.
-  const weights = days.filter((d) => d.weight)
-    .map((d) => ({ day: d.on_date, value: Number(d.weight) }))
-    .sort((a, b) => a.day.localeCompare(b.day));
-
   const set = (patch: Parameters<typeof A.setDay.mutate>[0]['patch']) =>
     A.setDay.mutate({ on_date: today, patch });
 
+  /** Two columns on a desktop, one on a phone — the same content either way. */
+  const pair: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fit, minmax(290px, 1fr))',
+    gap: 12, alignItems: 'start',
+  };
+
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h1 className="sronly">Body</h1>
-        <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Body sections" />
-        {/* The gym carries its own date, in openGym's header — two of them a
-            centimetre apart reads as a bug. */}
-        {tab !== 'trained' && (
-          <div style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-          </div>
-        )}
-      </div>
+    <div className="ogym ogym-page" style={{ padding: phone ? '14px 14px 28px' : '20px 24px 32px' }}>
+      <div style={{ maxWidth: 720, marginInline: 'auto' }}>
 
-      {/* ------------------------------------------------------------ today */}
-      {tab === 'today' && (
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, alignItems: 'start' }}>
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', placeItems: 'center', gap: 12 }}>
-            <div style={{ ...KICKER, justifySelf: 'start' }}>Today</div>
-            <Rings rings={[
-              { label: 'Move', value: steps, goal: GOALS.steps, color: PAL.pink, unit: 'steps' },
-              { label: 'Fuel', value: kcal, goal: GOALS.kcal, color: PAL.amber, unit: 'kcal' },
-              { label: 'Rest', value: slept, goal: GOALS.sleep, color: PAL.cyan, unit: 'hours' },
-            ]} />
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Stat label="Move" value={steps.toLocaleString()} unit="steps" color={PAL.pink} />
-              <Stat label="Fuel" value={String(kcal)} unit="kcal" color={PAL.amber} />
-              <Stat label="Rest" value={String(slept)} unit="hours" color={PAL.cyan} />
+        {/* One header for the whole tab. The gym used to carry a second one. */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, margin: '2px 0 18px' }}>
+          <div>
+            <h1 className="og-h1">Body</h1>
+            <div className="og-sub">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
-            <button
-              onClick={() => void ask('Steps today', { initial: String(steps), placeholder: 'e.g. 8400' })
-                .then((v) => { if (v !== null) set({ steps: Math.max(0, Math.round(Number(v) || 0)) }); })}
-              className="hov k-squish"
-              style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
-              Set steps
-            </button>
           </div>
+          <button className="og-btn og-primary og-sm" style={{ flex: 'none' }}
+            onClick={() => T.start(T.session ? null : T.todayRoutine)}>
+            <Icon name="play" size={14} color="currentColor" />
+            {T.session ? 'Resume' : 'Start'}
+          </button>
+        </div>
 
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12, justifyItems: 'center' }}>
-            <div style={{ ...KICKER, justifySelf: 'start' }}>Water — tap a cup</div>
+        {/* --------------------------------------------------------- today */}
+        <div className="og-card" style={{ display: 'grid', placeItems: 'center', gap: 12, paddingBlock: 18 }}>
+          <div className={KICKER} style={{ justifySelf: 'start', margin: 0 }}>Today</div>
+          <Rings rings={[
+            { label: 'Move', value: steps, goal: GOALS.steps, color: 'var(--og-acc)', unit: 'steps' },
+            { label: 'Fuel', value: kcal, goal: GOALS.kcal, color: 'var(--og-orange)', unit: 'kcal' },
+            { label: 'Rest', value: slept, goal: GOALS.sleep, color: 'var(--og-yellow)', unit: 'hours' },
+          ]} />
+          <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Stat label="Move" value={steps.toLocaleString()} unit="steps" color="var(--og-acc)" />
+            <Stat label="Fuel" value={String(kcal)} unit="kcal" color="var(--og-orange)" />
+            <Stat label="Rest" value={String(slept)} unit="hours" color="var(--og-yellow)" />
+          </div>
+          <button className="og-btn og-sm"
+            onClick={() => void ask('Steps today', { initial: String(steps), placeholder: 'e.g. 8400' })
+              .then((v) => { if (v !== null) set({ steps: Math.max(0, Math.round(Number(v) || 0)) }); })}>
+            Set steps
+          </button>
+        </div>
+
+        <div style={pair}>
+          <div className="og-card" style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
+            <div className={KICKER} style={{ justifySelf: 'start', margin: 0 }}>Water — tap a cup</div>
             <Vessel cups={water} goal={GOALS.water} onSet={(n) => set({ water: n })} />
           </div>
 
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 10 }}>
-            <div style={KICKER}>Sleep — drag the ends</div>
+          <div className="og-card" style={{ display: 'grid', gap: 10 }}>
+            <div className={KICKER} style={{ margin: 0 }}>Sleep — drag the ends</div>
             <SleepArc from={from} to={to}
               onChange={(f, t) => set({ sleep_from: f, sleep_to: t, sleep_h: sleepHours(f, t) })} />
-            <div style={{ textAlign: 'center', fontSize: 19, fontWeight: 800, letterSpacing: '-.02em', color: PAL.cyan }}>
-              {slept}<span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}> hours</span>
+            <div className="og-big" style={{ textAlign: 'center', color: 'var(--og-yellow)' }}>
+              {slept}<span className="og-muted" style={{ fontSize: 15 }}> hours</span>
             </div>
-          </div>
-
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 10 }}>
-            <div style={KICKER}>Weight, this month</div>
-            <Ribbon points={weights} />
-            <button
-              onClick={() => void ask('Weight today', { initial: String(day?.weight ?? ''), placeholder: 'kg' })
-                .then((v) => { if (v) set({ weight: Number(v) || null }); })}
-              className="hov k-squish"
-              style={{ justifySelf: 'start', padding: '7px 13px', borderRadius: 999, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
-              Log today's
-            </button>
           </div>
         </div>
-      )}
 
-      {/* ---------------------------------------------------------- trained */}
-      {tab === 'trained' && (
-        <Gym
-          today={today} workouts={workouts} phone={phone}
-          addWorkout={(w) => A.addWorkout.mutate(w)}
-          editWorkout={(id, patch) => A.editWorkout.mutate({ id, patch })}
-          delWorkout={(id) => A.delWorkout.mutate({ id })} />
-      )}
+        {/* --------------------------------------------------------- train */}
+        <div className={KICKER} style={{ marginTop: 22 }}>Training</div>
+        <TrainCard T={T} />
 
-      {/* ------------------------------------------------------------ eaten */}
-      {tab === 'eaten' && (
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '300px minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-          <div style={{ ...CARD, padding: '18px 16px', display: 'grid', gap: 12, justifyItems: 'center' }}>
-            <div style={{ ...KICKER, justifySelf: 'start' }}>Fuel today</div>
+        {/* ---------------------------------------------------------- fuel */}
+        <div className={KICKER} style={{ marginTop: 22 }}>Fuel</div>
+
+        <div style={pair}>
+          <div className="og-card" style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
             <Rings size={150} rings={[
-              { label: 'Calories', value: kcal, goal: GOALS.kcal, color: PAL.amber, unit: 'kcal' },
-              { label: 'Protein', value: macro.p, goal: 110, color: PAL.coral, unit: 'g' },
-              { label: 'Carbs', value: macro.c, goal: 260, color: PAL.mint, unit: 'g' },
+              { label: 'Calories', value: kcal, goal: GOALS.kcal, color: 'var(--og-orange)', unit: 'kcal' },
+              { label: 'Protein', value: macro.p, goal: 110, color: 'var(--og-acc)', unit: 'g' },
+              { label: 'Carbs', value: macro.c, goal: 260, color: 'var(--og-yellow)', unit: 'g' },
             ]} />
-            <div style={{ display: 'flex', gap: 14 }}>
-              <Stat label="kcal" value={String(kcal)} unit={`of ${GOALS.kcal}`} color={PAL.amber} />
-              <Stat label="protein" value={`${macro.p}g`} unit="" color={PAL.coral} />
-              <Stat label="carbs" value={`${macro.c}g`} unit="" color={PAL.mint} />
-              <Stat label="fat" value={`${macro.f}g`} unit="" color={PAL.violet} />
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Stat label="kcal" value={String(kcal)} unit={`of ${GOALS.kcal}`} color="var(--og-orange)" />
+              <Stat label="protein" value={`${macro.p}g`} unit="" color="var(--og-acc)" />
+              <Stat label="carbs" value={`${macro.c}g`} unit="" color="var(--og-yellow)" />
+              <Stat label="fat" value={`${macro.f}g`} unit="" color="var(--og-red)" />
             </div>
           </div>
 
-          <div style={{ ...CARD, padding: '16px 16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={KICKER}>Meals</div>
-              <button onClick={() => setAdding(true)} className="k-squish"
-                style={{
-                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px',
-                  borderRadius: 10, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800, minHeight: 34,
-                }}>
-                <Icon name="photo" size={13} color="var(--ink)" />Photograph one
+          <div className="og-card">
+            <div className="og-row og-between" style={{ marginBottom: 10 }}>
+              <div className={KICKER} style={{ margin: 0 }}>Meals</div>
+              <button className="og-btn og-primary og-xs" onClick={() => setAdding(true)}>
+                <Icon name="photo" size={12} color="currentColor" />Photograph one
               </button>
             </div>
 
             {meals.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: 0 }}>
-                Nothing today. Point the camera at a plate — it estimates the numbers and you check them
-                before anything is saved.
+              <p className="og-muted og-small" style={{ margin: 0 }}>
+                Nothing today. Point the camera at a plate — it estimates the numbers and you check
+                them before anything is saved.
               </p>
             )}
 
             {meals.map((m) => <MealRow key={m.id} meal={m} onDelete={() => A.delMeal.mutate({ id: m.id })} />)}
           </div>
         </div>
-      )}
+
+        {/* ------------------------------------------------------ progress */}
+        <div className={KICKER} style={{ marginTop: 22 }}>Progress</div>
+        <ProgressCards T={T} />
+      </div>
+
+      <TrainingOverlays T={T} />
 
       {adding && (
         <MealSheet on={today} onClose={() => setAdding(false)}
@@ -206,25 +191,23 @@ export default function BodyPage() {
 
 function MealRow({ meal: m, onDelete }: { meal: Meal; onDelete: () => void }) {
   return (
-    <div className="row" style={{
-      display: 'flex', alignItems: 'center', gap: 11, padding: '9px 4px', borderBottom: '1px solid var(--line)',
-    }}>
+    <div className="og-setrow" style={{ gap: 11 }}>
       <span style={{
-        width: 34, height: 34, flex: 'none', borderRadius: 10, display: 'grid', placeItems: 'center',
-        background: 'var(--card2)',
+        width: 32, height: 32, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center',
+        background: 'var(--og-surface-2)',
       }}>
-        <Icon name="food" size={15} color={PAL.amber} />
+        <Icon name="food" size={15} color="var(--og-orange)" />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{m.name}</span>
-        <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>
+        <span className="og-tt" style={{ display: 'block', fontSize: 15 }}>{m.name}</span>
+        <span className="og-ss" style={{ display: 'block' }}>
           {m.slot} · {m.protein}p {m.carbs}c {m.fat}f
         </span>
       </span>
-      <span style={{ fontSize: 12.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{m.kcal}</span>
-      <button onClick={onDelete} className="hov" aria-label={`Delete ${m.name}`}
-        style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-        <Icon name="close" size={12} color="var(--tx3)" />
+      <span style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{m.kcal}</span>
+      <button className="og-setgo" onClick={onDelete} aria-label={`Delete ${m.name}`}
+        style={{ background: 'transparent', width: 26, height: 26 }}>
+        <Icon name="close" size={12} color="var(--og-label-3)" />
       </button>
     </div>
   );
@@ -233,10 +216,12 @@ function MealRow({ meal: m, onDelete }: { meal: Meal; onDelete: () => void }) {
 function Stat({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
   return (
     <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color, letterSpacing: '-.02em', fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{
+        fontSize: 22, fontWeight: 600, color, letterSpacing: '-.021em', fontVariantNumeric: 'tabular-nums',
+      }}>
         {value}
       </div>
-      <div style={{ ...KICKER, marginTop: 2 }}>{label}{unit ? ` ${unit}` : ''}</div>
+      <div className="og-h2" style={{ margin: '2px 0 0', fontSize: 11 }}>{label}{unit ? ` ${unit}` : ''}</div>
     </div>
   );
 }

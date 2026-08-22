@@ -5,6 +5,15 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'Basedly',
   description: 'Your whole week, one surface.',
+  // Added to the home screen, the site opens as its own window with no address
+  // bar — the web half of "full screen on a phone". iOS reads these two rather
+  // than the manifest's `display`.
+  appleWebApp: { capable: true, title: 'Basedly', statusBarStyle: 'black-translucent' },
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  // A plain file in public/ rather than an app/manifest.ts metadata route:
+  // under `output: export` that route needs `dynamic = 'force-static'` and then
+  // still has to agree with `trailingSlash`. A static file has no opinions.
+  manifest: '/manifest.webmanifest',
 };
 
 export const viewport: Viewport = {

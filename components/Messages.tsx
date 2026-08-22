@@ -6,7 +6,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from './Icon';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
-import { useRealtime } from '@/lib/realtime';
 import { toast } from '@/lib/toast';
 import { confirmAsk } from '@/lib/ask';
 import { PeoplePicker } from './PeoplePicker';
@@ -17,7 +16,7 @@ import {
   useConversations, useMembers, useMessages, useMessageActions,
   startDm, startGroup, titleOf, unreadOf, putAttachment, attachFromDrive, driveFiles,
   sizeLabel, kindOfFile,
-  CONVOS, MEMBERS, messagesKey,
+  MEMBERS,
   type Conversation, type Member, type Message, type Attachment, type DriveFile,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
@@ -45,8 +44,6 @@ export function Messages({ me }: { me: string }) {
   /** Which picker is up: one person for a chat, several for a group. */
   const [picking, setPicking] = useState<'dm' | 'group' | null>(null);
   const convo = convos.find((c) => c.id === openId) ?? null;
-
-  useRealtime('bd_conversations', CONVOS);
 
   useEffect(() => {
     if (!phone && !convo && convos.length) setOpenId(convos[0].id);
@@ -205,8 +202,6 @@ export function Thread({
   const [drive, setDrive] = useState(false);
   const qc = useQueryClient();
   const foot = useRef<HTMLDivElement>(null);
-
-  useRealtime('bd_messages', messagesKey(convo.id), `conversation_id=eq.${convo.id}`);
 
   // Opening a conversation is reading it; and a new message should not leave
   // you scrolled halfway up your own history.

@@ -11,7 +11,6 @@ import { ShareSheet } from '@/components/ShareSheet';
 import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
 import { currentUserId } from '@/lib/supabase';
-import { useRealtime } from '@/lib/realtime';
 import { usePrefs } from '@/lib/prefs';
 import { BOT_NAME } from '@/lib/bot';
 import { toast } from '@/lib/toast';
@@ -22,7 +21,7 @@ import { useSignedUrl } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
 import {
   useFeed, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
-  key, POSTS, THREADS, LIKES, VOTES, type Filter, type Item, type Sort,
+  key, type Filter, type Item, type Sort,
 } from '@/lib/community';
 
 /**
@@ -73,11 +72,6 @@ export default function CommunityPage() {
   const { data: votes = [] } = useVotes();
   const { data: counts = {} } = useCommentCounts();
   const A = useCommunityActions(me);
-
-  useRealtime('bd_posts', POSTS);
-  useRealtime('bd_post_likes', LIKES);
-  useRealtime('bd_threads', THREADS);
-  useRealtime('bd_thread_votes', VOTES);
 
   /** Reactions per item, in the one shape the sort and the cards both want. */
   const reactions = useMemo(() => {

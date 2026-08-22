@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from '../Icon';
-import { ExerciseArt } from './ExerciseArt';
+import { ExerciseShot } from './ExerciseShot';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { usePrefs } from '@/lib/prefs';
@@ -13,63 +13,50 @@ import { useSets, useSetActions } from '@/lib/gym';
 import { useBodyDays, useBodyActions, type Workout, type Group } from '@/lib/body';
 import {
   EXERCISES, ROUTINES, volumeOf, bestByExercise, groupsOfSets, lastTime, nextSet,
-  kindOf, artOf, gearOf, workedOf, routineOf, slotFor, progression, setsLine,
+  kindOf, gearOf, workedOf, routineOf, slotFor, progression, setsLine,
   type WorkoutSet, type Routine, type Gear,
 } from '@/lib/lift';
 
 /**
- * Trained, wearing openGym.
+ * Training, wearing openGym — as pieces the Body page lays out itself.
  *
- * The first pass at this screen had openGym's *features* and none of its face:
- * it read the sets back correctly on a lavender card and looked like the rest
- * of Basedly. That was the wrong call. openGym is a black-ground, green-accent,
- * iOS-shaped tracker, and the shape is the product — the 26px tabular numbers,
- * the segmented ranges, the GitHub-style year grid, and the white demo card
- * with black line work and the worked muscle in red are what make a training
- * log legible in a gym: at arm's length, one-handed, mid-set.
+ * This file used to export one `<Gym>` that owned a segmented control and four
+ * screens, and the Body page dropped it inside a tab. That is what made Trained
+ * read as a window pane: a black, bordered, rounded box cut into a lavender
+ * page, with its own header and its own date a centimetre below the page's own.
  *
- * So this is openGym's three screens — **Home** (the week, today's session,
- * body weight, the streak), the **guided session** (demo, sets, rest clock),
- * and **Stats** (tiles, the year, the curve) — with Plan and Exercises behind
- * the same control. The design system is ported in `app/gym.css`, prefixed and
- * scoped; the reasoning is in that file's header.
+ * There are no tabs now. Body is one black scroll and this is three blocks in
+ * it — the week and today's session, the year and the numbers, and the session
+ * itself when it is running. The state they share lives in `useTraining`, so
+ * the page can put Fuel between two of them without any of them knowing.
  *
- * What it does *not* take is openGym's fixed bottom tab bar. Basedly already
- * has navigation, and a second bar nailed to the bottom of the viewport would
- * sit on top of it. Those five destinations become a segmented control at the
- * top of the section, and the centre Start button becomes the green pill beside
- * them — same five places, same one-tap start, none of it fighting the app it
- * is living inside.
+ * Plan and Exercises were destinations behind that control. They are sheets
+ * now, because both are things you open, do one thing in, and close.
  */
 
 const REST_S = 90;
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const GEARS: Gear[] = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Cardio'];
 
-type View = 'home' | 'plan' | 'stats' | 'exercises';
+/* ------------------------------------------------------------------ state */
 
-const VIEWS: { id: View; label: string; icon: IconName }[] = [
-  { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'plan', label: 'Plan', icon: 'cal' },
-  { id: 'stats', label: 'Stats', icon: 'up' },
-  { id: 'exercises', label: 'Exercises', icon: 'gym' },
-];
+export type Training = ReturnType<typeof useTraining>;
 
-export function Gym({
-  today, workouts, phone, addWorkout, editWorkout, delWorkout,
+export function useTraining({
+  today, workouts, addWorkout, editWorkout, delWorkout,
 }: {
   today: string;
   workouts: Workout[];
-  phone: boolean;
   addWorkout: (w: Workout) => void;
   editWorkout: (id: string, patch: Partial<Workout>) => void;
   delWorkout: (id: string) => void;
 }) {
   const { prefs, update } = usePrefs();
-  const [view, setView] = useState<View>('home');
   const [weekOff, setWeekOff] = useState(0);
   const [running, setRunning] = useState(false);
   const [pending, setPending] = useState<string[]>([]);
+  /** Which sheet is up. Plan and Exercises used to be tabs. */
+  const [sheet, setSheet] = useState<'plan' | 'exercises' | null>(null);
 
   const ids = useMemo(() => workouts.map((w) => w.id), [workouts]);
   const order = useMemo(
@@ -108,6 +95,8 @@ export function Gym({
     const named = out.map((b) => b.exercise);
     return [...out, ...pending.filter((p) => !named.includes(p)).map((p) => ({ exercise: p, sets: [] as WorkoutSet[] }))];
   }, [mine, pending]);
+
+  const doneDays = useMemo(() => new Set(workouts.map((w) => w.on_date)), [workouts]);
 
   /* --------------------------------------------------------------- verbs */
 
@@ -178,141 +167,179 @@ export function Gym({
       if (v) A.setDay.mutate({ on_date: today, patch: { weight: Number(v) || null } });
     });
 
-  const doneDays = useMemo(() => new Set(workouts.map((w) => w.on_date)), [workouts]);
+  const addExercise = (name: string) => {
+    if (!session) start(null);
+    setPending((p) => (p.includes(name) ? p : [...p, name]));
+    setRunning(true);
+  };
 
-  /* -------------------------------------------------------------- render */
+  const setPlanDay = (i: number, id: string) => {
+    const next = [...plan];
+    next[i] = id;
+    void update({ gymPlan: next });
+  };
+
+  return {
+    today, workouts, sets, days, session, mine, previously, bests, blocks, plan, todayRoutine,
+    doneDays, weekOff, setWeekOff, running, setRunning, sheet, setSheet, setPending,
+    start, logSet, change, drop, finish, logWeight, addExercise, setPlanDay, editWorkout,
+  };
+}
+
+/* ----------------------------------------------------------------- train */
+
+/**
+ * The week, and what today is. openGym's home screen, minus its header — the
+ * page has one, and two of them a centimetre apart reads as a bug.
+ */
+export function TrainCard({ T }: { T: Training }) {
+  const { session, todayRoutine, plan, doneDays, today, weekOff, setWeekOff } = T;
 
   return (
-    <div className="ogym ogym-ground" style={{ padding: phone ? 14 : 18 }}>
-      <div style={{ maxWidth: 640, marginInline: 'auto' }}>
-
-        {/* openGym's header: the name, the date under it, a round button right */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, margin: '4px 0 16px' }}>
-          <div>
-            <h2 className="og-h1">Gym</h2>
-            <div className="og-sub">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-            </div>
+    <>
+      <div className="og-card">
+        <div className="og-row og-between" style={{ marginBottom: 8 }}>
+          <button className="og-iconbtn" style={{ width: 30, height: 30 }}
+            onClick={() => setWeekOff((w) => w - 1)} aria-label="Previous week">
+            <Icon name="back" size={14} color="currentColor" />
+          </button>
+          <div className="og-small og-muted" style={{ fontWeight: 500 }}>
+            {weekOff === 0 ? 'This week' : `Week of ${weekLabel(weekOff)}`}
           </div>
-          <button className="og-iconbtn" onClick={() => setView('plan')} aria-label="Weekly plan">
-            <Icon name="set" size={17} color="currentColor" />
+          <button className="og-iconbtn" style={{ width: 30, height: 30 }}
+            onClick={() => setWeekOff((w) => w + 1)} aria-label="Next week">
+            <Icon name="chev" size={14} color="currentColor" />
           </button>
         </div>
 
-        {/* openGym's tab bar, moved inline so Basedly's own navigation keeps the
-            bottom of the screen. Start sits where its round button did. */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
-          <div className="og-seg" style={{ flex: 1, minWidth: 0 }}>
-            {VIEWS.map((v) => (
-              <button key={v.id} onClick={() => setView(v.id)} className={view === v.id ? 'og-on' : undefined}
-                aria-pressed={view === v.id} aria-label={v.label}>
-                <Icon name={v.icon} size={14} color="currentColor" />
-                {!phone && v.label}
+        <div className="og-week">
+          {weekDays(weekOff).map((d) => {
+            const iso = ymd(d);
+            const done = doneDays.has(iso);
+            const planned = !!plan[slotFor(d.getDay())];
+            return (
+              <button key={iso} className={`og-wday${iso === today ? ' og-today' : ''}`}
+                onClick={() => T.setSheet('plan')}
+                aria-label={d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}>
+                <div className="og-lbl">{WEEK[slotFor(d.getDay())].slice(0, 2)}</div>
+                <div className="og-num">{d.getDate()}</div>
+                <div className={`og-dot${done ? ' done' : planned ? ' plan' : ''}`} />
               </button>
-            ))}
-          </div>
-          <button className="og-btn og-primary og-sm" style={{ flex: 'none' }}
-            onClick={() => start(session ? null : todayRoutine)}>
-            <Icon name="play" size={14} color="currentColor" />
-            {session ? 'Resume' : 'Start'}
-          </button>
+            );
+          })}
         </div>
 
-        {view === 'home' && (
-          <>
-            <div className="og-card">
-              <div className="og-row og-between" style={{ marginBottom: 8 }}>
-                <button className="og-iconbtn" style={{ width: 30, height: 30 }}
-                  onClick={() => setWeekOff((w) => w - 1)} aria-label="Previous week">
-                  <Icon name="back" size={14} color="currentColor" />
-                </button>
-                <div className="og-small og-muted" style={{ fontWeight: 500 }}>
-                  {weekOff === 0 ? 'This week' : `Week of ${weekLabel(weekOff)}`}
-                </div>
-                <button className="og-iconbtn" style={{ width: 30, height: 30 }}
-                  onClick={() => setWeekOff((w) => w + 1)} aria-label="Next week">
-                  <Icon name="chev" size={14} color="currentColor" />
-                </button>
+        <button className="og-today-row" onClick={() => T.start(session ? null : todayRoutine)}>
+          <div className="og-row" style={{ gap: 9, minWidth: 0 }}>
+            <span className="og-lrow-i" style={{
+              background: session ? 'var(--og-orange)' : todayRoutine ? 'var(--og-acc)' : 'var(--og-surface-3)',
+              color: session || todayRoutine ? '#000' : '#fff',
+            }}>
+              <Icon name="gym" size={15} color="currentColor" />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div className="og-lbl2">Today</div>
+              <div className="og-ttl">
+                {session ? `${session.name} — in progress` : todayRoutine ? todayRoutine.name : 'Rest day'}
               </div>
-
-              <div className="og-week">
-                {weekDays(weekOff).map((d) => {
-                  const iso = ymd(d);
-                  const done = doneDays.has(iso);
-                  const planned = !!plan[slotFor(d.getDay())];
-                  return (
-                    <button key={iso} className={`og-wday${iso === today ? ' og-today' : ''}`}
-                      onClick={() => setView('plan')}
-                      aria-label={d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}>
-                      <div className="og-lbl">{WEEK[slotFor(d.getDay())].slice(0, 2)}</div>
-                      <div className="og-num">{d.getDate()}</div>
-                      <div className={`og-dot${done ? ' done' : planned ? ' plan' : ''}`} />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button className="og-today-row" onClick={() => start(session ? null : todayRoutine)}>
-                <div className="og-row" style={{ gap: 9, minWidth: 0 }}>
-                  <span className="og-lrow-i" style={{
-                    background: session ? 'var(--og-orange)' : todayRoutine ? 'var(--og-acc)' : 'var(--og-surface-3)',
-                    color: session || todayRoutine ? '#000' : '#fff',
-                  }}>
-                    <Icon name="gym" size={15} color="currentColor" />
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="og-lbl2">Today</div>
-                    <div className="og-ttl">
-                      {session ? `${session.name} — in progress` : todayRoutine ? todayRoutine.name : 'Rest day'}
-                    </div>
-                  </div>
-                </div>
-                <span className={`og-tag${session ? '' : ' og-on'}`}
-                  style={session ? { color: 'var(--og-orange)', background: 'color-mix(in srgb, var(--og-orange) 16%, transparent)' } : undefined}>
-                  {session ? 'Resume' : todayRoutine ? 'Start' : 'Plan'}
-                </span>
-              </button>
             </div>
+          </div>
+          <span className={`og-tag${session ? '' : ' og-on'}`}
+            style={session ? { color: 'var(--og-orange)', background: 'color-mix(in srgb, var(--og-orange) 16%, transparent)' } : undefined}>
+            {session ? 'Resume' : todayRoutine ? 'Start' : 'Plan'}
+          </span>
+        </button>
 
-            <WeightCard days={days} today={today} onLog={logWeight} range={90} />
-            <StreakCard workouts={workouts} plan={plan} />
-          </>
-        )}
-
-        {view === 'plan' && (
-          <PlanView plan={plan} onSet={(i, id) => {
-            const next = [...plan];
-            next[i] = id;
-            void update({ gymPlan: next });
-          }} />
-        )}
-
-        {view === 'stats' && (
-          <StatsView workouts={workouts} sets={sets} days={days} today={today} onLog={logWeight} />
-        )}
-
-        {view === 'exercises' && (
-          <ExercisesView bests={bests} sets={sets}
-            onPick={(name) => {
-              if (!session) start(null);
-              setPending((p) => (p.includes(name) ? p : [...p, name]));
-              setRunning(true);
-            }} />
-        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button className="og-btn og-sm" style={{ flex: 1 }} onClick={() => T.setSheet('plan')}>
+            <Icon name="cal" size={14} color="currentColor" />Weekly plan
+          </button>
+          <button className="og-btn og-sm" style={{ flex: 1 }} onClick={() => T.setSheet('exercises')}>
+            <Icon name="gym" size={14} color="currentColor" />Exercises
+          </button>
+        </div>
       </div>
 
-      {running && session && (
+      <StreakCard workouts={T.workouts} plan={plan} />
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- progress */
+
+/** The numbers, the year and the curve — openGym's Stats, inline. */
+export function ProgressCards({ T }: { T: Training }) {
+  return <StatsView workouts={T.workouts} sets={T.sets} days={T.days} today={T.today} onLog={T.logWeight} />;
+}
+
+/* -------------------------------------------------------------- overlays */
+
+/** Everything that covers the page: the running session and the two sheets. */
+export function TrainingOverlays({ T }: { T: Training }) {
+  return (
+    <>
+      {T.running && T.session && (
         <Session
-          session={session} blocks={blocks} mine={mine} previously={previously} bests={bests}
-          onClose={() => setRunning(false)}
-          onFinish={() => void finish()}
-          onLog={logSet} onChange={change} onDrop={drop}
-          onAddExercise={(name) => setPending((p) => (p.includes(name) ? p : [...p, name]))}
-          onRename={() => void ask('Name this session', { initial: session.name, placeholder: 'Push Day' })
-            .then((v) => { if (v) editWorkout(session.id, { name: v }); })} />
+          session={T.session} blocks={T.blocks} mine={T.mine} previously={T.previously} bests={T.bests}
+          onClose={() => T.setRunning(false)}
+          onFinish={() => void T.finish()}
+          onLog={T.logSet} onChange={T.change} onDrop={T.drop}
+          onAddExercise={(name) => T.setPending((p) => (p.includes(name) ? p : [...p, name]))}
+          onRename={() => void ask('Name this session', { initial: T.session?.name ?? '', placeholder: 'Push Day' })
+            .then((v) => { if (v && T.session) T.editWorkout(T.session.id, { name: v }); })} />
       )}
+
+      {T.sheet === 'plan' && (
+        <Sheet title="Weekly plan" onClose={() => T.setSheet(null)}>
+          <PlanView plan={T.plan} onSet={T.setPlanDay} />
+        </Sheet>
+      )}
+
+      {T.sheet === 'exercises' && (
+        <Sheet title="Exercises" onClose={() => T.setSheet(null)}>
+          <ExercisesView bests={T.bests} sets={T.sets}
+            onPick={(name) => { T.setSheet(null); T.addExercise(name); }} />
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/**
+ * openGym's bottom sheet: a grabber, a title, a scroll. Portalled to the body
+ * because `main` carries the font-scale zoom and a page transform, either of
+ * which would make it the containing block for anything fixed — the rule that
+ * has now bitten this codebase four times.
+ */
+function Sheet({
+  title, onClose, children,
+}: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useOverlayBack(true, onClose);
+
+  const body = (
+    <div onClick={onClose} className="ogym" style={{
+      position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.5)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}
+        style={{
+          width: '100%', maxWidth: 620, maxHeight: '88dvh', display: 'flex', flexDirection: 'column',
+          background: 'var(--og-bg-el)', borderRadius: 'var(--og-r-xl) var(--og-r-xl) 0 0',
+          padding: '8px 16px calc(20px + env(safe-area-inset-bottom))',
+        }}>
+        <span aria-hidden style={{ width: 36, height: 5, borderRadius: 99, background: 'var(--og-label-4)', margin: '6px auto 12px' }} />
+        <div className="og-row og-between" style={{ marginBottom: 12 }}>
+          <h3 style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-.021em' }}>{title}</h3>
+          <button className="og-iconbtn" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={15} color="currentColor" />
+          </button>
+        </div>
+        <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{children}</div>
+      </div>
     </div>
   );
+
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
 
 /* ------------------------------------------------------------ the session */
@@ -410,7 +437,7 @@ function Session({
               </div>
 
               <div className="og-exmedia">
-                <ExerciseArt art={artOf(block.exercise)} />
+                <ExerciseShot exercise={block.exercise} />
                 <span className="og-hint og-l">{workedOf(block.exercise)}</span>
                 <span className="og-hint og-r">{gearOf(block.exercise)}</span>
               </div>
@@ -821,7 +848,7 @@ function ExercisesView({
           const n = sets.filter((s) => s.exercise === e.name).length;
           return (
             <button key={e.id} className="og-item" onClick={() => onPick(e.name)}>
-              <span className="og-thumb"><ExerciseArt art={e.art} compact /></span>
+              <span className="og-thumb"><ExerciseShot exercise={e.name} compact still /></span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span className="og-tt" style={{ display: 'block' }}>{e.name}</span>
                 <span className="og-ss" style={{ display: 'block' }}>
@@ -875,7 +902,7 @@ function Picker({ onClose, onPick }: { onClose: () => void; onPick: (name: strin
           )}
           {list.map((e) => (
             <button key={e.id} className="og-item" onClick={() => onPick(e.name)}>
-              <span className="og-thumb"><ExerciseArt art={e.art} compact /></span>
+              <span className="og-thumb"><ExerciseShot exercise={e.name} compact still /></span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span className="og-tt" style={{ display: 'block' }}>{e.name}</span>
                 <span className="og-ss" style={{ display: 'block' }}>{e.worked} · {e.gear}</span>

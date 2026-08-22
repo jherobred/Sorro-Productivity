@@ -9,6 +9,7 @@ import { useLongPress } from '@/lib/useLongPress';
 import { ContextMenu } from '@/components/ContextMenu';
 import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit, type Tick } from '@/lib/habits';
 import { Streak, bestStreakFrom } from '@/components/Streak';
+import { Buddy } from '@/components/Buddy';
 
 /** Ported from Basedly.dc.html markup 1020–1078; cell grid at 4433 (40px desktop). */
 
@@ -33,6 +34,18 @@ export default function HabitsPage() {
   const week = lastDays(7);
   const today = ymd(new Date());
 
+  /**
+   * Whole days since anything at all was ticked. The creature's face reads off
+   * this and nothing else — never off how many habits are kept or missed, which
+   * is the rule the challenge mascots are built on and the reason it is safe to
+   * put one on the page somebody opens on the morning they are failing.
+   */
+  const lastTick = ticks.map((t) => t.on_date).sort().at(-1) ?? null;
+  const daysSince = lastTick
+    ? Math.round((Date.parse(`${today}T12:00`) - Date.parse(`${lastTick}T12:00`)) / 864e5)
+    : null;
+  const keptToday = ticks.filter((t) => t.on_date === today).length;
+
   const label = (h: Habit, t: Tick | undefined) =>
     !t ? '' : h.kind === 'bin' ? '✓'
       : h.kind === 'dur' ? `${Math.floor(Number(t.value) / 60)}h`
@@ -40,8 +53,12 @@ export default function HabitsPage() {
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <h1 className="sronly">Habits</h1>
+        <Buddy daysSince={daysSince} size={46} racing={keptToday > 0}
+          note={daysSince === null ? 'Tick one and we start'
+            : keptToday > 0 ? `${keptToday} kept today — keep going`
+              : daysSince === 0 ? 'Back at it' : 'Ready when you are'} />
         <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
           {weekLabel(week[0], week[6])}
         </div>

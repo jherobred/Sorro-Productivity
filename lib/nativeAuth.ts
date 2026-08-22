@@ -16,12 +16,19 @@ export const NATIVE_REDIRECT = 'com.basedly.app://auth';
  * the plain web redirect. Instead: open the consent screen in the system
  * browser, catch the deep link back, and exchange the PKCE code ourselves.
  */
-export async function signInWithGoogle(): Promise<{ error?: string }> {
+export async function signInWithGoogle(
+  /** `prompt: 'select_account'` forces Google's chooser — see lib/accounts.ts. */
+  opts: { prompt?: string } = {},
+): Promise<{ error?: string }> {
   const redirectTo = isNative() ? NATIVE_REDIRECT : `${window.location.origin}/auth/callback/`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo, skipBrowserRedirect: isNative() },
+    options: {
+      redirectTo,
+      skipBrowserRedirect: isNative(),
+      ...(opts.prompt ? { queryParams: { prompt: opts.prompt } } : {}),
+    },
   });
 
   if (error) return { error: error.message };

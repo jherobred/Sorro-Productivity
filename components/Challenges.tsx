@@ -275,7 +275,7 @@ function Faces({ members, me, color, moodFor }: {
         {shown.map((m, i) => (
           <span key={m.user_id} title={m.user_id === me ? 'You' : m.display_name ?? ''}
             style={{ marginLeft: i ? -9 : 0, display: 'flex' }}>
-            <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={28} />
+            <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={34} />
           </span>
         ))}
         {rest > 0 && (
@@ -419,7 +419,11 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
   const rule = RULES.find((r) => r.id === c.rule);
   const max = Math.max(c.target ?? 0, ...rows.map((r) => r.progress), 1);
   const left = daysLeft(c);
-  const [onTrail, setOnTrail] = useState(false);
+  // The race, not the spreadsheet. This defaulted to the standings list, which
+  // meant the one view that shows the gap as a distance — and now shows eight
+  // animals actually running at the finish — was behind a toggle most people
+  // never found. The list is one tap away and still there.
+  const [onTrail, setOnTrail] = useState(true);
   const [sharing, setSharing] = useState(false);
 
   /* ------------------------------------------------------------- the sync
@@ -584,7 +588,7 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
                 }}>
                   {m.place}
                 </span>
-                <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={26}
+                <Mascot id={m.user_id} mood={moodFor(m.user_id)} hue={hueOf(m.user_id)} size={32}
                   crown={m.place === 1} />
                 <span style={{
                   width: 62, flex: 'none', fontSize: 11.5, fontWeight: you ? 800 : 600,
@@ -626,7 +630,7 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
           display: 'flex', alignItems: 'center', gap: 9, marginTop: 10, padding: '8px 11px',
           borderRadius: 11, background: 'var(--card2)', border: '1px solid var(--line)',
         }}>
-          <Mascot id={me} mood={moodFor(me)} hue={hueOf(me)} size={30} />
+          <Mascot id={me} mood={moodFor(me)} hue={hueOf(me)} size={40} />
           <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', lineHeight: 1.5 }}>
             {nudge({
               mood: moodFor(me),

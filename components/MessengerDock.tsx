@@ -7,10 +7,9 @@ import { ChatList, Thread } from './Messages';
 import { PeoplePicker } from './PeoplePicker';
 import { currentUserId, cachedUserId } from '@/lib/supabase';
 import { useLayout } from '@/lib/useLayout';
-import { useRealtime } from '@/lib/realtime';
 import { useProfiles, displayOf } from '@/lib/people';
 import {
-  useConversations, useMembers, useMessageActions, startDm, unreadOf, titleOf, CONVOS,
+  useConversations, useMembers, useMessageActions, startDm, unreadOf, titleOf,
 } from '@/lib/messages';
 
 /**
@@ -51,7 +50,6 @@ export function MessengerDock() {
   const { data: convos = [] } = useConversations();
   const { data: members = [] } = useMembers();
   const A = useMessageActions(me);
-  useRealtime('bd_conversations', CONVOS);
 
   const convo = convos.find((c) => c.id === openId) ?? null;
   const nameOf = (id: string) => displayOf(profiles, id, me).label;

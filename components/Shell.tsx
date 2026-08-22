@@ -23,6 +23,8 @@ import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { useAutoSync } from '@/lib/integrations';
+import { useAccounts, watchAccounts, switchTo, addAccount, forget, signOutAll } from '@/lib/accounts';
+import { useLiveSync } from '@/lib/realtime';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 
@@ -88,6 +90,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { data: workspaces = [] } = useWorkspaces();
   const WA = useWorkspaceActions();
   const me = useMe();
+  // Every account signed in on this device. Kept current through refresh-token
+  // rotation by watchAccounts below; see lib/accounts.ts.
+  const accounts = useAccounts();
   const spaceName = prefs.workspace
     ? workspaces.find((w) => w.id === prefs.workspace)?.name ?? 'Personal'
     : 'Personal';
@@ -107,6 +112,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useBackGuard();
   // Canvas LMS and Google Calendar pull themselves in; see useAutoSync.
   useAutoSync();
+  // One socket for every table, owned by the session rather than by a screen.
+  // This is what makes the phone and the desktop agree without a reload.
+  useLiveSync();
+  // Remember whoever signs in, so switching back needs no round trip.
+  useEffect(watchAccounts, []);
 
   /**
    * Ctrl/Cmd+\ collapses the sidebar, the shortcut Notion and VS Code use.
@@ -373,7 +383,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="cog" size={13} color="var(--tx3)" />All settings
                 </button>
-                <button onClick={() => supabase.auth.signOut()} className="hov"
+                <button onClick={() => void signOutAll()} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="back" size={13} color="var(--tx3)" />Sign out
                 </button>
@@ -436,7 +446,45 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </button>
 
                 <div style={{ height: 1, background: 'var(--line)', margin: '6px 4px' }} />
-                <div style={{ ...MENU_KICKER }}>Account</div>
+                <div style={{ ...MENU_KICKER }}>Accounts</div>
+
+                {/* Switching is a stored session, not a sign-in: no round trip,
+                    no leaving the app. The page reloads on purpose — see
+                    lib/accounts.ts for why that is the safe way to do it. */}
+                {accounts.map((a) => {
+                  const on = a.user_id === me.id;
+                  return (
+                    <button key={a.user_id} role="menuitemradio" aria-checked={on}
+                      onClick={() => { if (on) { setWsOpen(false); go('profile'); } else void switchTo(a.user_id); }}
+                      className="hov" style={{ ...MENU_ITEM, minHeight: 38 }}>
+                      <Face name={a.name} photo={a.photo} size={22} />
+                      <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                        <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {a.name}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {a.email}
+                        </span>
+                      </span>
+                      {on
+                        ? <Icon name="check" size={13} color="var(--accTx)" />
+                        : <span onClick={(e) => { e.stopPropagation(); forget(a.user_id); toast(`Removed ${a.name}`); }}
+                            role="button" tabIndex={0} aria-label={`Remove ${a.name}`} title="Remove from this device"
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); forget(a.user_id); } }}
+                            style={{ display: 'grid', placeItems: 'center', width: 20, height: 20, borderRadius: 6 }}>
+                            <Icon name="close" size={11} color="var(--tx3)" />
+                          </span>}
+                    </button>
+                  );
+                })}
+
+                <button onClick={() => { setWsOpen(false); void addAccount(); }} className="hov"
+                  style={{ ...MENU_ITEM, color: 'var(--tx3)' }}>
+                  <Icon name="plus" size={13} color="var(--tx3)" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>Add another account</span>
+                </button>
+
+                <div style={{ height: 1, background: 'var(--line)', margin: '6px 4px' }} />
 
                 <button onClick={() => { setWsOpen(false); go('profile'); }} className="hov" style={MENU_ITEM}>
                   <Icon name="people" size={13} color="var(--tx3)" />
@@ -446,7 +494,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <Icon name="cog" size={13} color="var(--tx3)" />
                   <span style={{ flex: 1, textAlign: 'left' }}>Settings</span>
                 </button>
-                <button onClick={() => { void supabase.auth.signOut(); toast('Signed out'); }}
+                <button onClick={() => { void signOutAll(); toast('Signed out'); }}
                   className="hov" style={{ ...MENU_ITEM, color: 'var(--pal-coral)' }}>
                   <Icon name="back" size={13} color="var(--pal-coral)" />
                   <span style={{ flex: 1, textAlign: 'left' }}>Sign out</span>
@@ -750,14 +798,15 @@ const MENU_KICKER: React.CSSProperties = {
 
 /** Your name and picture, read once. */
 function useMe() {
-  const [me, setMe] = useState<{ name: string; photo: string | null }>({ name: '', photo: null });
+  // The id is here so the account switcher can tick the row you are on.
+  const [me, setMe] = useState<{ id: string; name: string; photo: string | null }>({ id: '', name: '', photo: null });
   useEffect(() => {
     void (async () => {
       const id = await currentUserId().catch(() => null);
       if (!id) return;
       const { data } = await supabase.from('bd_profiles')
         .select('name,photo_url').eq('user_id', id).maybeSingle();
-      setMe({ name: data?.name ?? '', photo: data?.photo_url ?? null });
+      setMe({ id, name: data?.name ?? '', photo: data?.photo_url ?? null });
     })();
   }, []);
   return me;

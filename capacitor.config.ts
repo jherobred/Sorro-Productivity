@@ -11,7 +11,16 @@ const config: CapacitorConfig = {
     backgroundColor: '#07060D',
   },
   plugins: {
-    StatusBar: { style: 'DARK', backgroundColor: '#0A0912' },
+    // Edge to edge. With `overlaysWebView: false` the webview started below the
+    // status bar, so the app was a page inside a grey frame rather than the
+    // screen — and a body tab that is meant to be black to the edges cannot be.
+    // The Shell frame is exactly 100dvh and already pads itself by
+    // env(safe-area-inset-*), so it can be handed the whole display. The
+    // transparent background is required: a colour here would repaint the strip
+    // the overlay just gave us. (`backgroundColor` is documented as having no
+    // effect while overlaysWebView is true; it is set for the moment before the
+    // plugin loads.)
+    StatusBar: { overlaysWebView: true, style: 'DARK', backgroundColor: '#00000000' },
   },
 };
 

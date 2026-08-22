@@ -6,7 +6,6 @@ import { Icon, type IconName } from '@/components/Icon';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { RowActions } from '@/components/MoneyRows';
-import { useRealtime } from '@/lib/realtime';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
@@ -14,12 +13,22 @@ import { useLayout } from '@/lib/useLayout';
 import { useLongPress } from '@/lib/useLongPress';
 import { useDragCard } from '@/lib/useDragCard';
 import { ContextMenu } from '@/components/ContextMenu';
+import { FolderIcon, LookSheet, Cover } from '@/components/projects/Look';
+import { Crew } from '@/components/projects/Crew';
+import { roomFor } from '@/lib/presence';
+import { useProfiles, displayOf } from '@/lib/people';
+import { currentUserId as whoAmI } from '@/lib/supabase';
 import { settler } from '@/lib/settle';
 
 /** Ported from Basedly.dc.html markup 1549–1702. */
 
-type Project = { id: string; name: string; tag: string; color: string; progress: number; deadline: string | null; position: number };
-type Card = { id: string; project_id: string; title: string; col: string; color: string; position: number };
+type Project = {
+  id: string; name: string; tag: string; color: string; progress: number;
+  deadline: string | null; position: number;
+  /** How the folder looks — see components/projects/Look.tsx and 0010. */
+  icon: string; cover: string; user_id: string;
+};
+type Card = { id: string; project_id: string; title: string; col: string; color: string; position: number; assignee_id: string | null };
 type Comment = { id: string; project_id: string; author_id: string; body: string; created_at: string };
 
 const PROJ = ['projects'] as const;
@@ -48,7 +57,7 @@ const RESTORE_PROJ = defineMutation('proj.restore', async (v: { id: string }) =>
   const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: v.id });
   if (error) throw error;
 });
-const EDIT_PROJ = defineMutation('proj.edit', async (v: { id: string; patch: { name?: string; tag?: string } }) => {
+const EDIT_PROJ = defineMutation('proj.edit', async (v: { id: string; patch: { name?: string; tag?: string; icon?: string; cover?: string } }) => {
   const { error } = await supabase.from('bd_projects').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
@@ -97,6 +106,12 @@ export default function ProjectsPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   /** `proj:<id>` while renaming a folder, 'proj:new' while naming a new one. */
   const [editing, setEditing] = useState<string | null>(null);
+  /** Which folder's icon and cover are being chosen. */
+  const [look, setLook] = useState<string | null>(null);
+  /** For card assignees: real names instead of the "MR" that used to be typed in. */
+  const { data: profiles = {} } = useProfiles();
+  const [me, setMe] = useState('');
+  useEffect(() => { void whoAmI().then(setMe).catch(() => setMe('')); }, []);
 
   const settle = settler(qc, PROJ, CARDS, CMTS);
 
@@ -104,7 +119,8 @@ export default function ProjectsPage() {
     queryKey: PROJ,
     queryFn: async (): Promise<Project[]> => {
       const { data, error } = await supabase.from('bd_projects')
-        .select('id,name,tag,color,progress,deadline,position').is('deleted_at', null).order('position');
+        .select('id,name,tag,color,progress,deadline,position,icon,cover,user_id')
+        .is('deleted_at', null).order('position');
       if (error) throw error;
       return data ?? [];
     },
@@ -113,7 +129,7 @@ export default function ProjectsPage() {
     queryKey: CARDS,
     queryFn: async (): Promise<Card[]> => {
       const { data, error } = await supabase.from('bd_cards')
-        .select('id,project_id,title,col,color,position').is('deleted_at', null).order('position');
+        .select('id,project_id,title,col,color,position,assignee_id').is('deleted_at', null).order('position');
       if (error) throw error;
       return data ?? [];
     },
@@ -129,21 +145,18 @@ export default function ProjectsPage() {
     },
   });
 
-  useRealtime('bd_cards', CARDS);
-  useRealtime('bd_project_comments', CMTS);
-
   const newProj = useMutation<unknown, Error, { id: string; name: string; color: string }>({
     mutationKey: NEW_PROJ,
     onMutate: (v) => {
       const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
       queryClient.setQueryData<Project[]>(PROJ, [
         ...prev,
-        { id: v.id, name: v.name, tag: '', color: v.color, progress: 0, deadline: null, position: prev.length },
+        { id: v.id, name: v.name, tag: '', color: v.color, progress: 0, deadline: null, position: prev.length, icon: '', cover: '', user_id: '' },
       ]);
     },
     onSettled: settle,
   });
-  const editProj = useMutation<unknown, Error, { id: string; patch: { name?: string; tag?: string } }>({
+  const editProj = useMutation<unknown, Error, { id: string; patch: { name?: string; tag?: string; icon?: string; cover?: string } }>({
     mutationKey: EDIT_PROJ,
     onMutate: (v) => {
       const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
@@ -308,7 +321,7 @@ export default function ProjectsPage() {
                 padding: phone ? '10px 4px' : '12px 6px', borderRadius: 12, textAlign: 'center',
                 ...dragProps.style,
               }}>
-              <FolderIcon color={p.color} count={n} size={phone ? 52 : 60} />
+              <FolderIcon color={p.color} count={n} size={phone ? 52 : 60} icon={p.icon} />
               <span style={{ width: '100%', fontSize: 11.5, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
                 {p.name}
               </span>
@@ -332,12 +345,22 @@ export default function ProjectsPage() {
 
         {shown.length === 0 && <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>Nothing matches that search.</div>}
 
+        {look && (() => {
+          const p = projects.find((x) => x.id === look);
+          return p ? (
+            <LookSheet name={p.name} icon={p.icon} cover={p.cover} color={p.color}
+              onClose={() => setLook(null)}
+              onSave={(patch) => editProj.mutate({ id: p.id, patch })} />
+          ) : null;
+        })()}
+
         {lp.ctx && (
           <ContextMenu x={lp.ctx.x} y={lp.ctx.y} kind="project" label={lp.ctx.label}
             accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={lp.close}
             items={[
               { label: 'Open', icon: 'proj', run: () => setOpen(lp.ctx!.id) },
               { label: 'Rename', icon: 'edit', run: () => setEditing(`proj:${lp.ctx!.id}`) },
+              { label: 'Change icon and cover', icon: 'photo', run: () => setLook(lp.ctx!.id) },
               { label: 'Delete', icon: 'trash', danger: true, run: () => { const id = lp.ctx!.id; const row = projects.find((x) => x.id === id); delProj.mutate({ id }); toast('Project deleted', () => restoreProj.mutate({ id, row })); } },
             ]} />
         )}
@@ -347,26 +370,41 @@ export default function ProjectsPage() {
 
   return (
     <div style={{ padding: pad }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <button onClick={() => setOpen(null)} className="hov" title="All projects"
-          style={{ width: 32, height: 32, flex: 'none', borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
-          <Icon name="back" size={15} color="var(--tx2)" />
-        </button>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>{proj.name}</div>
-        <div style={{ display: 'flex' }}>
-          {[{ i: 'MR', c: PAL.indigo }, { i: 'JL', c: PAL.mint }, { i: 'RT', c: PAL.amber }].map((m, i) => (
-            <div key={m.i} style={{
-              width: 24, height: 24, borderRadius: '50%', background: m.c, marginLeft: i ? -7 : 0,
-              border: '2px solid var(--bg)', display: 'grid', placeItems: 'center', fontSize: 8.5, fontWeight: 700, color: '#0C0F16',
-            }}>{m.i}</div>
-          ))}
+      {/* The cover, when there is one — Notion's band, and the header sits on
+          it rather than under it, so a project with a picture still opens on
+          its board rather than on a hero. */}
+      <Cover cover={proj.cover} color={proj.color}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button onClick={() => setOpen(null)} className="hov" title="All projects"
+            style={{ width: 32, height: 32, flex: 'none', borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="back" size={15} color="var(--tx2)" />
+          </button>
+
+          <button onClick={() => setLook(proj.id)} className="hov k-squish" title="Change icon and cover"
+            aria-label="Change icon and cover"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 6px 2px 2px', borderRadius: 10 }}>
+            <FolderIcon color={proj.color} count={0} size={34} icon={proj.icon} />
+            <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.025em' }}>{proj.name}</span>
+          </button>
+
+          {/* Who is actually on this. It used to be three invented initials,
+              the same three on every board. */}
+          <Crew projectId={proj.id} ownerId={proj.user_id} color={proj.color}
+            room={roomFor('projects', proj.id)} />
+
+          <button onClick={() => setView(VIEWS[(VIEWS.indexOf(view) + 1) % VIEWS.length])} className="acc" title="Switch view"
+            style={{ marginLeft: 'auto', width: 38, height: 38, borderRadius: 19, background: 'var(--acc)', display: 'grid', placeItems: 'center' }}>
+            <Icon name={VIEW_ICON[view]} size={16} color="#0C0F16" />
+          </button>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)', width: 62, textTransform: 'capitalize' }}>{view}</div>
         </div>
-        <button onClick={() => setView(VIEWS[(VIEWS.indexOf(view) + 1) % VIEWS.length])} className="acc" title="Switch view"
-          style={{ marginLeft: 'auto', width: 38, height: 38, borderRadius: 19, background: 'var(--acc)', display: 'grid', placeItems: 'center' }}>
-          <Icon name={VIEW_ICON[view]} size={16} color="#0C0F16" />
-        </button>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)', width: 62, textTransform: 'capitalize' }}>{view}</div>
-      </div>
+      </Cover>
+
+      {look === proj.id && (
+        <LookSheet name={proj.name} icon={proj.icon} cover={proj.cover} color={proj.color}
+          onClose={() => setLook(null)}
+          onSave={(patch) => editProj.mutate({ id: proj.id, patch })} />
+      )}
 
       {view === 'board' && (
         <div className="hbar" style={{ display: 'flex', gap: 12, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 6 }}>
@@ -403,7 +441,20 @@ export default function ProjectsPage() {
                       style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, marginBottom: 9, textWrap: 'pretty' }}>{c.title}</div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: PAL.indigo, display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700, color: '#0C0F16' }}>MR</div>
+                    {/* The assignee, or nothing. This drew a hardcoded "MR" on
+                        every card of every board — a name that was not even
+                        read from the row it was sitting on. */}
+                    {c.assignee_id ? (() => {
+                      const who = displayOf(profiles, c.assignee_id, me);
+                      return (
+                        <span title={who.label} style={{
+                          width: 20, height: 20, borderRadius: '50%', background: who.hue,
+                          display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700, color: '#0C0F16',
+                        }}>{who.initials}</span>
+                      );
+                    })() : (
+                      <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Unassigned</span>
+                    )}
                     <span style={{ marginLeft: 'auto' }}>
                       <RowActions label={c.title}
                         onEdit={() => setEditing(`card:${c.id}`)}
@@ -521,32 +572,6 @@ function CardTitle({ initial, onSave, onCancel }: {
       onBlur={() => (v.trim() ? onSave(v.trim()) : onCancel())}
       onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) onSave(v.trim()); if (e.key === 'Escape') onCancel(); }}
       style={{ width: '100%', minHeight: 32, padding: '6px 8px', marginBottom: 9, borderRadius: 8, border: '1px solid var(--acc)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5, fontWeight: 600 }} />
-  );
-}
-
-/**
- * The folder glyph itself: back plate, ruled paper, front flap, and the card
- * count printed on the flap where a paper folder would have its label.
- */
-function FolderIcon({ color, count, size }: { color: string; count: number; size: number }) {
-  const h = Math.round(size * 0.78);
-  return (
-    <span style={{ position: 'relative', width: size, height: h, display: 'block', flex: 'none' }}>
-      <span style={{ position: 'absolute', left: 0, top: 0, width: size * 0.42, height: h * 0.17, borderRadius: '4px 4px 0 0', background: `color-mix(in srgb, ${color} 70%, #000)` }} />
-      <span style={{ position: 'absolute', left: 0, top: h * 0.13, right: 0, bottom: h * 0.2, borderRadius: 6, background: 'var(--card2)', border: '1px solid var(--line2)', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ height: 2.5, width: '76%', borderRadius: 2, background: 'var(--line2)' }} />
-        <span style={{ height: 2.5, width: '54%', borderRadius: 2, background: 'var(--line2)' }} />
-      </span>
-      <span style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0, height: h * 0.6,
-        borderRadius: '3px 7px 7px 7px', display: 'grid', placeItems: 'center',
-        background: `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 62%, #000))`,
-      }}>
-        {count > 0 && (
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#0C0F16', opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
-        )}
-      </span>
-    </span>
   );
 }
 

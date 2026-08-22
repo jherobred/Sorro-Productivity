@@ -3,8 +3,8 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-23 (the gym now wears openGym; messages carry files and
-follow you around).
+Last updated: 2026-08-23 (Body is one black page, the whole app is live-synced,
+and you can hold more than one account).
 
 ---
 
@@ -118,11 +118,215 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    commit, and remember that a Postgres check failure takes down the *entire*
    multi-row insert, not the offending row.
 
-8. **The browser pane does not composite when hidden** — CSS animations sit at
+8. **Realtime is one channel, owned by the session.** `useLiveSync()` in
+   `lib/realtime.ts`, mounted once by the Shell, with a binding per table and
+   invalidation by *query-key prefix* (`bd_tasks` → `['tasks']`). Do not go back
+   to a `useRealtime(table, key)` per screen: two screens that want the same
+   table open two channels on one Phoenix topic and race, which is exactly what
+   Messages and the MessengerDock were doing. A table not in the
+   `supabase_realtime` publication is silent however good the client is — that
+   was the whole sync bug, and `0009` is the fix.
+
+9. **The browser pane does not composite when hidden** — CSS animations sit at
    `currentTime: 0`, so `getBoundingClientRect()` on anything with an entry
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-23, third pass (Body as one page, live sync, accounts)
+
+**The sync delay was not slowness, it was absence.** Only eleven tables were
+ever in the `supabase_realtime` publication — the community feed and project
+cards — and only four screens opened a channel. Tasks, calendar, notes, habits,
+money, files, the gym and the journal had no live path at all, so a phone and a
+desktop on the same account agreed only after `staleTime` expired *and* the
+window happened to be focused, which on a phone with the app already in front of
+you never happens. `0009_realtime_everywhere.sql` puts 54 tables in the
+publication and `lib/realtime.ts` is now one channel owned by the session rather
+than one per screen (`useLiveSync()`, mounted in `Shell`). Table `bd_x` maps to
+query prefix `['x']`; TanStack's prefix matching covers every window a screen has
+cached, which is fact 3 enforced rather than restated. A `visibilitychange`
+backstop refetches active queries when you come back to the app, because
+`focus` does not fire on a phone returning from the background.
+
+*Side effect worth knowing*: `Messages` and `MessengerDock` both called
+`useRealtime('bd_conversations', CONVOS)`, so two channels raced for one Phoenix
+topic on one socket. That cannot happen now — there is one.
+
+**Toasts sat on the phone's navigation.** `ToastHost` was pinned 22px off the
+bottom on every layout; `BottomNav` occupies roughly the bottom 66px on a phone.
+So every "Deleted · Undo" landed on the section icons and a tab covered the Undo
+button. It clears the bar on phones now.
+
+**A client-side exception no longer takes the whole app down.** Production was
+showing Next's default — "Application error: a client-side exception has
+occurred" — which is the same sentence for a null dereference, a corrupt cache
+and a bad deploy, and it asks the person least able to open a console to go and
+open one. `components/Crashed.tsx` plus `app/(shell)/error.tsx` and
+`app/global-error.tsx` show the real message, the digest and the top of the
+stack, with Copy details and **Clear saved data**. That last one matters: the
+whole TanStack cache is persisted under `basedly-cache` with `maxAge: Infinity`,
+so a row cached in a shape an older build wrote survives every reload and every
+deploy — a sticky, per-device failure that looks exactly like "broken for me and
+nobody else". **The reported Messages crash was not reproduced**: production
+holds one conversation, two members and zero messages, the schema matches what
+the client selects, and nothing in that render path throws on that data. The
+boundary is what will name it next time it happens.
+
+**Body is one page now.** It was a tab rail over three panes — Today and Eaten in
+Basedly's lavender cards, Trained in openGym's black tracker inside a rounded,
+bordered box. The section that mattered most looked like a different app seen
+through a window cut into this one. There are no tabs and no pane: the whole tab
+is openGym's black ground with everything laid on it in one scroll — today, water
+and sleep, training, fuel, progress.
+
+The seam closed with **one block, not a rewrite**. `app/gym.css` maps Basedly's
+own `--card` / `--line` / `--tx` / `--acc` onto openGym's surfaces inside
+`.ogym`, so the rings, the glass, the sleep arc and the meal sheet came across
+without a single component being edited. Anything portalled out of the page —
+`MealSheet`, the exercise sheets — carries `className="ogym"` or it comes back
+wearing lavender on a black tab.
+
+`components/body/Gym.tsx` no longer exports a screen. It exports `useTraining`
+(the state), `TrainCard`, `ProgressCards` and `TrainingOverlays`, so the page can
+put Fuel between two of them. Plan and Exercises were destinations behind a
+segmented control; they are sheets.
+
+**The exercise demos are photographs.** openGym pulls ~140 MB of GIFs on first
+launch, which a Capacitor APK off a static export cannot do, and the previous
+answer — nine drawn line-art patterns — made a bench press and a dumbbell fly the
+same picture. `public/ex/<id>-0.jpg` and `-1.jpg` are the start and finish of
+each of the 40 movements, crossfaded on a slow beat, which is what the GIF was
+communicating at 5.2 MB for the catalogue rather than 140. From
+**yuhonas/free-exercise-db**, which is Unlicense (public domain), so it ships
+inside an APK with no notice. `ExerciseShot` falls back to `ExerciseArt` for a
+movement typed in by hand — that is the normal case, not a failure.
+
+*This was decided against the agreed plan of a Supabase bucket, and the reason
+is that the premise changed*: two stills per exercise is 5.2 MB, not 140 MB, so
+bundling costs almost nothing and buys offline, no bucket policy to get wrong
+(see the `bd-feed` vs `bd-files` note above for how easy that is), and no
+runtime failure mode. `shotOf()` in `lib/lift.ts` is the one place to change if
+they ever move.
+
+**More than one account, one tap apart.** `lib/accounts.ts`. Supabase keeps one
+session; this keeps a copy of every session signed into on the device and
+switching is `setSession()`. Two things it would be easy to get wrong:
+
+- **Refresh-token rotation.** Supabase issues a new refresh token every time one
+  is used and invalidates the old one, so a copy taken at sign-in is worthless an
+  hour later. `remember()` is wired to `onAuthStateChange`, which fires on every
+  refresh. Store it once at sign-in instead and switching back fails days later
+  with nothing to point at.
+- **`prompt: 'select_account'`.** Without it Google returns the account already
+  signed in there and "Add another account" appears to do nothing.
+
+Switching **reloads the page on purpose**. The query cache, its persisted copy,
+the prefs store, the cached user id, the realtime socket and the presence channel
+are all keyed to whoever was signed in; tearing each down by hand is six chances
+to leave one holding the previous account's rows, and a balance from the wrong
+account is the worst bug this app could have. `remember()` returns true when the
+signed-in account *changed*, and that is what triggers it — clearing localStorage
+does nothing to a cache already in memory, and coming back from Google is a
+client-side route change, not a fresh document.
+
+**Full screen on a phone.** `overlaysWebView: true` on the StatusBar plugin (the
+webview started below the status bar, so the app was a page in a grey frame) plus
+`values-v27/styles.xml` for `windowLayoutInDisplayCutoutMode: shortEdges`. The
+Shell frame is already exactly 100dvh with `env(safe-area-inset-*)` padding, so
+it can be handed the whole display. On the web, `public/manifest.webmanifest` +
+`appleWebApp` metadata make it installable, which is the only way to lose a
+browser's address bar. **`adjustMarginsForEdgeToEdge` does not exist in Capacitor
+8** — the CLI's android config has 17 keys and that is not one of them; `tsc`
+catches it because `capacitor.config.ts` is in the tsconfig include.
+
+**The schedule scanner read classes and threw the rest of the week away.** Its
+prompt said, in as many words, "ignore breaks, vacant slots, lunch, and anything
+that is not a scheduled class". Point it at a screenshot of a real calendar and
+it returned the five subjects and dropped Wake Up, Travel Time, the gym and the
+evening shift — most of the week, and the half that moves. Now:
+
+- Every block with a time on it is read, and each carries a `kind` enum
+  (`class | lab | travel | personal | work | break | other`), which the review
+  screen turns into a colour and a chip so one tick drops a whole category.
+- Explicit instructions for a **calendar-app screenshot**: the column gives the
+  day, the hour labels give the time, and the time printed inside the block is
+  the truth — do not re-derive it from the geometry.
+- `maxOutputTokens` 8192 → 32768. A whole week with the literal source text on
+  every row runs well past 8192 and a JSON answer cut off mid-object does not
+  parse; the symptom is "the model returned prose, not JSON" on exactly the busy
+  timetables the feature exists for. `finishReason: MAX_TOKENS` now says so
+  instead. Entry cap 60 → 150.
+- **`readRange()` in `lib/schedule.ts` reads both ends of a block together.**
+  Reading each end alone is what broke every non-academic row: the timetable rule
+  that a bare hour under seven is the afternoon turned "Travel Time 6 - 7" into
+  18:00–07:00, a range that ends before it starts, and the review screen flagged
+  a perfectly legible commute as unreadable. A pair is one fact, so it is decided
+  as one — take the afternoon reading when it makes a coherent block, the literal
+  one when it does not. `node lib/schedule.check.ts` asserts both directions.
+
+Deployed as `schedule-scan` **version 2**, `verify_jwt` on.
+
+**Projects: a folder gets a face and a project gets people.** `0010_project_look.sql`
+adds `icon` and `cover` to `bd_projects` — one string each, told apart by shape
+(`''` / `ic:proj` / `grad:dusk` / a storage path / an emoji). Prefixes rather
+than a `kind` column because nothing ever queries it. `components/projects/Look.tsx`
+draws them and holds the picker: any emoji you can type, thirty of the app's own
+icons, six Notion-style gradient covers, or upload a picture.
+
+`components/projects/Crew.tsx` replaces three avatars that read **MR, JL and RT**
+— a literal array in the JSX, the same three initials on every project on
+everybody's screen. Every card drew "MR" as its assignee for the same reason.
+`bd_project_members` existed the whole time; this reads it, and a green ring
+means that person has the board open right now (off the presence channel the app
+already joins). Cards show their real `assignee_id` or say "Unassigned".
+
+**The mascots race now.** The trail drew eight heads at 32px breathing gently on
+a chart, which is a standings list with pictures on it. Each animal that has
+covered ground leans into it, gallops, and kicks dust back down the lane; the
+leader goes visibly harder; the finish is a chequered post; each name chip
+carries the gap to the leader so the reader is not doing subtraction. Lanes and
+animals grew with it (46/54px, 62px lanes) — a 32px head cannot carry a lean.
+`Challenges` **opens on the trail** rather than the standings, because the race
+was behind a toggle most people never found.
+
+The rule the moods are built on is unchanged and is why `components/Buddy.tsx`
+is safe to put on pages people open on bad mornings: **the face comes from
+whether you did the thing recently, never from how you compare to anyone.** Buddy
+is on Habits (days since anything was ticked) and Home (days since a task was
+completed — `completed_at` is now in the tasks select, one word, so the signal is
+real rather than inferred).
+
+**Migrations applied to production**: `0009_realtime_everywhere.sql`,
+`0010_project_look.sql`.
+
+**Verified in the browser (fixture mode).** Body: ground `rgb(0,0,0)`, cards
+`rgb(28,28,30)` at 14px, accent `#30d158`, h1 34px, no tab rail, no `.ogym-ground`,
+`--card` remapped to `#1c1c1e` inside `.ogym`; the exercise sheet listing 40 rows
+with 80 real photographs (850×567) and 50px thumbnails; the guided session's demo
+card 320px with `bench-0.jpg` loaded and the two hint pills still 25px (a bare
+`> span` selector would have stretched them to 320 — hence `.og-shot`). Projects:
+emoji and app-icon folder faces, the dusk cover at 109px, "You · owner",
+`@juleslopez` / `@raintol` as real assignees. Challenges: 7 racing animals with
+dust and speed lines, 46/54px on the trail and 34px in the standings, gap chips
+(−4, −5, −8), no sideways scroll at 375px. Habits and Home each draw a rabbit.
+All five check files pass, `tsc` and `next build` are clean, and the export
+carries 80 images, the manifest and both error-boundary chunks.
+
+**Not verified signed in**, as always in fixture mode: every write, the account
+switcher's `setSession` round trip, and the schedule scanner against a real
+calendar screenshot. Those are the first things to try.
+
+**One measuring trap, a third time.** The browser pane does not composite when
+hidden, so the page-entry transform on `main` sits at its *from* keyframe and
+every `getBoundingClientRect()` under it reads wrong — the Body page measured
+372.75px wide inside a 375px column, and the trail's walkers measured as
+overflowing by 160px when they were comfortably inside. `offsetWidth` is honest;
+`getBoundingClientRect()` is not. Neutralise the transform on `main` alone before
+measuring — a blanket `transform: none !important` breaks the shell's own layout
+and gives you a different set of wrong numbers.
 
 ---
 

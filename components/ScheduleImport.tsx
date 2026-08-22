@@ -11,12 +11,21 @@ import { toast } from '@/lib/toast';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import {
-  DAYS, DAY_LABEL, toRow, dedupe, occurrences, totalOccurrences, eventTitle,
-  defaultRange, validYmd, ymd, type Day, type Row, type ScanEntry,
+  DAYS, DAY_LABEL, KINDS, KIND_LABEL, KIND_COLOR, toRow, dedupe, occurrences,
+  totalOccurrences, eventTitle, defaultRange, validYmd, ymd,
+  type Day, type Kind, type Row, type ScanEntry,
 } from '@/lib/schedule';
 
 /**
- * Point it at a photo of your timetable; it fills in the term.
+ * Point it at a photo of your week; it fills in the term.
+ *
+ * It used to be a *class* importer, and it was told so in its prompt: ignore
+ * anything that is not a scheduled class. Point it at a screenshot of a real
+ * calendar and it returned the five subjects and dropped the wake-ups, the
+ * commutes, the shifts and the study blocks around them — most of the week, and
+ * the half that actually moves. It reads every block with a time on it now, and
+ * each one comes back labelled, so a chip unticks a whole category rather than
+ * twenty rows.
  *
  * The rule this screen is built around: **the model never writes to the
  * calendar.** It reads, and then a person confirms. Everything it was unsure
@@ -29,8 +38,6 @@ import {
  * API key belongs on a server and because the second, checking pass is easier
  * to keep honest there.
  */
-
-const COLORS = ['#7C6CFF', '#38D6F2', '#34D9A0', '#FFC24B', '#FF6B6B', '#FF6FA8', '#B07CFF'];
 
 /** Written as one insert: a term of classes is one act, not ninety. */
 const IMPORT = defineMutation('cal.importSchedule', async (v: { rows: Record<string, unknown>[] }) => {
@@ -76,7 +83,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.message ?? 'Could not read that');
 
-      const found = dedupe((data.entries as ScanEntry[]).map((e, i) => toRow(e, i, COLORS[i % COLORS.length])));
+      const found = dedupe((data.entries as ScanEntry[]).map((e, i) => toRow(e, i)));
       setRows(found);
       setNotes(typeof data.notes === 'string' ? data.notes : '');
       setScanInfo({ model: String(data.model ?? ''), verified: !!data.verified });
@@ -88,7 +95,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
       if (from && to && from < to) setRange({ from, to });
 
       setStage('review');
-      if (found.length === 0) toast('Nothing that looked like a class');
+      if (found.length === 0) toast('Nothing on that image had a time on it');
     } catch (e) {
       setStage('pick');
       toast(e instanceof Error ? e.message : 'Could not read that');
@@ -213,10 +220,12 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
                 border: '1.5px dashed var(--line2)', borderRadius: 16,
               }}>
               <Icon name="cal" size={26} color="var(--tx3)" />
-              <div style={{ fontSize: 13, fontWeight: 700 }}>Drop a photo of your timetable</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Drop a picture of your week</div>
               <div style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.7, maxWidth: 420 }}>
-                A screenshot of the portal, a photo of the printed sheet, a picture of the whiteboard.
-                Paste works too. Nothing goes on your calendar until you have read it back.
+                A screenshot of Google Calendar, the student portal, a photo of the printed sheet, a
+                picture of the whiteboard. It reads classes <em>and</em> everything around them —
+                travel, wake-ups, shifts, study blocks. Paste works too. Nothing goes on your
+                calendar until you have read it back.
               </div>
               <label className="k-squish" style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11,
@@ -265,8 +274,34 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
                     style={DATE_INPUT} />
                 </label>
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>
-                  {rows.filter((r) => r.include).length} of {rows.length} classes
+                  {rows.filter((r) => r.include).length} of {rows.length} blocks
                 </span>
+              </div>
+
+              {/* One tick per category. Somebody who wanted only their subjects
+                  turns off Travel and Personal here instead of hunting rows. */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {KINDS.filter((k) => rows.some((r) => r.kind === k)).map((k) => {
+                  const of = rows.filter((r) => r.kind === k);
+                  const on = of.some((r) => r.include);
+                  return (
+                    <button key={k} aria-pressed={on}
+                      onClick={() => setRows((rs) => rs.map((r) => (r.kind === k
+                        ? { ...r, include: on ? false : r.problems.length === 0 }
+                        : r)))}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999,
+                        fontSize: 11, fontWeight: 700,
+                        border: `1px solid ${on ? KIND_COLOR[k] : 'var(--line2)'}`,
+                        background: on ? `color-mix(in srgb, ${KIND_COLOR[k]} 18%, transparent)` : 'transparent',
+                        color: on ? 'var(--tx)' : 'var(--tx3)',
+                      }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: KIND_COLOR[k], flex: 'none' }} />
+                      {KIND_LABEL[k]}
+                      <span style={{ color: 'var(--tx3)', fontWeight: 600 }}>{of.length}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               {rows.map((r) => (
@@ -277,7 +312,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
 
               {rows.length === 0 && (
                 <div style={{ fontSize: 12.5, color: 'var(--tx3)', textAlign: 'center', padding: 30, lineHeight: 1.7 }}>
-                  Nothing on that image looked like a class.<br />
+                  Nothing on that image had a time on it.<br />
                   <button onClick={() => setStage('pick')} className="k-underline"
                     style={{ fontSize: 12, fontWeight: 700, color: 'var(--accTx)' }}>Try another picture</button>
                 </div>
@@ -340,7 +375,7 @@ function RowEditor({
           {row.include && <Icon name="check" size={11} color="#0C0F16" />}
         </button>
 
-        <input value={row.title} onChange={(e) => onPatch({ title: e.target.value })} aria-label="Class"
+        <input value={row.title} onChange={(e) => onPatch({ title: e.target.value })} aria-label="Title"
           style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }} />
 
         <input value={row.code} onChange={(e) => onPatch({ code: e.target.value })} placeholder="Code" aria-label="Course code"
@@ -378,15 +413,20 @@ function RowEditor({
         <input value={row.location} onChange={(e) => onPatch({ location: e.target.value })} placeholder="Room"
           aria-label="Room" style={{ width: 96, fontSize: 11, color: 'var(--tx2)' }} />
 
-        <span style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
-          {COLORS.slice(0, 5).map((c) => (
-            <button key={c} onClick={() => onPatch({ color: c })} aria-label={`Colour ${c}`}
-              style={{
-                width: 14, height: 14, borderRadius: 4, background: c,
-                outline: row.color === c ? '2px solid var(--tx2)' : 'none', outlineOffset: 1,
-              }} />
-          ))}
-        </span>
+        {/* The kind carries the colour, so there is one control rather than
+            two that have to be kept in agreement. */}
+        <select value={row.kind} aria-label="What sort of block this is"
+          onChange={(e) => {
+            const k = e.target.value as Kind;
+            onPatch({ kind: k, color: KIND_COLOR[k] });
+          }}
+          style={{
+            marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 8,
+            border: `1px solid ${row.color}`, background: `color-mix(in srgb, ${row.color} 16%, transparent)`,
+            color: 'var(--tx)',
+          }}>
+          {KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+        </select>
       </div>
 
       {(row.problems.length > 0 || unsure || row.raw) && (

@@ -1,5 +1,14 @@
 /**
- * Read a class schedule out of a photo or screenshot.
+ * Read a schedule out of a photo or screenshot.
+ *
+ * Not only a class schedule. It read timetables and was told, in as many words,
+ * to "ignore breaks, vacant slots, lunch, and anything that is not a scheduled
+ * class" — so a screenshot of somebody's actual week came back with the five
+ * subjects and without Wake Up, Travel Time, the gym or the evening shift, and
+ * the calendar it filled was a calendar of a life nobody lives. Everything with
+ * a time on it is read now, and every entry says what kind of thing it is so
+ * the review screen can colour it and the student can drop a whole category in
+ * one tick.
  *
  * The client sends one image; this returns the timetable as structured rows.
  * It writes nothing - the browser does that, as the signed-in user, through
@@ -40,6 +49,13 @@ const json = (body: unknown, status = 200) =>
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 /**
+ * What sort of block this is. An enum for the same reason the days are one:
+ * a free-text category comes back as "Class", "class", "Lecture", "Academic"
+ * and "Subject" across five images and nothing downstream can group it.
+ */
+const KINDS = ['class', 'lab', 'travel', 'personal', 'work', 'break', 'other'];
+
+/**
  * The shape the model must answer in. Enumerating the days is what stops the
  * long tail of "TTh", "M/W/F", "Tues" and "Thurs" from ever reaching the
  * client — the API rejects anything off this list.
@@ -57,13 +73,14 @@ const SCHEMA = {
           section: { type: 'string', description: 'Section or block if shown, else empty' },
           location: { type: 'string', description: 'Room or building if shown, else empty' },
           teacher: { type: 'string', description: 'Instructor if shown, else empty' },
+          kind: { type: 'string', enum: KINDS, description: 'What sort of block this is' },
           days: { type: 'array', items: { type: 'string', enum: DAYS } },
           start: { type: 'string', description: '24-hour HH:MM' },
           end: { type: 'string', description: '24-hour HH:MM' },
           raw: { type: 'string', description: 'The literal text this row was read from' },
           confidence: { type: 'number', description: '0 to 1' },
         },
-        required: ['title', 'days', 'start', 'end', 'raw', 'confidence'],
+        required: ['title', 'kind', 'days', 'start', 'end', 'raw', 'confidence'],
       },
     },
     term_starts_on: { type: 'string', description: 'YYYY-MM-DD if the image states a term start, else empty' },
@@ -73,45 +90,78 @@ const SCHEMA = {
   required: ['entries', 'notes'],
 };
 
-const READ_PROMPT = `You are reading a student's class schedule from an image. It may be a
-photograph of a printed timetable, a screenshot of a portal, a grid, or a list.
+const READ_PROMPT = `You are reading a student's weekly schedule from an image. It may be a
+photograph of a printed timetable, a screenshot of a portal, a screenshot of a
+calendar app such as Google Calendar or Outlook, a grid, or a list.
 
 Transcribe it. Do not interpret, summarise, or invent.
 
+READ EVERY BLOCK THAT HAS A TIME ON IT.
+Classes, labs, travel time, wake-up alarms, study blocks, work shifts, training,
+church, appointments, meals, personal reminders — all of them. A student's week
+is not only their subjects, and a block you leave out is one they will miss.
+The only things to skip are the grid itself (hour labels down the side, day
+names across the top), all-day banners with no time, and empty cells.
+
+Set "kind" for each entry:
+- "class"    a lecture, subject or course meeting
+- "lab"      a laboratory or practical session (often marked LAB in the title)
+- "travel"   getting somewhere: "Travel Time", "Travel Home", commute, drive
+- "personal" wake up, sleep, gym, meals, errands, church, appointments, study
+- "work"     a paid shift or job
+- "break"    an explicitly labelled break, free period or vacant slot
+- "other"    anything you cannot place
+
 Rules:
-- One entry per class per distinct time slot. If a class meets Monday 9-10:30
-  AND Wednesday 13:00-14:30, that is TWO entries, because the times differ.
-  If it meets Monday and Wednesday at the same time, that is ONE entry with
-  two days.
-- Times in 24-hour HH:MM. A schedule that says "1:00 - 2:30" in a column of
-  afternoon classes means 13:00-14:30. Use the surrounding rows to decide AM
-  or PM when it is not written; a university class at "8:00" is 08:00 and one
-  at "7:00" in an evening column is 19:00.
+- One entry per distinct time slot. If a class meets Monday 9:00-10:30 AND
+  Wednesday 13:00-14:30, that is TWO entries, because the times differ. If it
+  meets Monday and Wednesday at the same time, that is ONE entry with two days.
+- Times in 24-hour HH:MM.
+- Copy titles, codes, rooms and instructors exactly as written, including
+  abbreviations and any bracketed section numbers. Do not expand
+  "Comp Prog 1" into "Computer Programming 1" and do not tidy
+  "ICS2607 - INFOMAN (1906)" into "Information Management".
+- "raw" must be the literal text of that block as it appears, so a person can
+  check you. Never paraphrase it.
+- "confidence" is how sure you are of THAT row: 1.0 for crisp text you read
+  without difficulty, below 0.6 for anything blurred, cut off, handwritten,
+  overlapping another block, or inferred.
+- If a block is unreadable, still emit it with your best reading and a low
+  confidence, and say so in "notes". Do not silently drop anything.
+
+READING A CALENDAR-APP SCREENSHOT (a week or day grid):
+- The column a block sits in gives its day; the row of hour labels down the
+  left-hand edge gives its time. Use the labels, not the pixel height.
+- Most calendar apps print the time inside the block, e.g. "7 - 9am",
+  "11:30am - 1pm", "4 - 5pm". When that text is there it is the truth; read it
+  and do not re-derive the time from the geometry.
+- A block that repeats in several columns at the same time is ONE entry with
+  several days. A block that repeats at different times is one entry per time.
+- Colour is not information you need to report, but blocks of the same colour
+  are usually the same kind, which is a useful check on yourself.
+
+READING A PRINTED OR PORTAL TIMETABLE:
 - Day letters: M=mon, T=tue, W=wed, Th/H=thu, F=fri, S/Sat=sat, Su/Sun=sun.
   "TTh" is tue and thu. "MWF" is mon, wed, fri. "M-F" is mon..fri.
-- Copy titles, codes, rooms and instructors exactly as written, including
-  abbreviations. Do not expand "Comp Prog 1" into "Computer Programming 1".
-- "raw" must be the literal text of that row as it appears, so a person can
-  check you. Never paraphrase it.
-- "confidence" is how sure you are of THAT row: 1.0 for crisp printed text you
-  read without difficulty, below 0.6 for anything blurred, cut off, handwritten
-  or inferred.
-- If a cell is unreadable, still emit the entry with your best reading and a
-  low confidence, and say so in "notes". Do not silently drop a class.
-- Ignore breaks, vacant slots, lunch, and anything that is not a scheduled
-  class or activity.`;
+- Where AM/PM is not written, decide from the surrounding rows: a bare "1:00"
+  in a column of afternoon classes is 13:00, "8:00" at a university is 08:00,
+  and "7:00" in an evening column is 19:00.`;
 
 const VERIFY_PROMPT = `Here is a transcription of the schedule in this image, produced from the same
 image. Check every row against the picture and return the CORRECTED
 transcription in the same format.
 
 Look specifically for:
+- blocks in the image that are missing from the transcription entirely — most
+  often the non-academic ones: wake-up, travel, gym, shifts, study blocks
 - times read off the wrong row or column
 - AM/PM mistakes
+- a block in several columns split into duplicate entries when it is one entry
+  with several days, or the reverse
 - day letters merged or dropped (TTh read as T)
 - a class that meets at two different times collapsed into one entry
-- rows in the image that are missing entirely from the transcription
 - entries that are not in the image at all
+- a "kind" that does not match what the title plainly says
 
 Return the full corrected list, not a diff. Where you change a row, lower its
 confidence if the source is genuinely unclear. Where the original was right,
@@ -131,7 +181,12 @@ async function generate(key: string, model: string, parts: unknown[]): Promise<G
           responseMimeType: 'application/json',
           responseSchema: SCHEMA,
           temperature: 0,
-          maxOutputTokens: 8192,
+          // A whole week — classes *and* the wake-ups, commutes and shifts
+          // around them — with the literal source text on every row runs well
+          // past 8192, and a JSON answer cut off mid-object does not parse.
+          // The symptom is "the model returned prose, not JSON" on exactly the
+          // busy timetables the feature exists for.
+          maxOutputTokens: 32768,
         },
       }),
     },
@@ -148,11 +203,23 @@ async function generate(key: string, model: string, parts: unknown[]): Promise<G
   }
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== 'string') throw new Error('The model returned no text');
+  const candidate = data?.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
+  const why = candidate?.finishReason ?? '';
+
+  if (typeof text !== 'string') {
+    throw new Error(why === 'SAFETY' || why === 'PROHIBITED_CONTENT'
+      ? 'The model refused that image'
+      : `The model returned no text${why ? ` (${why})` : ''}`);
+  }
   try {
     return JSON.parse(text) as Gen;
   } catch {
+    // Say which of the two it was. A cut-off answer and a chatty one look the
+    // same from here and need completely different fixes.
+    if (why === 'MAX_TOKENS') {
+      throw new Error('That schedule was too long to read in one pass — try cropping it to a few days');
+    }
     throw new Error(`The model returned prose, not JSON: ${text.slice(0, 120)}`);
   }
 }
@@ -234,7 +301,9 @@ Deno.serve(async (req) => {
     ok: true,
     model: used,
     verified,
-    entries: Array.isArray(read.entries) ? read.entries.slice(0, 60) : [],
+    // 60 was a term of classes. A week with its travel, wake-ups and shifts in
+    // it is comfortably twice that before anything unusual happens.
+    entries: Array.isArray(read.entries) ? read.entries.slice(0, 150) : [],
     term_starts_on: read.term_starts_on ?? '',
     term_ends_on: read.term_ends_on ?? '',
     notes: typeof read.notes === 'string' ? read.notes.slice(0, 400) : '',

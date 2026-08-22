@@ -186,6 +186,21 @@ export const exerciseOf = (name: string): Exercise | null =>
   BY_NAME.get(name.trim().toLowerCase()) ?? null;
 
 export const artOf = (name: string): Art => exerciseOf(name)?.art ?? 'core';
+
+/**
+ * The id of the movement's photographs, or null for something typed in.
+ *
+ * Two stills per exercise ship in `public/ex/<id>-0.jpg` and `-1.jpg` — the
+ * start and the finish of the movement — and the demo card crossfades between
+ * them, which is what a demonstration GIF is for and a fifth of the weight.
+ * They are from yuhonas/free-exercise-db, which is Unlicense (public domain),
+ * so they can be redistributed inside an APK without a notice.
+ *
+ * A movement someone typed in has no photograph and never will, so this
+ * returning null is the normal case and not a failure — ExerciseShot falls
+ * back to the drawn art in `ExerciseArt.tsx`.
+ */
+export const shotOf = (name: string): string | null => exerciseOf(name)?.id ?? null;
 export const gearOf = (name: string): Gear => exerciseOf(name)?.gear ?? 'Barbell';
 export const workedOf = (name: string): string => exerciseOf(name)?.worked ?? 'Whole body';
 

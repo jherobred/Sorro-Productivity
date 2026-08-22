@@ -375,9 +375,48 @@
   50%      { transform: rotate(3deg); }
 }
 
+/*
+ * Racing.
+ *
+ * The trail drew eight heads breathing gently on a chart, which is a standings
+ * list with pictures. A race has to *look* like one: the animal leans into the
+ * direction it is travelling, its stride throws it up and down rather than
+ * making it hover, and something comes off the ground behind it. All three are
+ * still small — the head moves about three pixels — because the numbers beside
+ * it have to stay readable while it does.
+ */
+.mc.race { animation: mcrun 620ms cubic-bezier(.36,.07,.19,.97) infinite; transform-box: fill-box; transform-origin: 50% 90%; }
+.mc.race.quick { animation-duration: 470ms; }   /* out in front, and moving */
+@keyframes mcrun {
+  0%, 100% { transform: translateY(0) rotate(7deg); }
+  28%      { transform: translateY(-3.2px) rotate(11deg) scaleY(1.02); }
+  55%      { transform: translateY(.8px) rotate(6deg) scaleY(.985); }
+  78%      { transform: translateY(-1.6px) rotate(9deg); }
+}
+
+/* Two puffs kicked up behind, half a beat apart, so it reads as a stride. */
+.mc-dust circle { animation: mcdust 900ms ease-out infinite; animation-play-state: var(--anim, running); }
+@keyframes mcdust {
+  0%   { opacity: 0; transform: translate(0, 0) scale(.5); }
+  25%  { opacity: .45; }
+  100% { opacity: 0; transform: translate(-9px, -5px) scale(1.5); }
+}
+
+/* Speed lines: on for a third of the cycle, off for the rest. Always visible
+   and they stop being motion and start being whiskers. */
+.mc-zoom { animation: mczoom 620ms linear infinite; animation-play-state: var(--anim, running); }
+@keyframes mczoom {
+  0%, 60%, 100% { opacity: 0; transform: translateX(4px); }
+  20%           { opacity: .6; transform: translateX(-2px); }
+}
+
 /* The trail: the ground each competitor has covered, and the walk along it. */
 .tr-walk { transition: left .9s cubic-bezier(.2, .8, .2, 1), right .9s cubic-bezier(.2, .8, .2, 1); }
 .tr-fill { transition: width .9s cubic-bezier(.2, .8, .2, 1); }
 
-.nomo :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown) { animation: none; }
+.nomo :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom) { animation: none; }
+/* Held still, the lean stays — it is a pose, not a movement, and it is what
+   makes a stationary picture still read as somebody on their way somewhere. */
+.nomo .mc.race { transform: rotate(7deg); }
+.nomo :is(.mc-dust, .mc-zoom) { opacity: .3; }
 .nomo :is(.tr-walk, .tr-fill) { transition: none; }

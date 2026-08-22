@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
+import { Buddy } from '@/components/Buddy';
 import { useLayout } from '@/lib/useLayout';
 import { PAL } from '@/lib/pal';
 import { Icon, type IconName } from '@/components/Icon';
@@ -128,6 +129,11 @@ export default function HomePage() {
 
   const open = tasks.filter((t) => !t.done);
   const todayISO = new Date().toISOString().slice(0, 10);
+  /** Whole days since anything was ticked, or null if nothing ever has been. */
+  const lastDone = tasks.map((t) => t.completed_at).filter(Boolean).sort().at(-1);
+  const daysSinceDone = lastDone
+    ? Math.max(0, Math.round((Date.now() - Date.parse(lastDone)) / 864e5))
+    : null;
   const overdue = open.filter((t) => t.due_on && t.due_on < todayISO);
   const oldest = overdue
     .map((t) => Math.round((Date.now() - new Date(t.due_on! + 'T00:00:00').getTime()) / 86_400_000))
@@ -223,9 +229,17 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', marginTop: 6 }}>
-                {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-                {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 6 }}>
+                {/* The same creature that runs your lane on the challenge
+                    board, on the page you open first. It is derived from your
+                    id, so it costs nothing and it is already yours. Its face
+                    reads off whether anything got ticked today — never off how
+                    much is left, which would make a bad morning worse. */}
+                <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
+                <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)' }}>
+                  {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
+                </div>
               </div>
             </div>
           </div>

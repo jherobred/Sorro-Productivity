@@ -1,0 +1,14 @@
+{
+  "name": "Basedly",
+  "short_name": "Basedly",
+  "description": "Your whole week, one surface.",
+  "start_url": "/home/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A0912",
+  "theme_color": "#0A0912",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -85,7 +85,10 @@ export function MealSheet({
   const unsure = read != null && read.confidence < 0.6;
 
   const body = (
-    <div onClick={onClose} style={{
+    // `ogym` because this is portalled out of the page and would otherwise come
+    // back wearing Basedly's lavender on top of a black tab. The class maps the
+    // tokens; nothing inside had to change. See app/gym.css.
+    <div onClick={onClose} className="ogym" style={{
       position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(0,0,0,.55)',
       display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center', padding: phone ? 0 : 16,
     }}>

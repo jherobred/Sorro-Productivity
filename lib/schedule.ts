@@ -19,9 +19,45 @@ export const DAY_LABEL: Record<Day, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
 };
 
+/**
+ * What sort of block this is.
+ *
+ * The scan used to be told to ignore everything that was not a class, so a
+ * screenshot of a real week came back with the five subjects and none of the
+ * wake-ups, commutes, shifts or study blocks around them. It reads all of it
+ * now, and this is how the review screen groups what came back — so somebody
+ * who wanted only their classes unticks one chip rather than twenty rows.
+ */
+export const KINDS = ['class', 'lab', 'travel', 'personal', 'work', 'break', 'other'] as const;
+export type Kind = (typeof KINDS)[number];
+
+export const KIND_LABEL: Record<Kind, string> = {
+  class: 'Class', lab: 'Lab', travel: 'Travel', personal: 'Personal',
+  work: 'Work', break: 'Break', other: 'Other',
+};
+
+/** One colour per kind, so a week reads at a glance the way it did in the app
+ *  it was screenshotted from. Values are PAL (lib/pal.ts). */
+export const KIND_COLOR: Record<Kind, string> = {
+  class: '#7C8CFF',    // indigo
+  lab: '#B07CFF',      // violet
+  travel: '#38D6F2',   // cyan
+  personal: '#34D9A0', // mint
+  work: '#FFC24B',     // amber
+  break: '#8A86A6',    // muted
+  other: '#FF6FA8',    // pink
+};
+
+/** Anything the model did not put in the list is "other", never a crash. */
+export function normaliseKind(v: unknown): Kind {
+  const k = String(v ?? '').trim().toLowerCase();
+  return (KINDS as readonly string[]).includes(k) ? (k as Kind) : 'other';
+}
+
 /** What the scan returns, before a human has looked at it. */
 export type ScanEntry = {
   title: string;
+  kind?: string;
   code?: string;
   section?: string;
   location?: string;
@@ -37,6 +73,7 @@ export type ScanEntry = {
 export type Row = {
   id: string;
   title: string;
+  kind: Kind;
   code: string;
   location: string;
   teacher: string;
@@ -70,11 +107,17 @@ export function normaliseDay(v: string): Day | null {
 /**
  * "9", "9:00", "9:00 AM", "9.00pm", "0900", "13:00" → "HH:MM", or null.
  *
- * A bare hour under 8 is read as the afternoon: no university timetable means
+ * A bare hour under 7 is read as the afternoon: no university timetable means
  * 1:00 in the morning, and "1:00 - 2:30" with no meridiem is the single most
  * common thing on a printed schedule.
+ *
+ * `assumeAfternoon: false` turns that off and reads the digits literally. It
+ * matters now that the scan reads whole weeks rather than only classes: a
+ * "Travel Time 6 - 7" is a commute at six in the morning, and the timetable
+ * rule turned it into one at six in the evening that ended eleven hours before
+ * it began. `readRange` below decides which reading to trust.
  */
-export function normaliseTime(v: string): string | null {
+export function normaliseTime(v: string, assumeAfternoon = true): string | null {
   const s = v.trim().toLowerCase().replace(/\s+/g, '');
   if (!s) return null;
 
@@ -91,10 +134,42 @@ export function normaliseTime(v: string): string | null {
 
   if (mer === 'p' && h < 12) h += 12;
   else if (mer === 'a' && h === 12) h = 0;
-  else if (!mer && h >= 1 && h < 7) h += 12;   // see the note above
+  else if (!mer && assumeAfternoon && h >= 1 && h < 7) h += 12;   // see the note above
 
   if (h > 23) return null;
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/**
+ * Both ends of one block, read together.
+ *
+ * Reading each end on its own is what broke the non-academic rows: "6:00" and
+ * "7:00" became 18:00 and 07:00, a range that ends before it starts, and the
+ * review screen flagged a perfectly legible commute as unreadable. A pair is
+ * one fact, so it is decided as one — take the afternoon reading when it makes
+ * a coherent block, and the literal one when it does not.
+ *
+ * The kind is a second nudge. A class printed "1:00 - 2:30" is the afternoon
+ * and always has been; a wake-up alarm or a bus is written with am/pm in every
+ * calendar app there is, so for those the digits are taken at face value.
+ */
+export function readRange(
+  rawStart: string, rawEnd: string, kind: Kind = 'class',
+): { start: string | null; end: string | null } {
+  const guessing = kind === 'class' || kind === 'lab' || kind === 'work';
+  const pair = (assume: boolean) => ({
+    start: normaliseTime(rawStart ?? '', assume),
+    end: normaliseTime(rawEnd ?? '', assume),
+  });
+  const coherent = (p: { start: string | null; end: string | null }) =>
+    !!p.start && !!p.end && minutesOf(p.end) > minutesOf(p.start);
+
+  const first = pair(guessing);
+  if (coherent(first)) return first;
+  const second = pair(!guessing);
+  if (coherent(second)) return second;
+  // Neither reading works. Return the preferred one so toRow can say why.
+  return first;
 }
 
 export const minutesOf = (hhmm: string): number => {
@@ -102,11 +177,17 @@ export const minutesOf = (hhmm: string): number => {
   return h * 60 + m;
 };
 
-/** A scanned entry, cleaned and judged. Never throws; complains instead. */
-export function toRow(e: ScanEntry, i: number, color: string): Row {
+/**
+ * A scanned entry, cleaned and judged. Never throws; complains instead.
+ *
+ * The colour comes from the kind rather than a rotating palette. Seven
+ * arbitrary hues told you nothing; "every commute is cyan" tells you where your
+ * day goes.
+ */
+export function toRow(e: ScanEntry, i: number): Row {
+  const kind = normaliseKind(e.kind);
   const days = (e.days ?? []).map(normaliseDay).filter((d): d is Day => !!d);
-  const start = normaliseTime(e.start ?? '');
-  const end = normaliseTime(e.end ?? '');
+  const { start, end } = readRange(e.start ?? '', e.end ?? '', kind);
   const problems: string[] = [];
 
   const title = (e.title ?? '').trim();
@@ -118,7 +199,8 @@ export function toRow(e: ScanEntry, i: number, color: string): Row {
 
   return {
     id: `${i}-${title.slice(0, 12)}`,
-    title: title || 'Untitled class',
+    title: title || 'Untitled',
+    kind,
     code: (e.code ?? '').trim(),
     location: (e.location ?? '').trim(),
     teacher: (e.teacher ?? '').trim(),
@@ -128,7 +210,7 @@ export function toRow(e: ScanEntry, i: number, color: string): Row {
     raw: (e.raw ?? '').trim(),
     confidence: typeof e.confidence === 'number' ? Math.max(0, Math.min(1, e.confidence)) : 0.5,
     include: problems.length === 0,
-    color,
+    color: KIND_COLOR[kind],
     problems,
   };
 }

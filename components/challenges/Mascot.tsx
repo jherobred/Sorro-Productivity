@@ -163,7 +163,7 @@ const BROW: Record<Mood, { drop: number; tilt: number }> = {
 };
 
 export function Mascot({
-  id, mood, hue, size = 34, crown = false, animal,
+  id, mood, hue, size = 34, crown = false, animal, racing = false,
 }: {
   id: string;
   mood: Mood;
@@ -173,17 +173,41 @@ export function Mascot({
   crown?: boolean;
   /** Override the derived creature. Only the fixtures do this. */
   animal?: Animal;
+  /**
+   * On the trail, where the animals are going somewhere. Adds the lean, the
+   * gallop, the dust and the speed lines — the difference between eight heads
+   * sitting on a chart and eight competitors trying to beat each other there.
+   */
+  racing?: boolean;
 }) {
   const kind = animal ?? animalOf(id);
   const skin = SKINS[kind];
   const brow = BROW[mood];
   const asleep = mood === 'resting';
+  // Asleep is asleep. A resting animal that gallops is a bug you can see.
+  const running = racing && !asleep;
 
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} role="img"
       aria-label={`${kind}, ${LABEL[mood]}`}
       style={{ overflow: 'visible', flex: 'none' }}>
-      <g className={`mc${mood === 'blazing' ? ' quick' : asleep ? ' slow' : ''}`}>
+      {/* Dust and speed lines go behind, so they read as left behind rather
+          than stuck to the animal's face. */}
+      {running && (
+        <>
+          <g className="mc-zoom" stroke={hue} strokeWidth="2.2" strokeLinecap="round" opacity=".55">
+            <path d="M2 22 h7" />
+            <path d="M-1 29 h10" />
+            <path d="M2 36 h6" />
+          </g>
+          <g className="mc-dust" fill={hue} opacity=".38">
+            <circle cx="7" cy="42" r="3.4" />
+            <circle cx="1" cy="44" r="2.4" style={{ animationDelay: '.45s' }} />
+          </g>
+        </>
+      )}
+
+      <g className={`mc${running ? ' race' : ''}${mood === 'blazing' ? ' quick' : asleep ? ' slow' : ''}`}>
         <g className="mc-ears">{skin.ears(mood)}</g>
 
         {/* head */}

@@ -22,6 +22,9 @@ export type Task = {
   stars: number;
   position: number;
   deleted_at: string | null;
+  /** When it was ticked. Written by COMPLETE below; read so a screen can tell
+      "did anything get done today" without a second query. */
+  completed_at?: string | null;
 };
 
 export type List = { id: string; name: string; color: string; position: number };
@@ -49,7 +52,7 @@ export function useTasks() {
     queryFn: async (): Promise<Task[]> => {
       const { data, error } = await supabase
         .from('bd_tasks')
-        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at')
+        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at')
         .is('deleted_at', null)
         .order('position');
       if (error) throw error;

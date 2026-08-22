@@ -1,9 +1,23 @@
 'use client';
 
 import { useToasts, dismiss } from '@/lib/toast';
+import { useLayout } from '@/lib/useLayout';
 import { Icon } from './Icon';
 
+/**
+ * Toasts sit above the bottom navigation, not on it.
+ *
+ * They used to be pinned 22px off the bottom on every layout. On a desktop
+ * that is empty space; on a phone it is exactly where BottomNav lives — a
+ * 44px bar inside 16px of padding — so every "Deleted · Undo" landed on top of
+ * the section icons and covered the Undo button with a tab. NAV_H is that bar
+ * plus its padding, and the safe-area inset is added once, here, rather than
+ * being paid twice.
+ */
+const NAV_H = 66;
+
 export function ToastHost() {
+  const { phone } = useLayout();
   const toasts = useToasts();
   if (!toasts.length) return null;
 
@@ -13,7 +27,7 @@ export function ToastHost() {
         position: 'fixed',
         left: '50%',
         transform: 'translateX(-50%)',
-        bottom: 'calc(22px + env(safe-area-inset-bottom))',
+        bottom: `calc(${phone ? NAV_H + 10 : 22}px + env(safe-area-inset-bottom))`,
         zIndex: 90,
         display: 'flex',
         flexDirection: 'column',
