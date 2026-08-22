@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
 import { DEFAULT_ACCENT } from './pal';
+import { EMPTY_PLAN } from './lift';
 
 export type Prefs = {
   theme: 'dark' | 'light';
@@ -17,6 +18,8 @@ export type Prefs = {
   journalMode: string | null;
   /** Hide the resident bot's posts from the feed. Its challenges stay. */
   hideBot: boolean;
+  /** Seven slots, Monday first: which split each weekday carries, or ''. */
+  gymPlan: string[];
 
   /* Accessibility. Each of these maps to a WCAG success criterion:
      fontScale → 1.4.4 Resize Text, contrast → 1.4.6, underlineLinks → 1.4.1
@@ -51,6 +54,7 @@ export const DEFAULT_PREFS: Prefs = {
   lockEvents: false,
   journalMode: null,
   hideBot: false,
+  gymPlan: EMPTY_PLAN,
 
   fontScale: 1,
   density: 'comfortable',

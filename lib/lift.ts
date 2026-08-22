@@ -30,7 +30,22 @@ export type Muscle = (typeof MUSCLES)[number];
 
 export type Kind = 'weight' | 'bodyweight' | 'cardio';
 
-export type Exercise = { id: string; name: string; group: Muscle; kind: Kind };
+/**
+ * Which demonstration picture a movement uses. Nine patterns, not 1,324
+ * pictures: a bench press and an incline press are the same drawing with the
+ * bench at a different angle. `components/body/ExerciseArt.tsx` draws them.
+ */
+export type Art =
+  | 'bench' | 'incline' | 'ohp' | 'row' | 'pull' | 'squat' | 'hinge' | 'curl' | 'core' | 'cardio';
+
+/** What you hold. openGym filters its catalogue by this; so does ours. */
+export type Gear = 'Barbell' | 'Dumbbell' | 'Machine' | 'Cable' | 'Bodyweight' | 'Cardio';
+
+export type Exercise = {
+  id: string; name: string; group: Muscle; kind: Kind; art: Art; gear: Gear;
+  /** The muscle names openGym prints as tags under the exercise title. */
+  worked: string;
+};
 
 /** One line of a session. Mirrors a `bd_workout_sets` row. */
 export type WorkoutSet = {
@@ -44,51 +59,51 @@ export type WorkoutSet = {
 };
 
 export const EXERCISES: Exercise[] = [
-  { id: 'bench', name: 'Bench press', group: 'chest', kind: 'weight' },
-  { id: 'incline', name: 'Incline press', group: 'chest', kind: 'weight' },
-  { id: 'dbfly', name: 'Dumbbell fly', group: 'chest', kind: 'weight' },
-  { id: 'pushup', name: 'Push-up', group: 'chest', kind: 'bodyweight' },
-  { id: 'dip', name: 'Dip', group: 'chest', kind: 'bodyweight' },
-  { id: 'cablefly', name: 'Cable fly', group: 'chest', kind: 'weight' },
+  { id: 'bench', name: 'Bench press', group: 'chest', kind: 'weight', art: 'bench', gear: 'Barbell', worked: 'Pectorals' },
+  { id: 'incline', name: 'Incline press', group: 'chest', kind: 'weight', art: 'incline', gear: 'Barbell', worked: 'Upper chest' },
+  { id: 'dbfly', name: 'Dumbbell fly', group: 'chest', kind: 'weight', art: 'bench', gear: 'Dumbbell', worked: 'Pectorals' },
+  { id: 'pushup', name: 'Push-up', group: 'chest', kind: 'bodyweight', art: 'bench', gear: 'Bodyweight', worked: 'Pectorals' },
+  { id: 'dip', name: 'Dip', group: 'chest', kind: 'bodyweight', art: 'bench', gear: 'Bodyweight', worked: 'Lower chest' },
+  { id: 'cablefly', name: 'Cable fly', group: 'chest', kind: 'weight', art: 'bench', gear: 'Cable', worked: 'Pectorals' },
 
-  { id: 'deadlift', name: 'Deadlift', group: 'back', kind: 'weight' },
-  { id: 'row', name: 'Barbell row', group: 'back', kind: 'weight' },
-  { id: 'dbrow', name: 'Dumbbell row', group: 'back', kind: 'weight' },
-  { id: 'pulldown', name: 'Lat pulldown', group: 'back', kind: 'weight' },
-  { id: 'pullup', name: 'Pull-up', group: 'back', kind: 'bodyweight' },
-  { id: 'facepull', name: 'Face pull', group: 'back', kind: 'weight' },
-  { id: 'shrug', name: 'Shrug', group: 'back', kind: 'weight' },
+  { id: 'deadlift', name: 'Deadlift', group: 'back', kind: 'weight', art: 'hinge', gear: 'Barbell', worked: 'Posterior chain' },
+  { id: 'row', name: 'Barbell row', group: 'back', kind: 'weight', art: 'row', gear: 'Barbell', worked: 'Lats' },
+  { id: 'dbrow', name: 'Dumbbell row', group: 'back', kind: 'weight', art: 'row', gear: 'Dumbbell', worked: 'Lats' },
+  { id: 'pulldown', name: 'Lat pulldown', group: 'back', kind: 'weight', art: 'pull', gear: 'Cable', worked: 'Lats' },
+  { id: 'pullup', name: 'Pull-up', group: 'back', kind: 'bodyweight', art: 'pull', gear: 'Bodyweight', worked: 'Lats' },
+  { id: 'facepull', name: 'Face pull', group: 'back', kind: 'weight', art: 'row', gear: 'Cable', worked: 'Rear delts' },
+  { id: 'shrug', name: 'Shrug', group: 'back', kind: 'weight', art: 'hinge', gear: 'Barbell', worked: 'Traps' },
 
-  { id: 'ohp', name: 'Overhead press', group: 'arms', kind: 'weight' },
-  { id: 'lateral', name: 'Lateral raise', group: 'arms', kind: 'weight' },
-  { id: 'curl', name: 'Barbell curl', group: 'arms', kind: 'weight' },
-  { id: 'hammer', name: 'Hammer curl', group: 'arms', kind: 'weight' },
-  { id: 'triext', name: 'Triceps extension', group: 'arms', kind: 'weight' },
-  { id: 'pushdown', name: 'Cable pushdown', group: 'arms', kind: 'weight' },
-  { id: 'preacher', name: 'Preacher curl', group: 'arms', kind: 'weight' },
+  { id: 'ohp', name: 'Overhead press', group: 'arms', kind: 'weight', art: 'ohp', gear: 'Barbell', worked: 'Front delts' },
+  { id: 'lateral', name: 'Lateral raise', group: 'arms', kind: 'weight', art: 'ohp', gear: 'Dumbbell', worked: 'Side delts' },
+  { id: 'curl', name: 'Barbell curl', group: 'arms', kind: 'weight', art: 'curl', gear: 'Barbell', worked: 'Biceps' },
+  { id: 'hammer', name: 'Hammer curl', group: 'arms', kind: 'weight', art: 'curl', gear: 'Dumbbell', worked: 'Brachialis' },
+  { id: 'triext', name: 'Triceps extension', group: 'arms', kind: 'weight', art: 'ohp', gear: 'Dumbbell', worked: 'Triceps' },
+  { id: 'pushdown', name: 'Cable pushdown', group: 'arms', kind: 'weight', art: 'curl', gear: 'Cable', worked: 'Triceps' },
+  { id: 'preacher', name: 'Preacher curl', group: 'arms', kind: 'weight', art: 'curl', gear: 'Machine', worked: 'Biceps' },
 
-  { id: 'plank', name: 'Plank', group: 'core', kind: 'bodyweight' },
-  { id: 'crunch', name: 'Crunch', group: 'core', kind: 'bodyweight' },
-  { id: 'legraise', name: 'Hanging leg raise', group: 'core', kind: 'bodyweight' },
-  { id: 'russian', name: 'Russian twist', group: 'core', kind: 'weight' },
-  { id: 'cablecrunch', name: 'Cable crunch', group: 'core', kind: 'weight' },
+  { id: 'plank', name: 'Plank', group: 'core', kind: 'bodyweight', art: 'core', gear: 'Bodyweight', worked: 'Abdominals' },
+  { id: 'crunch', name: 'Crunch', group: 'core', kind: 'bodyweight', art: 'core', gear: 'Bodyweight', worked: 'Abdominals' },
+  { id: 'legraise', name: 'Hanging leg raise', group: 'core', kind: 'bodyweight', art: 'core', gear: 'Bodyweight', worked: 'Lower abs' },
+  { id: 'russian', name: 'Russian twist', group: 'core', kind: 'weight', art: 'core', gear: 'Dumbbell', worked: 'Obliques' },
+  { id: 'cablecrunch', name: 'Cable crunch', group: 'core', kind: 'weight', art: 'core', gear: 'Cable', worked: 'Abdominals' },
 
-  { id: 'squat', name: 'Back squat', group: 'legs', kind: 'weight' },
-  { id: 'frontsquat', name: 'Front squat', group: 'legs', kind: 'weight' },
-  { id: 'legpress', name: 'Leg press', group: 'legs', kind: 'weight' },
-  { id: 'lunge', name: 'Walking lunge', group: 'legs', kind: 'weight' },
-  { id: 'rdl', name: 'Romanian deadlift', group: 'legs', kind: 'weight' },
-  { id: 'legcurl', name: 'Leg curl', group: 'legs', kind: 'weight' },
-  { id: 'legext', name: 'Leg extension', group: 'legs', kind: 'weight' },
-  { id: 'calf', name: 'Calf raise', group: 'legs', kind: 'weight' },
-  { id: 'hipthrust', name: 'Hip thrust', group: 'legs', kind: 'weight' },
+  { id: 'squat', name: 'Back squat', group: 'legs', kind: 'weight', art: 'squat', gear: 'Barbell', worked: 'Quadriceps' },
+  { id: 'frontsquat', name: 'Front squat', group: 'legs', kind: 'weight', art: 'squat', gear: 'Barbell', worked: 'Quadriceps' },
+  { id: 'legpress', name: 'Leg press', group: 'legs', kind: 'weight', art: 'squat', gear: 'Machine', worked: 'Quadriceps' },
+  { id: 'lunge', name: 'Walking lunge', group: 'legs', kind: 'weight', art: 'squat', gear: 'Dumbbell', worked: 'Glutes' },
+  { id: 'rdl', name: 'Romanian deadlift', group: 'legs', kind: 'weight', art: 'hinge', gear: 'Barbell', worked: 'Hamstrings' },
+  { id: 'legcurl', name: 'Leg curl', group: 'legs', kind: 'weight', art: 'hinge', gear: 'Machine', worked: 'Hamstrings' },
+  { id: 'legext', name: 'Leg extension', group: 'legs', kind: 'weight', art: 'squat', gear: 'Machine', worked: 'Quadriceps' },
+  { id: 'calf', name: 'Calf raise', group: 'legs', kind: 'weight', art: 'squat', gear: 'Machine', worked: 'Calves' },
+  { id: 'hipthrust', name: 'Hip thrust', group: 'legs', kind: 'weight', art: 'hinge', gear: 'Barbell', worked: 'Glutes' },
 
-  { id: 'run', name: 'Run', group: 'cardio', kind: 'cardio' },
-  { id: 'bike', name: 'Bike', group: 'cardio', kind: 'cardio' },
-  { id: 'rowerg', name: 'Rowing machine', group: 'cardio', kind: 'cardio' },
-  { id: 'skip', name: 'Skipping', group: 'cardio', kind: 'cardio' },
-  { id: 'stairs', name: 'Stair climber', group: 'cardio', kind: 'cardio' },
-  { id: 'inclinewalk', name: 'Incline walk', group: 'cardio', kind: 'cardio' },
+  { id: 'run', name: 'Run', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Heart & lungs' },
+  { id: 'bike', name: 'Bike', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Quadriceps' },
+  { id: 'rowerg', name: 'Rowing machine', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Full body' },
+  { id: 'skip', name: 'Skipping', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Calves' },
+  { id: 'stairs', name: 'Stair climber', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Glutes' },
+  { id: 'inclinewalk', name: 'Incline walk', group: 'cardio', kind: 'cardio', art: 'cardio', gear: 'Cardio', worked: 'Heart & lungs' },
 ];
 
 const BY_NAME = new Map(EXERCISES.map((e) => [e.name.toLowerCase(), e]));
@@ -164,3 +179,73 @@ export function nextSet(prev: WorkoutSet | undefined, kind: Kind): { weight_kg: 
   if (prev) return { weight_kg: prev.weight_kg, reps: prev.reps };
   return kind === 'bodyweight' ? { weight_kg: 0, reps: 10 } : kind === 'cardio' ? { weight_kg: 0, reps: 20 } : { weight_kg: 20, reps: 8 };
 }
+
+/* ------------------------------------------------------------- catalogue */
+
+export const exerciseOf = (name: string): Exercise | null =>
+  BY_NAME.get(name.trim().toLowerCase()) ?? null;
+
+export const artOf = (name: string): Art => exerciseOf(name)?.art ?? 'core';
+export const gearOf = (name: string): Gear => exerciseOf(name)?.gear ?? 'Barbell';
+export const workedOf = (name: string): string => exerciseOf(name)?.worked ?? 'Whole body';
+
+/* ---------------------------------------------------------------- plans */
+
+export type Routine = { id: string; name: string; exercises: string[] };
+
+/**
+ * The weekly plan, as a fixed set of splits rather than a routine builder.
+ *
+ * openGym ships an editor over 1,324 exercises; the thing a student actually
+ * needs is to say "Monday is push" once and be asked about it every Monday.
+ * Which day carries which split lives in `prefs.gymPlan` — seven strings — so
+ * it follows the account between devices without a table, and a session built
+ * from a split is still just exercises you can add to or drop.
+ */
+export const ROUTINES: Routine[] = [
+  { id: 'push', name: 'Push Day', exercises: ['Bench press', 'Incline press', 'Overhead press', 'Lateral raise', 'Cable pushdown'] },
+  { id: 'pull', name: 'Pull Day', exercises: ['Deadlift', 'Barbell row', 'Lat pulldown', 'Face pull', 'Barbell curl'] },
+  { id: 'legs', name: 'Leg Day', exercises: ['Back squat', 'Romanian deadlift', 'Leg press', 'Leg curl', 'Calf raise'] },
+  { id: 'upper', name: 'Upper Body', exercises: ['Bench press', 'Barbell row', 'Overhead press', 'Lat pulldown', 'Barbell curl'] },
+  { id: 'lower', name: 'Lower Body', exercises: ['Back squat', 'Romanian deadlift', 'Hip thrust', 'Leg extension', 'Calf raise'] },
+  { id: 'full', name: 'Full Body', exercises: ['Back squat', 'Bench press', 'Barbell row', 'Overhead press', 'Plank'] },
+  { id: 'cardio', name: 'Cardio', exercises: ['Run', 'Skipping'] },
+];
+
+export const routineOf = (id: string | null | undefined): Routine | null =>
+  ROUTINES.find((r) => r.id === id) ?? null;
+
+/** Seven slots, Monday first — the order the week strip is drawn in. */
+export const EMPTY_PLAN: string[] = ['push', '', 'pull', '', 'legs', '', ''];
+
+/** The plan slot for a JS weekday (0 = Sunday), against a Monday-first plan. */
+export const slotFor = (jsDay: number): number => (jsDay + 6) % 7;
+
+/* ----------------------------------------------------------- progression */
+
+/**
+ * Double progression, which is the rule openGym defaults to and the only one
+ * worth having on a screen this size: hold the weight until every set hits the
+ * top of the rep range, then add the smallest jump the gym owns.
+ *
+ * Returns null when there is nothing to say — a first session, or a set that
+ * fell short, where the honest advice is "same again".
+ */
+export function progression(
+  last: WorkoutSet[], targetReps = 8, step = 2.5,
+): { weight: number; hit: boolean } | null {
+  const done = last.filter((s) => s.done && s.weight_kg > 0);
+  if (done.length === 0) return null;
+  const weight = Math.max(...done.map((s) => s.weight_kg));
+  const top = done.filter((s) => s.weight_kg === weight);
+  const hit = top.every((s) => s.reps >= targetReps);
+  return { weight: hit ? Math.round((weight + step) * 2) / 2 : weight, hit };
+}
+
+/** "85×8, 85×8, 85×7" — how openGym prints what you did last time. */
+export const setsLine = (sets: WorkoutSet[]): string =>
+  sets.filter((s) => s.done)
+    .map((s) => (s.weight_kg > 0 ? `${trim(s.weight_kg)}×${s.reps}` : `${s.reps}`))
+    .join(', ');
+
+const trim = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));

@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { useLayout } from '@/lib/useLayout';
+import { useOverlayBack } from '@/lib/nav';
 import { useRealtime } from '@/lib/realtime';
 import { toast } from '@/lib/toast';
 import { confirmAsk } from '@/lib/ask';
@@ -13,8 +15,10 @@ import { useSignedUrl } from '@/lib/uploads';
 import { useProfiles, displayOf, type Person } from '@/lib/people';
 import {
   useConversations, useMembers, useMessages, useMessageActions,
-  startDm, startGroup, titleOf, unreadOf,
-  CONVOS, MEMBERS, messagesKey, type Conversation, type Member, type Message,
+  startDm, startGroup, titleOf, unreadOf, putAttachment, attachFromDrive, driveFiles,
+  sizeLabel, kindOfFile,
+  CONVOS, MEMBERS, messagesKey,
+  type Conversation, type Member, type Message, type Attachment, type DriveFile,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
 
@@ -115,16 +119,18 @@ export function Messages({ me }: { me: string }) {
 
 /* ------------------------------------------------------------------- list */
 
-function ChatList({
-  convos, members, profiles, me, selected, phone, onPick, onNew, onNewGroup, nameOf,
+export function ChatList({
+  convos, members, profiles, me, selected, phone, onPick, onNew, onNewGroup, nameOf, hideNew,
 }: {
   convos: Conversation[]; members: Member[]; profiles: Record<string, Person>; me: string;
   selected: string | null; phone: boolean;
   onPick: (id: string) => void; onNew: () => void; onNewGroup: () => void; nameOf: (id: string) => string;
+  /** The dock carries its own New chat button above the list. */
+  hideNew?: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: hideNew ? 'none' : 'flex', gap: 6 }}>
         <button onClick={onNew} className="hov k-squish" style={{ ...NEW_BTN, flex: 1 }}>
           <Icon name="plus" size={13} color="var(--tx3)" />New chat
         </button>
@@ -183,15 +189,20 @@ function ChatList({
 
 /* ----------------------------------------------------------------- thread */
 
-function Thread({
-  convo, members, profiles, me, A, onBack, nameOf,
+export function Thread({
+  convo, members, profiles, me, A, onBack, nameOf, compact,
 }: {
   convo: Conversation; members: Member[]; profiles: Record<string, Person>; me: string;
   A: ReturnType<typeof useMessageActions>; onBack?: () => void; nameOf: (id: string) => string;
+  /** The docked window: same thread, tighter, no Leave button. */
+  compact?: boolean;
 }) {
   const { data: messages = [] } = useMessages(convo.id);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
+  const [attach, setAttach] = useState<Attachment | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [drive, setDrive] = useState(false);
   const qc = useQueryClient();
   const foot = useRef<HTMLDivElement>(null);
 
@@ -205,9 +216,22 @@ function Thread({
 
   const send = () => {
     const v = draft.trim();
-    if (!v) return;
-    A.say(convo.id, v);
+    if (!v && !attach) return;
+    A.say(convo.id, v, undefined, attach);
     setDraft('');
+    setAttach(null);
+  };
+
+  /** One path for a photo, a file off the disk, and a file out of the Drive. */
+  const take = async (get: () => Promise<Attachment>) => {
+    setBusy(true);
+    try {
+      setAttach(await get());
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not attach that');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const here = members.filter((m) => m.conversation_id === convo.id).map((m) => m.user_id);
@@ -244,7 +268,7 @@ function Thread({
             <Icon name="plus" size={14} color="var(--tx2)" />
           </button>
         )}
-        <button
+        {!compact && <button
           onClick={() => void confirmAsk('Leave this conversation?', {
             message: 'You will stop seeing it. The others keep the history.',
             confirmLabel: 'Leave', danger: true,
@@ -252,7 +276,7 @@ function Thread({
           className="hov" aria-label="Leave" title="Leave"
           style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
           <Icon name="close" size={14} color="var(--tx3)" />
-        </button>
+        </button>}
       </header>
 
       <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 13px', display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -267,22 +291,76 @@ function Thread({
         <div ref={foot} />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid var(--line)', flex: 'none' }}>
-        <input value={draft} onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-          placeholder="Message" aria-label="Message"
-          style={{
-            flex: 1, minHeight: 38, padding: '9px 12px', borderRadius: 11,
-            border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5,
-          }} />
-        <button onClick={send} disabled={!draft.trim()} className="acc k-squish" aria-label="Send"
-          style={{
-            flex: 'none', width: 42, minHeight: 38, borderRadius: 11, display: 'grid', placeItems: 'center',
-            background: 'var(--acc)', opacity: draft.trim() ? 1 : 0.45,
+      <div style={{ borderTop: '1px solid var(--line)', flex: 'none' }}>
+        {/* What is going with the message, before it goes. */}
+        {attach && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9, margin: '9px 12px 0', padding: '7px 9px',
+            borderRadius: 11, background: 'var(--card2)', border: '1px solid var(--line2)',
           }}>
-          <Icon name="send" size={15} color="#0A0912" />
-        </button>
+            <Icon name={attach.kind === 'image' ? 'image' : 'files'} size={14} color="var(--accTx)" />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {attach.name}
+            </span>
+            <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{sizeLabel(attach.size)}</span>
+            <button onClick={() => setAttach(null)} className="hov" aria-label="Remove the attachment"
+              style={{ width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+              <Icon name="close" size={11} color="var(--tx3)" />
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 6, padding: '10px 12px', alignItems: 'center' }}>
+          {/* A photo, anything else off the device, or something already in
+              your Files. Three buttons rather than one paperclip behind a
+              menu: on a phone the menu is two taps to do the commonest thing. */}
+          <label className="hov" title="Send a photo" style={ATTACH_BTN}>
+            <Icon name="image" size={15} color="var(--tx2)" />
+            <input type="file" accept="image/*" hidden disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) void take(() => putAttachment(f));
+              }} />
+          </label>
+
+          <label className="hov" title="Send a file" style={ATTACH_BTN}>
+            <Icon name="files" size={15} color="var(--tx2)" />
+            <input type="file" hidden disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) void take(() => putAttachment(f));
+              }} />
+          </label>
+
+          <button onClick={() => setDrive(true)} className="hov" title="Send a file from your Files"
+            aria-label="Send a file from your Files" style={ATTACH_BTN} disabled={busy}>
+            <Icon name="folderPlus" size={15} color="var(--tx2)" />
+          </button>
+
+          <input value={draft} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+            placeholder={busy ? 'Attaching…' : 'Message'} aria-label="Message"
+            style={{
+              flex: 1, minWidth: 0, minHeight: 38, padding: '9px 12px', borderRadius: 11,
+              border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5,
+            }} />
+
+          <button onClick={send} disabled={!draft.trim() && !attach} className="acc k-squish" aria-label="Send"
+            style={{
+              flex: 'none', width: 42, minHeight: 38, borderRadius: 11, display: 'grid', placeItems: 'center',
+              background: 'var(--acc)', opacity: draft.trim() || attach ? 1 : 0.45,
+            }}>
+            <Icon name="send" size={15} color="#0A0912" />
+          </button>
+        </div>
       </div>
+
+      {drive && (
+        <DrivePicker onClose={() => setDrive(false)}
+          onPick={(f) => { setDrive(false); void take(() => attachFromDrive(f)); }} />
+      )}
 
       {adding && (
         <PeoplePicker title="Add to this chat" me={me} exclude={here} multi askName={false}
@@ -306,6 +384,11 @@ function Bubble({
 
       {msg.share_kind && msg.share_id && (
         <SharedPost kind={msg.share_kind} id={msg.share_id} profiles={profiles} me={me} />
+      )}
+
+      {msg.attach_path && (
+        <AttachedFile path={msg.attach_path} name={msg.attach_name ?? 'File'}
+          kind={msg.attach_kind ?? 'file'} size={msg.attach_size ?? 0} mine={mine} />
       )}
 
       {msg.body && (
@@ -390,4 +473,150 @@ const PANEL: React.CSSProperties = {
 const NEW_BTN: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 7, padding: '8px 11px', minHeight: 38,
   borderRadius: 11, border: '1px dashed var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+};
+
+/**
+ * A file somebody sent.
+ *
+ * A picture is the picture; anything else is a row you can open, because a
+ * spreadsheet rendered as a grey rectangle tells you nothing its filename does
+ * not. The object lives in `bd-feed`, which is the bucket whose read policy
+ * lets the other people in the chat see it at all — see migration 0008.
+ */
+function AttachedFile({
+  path, name, kind, size, mine,
+}: { path: string; name: string; kind: string; size: number; mine: boolean }) {
+  const url = useSignedUrl('bd-feed', path);
+
+  if (kind === 'image') {
+    return (
+      <a href={url ?? undefined} target="_blank" rel="noreferrer" title={name}
+        style={{ display: 'block', maxWidth: '78%', borderRadius: 14, overflow: 'hidden', background: 'var(--card2)' }}>
+        {url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt={name} style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />
+        )}
+      </a>
+    );
+  }
+
+  return (
+    <a href={url ?? undefined} target="_blank" rel="noreferrer" download={name}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, maxWidth: '78%', padding: '9px 12px',
+        borderRadius: 14, border: '1px solid var(--line2)',
+        background: mine ? 'color-mix(in srgb, var(--acc) 14%, var(--card2))' : 'var(--card2)',
+      }}>
+      <span style={{
+        width: 32, height: 32, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center',
+        background: 'var(--card)',
+      }}>
+        <Icon name={ICON_FOR[kind] ?? 'files'} size={15} color="var(--accTx)" />
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {name}
+        </span>
+        <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>
+          {sizeLabel(size)}{size ? ' · ' : ''}tap to open
+        </span>
+      </span>
+      <Icon name="download" size={14} color="var(--tx3)" />
+    </a>
+  );
+}
+
+const ICON_FOR: Record<string, IconName> = {
+  image: 'image', video: 'play', audio: 'play', pdf: 'files', doc: 'text',
+  sheet: 'grid', slides: 'photo', archive: 'archive', file: 'files',
+};
+
+/**
+ * Your Files, as a place to send from.
+ *
+ * The ask was to point at something already in the app rather than finding it
+ * on the device a second time. It is copied on send rather than linked —
+ * `lib/messages.ts` explains why that is the honest option and not the lazy one.
+ */
+function DrivePicker({ onClose, onPick }: { onClose: () => void; onPick: (f: DriveFile) => void }) {
+  const { phone } = useLayout();
+  const [files, setFiles] = useState<DriveFile[] | null>(null);
+  const [q, setQ] = useState('');
+  useOverlayBack(true, onClose);
+
+  useEffect(() => { void driveFiles().then(setFiles).catch(() => setFiles([])); }, []);
+
+  const needle = q.trim().toLowerCase();
+  const shown = (files ?? []).filter((f) => !needle || f.name.toLowerCase().includes(needle));
+
+  const body = (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.55)',
+      display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center', padding: phone ? 0 : 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Send from your Files"
+        className="k-bloom"
+        style={{
+          width: 420, maxWidth: '100%', maxHeight: '78dvh', display: 'flex', flexDirection: 'column',
+          background: 'var(--card)', border: '1px solid var(--line2)',
+          borderRadius: phone ? '18px 18px 0 0' : 18, boxShadow: 'var(--shl)', overflow: 'hidden',
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 15px 10px' }}>
+          <Icon name="files" size={16} color="var(--accTx)" />
+          <h2 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', flex: 1 }}>Send from your Files</h2>
+          <button onClick={onClose} className="hov k-squish" aria-label="Close"
+            style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
+            <Icon name="close" size={14} color="var(--tx2)" />
+          </button>
+        </div>
+
+        <div style={{ padding: '0 15px 10px' }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your files"
+            aria-label="Search your files"
+            style={{
+              width: '100%', minHeight: 38, padding: '9px 12px', borderRadius: 11,
+              border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5,
+            }} />
+        </div>
+
+        <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 9px 10px' }}>
+          {files === null && (
+            <p style={{ fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center', padding: 24 }}>Reading your files…</p>
+          )}
+          {files !== null && shown.length === 0 && (
+            <p style={{ fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center', padding: 24, lineHeight: 1.7 }}>
+              {q ? 'Nothing matching.' : 'Nothing in Files yet.'}
+            </p>
+          )}
+          {shown.map((f) => (
+            <button key={f.id} onClick={() => onPick(f)} className="hov"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '9px 10px',
+                borderRadius: 11, textAlign: 'left', minHeight: 46,
+              }}>
+              <span style={{
+                width: 30, height: 30, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center',
+                background: 'var(--card2)',
+              }}>
+                <Icon name={ICON_FOR[f.kind || kindOfFile(f.name)] ?? 'files'} size={14} color="var(--accTx)" />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f.name}
+                </span>
+                <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)' }}>{sizeLabel(f.size_bytes)}</span>
+              </span>
+              <Icon name="send" size={13} color="var(--tx3)" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
+}
+
+const ATTACH_BTN: React.CSSProperties = {
+  width: 34, height: 34, flex: 'none', borderRadius: 10, display: 'grid', placeItems: 'center', cursor: 'pointer',
 };

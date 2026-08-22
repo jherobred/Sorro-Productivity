@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
+import { MessengerDock } from './MessengerDock';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { usePresence, roomFor, type Peer } from '@/lib/presence';
@@ -605,6 +606,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           onClose={() => setMenu(null)} accent={acc} dark={dark} />
       )}
 
+      <MessengerDock />
       <ToastHost />
       <AskHost />
     </div>

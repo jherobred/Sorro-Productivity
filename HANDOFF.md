@@ -3,8 +3,8 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-23 (the gym log, the trail, and the constraint that was
-eating every import).
+Last updated: 2026-08-23 (the gym now wears openGym; messages carry files and
+follow you around).
 
 ---
 
@@ -123,6 +123,88 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-23, second pass (openGym properly, attachments, the dock)
+
+**The gym had openGym's features and none of its face.** The first pass read
+sets back correctly on a lavender Basedly card, and that was the wrong call:
+openGym is a black-ground, green-accent, iOS-shaped tracker and the shape *is*
+the product. `app/gym.css` ports its design system out of that repo's
+`frontend/src/index.css` — the real tokens (`#000` ground, `#1c1c1e` surface,
+`#30d158` accent, 14px card radius, 26px tabular readouts), the week strip, the
+segmented control, the stepper, the set row, the rest clock and the
+GitHub-style year grid — every class prefixed `og-` and scoped under `.ogym`.
+**The prefix is not tidiness**: openGym calls its classes `.card`, `.row`,
+`.chip`, `.sheet` and `.tag`, all five of which already mean something else in
+`globals.css`, and unprefixed this file would repaint half the app.
+
+**What was deliberately not ported: openGym's fixed bottom tab bar.** Basedly
+already owns the bottom of the viewport. Its five destinations became a
+segmented control at the top of the section and its centre Start button became
+the green pill beside them — same five places, same one-tap start, nothing
+fighting the app it lives inside. The dock below is suppressed on phones for
+the same reason.
+
+`components/body/Gym.tsx` is openGym's three screens: Home (week strip, today's
+split, body weight, streak), the guided session (demo, tags, last time, the
+progression line, set rows, rest clock) and Stats (four tiles, the year, the
+curve), plus Plan and Exercises. The weekly plan is `prefs.gymPlan`, seven
+strings — no table, and it follows the account between devices. Progression is
+double progression: hold the weight until every set hits the top of the range,
+then add the smallest jump (`progression()` in `lib/lift.ts`, checked).
+
+**The exercise demos are drawn, not downloaded.** openGym pulls ~140 MB of GIFs
+from `hasaneyldrm/exercises-dataset` on first launch, under that dataset's own
+terms. A Capacitor APK off a static export can do neither that nor a hotlink,
+so `components/body/ExerciseArt.tsx` draws nine movement patterns as line art
+on white with the worked muscle in red — a bench press and an incline press are
+the same picture with the bench at a different angle. `Exercise.art` is the
+key, so swapping in real images later means changing one component.
+
+**Messages carry files.** Three controls on the composer: a photo, any file,
+and one out of your Files. `0008` adds four columns to `bd_messages` rather
+than a table — an attachment has no life of its own.
+
+**The bucket choice is the load-bearing decision.** Storage RLS on `bd-files`
+is `foldername[1] = auth.uid()` for *every* command, so an attachment left
+there opens for the sender and 400s for everyone else — the worst kind of bug,
+because the person who can test it is the one person it works for. Attachments
+go to `bd-feed`, whose read policy is `bucket_id = 'bd-feed'`. Sending from your
+Files therefore **copies** the object. That is deliberate: the alternative is
+widening the read policy on the whole of `bd-files`, which would hand every
+signed-in account the keys to everybody's private documents to save one round
+trip.
+
+**`components/MessengerDock.tsx`** is the bottom-right bar LinkedIn, Facebook
+and Instagram all landed on: collapsed with an unread count, a list when you
+open it, the conversation in the same box. Mounted in `Shell`, portalled to
+`document.body` (fact 2, third time), and **desktop only** — on a phone it
+would sit on Basedly's own navigation, and a 328px window inside a 375px screen
+is just the screen with a border. `Thread` and `ChatList` are exported from
+`Messages.tsx` and shared; `compact` drops the Leave button.
+
+**Migrations applied to production**: `0008_message_attachments.sql`.
+
+**Verified in the browser (fixture mode).** The gym's computed values against
+openGym's own: ground `rgb(0,0,0)`, card `rgb(28,28,30)` at 14px, accent
+`#30d158`, the today pill a 28px green disc with black text, h1 34px/700, the
+big readout 30px/600. The guided session end to end — routine start, the demo
+card white with its two corner hints, `Best: 76 kg`, `Last time: 60x8`, the
+green "Last time you hit all reps · try 62.5 kg", a set arriving prefilled at
+62.5x8, ticking it moving the header to `1/3 sets` and raising the `1:30`
+clock. Stats: four tiles, a 12-month grid with Sep-to-Aug labels that scrolls,
+the curve. At 375px the section fits in 345px with no sideways scroll and the
+dock is absent. The dock at 328x505 portalled to BODY, its list, a thread with
+all three attachment controls and no Leave, and the Files picker listing real
+files with sizes and filtering. Both check files pass; `tsc` and `next build`
+are clean.
+
+**One measuring trap, again.** The pane does not composite when hidden, so CSS
+*transitions* sit at their start value too, not only animations — the dock
+measured 232px wide while its own inline style said 328px. Set
+`transition: none` before reading a box, the same as for animations (fact 8).
 
 ---
 

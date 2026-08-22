@@ -6,8 +6,9 @@
 
 import assert from 'node:assert/strict';
 import {
-  MUSCLES, EXERCISES, groupOf, kindOf, e1rm, volumeOf, bestByExercise,
-  groupsOfSets, lastTime, nextSet, type WorkoutSet,
+  MUSCLES, EXERCISES, ROUTINES, EMPTY_PLAN, groupOf, kindOf, e1rm, volumeOf, bestByExercise,
+  groupsOfSets, lastTime, nextSet, exerciseOf, artOf, progression, setsLine, slotFor,
+  type WorkoutSet,
 } from './lift.ts';
 
 let n = 0;
@@ -99,5 +100,59 @@ assert.deepEqual(
   { weight_kg: 82.5, reps: 5 },
   'the repeat is the offer; a change is a correction',
 );
+
+/* the demonstrations ---------------------------------------------------- */
+for (const e of EXERCISES) {
+  assert.ok(e.art && e.gear && e.worked, `${e.name} has a picture, a piece of kit and a muscle`);
+}
+assert.equal(artOf('Bench press'), 'bench');
+assert.equal(artOf('Sandbag carry'), 'core', 'an unknown movement still gets a picture');
+assert.equal(exerciseOf('  BENCH press ')?.id, 'bench');
+assert.equal(exerciseOf('nope'), null);
+
+/* the plans -------------------------------------------------------------- */
+assert.equal(EMPTY_PLAN.length, 7, 'a week is seven slots');
+for (const id of EMPTY_PLAN.filter(Boolean)) {
+  assert.ok(ROUTINES.some((r) => r.id === id), `${id} is a routine that exists`);
+}
+for (const r of ROUTINES) {
+  for (const name of r.exercises) {
+    assert.ok(exerciseOf(name), `${r.name} names "${name}", which is in the catalogue`);
+  }
+}
+assert.equal(slotFor(1), 0, 'Monday is the first slot');
+assert.equal(slotFor(0), 6, 'Sunday is the last, not the first');
+
+/* progression ------------------------------------------------------------ */
+{
+  const at = (w: number, r: number, done = true) => set({ exercise: 'Bench press', weight_kg: w, reps: r, done });
+
+  assert.equal(progression([]), null, 'nothing to say about a first session');
+  assert.equal(progression([at(0, 12)]), null, 'a bodyweight set has no weight to add to');
+
+  const all = progression([at(85, 8), at(85, 8), at(85, 8)], 8);
+  assert.deepEqual(all, { weight: 87.5, hit: true }, 'every set at the top of the range earns the jump');
+
+  const short = progression([at(85, 8), at(85, 6)], 8);
+  assert.deepEqual(short, { weight: 85, hit: false }, 'one short set means the same weight again');
+
+  const mixed = progression([at(60, 12), at(85, 8), at(85, 8)], 8);
+  assert.deepEqual(mixed, { weight: 87.5, hit: true }, 'a warm-up set does not hold the top set back');
+
+  assert.equal(progression([at(85, 8, false)], 8), null, 'a set you did not finish is not evidence');
+}
+
+/* what it prints --------------------------------------------------------- */
+assert.equal(setsLine([]), '');
+assert.equal(
+  setsLine([
+    set({ exercise: 'Bench press', weight_kg: 85, reps: 8 }),
+    set({ exercise: 'Bench press', weight_kg: 82.5, reps: 7 }),
+    set({ exercise: 'Bench press', weight_kg: 80, reps: 5, done: false }),
+  ]),
+  '85×8, 82.5×7',
+  'trailing zeroes trimmed, unfinished sets left out',
+);
+assert.equal(setsLine([set({ exercise: 'Pull-up', weight_kg: 0, reps: 9 })]), '9', 'bodyweight is just the reps');
 
 console.log('lift.check.ts — all good');

@@ -16,6 +16,11 @@
    overrides so a page can still take a curve off a specific element. */
 @import './kinetics.css';
 
+/* openGym's design system, ported and scoped to `.ogym` — the gym section
+   wears it instead of this one. Every class in there is `og-`prefixed and
+   nothing below is affected; see the header of gym.css for why. */
+@import './gym.css';
+
 /* ---- Theme tokens (THEMES in the prototype) ---------------------------- */
 :root,
 :root[data-theme='dark'] {

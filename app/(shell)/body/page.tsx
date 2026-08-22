@@ -84,9 +84,13 @@ export default function BodyPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 className="sronly">Body</h1>
         <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Body sections" />
-        <div style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
-          {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-        </div>
+        {/* The gym carries its own date, in openGym's header — two of them a
+            centimetre apart reads as a bug. */}
+        {tab !== 'trained' && (
+          <div style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
+            {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------ today */}
