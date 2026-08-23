@@ -6,7 +6,7 @@ import { fixture } from './devFixtures';
 import { PAL } from './pal';
 import { isBot, BOT_NAME } from './bot';
 import { animalOf, type Animal } from './mascot';
-import { toFit, type Fit } from '@/components/PhotoFrame';
+import { toFit, type Fit } from './photoFit';
 
 /**
  * Who wrote this.
