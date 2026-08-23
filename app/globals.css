@@ -93,7 +93,8 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #07060D;
+  background: var(--bg, #07060D);
+  color: var(--tx, #EFEDF5);
   font-family: Archivo, system-ui, sans-serif;
   overflow: hidden;
 }
@@ -102,10 +103,10 @@ html, body {
    prototype — no need to restate it here. */
 /* :root IS <html>, so it has to select itself here — `:root html` matches nothing. */
 html[data-theme='light'],
-html[data-theme='light'] body { background: #E9E7EF; }
+html[data-theme='light'] body { background: var(--bg, #F6F5F9); color: var(--tx, #1C1A26); }
 
 * { box-sizing: border-box; }
-h1, h2, h3, h4, h5, h6 { margin: 0; font-size: inherit; line-height: inherit; letter-spacing: inherit; }
+h1, h2, h3, h4, h5, h6 { margin: 0; font-size: inherit; line-height: inherit; letter-spacing: inherit; color: var(--tx); }
 p { margin: 0; }
 a { color: var(--accTx, #8B7CFF); text-decoration: none; }
 a:hover { color: var(--acc2, #38D6F2); }

@@ -228,6 +228,7 @@ export function SettingsModal({
           maxHeight: '86vh',
           display: 'flex',
           background: 'var(--card)',
+          color: 'var(--tx)',
           border: '1px solid var(--line2)',
           borderRadius: 20,
           boxShadow: '0 24px 64px rgba(0,0,0,0.65)',
@@ -244,6 +245,7 @@ export function SettingsModal({
             display: 'flex',
             flexDirection: 'column',
             padding: '14px 10px',
+            color: 'var(--tx)',
           }}
         >
           {/* Search Box */}
@@ -317,10 +319,10 @@ export function SettingsModal({
         </div>
 
         {/* Right Content Pane */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, color: 'var(--tx)' }}>
           {/* Top Bar with Title and Close 'X' */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', textTransform: 'capitalize' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', textTransform: 'capitalize', color: 'var(--tx)' }}>
               {tab === 'general' ? 'General Settings' : tab}
             </h2>
             <button
@@ -375,6 +377,7 @@ export function SettingsModal({
           width: '100%',
           height: '92dvh',
           background: 'var(--card)',
+          color: 'var(--tx)',
           borderTop: '1px solid var(--line2)',
           borderRadius: '20px 20px 0 0',
           display: 'flex',
@@ -394,10 +397,10 @@ export function SettingsModal({
               <Icon name="chev" size={14} color="var(--accTx)" /> Back
             </button>
           ) : (
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', flex: 1 }}>Settings</div>
+            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', flex: 1, color: 'var(--tx)' }}>Settings</div>
           )}
 
-          <div style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 700 }}>
+          <div style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 700, color: 'var(--tx)' }}>
             {phoneSubPage ? (phoneSubPage === 'general' ? 'Profile' : phoneSubPage) : ''}
           </div>
 
@@ -577,14 +580,14 @@ export function SettingsModal({
                   <button
                     onClick={() => setTab('avatar')}
                     className="hov k-squish"
-                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700 }}
+                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}
                   >
                     Edit Vector Avatar
                   </button>
                   <button
                     onClick={() => setTab('mascot')}
                     className="hov k-squish"
-                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700 }}
+                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}
                   >
                     Choose Mascot
                   </button>
@@ -652,7 +655,7 @@ export function SettingsModal({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Appearance</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Appearance</div>
                   <div style={{ display: 'flex', gap: 4, background: 'var(--card2)', padding: 3, borderRadius: 8, border: '1px solid var(--line2)' }}>
                     <ThemeBtn
                       active={prefs.theme === 'light'}
@@ -670,7 +673,7 @@ export function SettingsModal({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Accent Color</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Accent Color</div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {ACCENTS.map((c) => (
                       <button
@@ -822,7 +825,7 @@ export function SettingsModal({
               <div style={{ display: 'flex', gap: 8 }}>
                 {[
                   { v: 'dark', n: 'Dark Mode', ic: 'moon' },
-                  { v: 'light', n: 'Light Mode', ic: 'sun' },
+                  { v: 'light', n: 'Light Mode', ic: 'spark' },
                 ].map((t) => (
                   <button
                     key={t.v}
@@ -1182,7 +1185,7 @@ const INPUT_STYLE: React.CSSProperties = {
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 5, color: 'var(--tx)' }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>{hint}</div>}
     </div>
@@ -1216,7 +1219,7 @@ function ToggleRow({ label, hint, on, onChange }: { label: string; hint: string;
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{label}</div>
         <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{hint}</div>
       </div>
       <button
@@ -1262,6 +1265,7 @@ function PhoneGroup({ children }: { children: React.ReactNode }) {
         borderRadius: 16,
         overflow: 'hidden',
         marginBottom: 14,
+        color: 'var(--tx)',
       }}
     >
       {children}
@@ -1296,11 +1300,12 @@ function PhoneRow({
         border: 'none',
         borderBottom: '1px solid var(--line)',
         textAlign: 'left',
+        color: 'var(--tx)',
       }}
     >
       <Icon name={icon} size={17} color="var(--tx2)" />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)' }}>{label}</div>
         {sub && <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{sub}</div>}
       </div>
       {previewColor && (
