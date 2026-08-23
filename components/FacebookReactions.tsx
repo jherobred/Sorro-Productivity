@@ -87,6 +87,7 @@ export function FacebookReactionButton({
     return getStoredUserReactions()[itemId] || 'like';
   });
   const [hoveredReaction, setHoveredReaction] = useState<ReactionType | null>(null);
+  const [localOffset, setLocalOffset] = useState(0);
   const [burst, setBurst] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,13 +98,14 @@ export function FacebookReactionButton({
     } else {
       setActiveReaction(null);
     }
+    setLocalOffset(0);
   }, [mine, itemId]);
 
   const onMouseEnter = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       setHoverDock(true);
-    }, 280);
+    }, 180);
   };
 
   const onMouseLeave = () => {
@@ -111,13 +113,13 @@ export function FacebookReactionButton({
     timerRef.current = setTimeout(() => {
       setHoverDock(false);
       setHoveredReaction(null);
-    }, 320);
+    }, 200);
   };
 
   const onTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
       setHoverDock(true);
-    }, 350);
+    }, 250);
   };
 
   const onTouchEnd = () => {
@@ -133,15 +135,17 @@ export function FacebookReactionButton({
     if (isSame) {
       // Toggle off
       setActiveReaction(null);
+      setLocalOffset(mine ? -1 : 0);
       storeUserReaction(itemId, null);
       playTick();
       onReact(false);
     } else {
       // Set new reaction
       setActiveReaction(r);
+      setLocalOffset(mine ? 0 : 1);
       storeUserReaction(itemId, r);
       setBurst((n) => n + 1);
-      if (r === 'love' || r === 'fire') {
+      if (r === 'love' || r === 'fire' || r === 'celebrate') {
         playCelebration();
       } else {
         playClick();
@@ -159,6 +163,7 @@ export function FacebookReactionButton({
     if (mine) {
       // Untoggle
       setActiveReaction(null);
+      setLocalOffset(mine ? -1 : 0);
       storeUserReaction(itemId, null);
       playTick();
       onReact(false);
@@ -166,6 +171,7 @@ export function FacebookReactionButton({
       // Quick like
       const nextReaction: ReactionType = 'like';
       setActiveReaction(nextReaction);
+      setLocalOffset(mine ? 0 : 1);
       storeUserReaction(itemId, nextReaction);
       setBurst((n) => n + 1);
       playClick();
@@ -173,9 +179,10 @@ export function FacebookReactionButton({
     }
   };
 
+  const effectiveCount = Math.max(0, count + localOffset);
   const currentDef = activeReaction ? getReaction(activeReaction) : null;
   const isHeart = kind === 'photo' && !activeReaction;
-  const labelColor = currentDef ? currentDef.color : mine ? PAL.coral : 'var(--tx2)';
+  const labelColor = currentDef ? currentDef.color : (mine || localOffset > 0) ? PAL.coral : 'var(--tx2)';
 
   return (
     <div
@@ -306,7 +313,7 @@ export function FacebookReactionButton({
         <span>{currentDef ? currentDef.label : kind === 'photo' ? 'Like' : 'Upvote'}</span>
 
         {/* Counter Badge */}
-        {count > 0 && (
+        {effectiveCount > 0 && (
           <span
             style={{
               marginLeft: 2,
@@ -314,14 +321,14 @@ export function FacebookReactionButton({
               borderRadius: 999,
               fontSize: 10.5,
               fontWeight: 800,
-              background: mine
+              background: (mine || localOffset > 0)
                 ? `color-mix(in srgb, ${labelColor} 16%, transparent)`
                 : 'var(--card2)',
               color: labelColor,
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {count}
+            {effectiveCount}
           </span>
         )}
 

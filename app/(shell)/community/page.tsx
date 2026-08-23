@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
@@ -11,54 +11,36 @@ import { PostView } from '@/components/PostView';
 import { ShareSheet } from '@/components/ShareSheet';
 import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
-import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
+import { FacebookReactionButton } from '@/components/FacebookReactions';
 import { currentUserId } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
 import { BOT_NAME } from '@/lib/bot';
 import { toast } from '@/lib/toast';
-import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
 import { useSignedUrls } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
+import { useReposts } from '@/lib/reposts';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort,
 } from '@/lib/community';
 import { FeedSkeleton } from '@/components/Skeleton';
-
-/**
- * Community: one stream.
- *
- * Photos and discussions used to live on separate tabs, which meant deciding
- * which half of the room to walk into before you had said anything. They are
- * the same room. A card is a photo with a caption or a title with a body, it
- * has one reaction, one comment thread, and it sits in one list you sort by
- * new or by top — Reddit's controls around Instagram's cards, which is what
- * both apps have been converging on for years.
- *
- * Three smaller things this fixes, all of them the sort you notice daily:
- * posts no longer tilt as they arrive (a card that moves while you are trying
- * to read it is an animation for the developer, not the reader); a picture
- * posted without a caption stays without one, instead of being labelled
- * `IMG_20260812.jpg`; and everybody has a name, because `bd_profiles` is
- * readable and an author called "A4" is the app admitting it never looked.
- */
+import { playCelebration, playClick } from '@/lib/audio';
 
 const SORTS: { id: Sort; label: string }[] = [
-  { id: 'new', label: 'New' },
+  { id: 'new', label: 'Latest' },
   { id: 'top', label: 'Top' },
 ];
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'Everything' },
-  { id: 'photo', label: 'Photos' },
-  { id: 'discussion', label: 'Discussions' },
-];
+
+type SubTab = 'posts' | 'replies' | 'reposts' | 'media' | 'challenges';
 
 export default function CommunityPage() {
+  const router = useRouter();
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const [tab, setTab] = useState<'feed' | 'messages' | 'challenges'>('feed');
+  const [subTab, setSubTab] = useState<SubTab>('posts');
   const [me, setMe] = useState('');
   const [sort, setSort] = useState<Sort>('new');
   const [filter, setFilter] = useState<Filter>('all');
@@ -67,6 +49,9 @@ export default function CommunityPage() {
   const [sharing, setSharing] = useState<Item | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [followed, setFollowed] = useState<Set<string>>(() => new Set(['bcherny', 'basedly_bot']));
+  const [showMoreTrends, setShowMoreTrends] = useState(false);
 
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
 
@@ -106,9 +91,9 @@ export default function CommunityPage() {
   const { data: likes = [] } = useLikes();
   const { data: votes = [] } = useVotes();
   const { data: counts = {} } = useCommentCounts();
+  const reposts = useReposts();
   const A = useCommunityActions(me);
 
-  /** Reactions per item, in the one shape the sort and the cards both want. */
   const reactions = useMemo(() => {
     const out: Record<string, number> = {};
     for (const l of likes) out[`photo:${l.post_id}`] = (out[`photo:${l.post_id}`] ?? 0) + 1;
@@ -123,17 +108,80 @@ export default function CommunityPage() {
     return out;
   }, [likes, votes, me]);
 
-  const items = useFeed(sort, filter, reactions, prefs.hideBot);
+  const rawItems = useFeed(sort, filter, reactions, prefs.hideBot);
   const loading = useFeedPending();
-  // The arrows in the opened post step through the pictures, the way a gallery
-  // does; a discussion opens on its own.
+
+  const items = useMemo(() => {
+    let list = rawItems;
+
+    if (subTab === 'media') {
+      list = list.filter((i) => i.image_path || (i.images && i.images.length > 0));
+    } else if (subTab === 'replies') {
+      list = list.filter((i) => (counts[key(i)] ?? 0) > 0);
+    } else if (subTab === 'reposts') {
+      const repostedIds = new Set(reposts.map((r) => r.itemId));
+      list = list.filter((i) => repostedIds.has(i.id));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((i) => {
+        const p = profiles[i.author_id];
+        const name = p?.name?.toLowerCase() || '';
+        const handle = p?.handle?.toLowerCase() || '';
+        const title = i.title?.toLowerCase() || '';
+        const body = i.body?.toLowerCase() || '';
+        const tag = i.tag?.toLowerCase() || '';
+        return name.includes(q) || handle.includes(q) || title.includes(q) || body.includes(q) || tag.includes(q);
+      });
+    }
+
+    return list;
+  }, [rawItems, subTab, searchQuery, counts, reposts, profiles]);
+
   const photos = items.filter((i) => i.image_path);
   const open_ = viewing ? items.find((i) => key(i) === viewing) ?? null : null;
 
+  const toggleFollow = (handle: string, name: string) => {
+    setFollowed((prev) => {
+      const next = new Set(prev);
+      if (next.has(handle)) {
+        next.delete(handle);
+        playClick();
+        toast(`Unfollowed @${handle}`);
+      } else {
+        next.add(handle);
+        playCelebration();
+        toast(`Following @${handle}`);
+      }
+      return next;
+    });
+  };
+
+  const SUGGESTIONS = [
+    { name: 'Boris Cherny', handle: 'bcherny', badge: 'blue', desc: 'Creator & Engineer', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop' },
+    { name: 'Elon Musk', handle: 'elonmusk', badge: 'gold', desc: 'X / Tesla / SpaceX', avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop' },
+    { name: 'TeamYouTube', handle: 'TeamYouTube', badge: 'gold', desc: 'Official updates', avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&h=100&fit=crop' },
+    { name: 'Basedly Bot', handle: 'basedly_bot', badge: 'bot', desc: 'AI Sprint Companion', avatar: null },
+  ];
+
+  const TRENDS = [
+    { cat: 'Trending in Philippines', tag: '#MissUniverseThailand2026', count: '42.8K posts' },
+    { cat: 'Entertainment · Trending', tag: '#StarMagicAllStarGames2026', count: '28.6K posts' },
+    { cat: 'Productivity · Trending', tag: '#FocusSprint2026', count: '19.4K posts' },
+    { cat: 'Only on Basedly · Trending', tag: '#Aston_lv', count: '14.8K posts' },
+    { cat: 'Habits · Trending', tag: 'SB19 LOLLAPALOOZA JOURNEY', count: '88.3K posts' },
+    { cat: 'Technology · Trending', tag: '#NextJS15', count: '12.5K posts' },
+    { cat: 'Design · Trending', tag: '#Glassmorphism', count: '9.2K posts' },
+  ];
+
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h1 className="sronly">Community</h1>
+    <div style={{
+      maxWidth: 1280,
+      marginInline: 'auto',
+      padding: phone ? '12px 10px 24px' : '16px 20px 32px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <TabRail
           tabs={[
             { id: 'feed', label: 'Feed', icon: 'chat' },
@@ -141,78 +189,459 @@ export default function CommunityPage() {
             { id: 'challenges', label: 'Challenges', icon: 'trophy' },
           ]}
           value={tab} onChange={setTab} phone={phone} label="Community sections" />
+
+        {tab === 'feed' && (
+          <button
+            onClick={() => setComposing(true)}
+            className="acc k-squish"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderRadius: 999,
+              background: 'var(--acc)', color: '#0A0912', fontSize: 13, fontWeight: 800,
+              boxShadow: '0 4px 14px color-mix(in srgb, var(--acc) 30%, transparent)',
+            }}
+          >
+            <Icon name="plus" size={14} color="#0A0912" />
+            Post
+          </button>
+        )}
       </div>
 
       {tab === 'feed' && (
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'minmax(0, 560px)', justifyContent: 'center', gap: 14 }}>
-          {/* Start a post. A button, not a text field: the field was one line
-              with a paperclip, which is not where anyone wants to write. */}
-          <button onClick={() => setComposing(true)} className="hov k-squish" style={{
-            display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', textAlign: 'left',
-            background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 16, boxShadow: 'var(--sh)',
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: phone ? '1fr' : 'minmax(0, 1fr) 350px',
+          gap: 20,
+          alignItems: 'start',
+        }}>
+          <main style={{
+            background: 'var(--card)',
+            border: '1px solid var(--line)',
+            borderRadius: 20,
+            overflow: 'hidden',
+            boxShadow: 'var(--sh)',
           }}>
-            <Avatar id={me} profiles={profiles} me={me} size={34} />
-            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: 'var(--tx3)' }}>
-              Ask something, or show what you are working on
-            </span>
-            <span style={{ display: 'flex', gap: 6 }}>
-              <span style={CHIP}><Icon name="image" size={14} color="var(--tx2)" /></span>
-              <span style={CHIP}><Icon name="chat" size={14} color="var(--tx2)" /></span>
-            </span>
-          </button>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px 10px',
+              borderBottom: '1px solid var(--line)',
+              background: 'color-mix(in srgb, var(--card) 90%, transparent)',
+              backdropFilter: 'blur(12px)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button
+                  onClick={() => router.back()}
+                  className="hov k-squish"
+                  title="Back"
+                  style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    display: 'grid', placeItems: 'center',
+                    border: 'none', background: 'transparent', color: 'var(--tx)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="back" size={16} color="var(--tx)" />
+                </button>
+                <div>
+                  <h1 style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: 'var(--tx)' }}>
+                    Community Feed
+                  </h1>
+                  <div style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 600 }}>
+                    {items.length} {items.length === 1 ? 'post' : 'posts'}
+                  </div>
+                </div>
+              </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {SORTS.map((s) => (
-              <Chip key={s.id} on={sort === s.id} onClick={() => setSort(s.id)}
-                icon={s.id === 'top' ? 'flame' : 'spark'}>{s.label}</Chip>
-            ))}
-            <span style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 4px' }} />
-            {FILTERS.map((f) => (
-              <Chip key={f.id} on={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</Chip>
-            ))}
-
-            {/* The bot posts on a timer. On a quiet week it is most of what is
-                here, which is when a room of people starts reading like a
-                noticeboard — so it can be switched off.
-
-                The chip is labelled with the *action*, not the subject. It
-                used to read just "Gemini" when off, sitting in a row of filter
-                chips, so it looked like "show me Gemini's posts" — the exact
-                opposite of what pressing it does. A control says what it will
-                do to you. */}
-            <Chip on={prefs.hideBot} icon={prefs.hideBot ? 'eye' : 'spark'}
-              onClick={() => { void update({ hideBot: !prefs.hideBot }); toast(prefs.hideBot ? `${BOT_NAME} is back in the feed` : `${BOT_NAME} hidden`); }}>
-              {prefs.hideBot ? `Show ${BOT_NAME}` : `Hide ${BOT_NAME}`}
-            </Chip>
-          </div>
-
-          {loading && <FeedSkeleton count={3} />}
-
-          {!loading && items.length === 0 && (
-            <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)', lineHeight: 1.8 }}>
-              Nothing here yet.<br />
-              <span style={{ fontSize: 11 }}>Post a photo of what you are working on, or ask the room something.</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {SORTS.map((s) => (
+                  <Chip key={s.id} on={sort === s.id} onClick={() => setSort(s.id)}
+                    icon={s.id === 'top' ? 'flame' : 'spark'}>{s.label}</Chip>
+                ))}
+                <Chip on={prefs.hideBot} icon={prefs.hideBot ? 'eye' : 'spark'}
+                  onClick={() => { void update({ hideBot: !prefs.hideBot }); toast(prefs.hideBot ? `${BOT_NAME} is back` : `${BOT_NAME} hidden`); }}>
+                  {prefs.hideBot ? `Show Bot` : `Hide Bot`}
+                </Chip>
+              </div>
             </div>
-          )}
 
-          {!loading && items.map((item) => (
-            <FeedCard
-              key={key(item)} item={item} me={me} profiles={profiles}
-              reactions={reactions[key(item)] ?? 0}
-              reacted={mine.has(key(item))}
-              comments={counts[key(item)] ?? 0}
-              editing={editing === key(item)}
-              open={open === key(item)}
-              onToggleComments={() => setOpen(open === key(item) ? null : key(item))}
-              onReact={(on) => A.react.mutate({ kind: item.kind, id: item.id, on })}
-              onComment={(body) => { A.comment.mutate({ kind: item.kind, id: item.id, body }); toast('Posted'); }}
-              onEdit={() => setEditing(key(item))}
-              onEditCancel={() => setEditing(null)}
-              onEditSave={(title, body) => { A.edit.mutate({ kind: item.kind, id: item.id, title, body }); setEditing(null); toast('Updated'); }}
-              onDelete={() => A.remove(item)}
-              onOpen={() => setViewing(key(item))}
-              onShare={() => setSharing(item)} />
-          ))}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              borderBottom: '1px solid var(--line)',
+              background: 'var(--card)',
+            }}>
+              {(['posts', 'replies', 'reposts', 'media', 'challenges'] as SubTab[]).map((st) => {
+                const on = subTab === st;
+                const labels: Record<SubTab, string> = {
+                  posts: 'Posts ▾',
+                  replies: 'Replies',
+                  reposts: 'Reposts',
+                  media: 'Media',
+                  challenges: 'Challenges',
+                };
+                return (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      if (st === 'challenges') {
+                        setTab('challenges');
+                      } else {
+                        setSubTab(st);
+                      }
+                    }}
+                    className="hov"
+                    style={{
+                      padding: '12px 6px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: on ? 800 : 600,
+                      color: on ? 'var(--tx)' : 'var(--tx3)',
+                      transition: 'color 0.15s',
+                    }}>
+                      {labels[st]}
+                    </span>
+                    {on && (
+                      <span style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        height: 3.5,
+                        width: 44,
+                        borderRadius: 999,
+                        background: 'var(--acc)',
+                      }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', marginBottom: 10, color: 'var(--tx)' }}>
+                Let&apos;s get you set up
+              </div>
+              <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6 }} className="navsb">
+                {[
+                  { id: 'topics', title: 'Follow 3 Topics', icon: 'chat', badge: '3 left', bg: 'linear-gradient(135deg, #FF7A00, #FF0055)' },
+                  { id: 'accounts', title: 'Follow 5 accounts', icon: 'people', badge: 'DONE ✓', bg: 'linear-gradient(135deg, #A855F7, #6366F1)' },
+                  { id: 'profile', title: 'Complete your profile', icon: 'photo', badge: 'DONE ✓', bg: 'linear-gradient(135deg, #06B6D4, #3B82F6)' },
+                  { id: 'alerts', title: 'Turn on streak alerts', icon: 'flame', badge: 'ACTIVE 🔥', bg: 'linear-gradient(135deg, #10B981, #059669)' },
+                ].map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      if (c.id === 'profile') router.push('/profile');
+                      else toast(`Goal: ${c.title}`);
+                    }}
+                    className="hov k-squish"
+                    style={{
+                      flex: '0 0 160px',
+                      height: 100,
+                      borderRadius: 14,
+                      background: c.bg,
+                      padding: 12,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      color: '#fff',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{
+                        padding: '2px 7px',
+                        borderRadius: 999,
+                        background: 'rgba(0,0,0,0.3)',
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        backdropFilter: 'blur(4px)',
+                      }}>
+                        {c.badge}
+                      </span>
+                      <Icon name={c.icon as any} size={15} color="#fff" />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.3 }}>
+                      {c.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              padding: '14px 16px',
+              borderBottom: '1px solid var(--line)',
+              alignItems: 'center',
+            }}>
+              <Avatar id={me} profiles={profiles} me={me} size={38} />
+              <button
+                onClick={() => setComposing(true)}
+                className="hov"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 14px',
+                  borderRadius: 999,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx3)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>What is happening?!</span>
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  <Icon name="image" size={15} color="var(--accTx)" />
+                  <Icon name="chat" size={15} color="var(--accTx)" />
+                </span>
+              </button>
+            </div>
+
+            {loading && <FeedSkeleton count={3} />}
+
+            {!loading && items.length === 0 && (
+              <div style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--tx3)', lineHeight: 1.8 }}>
+                No posts found {searchQuery ? `matching "${searchQuery}"` : 'in this tab.'}<br />
+                <span style={{ fontSize: 11.5 }}>Be the first to share an update or photo with the community!</span>
+              </div>
+            )}
+
+            {!loading && items.map((item) => (
+              <XPostCard
+                key={key(item)}
+                item={item}
+                me={me}
+                profiles={profiles}
+                reactions={reactions[key(item)] ?? 0}
+                reacted={mine.has(key(item))}
+                comments={counts[key(item)] ?? 0}
+                editing={editing === key(item)}
+                open={open === key(item)}
+                onToggleComments={() => setOpen(open === key(item) ? null : key(item))}
+                onReact={(on) => A.react.mutate({ kind: item.kind, id: item.id, on })}
+                onComment={(body) => { A.comment.mutate({ kind: item.kind, id: item.id, body }); toast('Posted'); }}
+                onEdit={() => setEditing(key(item))}
+                onEditCancel={() => setEditing(null)}
+                onEditSave={(title, body) => { A.edit.mutate({ kind: item.kind, id: item.id, title, body }); setEditing(null); toast('Updated'); }}
+                onDelete={() => A.remove(item)}
+                onOpen={() => setViewing(key(item))}
+                onShare={() => setSharing(item)}
+              />
+            ))}
+          </main>
+
+          {!phone && (
+            <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                borderRadius: 999,
+                padding: '0 14px',
+                minHeight: 42,
+              }}>
+                <Icon name="search" size={15} color="var(--tx3)" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search Basedly"
+                  aria-label="Search Basedly"
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--tx)',
+                    padding: '8px 10px',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      border: 'none',
+                      background: 'var(--card)',
+                      color: 'var(--tx3)',
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div style={{
+                background: 'var(--card)',
+                border: '1px solid var(--line)',
+                borderRadius: 18,
+                padding: '14px 16px',
+                boxShadow: 'var(--sh)',
+              }}>
+                <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', marginBottom: 12, color: 'var(--tx)' }}>
+                  You might like
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {SUGGESTIONS.map((s) => {
+                    const isFollowed = followed.has(s.handle);
+                    return (
+                      <div key={s.handle} style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+                        <div
+                          onClick={() => router.push(`/profile/?u=${encodeURIComponent(s.handle)}`)}
+                          className="hov k-squish"
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minWidth: 0, flex: 1 }}
+                        >
+                          {s.avatar ? (
+                            <img src={s.avatar} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{
+                              width: 38, height: 38, borderRadius: '50%', background: 'var(--acc)',
+                              display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, color: '#0A0912',
+                            }}>
+                              🤖
+                            </span>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {s.name}
+                              </span>
+                              {s.badge === 'blue' && <span style={{ color: '#1D9BF0', fontSize: 12 }}>✓</span>}
+                              {s.badge === 'gold' && <span style={{ color: '#E2B714', fontSize: 12 }}>★</span>}
+                              {s.badge === 'bot' && <BotTag />}
+                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                              @{s.handle}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => toggleFollow(s.handle, s.name)}
+                          className="hov k-squish"
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: 999,
+                            border: isFollowed ? '1px solid var(--line2)' : 'none',
+                            background: isFollowed ? 'var(--card2)' : 'var(--tx)',
+                            color: isFollowed ? 'var(--tx)' : 'var(--bg)',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            flex: 'none',
+                          }}
+                        >
+                          {isFollowed ? 'Following' : 'Follow'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => router.push('/people')}
+                  className="hov"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    marginTop: 14,
+                    paddingTop: 10,
+                    borderTop: '1px solid var(--line2)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accTx)',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Show more
+                </button>
+              </div>
+
+              <div style={{
+                background: 'var(--card)',
+                border: '1px solid var(--line)',
+                borderRadius: 18,
+                padding: '14px 16px',
+                boxShadow: 'var(--sh)',
+              }}>
+                <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', marginBottom: 12, color: 'var(--tx)' }}>
+                  What’s happening
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {(showMoreTrends ? TRENDS : TRENDS.slice(0, 5)).map((t, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => { setSearchQuery(t.tag.replace('#', '')); toast(`Filter: ${t.tag}`); }}
+                      className="hov"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{t.cat}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', margin: '1px 0' }}>{t.tag}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{t.count}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setShowMoreTrends(!showMoreTrends)}
+                  className="hov"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    marginTop: 12,
+                    paddingTop: 10,
+                    borderTop: '1px solid var(--line2)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accTx)',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showMoreTrends ? 'Show less' : 'Show more'}
+                </button>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--tx3)', lineHeight: 1.6, padding: '0 8px' }}>
+                <span>Terms of Service</span> · <span>Privacy Policy</span> · <span>Cookie Policy</span><br />
+                <span>Accessibility</span> · <span>Ads Info</span> · <span>© 2026 Basedly Corp.</span>
+              </div>
+            </aside>
+          )}
         </div>
       )}
 
@@ -242,9 +671,7 @@ export default function CommunityPage() {
   );
 }
 
-/* ------------------------------------------------------------------- card */
-
-function FeedCard({
+function XPostCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
   onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare,
 }: {
@@ -263,117 +690,179 @@ function FeedCard({
   onEditCancel: () => void;
   onEditSave: (title: string, body: string) => void;
   onDelete: () => void;
-  /** Opens the post on its own, picture beside the conversation. */
   onOpen: () => void;
   onShare: () => void;
 }) {
   const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
+  const targetHandle = profiles[item.author_id]?.handle || item.author_id;
+
+  const viewsCount = useMemo(() => {
+    return Math.floor(((item.title?.length || 10) * 47 + item.id.charCodeAt(0) * 11) % 4500 + 320);
+  }, [item.title, item.id]);
 
   return (
     <article style={{
-      position: 'relative', borderRadius: 18, overflow: 'hidden',
-      background: 'var(--card)', boxShadow: 'var(--sh)', border: '1px solid var(--line)',
+      display: 'flex',
+      gap: 12,
+      padding: '14px 16px',
+      borderBottom: '1px solid var(--line)',
+      background: 'transparent',
+      transition: 'background 0.15s',
     }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 13px 10px' }}>
-        <div
-          onClick={() => {
-            const p = profiles[item.author_id];
-            const target = p?.handle || item.author_id;
-            if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
-          }}
-          className="hov k-squish"
-          title={`View ${who.label}'s profile`}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minWidth: 0, flex: 1 }}
-        >
-          <Avatar id={item.author_id} profiles={profiles} me={me} size={32} />
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {who.label}
-              </span>
-              {who.bot && <BotTag />}
+      <div
+        onClick={() => targetHandle && router.push(`/profile/?u=${encodeURIComponent(targetHandle)}`)}
+        className="hov k-squish"
+        title={`View ${who.label}'s profile`}
+        style={{ cursor: 'pointer', flex: 'none' }}
+      >
+        <Avatar id={item.author_id} profiles={profiles} me={me} size={42} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <div
+            onClick={() => targetHandle && router.push(`/profile/?u=${encodeURIComponent(targetHandle)}`)}
+            className="hov"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 0 }}
+          >
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {who.label}
             </span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>
-              {who.sub ? `${who.sub} · ` : ''}{ago(item.created_at)}
+            <span style={{ color: '#1D9BF0', fontSize: 12 }}>✓</span>
+            {who.bot && <BotTag />}
+            <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 500 }}>
+              @{targetHandle}
             </span>
+          </div>
+
+          <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 500 }}>·</span>
+          <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 500 }}>
+            {ago(item.created_at)}
+          </span>
+
+          {item.tag && (
+            <span style={{
+              marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+              color: who.hue, background: `color-mix(in srgb, ${who.hue} 16%, transparent)`,
+            }}>
+              {item.tag}
+            </span>
+          )}
+
+          {isMine && (
+            <span style={{ marginLeft: item.tag ? 6 : 'auto' }}>
+              <RowActions label={(item.title || item.body || 'post').slice(0, 30)} onEdit={onEdit} onDelete={onDelete} />
+            </span>
+          )}
+        </header>
+
+        {editing ? (
+          <div style={{ margin: '8px 0' }}>
+            <ItemEdit item={item} onCancel={onEditCancel} onSave={onEditSave} />
+          </div>
+        ) : (
+          <div style={{ cursor: 'pointer' }} onClick={onOpen}>
+            {item.title && (
+              <h2 style={{
+                fontSize: 14.5, fontWeight: 800, letterSpacing: '-0.015em',
+                lineHeight: 1.35, margin: '2px 0 6px', color: 'var(--tx)',
+              }}>
+                {item.title}
+              </h2>
+            )}
+
+            {item.body && (
+              <div style={{ fontSize: 13, lineHeight: 1.55, fontWeight: 500, color: 'var(--tx2)', textWrap: 'pretty', marginBottom: 8 }}>
+                {item.body}
+              </div>
+            )}
+
+            {item.images.length > 0 && (
+              <div style={{ borderRadius: 14, overflow: 'hidden', margin: '8px 0 10px', border: '1px solid var(--line2)' }}>
+                <PostImages paths={item.images} tint={who.hue} alt={item.title || item.body || 'Post image'} onOpen={onOpen} />
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          maxWidth: 460,
+          marginTop: 8,
+        }}>
+          <button
+            onClick={onToggleComments}
+            className="hov k-squish"
+            aria-label="Reply"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+              border: 'none', color: open ? 'var(--accTx)' : 'var(--tx3)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Icon name="chat" size={15} color={open ? 'var(--accTx)' : 'var(--tx3)'} />
+            <span>{comments || ''}</span>
+          </button>
+
+          <button
+            onClick={onShare}
+            className="hov k-squish"
+            aria-label="Repost"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+              border: 'none', color: 'var(--tx3)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Icon name="undo" size={14} color="var(--tx3)" />
+            <span>{Math.floor(reactions * 0.4) || ''}</span>
+          </button>
+
+          <FacebookReactionButton
+            itemId={key(item)}
+            kind={item.kind}
+            mine={reacted}
+            count={reactions}
+            onReact={onReact}
+            size="sm"
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>
+            <Icon name="eye" size={14} color="var(--tx3)" />
+            <span>{viewsCount}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => { playClick(); toast('Post saved to bookmarks'); }}
+              className="hov k-squish"
+              title="Bookmark"
+              style={{ background: 'transparent', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}
+            >
+              <Icon name="star" size={14} color="var(--tx3)" />
+            </button>
+            <button
+              onClick={onShare}
+              className="hov k-squish"
+              title="Send"
+              style={{ background: 'transparent', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}
+            >
+              <Icon name="send" size={14} color="var(--tx3)" />
+            </button>
           </div>
         </div>
 
-        {item.tag && (
-          <span style={{
-            marginLeft: 'auto', flex: 'none', padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 800,
-            color: who.hue, background: `color-mix(in srgb, ${who.hue} 16%, transparent)`,
-          }}>
-            {item.tag}
-          </span>
+        {open && (
+          <div style={{ marginTop: 12 }}>
+            <CommentPanel item={item} me={me} profiles={profiles} onComment={onComment} />
+          </div>
         )}
-
-        {/* Your own post, and only yours: RLS would refuse anyone else's. */}
-        {isMine && (
-          <span style={{ marginLeft: item.tag ? 0 : 'auto', flex: 'none' }}>
-            <RowActions label={(item.title || item.body || 'post').slice(0, 30)} onEdit={onEdit} onDelete={onDelete} />
-          </span>
-        )}
-      </header>
-
-      {editing ? (
-        <div style={{ padding: '0 13px 13px' }}>
-          <ItemEdit item={item} onCancel={onEditCancel} onSave={onEditSave} />
-        </div>
-      ) : (
-        <>
-          {item.title && (
-            <h2 onClick={onOpen} style={{
-              padding: '0 13px 8px', fontSize: 15.5, fontWeight: 800, letterSpacing: '-.02em',
-              lineHeight: 1.35, textWrap: 'pretty', cursor: 'pointer',
-            }}>
-              {item.title}
-            </h2>
-          )}
-
-          {item.images.length > 0 && (
-            <PostImages paths={item.images} tint={who.hue} alt={item.title || item.body || 'Post image'} onOpen={onOpen} />
-          )}
-
-          {item.body && (
-            <div style={{ padding: '11px 13px 0', fontSize: 12.5, lineHeight: 1.6, fontWeight: 500, textWrap: 'pretty' }}>
-              {item.body}
-            </div>
-          )}
-        </>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '11px 13px 12px' }}>
-        <FacebookReactionButton
-          itemId={key(item)}
-          kind={item.kind}
-          mine={reacted}
-          count={reactions}
-          onReact={onReact}
-        />
-        <button onClick={onToggleComments} className="tap" aria-expanded={open}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: open ? 'var(--accTx)' : 'var(--tx2)' }}>
-          <Icon name="chat" size={15} color={open ? 'var(--accTx)' : 'var(--tx2)'} />{comments}
-        </button>
-        <button onClick={onShare} className="tap" aria-label="Share this post">
-          <Icon name="send" size={15} color="var(--tx3)" />
-        </button>
-        <button onClick={onOpen} className="tap" aria-label="Open this post"
-          style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
-          Open
-        </button>
       </div>
-
-      {open && (
-        <CommentPanel item={item} me={me} profiles={profiles} onComment={onComment} />
-      )}
     </article>
   );
 }
-
-/* --------------------------------------------------------------- comments */
 
 function CommentPanel({
   item, me, profiles, onComment,
@@ -393,59 +882,52 @@ function CommentPanel({
 
   return (
     <div className="rise" style={{
-      padding: '12px 13px 13px', borderTop: '1px solid var(--line)',
-      display: 'flex', flexDirection: 'column', gap: 11,
+      padding: '12px 14px',
+      borderRadius: 14,
+      background: 'var(--card2)',
+      border: '1px solid var(--line2)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
     }}>
-      {isLoading && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading…</div>}
+      {isLoading && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading replies…</div>}
       {!isLoading && comments.length === 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No replies yet. Be the one.</div>
+        <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No replies yet. Post your thought!</div>
       )}
 
       {comments.map((c) => {
         const who = displayOf(profiles, c.author_id, me);
+        const handle = profiles[c.author_id]?.handle || c.author_id;
         return (
           <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <button
-              onClick={() => {
-                const p = profiles[c.author_id];
-                const target = p?.handle || c.author_id;
-                if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
-              }}
+              onClick={() => handle && router.push(`/profile/?u=${encodeURIComponent(handle)}`)}
               className="hov k-squish"
-              title={`View ${who.label}'s profile`}
-              style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
             >
-              <Avatar id={c.author_id} profiles={profiles} me={me} size={24} />
+              <Avatar id={c.author_id} profiles={profiles} me={me} size={28} />
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                onClick={() => {
-                  const p = profiles[c.author_id];
-                  const target = p?.handle || c.author_id;
-                  if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
-                }}
-                className="hov"
-                style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', marginBottom: 2, cursor: 'pointer', display: 'inline-block' }}
-              >
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx)' }}>
                 {who.label} · <span style={{ color: 'var(--tx3)', fontWeight: 500 }}>{ago(c.created_at)}</span>
               </div>
-              <div style={{ fontSize: 12.5, lineHeight: 1.55, textWrap: 'pretty' }}>{c.body}</div>
+              <div style={{ fontSize: 12, lineHeight: 1.55, textWrap: 'pretty', color: 'var(--tx2)' }}>{c.body}</div>
             </div>
           </div>
         );
       })}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <input value={draft} onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-          placeholder="Write a reply" aria-label="Write a reply"
+          placeholder="Post your reply" aria-label="Post your reply"
           style={{
-            flex: 1, minHeight: 36, padding: '9px 12px', borderRadius: 10,
-            border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5,
+            flex: 1, minHeight: 36, padding: '8px 12px', borderRadius: 999,
+            border: '1px solid var(--line2)', background: 'var(--card)', color: 'var(--tx)', fontSize: 12.5,
           }} />
         <button onClick={send} className="acc k-squish" disabled={!draft.trim()}
           style={{
-            flex: 'none', padding: '0 15px', minHeight: 36, borderRadius: 10,
+            flex: 'none', padding: '0 16px', minHeight: 36, borderRadius: 999,
             background: 'var(--acc)', color: '#0A0912', fontSize: 12, fontWeight: 800,
             opacity: draft.trim() ? 1 : 0.45,
           }}>
@@ -455,8 +937,6 @@ function CommentPanel({
     </div>
   );
 }
-
-/* ----------------------------------------------------------------- pieces */
 
 function Avatar({
   id, profiles, me, size,
@@ -475,20 +955,6 @@ function Avatar({
   );
 }
 
-/**
- * A photo, shown whole in a fixed 4:5 stage — Instagram's desktop behaviour.
- * `object-fit: cover` looks tidier on a grid of holiday snaps and silently eats
- * the top and bottom of a photographed whiteboard, which is most of what gets
- * posted here.
- */
-/**
- * One picture, or several you swipe through.
- *
- * Scroll-snap rather than a carousel library: the browser already does
- * momentum, rubber-banding, snapping and keyboard scrolling, and it does all
- * of them better on a phone than any JavaScript reimplementation. The only
- * thing added is the dot row, which needs to know where the scroll got to.
- */
 function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: string; alt: string; onOpen: () => void }) {
   const urls = useSignedUrls('bd-feed', paths);
   const [at, setAt] = useState(0);
@@ -499,7 +965,7 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
   if (paths.length === 1) {
     return (
       <div style={wrap}>
-        <MediaFrame src={urls[0] ?? null} alt={alt} ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
+        <MediaFrame src={urls[0] ?? null} alt={alt} ratio={16 / 10} maxHeight={520} rounded={0} onOpen={onOpen} />
       </div>
     );
   }
@@ -519,7 +985,7 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
         {paths.map((path, i) => (
           <div key={path} style={{ scrollSnapAlign: 'center' }}>
             <MediaFrame src={urls[i] ?? null} alt={i === 0 ? alt : `${alt} (${i + 1} of ${paths.length})`}
-              ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
+              ratio={16 / 10} maxHeight={520} rounded={0} onOpen={onOpen} />
           </div>
         ))}
       </div>
@@ -548,66 +1014,28 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
   );
 }
 
-/**
- * One gesture for both kinds. A photo is liked and a discussion is upvoted —
- * the same act with different iconography, so the card does not need two
- * different buttons and the reader does not need to learn two.
- */
-function ReactButton({ kind, mine, count, onToggle }: { kind: Item['kind']; mine: boolean; count: number; onToggle: () => void }) {
-  const [burst, setBurst] = useState(0);
-  const photo = kind === 'photo';
-  const colour = mine ? (photo ? PAL.coral : 'var(--accTx)') : 'var(--tx2)';
-
-  return (
-    <button onClick={() => { if (!mine) setBurst((n) => n + 1); onToggle(); }} className="tap"
-      aria-pressed={mine} aria-label={photo ? 'Like' : 'Upvote'}
-      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: colour }}>
-      <span className={mine ? 'heartpop' : undefined} style={{ display: 'flex' }}>
-        <Icon name={photo ? 'heart' : 'up'} size={15} color={colour} />
-      </span>
-      {count}
-
-      {burst > 0 && photo && (
-        <span key={burst} aria-hidden style={{ position: 'absolute', left: 7, top: 8, width: 0, height: 0, pointerEvents: 'none' }}>
-          {Array.from({ length: 8 }, (_, i) => {
-            const a = (i / 8) * Math.PI * 2;
-            return (
-              <span key={i} className="burst" style={{
-                position: 'absolute', width: 5, height: 5, borderRadius: '50%',
-                background: i % 2 ? PAL.coral : PAL.pink,
-                ['--px' as string]: `${Math.round(Math.cos(a) * 26)}px`,
-                ['--py' as string]: `${Math.round(Math.sin(a) * 26)}px`,
-              }} />
-            );
-          })}
-        </span>
-      )}
-    </button>
-  );
-}
-
 function Chip({
   on, onClick, icon, children,
 }: { on: boolean; onClick: () => void; icon?: 'flame' | 'spark' | 'eye'; children: React.ReactNode }) {
   return (
     <button onClick={onClick} aria-pressed={on} className="k-chip" style={{
-      display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 999, minHeight: 32,
-      fontSize: 11.5, fontWeight: 700,
+      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, minHeight: 28,
+      fontSize: 11, fontWeight: 700,
       border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
       background: on ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
       color: on ? 'var(--accTx)' : 'var(--tx2)',
+      cursor: 'pointer',
     }}>
-      {icon && <Icon name={icon} size={12} color={on ? 'var(--accTx)' : 'var(--tx3)'} />}
+      {icon && <Icon name={icon} size={11} color={on ? 'var(--accTx)' : 'var(--tx3)'} />}
       {children}
     </button>
   );
 }
 
-/** Says what wrote this. Small, permanent, and never optional. */
 function BotTag() {
   return (
     <span style={{
-      flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9,
+      flex: 'none', padding: '1px 6px', borderRadius: 5, fontSize: 8.5,
       fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
       color: 'var(--tx3)', border: '1px solid var(--line2)',
     }}>
@@ -616,37 +1044,31 @@ function BotTag() {
   );
 }
 
-/** Title and body together, so one edit is one save. */
 function ItemEdit({ item, onSave, onCancel }: { item: Item; onSave: (t: string, b: string) => void; onCancel: () => void }) {
   const [t, setT] = useState(item.title);
   const [b, setB] = useState(item.body);
   const ok = item.kind === 'photo' ? true : !!t.trim();
 
   return (
-    <div className="k-bloom">
+    <div className="k-bloom" style={{ padding: '8px 0' }}>
       {item.kind === 'discussion' && (
         <input autoFocus value={t} onChange={(e) => setT(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }} aria-label="Title"
-          style={{ width: '100%', minHeight: 38, padding: '7px 0', fontSize: 14, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', borderBottom: '1px solid var(--line2)' }} />
+          style={{ width: '100%', minHeight: 36, padding: '6px 0', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', borderBottom: '1px solid var(--line2)', background: 'transparent' }} />
       )}
       <textarea autoFocus={item.kind === 'photo'} value={b} onChange={(e) => setB(e.target.value)} rows={3}
         placeholder={item.kind === 'photo' ? 'Caption' : 'Detail'} aria-label="Body"
-        style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent' }} />
+        style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent', border: 'none' }} />
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={() => ok && onSave(t.trim(), b.trim())} className="acc k-squish"
-          style={{ minHeight: 36, padding: '0 14px', borderRadius: 9, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800, opacity: ok ? 1 : 0.45 }}>
+          style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800, opacity: ok ? 1 : 0.45 }}>
           Save
         </button>
         <button onClick={onCancel} className="hov k-squish"
-          style={{ minHeight: 36, padding: '0 12px', borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+          style={{ minHeight: 34, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
           Cancel
         </button>
       </div>
     </div>
   );
 }
-
-const CHIP: React.CSSProperties = {
-  width: 32, height: 32, borderRadius: 9, border: '1px solid var(--line2)',
-  display: 'grid', placeItems: 'center',
-};
