@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { usePrefs, type Prefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
+import { useLayout } from '@/lib/useLayout';
 import { ON_ACCENT } from '@/lib/glass';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
@@ -281,6 +282,7 @@ function Toggle({ label, hint, on, onChange, icon }: {
  */
 function AppTab() {
   const fs = useFullscreen();
+  const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const { state, check } = useAppUpdate();
 
@@ -307,14 +309,19 @@ function AppTab() {
             not ask on load: it arms the very first tap of the session and asks
             then. In practice that is you opening the first tab, which is why it
             feels like the app simply launches fullscreen. */}
-        <div style={{ marginTop: 8 }}>
-          <Toggle
-            icon="expand"
-            label="Always start fullscreen"
-            hint="Asks again on the first tap of every launch. The APK is already edge to edge and ignores this."
-            on={prefs.alwaysFullscreen}
-            onChange={(v) => void update({ alwaysFullscreen: v })} />
-        </div>
+        {/* Phone only. A desktop browser has no address bar worth reclaiming,
+            and a window that takes the whole screen on the first click of a
+            session is a window that took it without asking. */}
+        {phone && (
+          <div style={{ marginTop: 8 }}>
+            <Toggle
+              icon="expand"
+              label="Always start fullscreen"
+              hint="Phones only. Asks on the first tap of every launch, because a browser will not grant it before then. The APK is already edge to edge and ignores this."
+              on={prefs.alwaysFullscreen}
+              onChange={(v) => void update({ alwaysFullscreen: v })} />
+          </div>
+        )}
       </Group>
 
       <Group label="Version">

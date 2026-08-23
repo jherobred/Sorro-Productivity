@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -73,6 +73,47 @@ export function MediaFrame({
  * was positioned against `main` — covering part of the page, offset wrongly,
  * with the feed showing through underneath. HANDOFF fact 2.
  */
+/**
+ * Zoom, inside the app.
+ *
+ * Opening a picture used to be an `<a target="_blank">` to a signed URL, which
+ * hands it to the browser's own image viewer: a different background, no way
+ * back except the tab button, no next/previous, and on Android a download
+ * prompt. It also leaks a signed storage URL into browser history.
+ *
+ * So the pinching happens here. Wheel and pinch zoom about the pointer rather
+ * than about the middle, because zooming about the middle means the thing you
+ * were looking at slides away from you. Double-tap toggles, and a zoomed
+ * picture pans by dragging - with the drag only starting once you are actually
+ * zoomed in, or the swipe between photos would fight it.
+ */
+const MAX_ZOOM = 6;
+
+function useZoom() {
+  const [z, setZ] = useState({ k: 1, x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  /** Live pointers, so two of them can be measured against each other. */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; k: number } | null>(null);
+
+  const reset = useCallback(() => setZ({ k: 1, x: 0, y: 0 }), []);
+
+  /** Scale about a point, keeping whatever is under it under it. */
+  const zoomAt = useCallback((next: number, cx: number, cy: number, box: DOMRect) => {
+    setZ((p) => {
+      const k = Math.min(MAX_ZOOM, Math.max(1, next));
+      if (k === 1) return { k: 1, x: 0, y: 0 };
+      // The pointer's offset from the centre, in unscaled picture units.
+      const px = cx - (box.left + box.width / 2);
+      const py = cy - (box.top + box.height / 2);
+      const ratio = k / p.k;
+      return { k, x: px - (px - p.x) * ratio, y: py - (py - p.y) * ratio };
+    });
+  }, []);
+
+  return { z, setZ, reset, zoomAt, drag, touches, pinch };
+}
+
 export function Lightbox({
   items, index, onClose, onIndex,
 }: {
@@ -82,7 +123,12 @@ export function Lightbox({
   onIndex: (i: number) => void;
 }) {
   const [i, setI] = useState(index);
+  const { z, setZ, reset, zoomAt, drag, touches, pinch } = useZoom();
+  const stage = useRef<HTMLDivElement>(null);
   useEffect(() => setI(index), [index]);
+  // A new picture starts at 1x. Carrying the zoom across would drop you into
+  // the corner of the next one.
+  useEffect(() => { reset(); }, [i, reset]);
   useOverlayBack(true, onClose);
 
   useEffect(() => {
@@ -90,10 +136,13 @@ export function Lightbox({
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowRight') setI((n) => Math.min(n + 1, items.length - 1));
       if (e.key === 'ArrowLeft') setI((n) => Math.max(n - 1, 0));
+      if (e.key === '0') reset();
+      if (e.key === '+' || e.key === '=') setZ((p) => ({ ...p, k: Math.min(MAX_ZOOM, p.k * 1.4) }));
+      if (e.key === '-') setZ((p) => (p.k / 1.4 <= 1 ? { k: 1, x: 0, y: 0 } : { ...p, k: p.k / 1.4 }));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [items.length, onClose]);
+  }, [items.length, onClose, reset, setZ]);
 
   useEffect(() => { onIndex(i); }, [i, onIndex]);
 
@@ -127,9 +176,79 @@ export function Lightbox({
       )}
 
       {item.src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img onClick={(e) => e.stopPropagation()} src={item.src} alt={item.alt} className="k-zoomfade"
-          style={{ maxWidth: 'min(100%, 1100px)', maxHeight: '82dvh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
+        <div
+          ref={stage}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => {
+            const box = e.currentTarget.getBoundingClientRect();
+            if (z.k > 1) reset();
+            else zoomAt(2.5, e.clientX, e.clientY, box);
+          }}
+          onWheel={(e) => {
+            const box = e.currentTarget.getBoundingClientRect();
+            zoomAt(z.k * (e.deltaY < 0 ? 1.18 : 1 / 1.18), e.clientX, e.clientY, box);
+          }}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (touches.current.size === 2) {
+              const [a, b] = [...touches.current.values()];
+              pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), k: z.k };
+              drag.current = null;
+            } else if (z.k > 1) {
+              drag.current = { x: e.clientX, y: e.clientY, ox: z.x, oy: z.y };
+            }
+          }}
+          onPointerMove={(e) => {
+            if (!touches.current.has(e.pointerId)) return;
+            touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            const box = e.currentTarget.getBoundingClientRect();
+
+            if (touches.current.size === 2 && pinch.current) {
+              const [a, b] = [...touches.current.values()];
+              const dist = Math.hypot(a.x - b.x, a.y - b.y);
+              zoomAt(pinch.current.k * (dist / pinch.current.dist),
+                (a.x + b.x) / 2, (a.y + b.y) / 2, box);
+              return;
+            }
+            if (drag.current) {
+              setZ((p) => ({
+                ...p,
+                x: drag.current!.ox + (e.clientX - drag.current!.x),
+                y: drag.current!.oy + (e.clientY - drag.current!.y),
+              }));
+            }
+          }}
+          onPointerUp={(e) => {
+            touches.current.delete(e.pointerId);
+            if (touches.current.size < 2) pinch.current = null;
+            drag.current = null;
+          }}
+          onPointerCancel={(e) => { touches.current.delete(e.pointerId); pinch.current = null; drag.current = null; }}
+          style={{
+            maxWidth: 'min(100%, 1100px)', maxHeight: '82dvh', overflow: 'hidden', borderRadius: 10,
+            touchAction: 'none', cursor: z.k > 1 ? (drag.current ? 'grabbing' : 'grab') : 'zoom-in',
+          }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.src} alt={item.alt} className="k-zoomfade" draggable={false}
+            style={{
+              maxWidth: '100%', maxHeight: '82dvh', objectFit: 'contain', display: 'block',
+              transform: `translate(${z.x}px, ${z.y}px) scale(${z.k})`,
+              transformOrigin: 'center',
+              transition: drag.current || pinch.current ? 'none' : 'transform .18s ease-out',
+            }} />
+        </div>
+      )}
+
+      {z.k > 1 && (
+        <button onClick={(e) => { e.stopPropagation(); reset(); }} className="hov k-squish"
+          style={{
+            position: 'absolute', top: 16, left: 16, height: 34, padding: '0 12px', borderRadius: 17,
+            background: 'rgba(255,255,255,.1)', color: '#fff', fontSize: 11.5, fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+          {z.k.toFixed(1)}× · reset
+        </button>
       )}
 
       {(item.caption || items.length > 1) && (

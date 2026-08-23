@@ -122,9 +122,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useLiveSync();
   // Remember whoever signs in, so switching back needs no round trip.
   useEffect(watchAccounts, []);
-  // Web only, and only on the first tap — the Fullscreen API refuses anything
-  // that is not a user gesture. See lib/appUpdate.ts.
-  useAlwaysFullscreen(prefs.alwaysFullscreen);
+  // Phone web only. A desktop browser has no address bar worth reclaiming and
+  // a window that goes fullscreen on the first click of the session is a window
+  // that has taken your screen without asking. Only on the first tap, too — the
+  // Fullscreen API refuses anything that is not a user gesture. lib/appUpdate.ts.
+  useAlwaysFullscreen(phone && prefs.alwaysFullscreen);
 
   /**
    * Ctrl/Cmd+\ collapses the sidebar, the shortcut Notion and VS Code use.

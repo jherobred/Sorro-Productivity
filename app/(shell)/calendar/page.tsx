@@ -12,7 +12,7 @@ import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import {
-  useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels,
+  useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, liveEventIds, GRID_START, GRID_END, type Ev, type Span,
 } from '@/lib/events';
 
@@ -52,7 +52,7 @@ export default function CalendarPage() {
    * click empty space. Both carry the click point so the bubble opens there.
    */
   const [pop, setPop] = useState<
-    | { kind: 'event'; ev: Ev; x: number; y: number }
+    | { kind: 'event'; ev: Ev; span?: Span | null; x: number; y: number }
     | { kind: 'slot'; day: number; hour: number; allDay: boolean; x: number; y: number }
     | null>(null);
   const [edit, setEdit] = useState<Ev | null>(null);
@@ -174,7 +174,14 @@ export default function CalendarPage() {
     A.wipe(ids);
   };
 
-  const openEvent = (ev: Ev, x: number, y: number) => setPop({ kind: 'event', ev, x, y });
+  /**
+   * `span` is passed when the press landed on a multi-day bar, so the bubble
+   * can offer "all N days" alongside the single day you actually clicked.
+   * Without it, the only delete on offer acted on the first day of the run —
+   * which is never the one you meant when you clicked the middle.
+   */
+  const openEvent = (ev: Ev, x: number, y: number, span?: Span | null) =>
+    setPop({ kind: 'event', ev, x, y, span: span ?? null });
   const openSlot = (day: number, hour: number, x: number, y: number, allDay = false) =>
     setPop({ kind: 'slot', day, hour, allDay, x, y });
 
@@ -304,10 +311,17 @@ export default function CalendarPage() {
 
       {pop?.kind === 'event' && (
         <EventPopover ev={pop.ev} x={pop.x} y={pop.y}
+          runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
           onClose={() => setPop(null)}
           onEdit={() => { setEdit(pop.ev); setPop(null); }}
           onDuplicate={() => { A.duplicate(pop.ev); setPop(null); }}
-          onDelete={() => { A.removeWithUndo(pop.ev); setPop(null); }} />
+          onDelete={() => { A.removeWithUndo(pop.ev); setPop(null); }}
+          onDeleteRun={() => {
+            const run = pop.span;
+            if (!run) return;
+            A.wipeRun(events.filter((e) => run.ids.includes(e.id)));
+            setPop(null);
+          }} />
       )}
 
       {pop?.kind === 'slot' && (
@@ -339,17 +353,20 @@ function Grid({
   TA: ReturnType<typeof useTaskActions>;
   sel: string | null;
   setSel: (id: string | null) => void;
-  openEvent: (ev: Ev, x: number, y: number) => void;
+  openEvent: (ev: Ev, x: number, y: number, span?: Span | null) => void;
   openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean) => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
 }) {
   const { prefs } = usePrefs();
+  const dark = prefs.theme === 'dark';
   const { phone } = useLayout();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);
   const [resize, setResize] = useState<{ id: string; end: number } | null>(null);
   /** A whole run being dragged, as an offset in days and hours from where it is. */
-  const [spanDrag, setSpanDrag] = useState<{ key: string; day: number; hour: number } | null>(null);
+  /** Which *one* day of a run is being dragged, and by how much. */
+  const [spanDrag, setSpanDrag] = useState<
+    { key: string; id: string; fromDay: number; day: number; hour: number } | null>(null);
   const [taskDrag, setTaskDrag] = useState<{ task: Task; day: number; hour: number | null } | null>(null);
 
   const hours = Array.from({ length: SPAN + 1 }, (_, i) => GRID_START + i);
@@ -370,6 +387,22 @@ function Grid({
 
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
+
+  /**
+   * Which row of a run a pointer at `clientX` is over.
+   *
+   * The bar covers several columns and each is a separate event. Every path
+   * that acts on a run — the click, the long press, the drag — has to ask this
+   * first, or it acts on `s.ev`, which is always the *first* day. That is the
+   * whole bug: clicking Thursday of a Wed–Fri class and pressing delete removed
+   * Wednesday.
+   */
+  const spanHit = (s: Span, clientX: number) => {
+    const rect = bodyRef.current?.getBoundingClientRect();
+    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
+    const col = rect ? Math.floor((clientX - rect.left) / colW) : s.firstDay;
+    return s.members.find((m) => m.day === col) ?? s.members[0];
+  };
 
   /** Multi-day runs draw as one bar; their members are skipped per column. */
   const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
@@ -439,18 +472,35 @@ function Grid({
   const pressSpan = (e: React.PointerEvent, s: Span) => {
     e.preventDefault();
     e.stopPropagation();
-    setSel(s.ev.id);
+
+    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
+
+    /**
+     * Which day of the run was actually touched.
+     *
+     * The bar spans several columns and every one of them is a separate row.
+     * Acting on `s.ev` — the first day's — is why deleting from the middle of a
+     * run deleted Monday, and why dragging it took all five days with it. The
+     * pointer's x against the grid says which column, and `members` says which
+     * row is in that column.
+     */
+    const hit = spanHit(s, e.clientX);
+    const ev = hit.ev;
+
+    setSel(ev.id);
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-    const locked = isReadOnly(s.ev) || prefs.lockEvents;
+    const origDay = hit.day;
+    const origHour = hoursOf(ev.starts_at);
+    const origEnd = hoursOf(ev.ends_at);
+    const locked = isReadOnly(ev) || prefs.lockEvents;
     let moved = false;
 
     const timer = window.setTimeout(() => {
       if (moved) return;
       if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
-      openEvent(s.ev, startX, startY);
+      openEvent(ev, startX, startY, s);
     }, K.longPressMs);
 
     const onMove = (m: PointerEvent) => {
@@ -459,10 +509,10 @@ function Grid({
       if (!moved && Math.hypot(dx, dy) > K.longPressCancelPx) { moved = true; clearTimeout(timer); }
       if (!moved || locked) return;
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
-      // The run keeps its length, so it may only slide as far as its own ends
-      // allow — otherwise half a bar walks off the week and stops being drawn.
-      const dayStep = Math.max(-s.firstDay, Math.min(days - (s.firstDay + s.days), Math.round(dx / colW)));
-      setSpanDrag({ key: s.key, day: dayStep, hour: steps * 0.5 });
+      // One day moves, so it may go anywhere in the week — the run's own ends
+      // stopped mattering the moment the whole bar stopped moving together.
+      const dayStep = Math.max(-origDay, Math.min(days - 1 - origDay, Math.round(dx / colW)));
+      setSpanDrag({ key: s.key, id: ev.id, fromDay: origDay, day: dayStep, hour: steps * 0.5 });
     };
 
     const onUp = () => {
@@ -470,11 +520,13 @@ function Grid({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       if (locked) {
-        if (moved) toast(isReadOnly(s.ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
         return;
       }
       setSpanDrag((d) => {
-        if (d && d.key === s.key) A.moveRun(events.filter((e2) => s.ids.includes(e2.id)), d.day, d.hour);
+        if (d && d.key === s.key && (d.day !== 0 || d.hour !== 0)) {
+          A.moveTo(ev, origDay + d.day, origHour + d.hour);
+        }
         return null;
       });
     };
@@ -659,6 +711,7 @@ function Grid({
                         label={hhmm(start)} lifted={isDrag || isResize} selected={sel === e.id}
                         onPointerDown={(p) => press(p, e, 'move')}
                         onResize={(p) => press(p, e, 'resize')}
+                        dark={dark}
                         onOpen={(p) => openEvent(e, p.clientX, p.clientY)} />
                     );
                   })}
@@ -696,10 +749,10 @@ function Grid({
               pointer so clicking an empty slot underneath still creates. */}
           <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {spans.filter((s) => s.days > 1).map((s) => (
-              <SpanChip key={s.key} span={s} days={days}
+              <SpanChip key={s.key} span={s} days={days} dark={dark}
                 offset={spanDrag?.key === s.key ? spanDrag : null}
                 onPointerDown={(p) => pressSpan(p, s)}
-                onOpen={(x, y) => openEvent(s.ev, x, y)} />
+                onOpen={(x, y) => openEvent(spanHit(s, x).ev, x, y, s)} />
             ))}
           </div>
         </div>
@@ -710,14 +763,16 @@ function Grid({
 }
 
 function EventChip({
-  ev, top, height, label, lifted, selected, onPointerDown, onResize, onOpen,
+  ev, top, height, label, lifted, selected, dark, onPointerDown, onResize, onOpen,
 }: {
   ev: Ev; top: number; height: number; label: string; lifted: boolean; selected: boolean;
+  dark: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
   onOpen: (e: React.MouseEvent) => void;
 }) {
   const locked = isReadOnly(ev);
+  const ink = chipInk(ev, dark);
   return (
     <div
       onPointerDown={onPointerDown}
@@ -729,13 +784,14 @@ function EventChip({
         borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
         background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
         borderLeft: `2px solid ${ev.color}`,
+        color: ink,
         boxShadow: lifted ? 'var(--shl)' : undefined,
         transform: lifted ? 'scale(1.02)' : undefined,
         cursor: locked ? 'default' : 'grab', touchAction: 'none', zIndex: lifted ? 5 : 1,
         outline: selected ? `1px solid ${ev.color}` : undefined,
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
-        {locked && <Icon name="lock" size={9} color="var(--tx3)" />}
+        {locked && <Icon name="lock" size={9} color={ink} />}
         {ev.title}
       </span>
       <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
@@ -751,9 +807,10 @@ function EventChip({
 }
 
 /** The horizontal bar Google draws for a run of identical days. */
-function SpanChip({ span: s, days, offset, onPointerDown, onOpen }: {
+function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
   span: Span; days: number;
-  offset: { day: number; hour: number } | null;
+  dark: boolean;
+  offset: { day: number; fromDay: number; hour: number } | null;
   onPointerDown: (e: React.PointerEvent) => void;
   onOpen: (x: number, y: number) => void;
 }) {
@@ -761,7 +818,18 @@ function SpanChip({ span: s, days, offset, onPointerDown, onOpen }: {
   const shift = offset?.hour ?? 0;
   const start = hoursOf(s.ev.starts_at) + shift;
   const end = hoursOf(s.ev.ends_at) + shift;
-  const firstDay = s.firstDay + (offset?.day ?? 0);
+  /**
+   * Picking one day out of the run.
+   *
+   * The bar used to slide bodily — five days moving because you grabbed one of
+   * them. Now the moment a drag starts it shrinks to the single column you took
+   * hold of and follows the pointer, which is both what happens on drop and the
+   * only honest picture of it. Let go and the run redraws itself around what is
+   * left, because `spanRuns` is a grouping pass over the rows, not a record.
+   */
+  const firstDay = lifted ? offset!.fromDay + offset!.day : s.firstDay;
+  const width = lifted ? 1 : s.days;
+  const ink = chipInk(s.ev, dark);
   return (
     <div
       onPointerDown={onPointerDown}
@@ -770,24 +838,27 @@ function SpanChip({ span: s, days, offset, onPointerDown, onOpen }: {
       style={{
         position: 'absolute',
         left: `calc(${(firstDay / days) * 100}% + 3px)`,
-        width: `calc(${(s.days / days) * 100}% - 6px)`,
+        width: `calc(${(width / days) * 100}% - 6px)`,
         top: `${pct(start)}%`, height: `${Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}%`,
         borderRadius: 8, padding: '4px 9px', overflow: 'hidden', pointerEvents: 'auto',
         background: `color-mix(in srgb, ${s.ev.color} 26%, var(--card))`,
         borderLeft: `2px solid ${s.ev.color}`,
+        color: ink,
         boxShadow: lifted ? 'var(--shl)' : 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
         transform: lifted ? 'scale(1.01)' : undefined,
         zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title}
-        <span style={{
-          marginLeft: 'auto', flex: 'none', padding: '1px 7px', borderRadius: 999,
-          background: `color-mix(in srgb, ${s.ev.color} 42%, var(--card))`,
-          fontSize: 9, fontWeight: 800,
-        }}>
-          {s.days} days
-        </span>
+        {!lifted && (
+          <span style={{
+            marginLeft: 'auto', flex: 'none', padding: '1px 7px', borderRadius: 999,
+            background: `color-mix(in srgb, ${s.ev.color} 42%, var(--card))`,
+            fontSize: 9, fontWeight: 800,
+          }}>
+            {s.days} days
+          </span>
+        )}
       </span>
       <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
         {hhmm(start)}–{hhmm(end)} · {s.ev.location}
@@ -1098,7 +1169,31 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
 
   useOverlayBack(true, onClose);
 
-  const swatches = ['#FF6B6B', '#7C8CFF', '#38D6F2', '#34D9A0', '#B07CFF', '#FFC24B', '#FF6FA8', '#A3E635'];
+  const [textColor, setTextColor] = useState<string | null>(ev.text_color ?? null);
+  const { prefs } = usePrefs();
+  const dark = prefs.theme === 'dark';
+
+  /**
+   * The whole spread, not eight of them.
+   *
+   * Google Calendar ships eleven named colours and every calendar app since has
+   * copied the idea, because "the blue one" is how people actually refer to a
+   * block on a grid. The custom well below is the escape hatch for a course
+   * colour that has to match something else.
+   */
+  const swatches = [
+    '#FF6B6B', '#FF8A4C', '#FFC24B', '#A3E635', '#34D9A0', '#38D6F2',
+    '#38BDF8', '#7C8CFF', '#B07CFF', '#FF6FA8', '#8A86A6', '#3A3550',
+  ];
+  /** Label colours. `null` is "read it off the background" — see chipInk. */
+  const inks: { v: string | null; n: string }[] = [
+    { v: null, n: 'Auto' },
+    { v: '#F4F2FB', n: 'Light' },
+    { v: '#141220', n: 'Dark' },
+    { v: '#FFC24B', n: 'Amber' },
+    { v: '#34D9A0', n: 'Mint' },
+    { v: '#FF6B6B', n: 'Coral' },
+  ];
 
   const save = () => {
     // Native date/time inputs give local wall-clock strings; `new Date(...)`
@@ -1106,7 +1201,10 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
     const starts = new Date(`${date}T${allDay ? '00:00' : from}`);
     const ends = new Date(`${date}T${allDay ? '23:59' : to}`);
     if (ends <= starts) { toast('The end time has to be after the start'); return; }
-    onSave({ title, location, color, all_day: allDay, starts_at: starts.toISOString(), ends_at: ends.toISOString() });
+    onSave({
+      title, location, color, text_color: textColor, all_day: allDay,
+      starts_at: starts.toISOString(), ends_at: ends.toISOString(),
+    });
   };
 
   return (
@@ -1142,12 +1240,57 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 7, marginBottom: 20, flexWrap: 'wrap' }}>
+        <span style={LABEL}>Background</span>
+        <div style={{ display: 'flex', gap: 7, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           {swatches.map((c) => (
             <button key={c} onClick={() => setColor(c)} aria-label={`Colour ${c}`} aria-pressed={color === c}
               className={`k-swatch${color === c ? ' on' : ''}`}
               style={{ width: 26, height: 26, borderRadius: 7, background: c, outline: color === c ? '2px solid var(--tx)' : undefined, outlineOffset: 2 }} />
           ))}
+          <label title="Any colour" aria-label="Custom background colour"
+            style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', border: '1px dashed var(--line2)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            <Icon name="pen" size={12} color="var(--tx3)" />
+            <input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#7C8CFF'}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+          </label>
+        </div>
+
+        <span style={LABEL}>Text</span>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          {inks.map((k) => (
+            <button key={k.n} onClick={() => setTextColor(k.v)} aria-pressed={textColor === k.v}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8,
+                fontSize: 11, fontWeight: 700, minHeight: 30,
+                border: `1px solid ${textColor === k.v ? 'var(--acc)' : 'var(--line2)'}`,
+                color: textColor === k.v ? 'var(--tx)' : 'var(--tx2)',
+              }}>
+              {k.v && <span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: k.v, border: '1px solid var(--line2)' }} />}
+              {k.n}
+            </button>
+          ))}
+          <label title="Any colour" aria-label="Custom text colour"
+            style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', border: '1px dashed var(--line2)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            <Icon name="pen" size={12} color="var(--tx3)" />
+            <input type="color" value={textColor && /^#[0-9a-f]{6}$/i.test(textColor) ? textColor : '#F4F2FB'}
+              onChange={(e) => setTextColor(e.target.value)}
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
+          </label>
+        </div>
+
+        {/* What it will look like, before you close the sheet. */}
+        <div style={{
+          marginBottom: 18, padding: '7px 10px', borderRadius: 8,
+          background: `color-mix(in srgb, ${color} 26%, var(--card))`,
+          borderLeft: `2px solid ${color}`,
+          color: chipInk({ color, text_color: textColor }, dark),
+          fontSize: 11, fontWeight: 700,
+        }}>
+          {title || 'Untitled'}
+          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2 }}>{from}–{to}</span>
+        </div>
+        <div style={{ display: 'none' }}>
         </div>
 
         <div style={{ display: 'flex', gap: 9 }}>
@@ -1178,10 +1321,13 @@ const LABEL: React.CSSProperties = {
  * Edit, which opens the full sheet.
  */
 function EventPopover({
-  ev, x, y, onClose, onEdit, onDuplicate, onDelete,
+  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun,
 }: {
   ev: Ev; x: number; y: number;
-  onClose: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void;
+  /** How many days this event's run covers, or 0 when it stands alone. */
+  runDays: number;
+  onClose: () => void; onEdit: () => void; onDuplicate: () => void;
+  onDelete: () => void; onDeleteRun: () => void;
 }) {
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at);
@@ -1199,7 +1345,9 @@ function EventPopover({
               style={ACT}><Icon name="edit" size={14} color="var(--tx2)" /></button>
             <button onClick={onDuplicate} className="hov k-squish" aria-label="Duplicate event" title="Duplicate"
               style={ACT}><Icon name="copy" size={14} color="var(--tx2)" /></button>
-            <button onClick={onDelete} className="hov k-squish" aria-label="Delete event" title="Delete"
+            <button onClick={onDelete} className="hov k-squish"
+              aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'}
+              title={runDays > 1 ? 'Delete this day' : 'Delete'}
               style={ACT}><Icon name="trash" size={14} color="var(--pal-coral)" /></button>
           </>
         )}
@@ -1221,6 +1369,21 @@ function EventPopover({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 9 }}>
               <Icon name="lock" size={12} color="var(--tx3)" />Synced — edit it where it came from
             </div>
+          )}
+
+          {/* A repeating class is N rows drawn as one bar. Everything above
+              acts on the day you clicked; this is the way to reach all of it,
+              and it says how many so it can never be a surprise. */}
+          {runDays > 1 && !locked && (
+            <button onClick={onDeleteRun} className="hov"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7, marginTop: 11, padding: '7px 10px',
+                width: '100%', borderRadius: 9, border: '1px solid var(--line2)',
+                fontSize: 11.5, fontWeight: 700, color: 'var(--pal-coral)',
+              }}>
+              <Icon name="trash" size={13} color="var(--pal-coral)" />
+              Delete all {runDays} days of this
+            </button>
           )}
         </div>
       </div>

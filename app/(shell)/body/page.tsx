@@ -82,11 +82,15 @@ export default function BodyPage() {
     <div className="ogym ogym-page" style={{ padding: phone ? '14px 14px 28px' : '20px 24px 32px' }}>
       <div style={{ maxWidth: 720, marginInline: 'auto' }}>
 
-        {/* One header for the whole tab. The gym used to carry a second one. */}
+        {/* One header for the whole tab. The gym used to carry a second one.
+            On a phone the Shell's own header already says "Body" a centimetre
+            above this, so the word is read out but not drawn twice; the date
+            becomes the heading, which is the part that is actually telling you
+            something. On a desktop nothing else names the page, so it stays. */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, margin: '2px 0 18px' }}>
           <div>
-            <h1 className="og-h1">Body</h1>
-            <div className="og-sub">
+            <h1 className={phone ? 'sronly' : 'og-h1'}>Body</h1>
+            <div className={phone ? 'og-h1' : 'og-sub'} style={phone ? { fontSize: 26 } : undefined}>
               {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
           </div>

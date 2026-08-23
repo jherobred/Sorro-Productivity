@@ -276,7 +276,9 @@ export function seedDevFixtures() {
   // read one out of. bd_profiles is world-readable by design.
   seed(['profiles'], {
     me: { user_id: 'me', name: 'Jhems Reduta', handle: 'jhemsreduta07', photo_url: null },
-    jl: { user_id: 'jl', name: 'Jules Lopez', handle: 'juleslopez', photo_url: null },
+    // One profile carries a picture so the avatar's photo path is exercised in
+    // the preview, not just the initials fallback.
+    jl: { user_id: 'jl', name: 'Jules Lopez', handle: 'juleslopez', photo_url: '/ex/pullup-0.jpg' },
     rt: { user_id: 'rt', name: 'Rain Tolentino', handle: 'raintol', photo_url: null },
     bc: { user_id: 'bc', name: 'Bea Cruz', handle: null, photo_url: null },
     csss: { user_id: 'csss', name: 'CS Student Society', handle: 'csss', photo_url: null },

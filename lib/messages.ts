@@ -46,7 +46,20 @@ export type Message = {
   attach_kind: string | null;
   attach_size: number | null;
   created_at: string;
+  /** Stamped when the text was changed, so a bubble can say so. */
+  edited_at?: string | null;
 };
+
+/** Why somebody reported a message. Matches the CHECK in migration 0012. */
+export const REPORT_REASONS = [
+  { id: 'spam', label: 'Spam or advertising' },
+  { id: 'harassment', label: 'Harassment or bullying' },
+  { id: 'explicit', label: 'Explicit or graphic' },
+  { id: 'scam', label: 'Scam or impersonation' },
+  { id: 'other', label: 'Something else' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['id'];
 
 /** What the composer is holding but has not sent yet. */
 export type Attachment = { path: string; name: string; kind: string; size: number };
@@ -88,7 +101,7 @@ export function useMessages(conversationId: string | null) {
     enabled: !!conversationId,
     queryFn: async (): Promise<Message[]> => {
       const { data, error } = await supabase.from('bd_messages')
-        .select('id,conversation_id,author_id,body,share_kind,share_id,attach_path,attach_name,attach_kind,attach_size,created_at')
+        .select('id,conversation_id,author_id,body,share_kind,share_id,attach_path,attach_name,attach_kind,attach_size,created_at,edited_at')
         .eq('conversation_id', conversationId!).is('deleted_at', null)
         .order('created_at').limit(300);
       if (error) throw error;
@@ -125,10 +138,40 @@ const LEAVE = defineMutation('msg.leave', async (v: { conversation_id: string })
   if (error) throw error;
 });
 
+/**
+ * Taking a message back is a soft delete, and that is the whole design.
+ *
+ * A row that is still there can be restored by Undo, and — more to the point —
+ * it can still be read by whoever ends up reviewing a report. A hard delete
+ * would make "say something vile, then unsend it" a complete escape. The
+ * trigger in 0012 records every one of these either way.
+ */
 const UNSEND = defineMutation('msg.unsend', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_messages')
     .update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
+});
+
+const RESTORE = defineMutation('msg.restore', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_messages')
+    .update({ deleted_at: null }).eq('id', v.id);
+  if (error) throw error;
+});
+
+const EDIT = defineMutation('msg.edit', async (v: { id: string; body: string }) => {
+  const { error } = await supabase.from('bd_messages')
+    .update({ body: v.body, edited_at: new Date().toISOString() }).eq('id', v.id);
+  if (error) throw error;
+});
+
+const REPORT = defineMutation('msg.report', async (v: {
+  message_id: string; conversation_id: string; reason: ReportReason; note: string;
+}) => {
+  const { error } = await supabase.from('bd_message_reports').insert(v);
+  // 23505 is the one-report-per-person index doing its job. Pressing report
+  // twice is not two reports, and saying "already reported" is the honest
+  // answer rather than an error.
+  if (error && error.code !== '23505') throw error;
 });
 
 /* ----------------------------------------------------------------- actions */
@@ -185,6 +228,40 @@ export function useMessageActions(me: string) {
     onSettled: settle,
   });
 
+  const restore = useMutation<unknown, Error, { id: string; conversation_id: string; row: Message }>({
+    mutationKey: RESTORE,
+    onMutate: (v) => {
+      const k = messagesKey(v.conversation_id);
+      const prev = queryClient.getQueryData<Message[]>(k) ?? [];
+      // Back where it was, not at the end: a restored message that jumps to the
+      // bottom of the thread rewrites the conversation.
+      queryClient.setQueryData<Message[]>(k, [...prev, v.row]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)));
+    },
+    onSettled: settle,
+  });
+
+  const edit = useMutation<unknown, Error, { id: string; conversation_id: string; body: string }>({
+    mutationKey: EDIT,
+    onMutate: (v) => {
+      const k = messagesKey(v.conversation_id);
+      const prev = queryClient.getQueryData<Message[]>(k) ?? [];
+      queryClient.setQueryData<Message[]>(k, prev.map((m) =>
+        (m.id === v.id ? { ...m, body: v.body, edited_at: new Date().toISOString() } : m)));
+    },
+    onSettled: settle,
+  });
+
+  const report = useMutation<unknown, Error, {
+    message_id: string; conversation_id: string; reason: ReportReason; note: string;
+  }>({ mutationKey: REPORT });
+
+  /** Unsend with the way back attached. */
+  const takeBack = (m: Message) => {
+    unsend.mutate({ id: m.id, conversation_id: m.conversation_id });
+    toast('Message removed', () => restore.mutate({ id: m.id, conversation_id: m.conversation_id, row: m }));
+  };
+
   /**
    * Say something. `share` attaches a post by reference; `attach` carries a
    * file already sitting in the `bd-feed` bucket — `putAttachment` below is the
@@ -204,7 +281,7 @@ export function useMessageActions(me: string) {
     });
   };
 
-  return { send, say, markRead, leave, unsend };
+  return { send, say, markRead, leave, unsend, restore, edit, report, takeBack };
 }
 
 /**

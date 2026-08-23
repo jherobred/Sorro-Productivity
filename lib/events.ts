@@ -16,6 +16,14 @@ export type Ev = {
   all_day: boolean;
   location: string;
   color: string;
+  /**
+   * The label colour. Null means "work it out" — see `chipInk`.
+   *
+   * `color` has only ever been the background. The label was drawn in the
+   * theme's own text colour on top of it, which is unreadable the moment
+   * somebody picks a pale swatch in dark mode, or a dark one in light.
+   */
+  text_color?: string | null;
   /** 'app' for anything created here; 'gcal_ics' rows are a read-only mirror. */
   source?: string;
   remind_minutes: number | null;
@@ -128,7 +136,7 @@ export function useEvents(ws: Date, days = 7) {
 
       const { data, error } = await supabase
         .from('bd_events')
-        .select('id,title,starts_at,ends_at,all_day,location,color,source,remind_minutes,snoozed_until,deleted_at')
+        .select('id,title,starts_at,ends_at,all_day,location,color,text_color,source,remind_minutes,snoozed_until,deleted_at')
         .is('deleted_at', null)
         .gte('starts_at', from.toISOString())
         .lt('starts_at', to.toISOString())
@@ -145,7 +153,19 @@ export function useEvents(ws: Date, days = 7) {
  * week. Purely a grouping pass over what is already loaded: a repeating event
  * is still N rows, it is only *drawn* as one bar.
  */
-export type Span = { key: string; ev: Ev; firstDay: number; days: number; ids: string[] };
+/**
+ * `members` is what makes a run editable.
+ *
+ * The bar is drawn from `ev` — the *first* day's row — and everything used to
+ * act on that: clicking the middle of a five-day run and pressing delete
+ * removed Monday, and dragging it moved all five. `members` maps each column
+ * back to the row that actually sits in it, so a press can find the day it
+ * landed on instead of the day the bar happens to start.
+ */
+export type Span = {
+  key: string; ev: Ev; firstDay: number; days: number; ids: string[];
+  members: { day: number; ev: Ev }[];
+};
 
 export function spanRuns(events: Ev[], ws: Date, dayCount: number): Span[] {
   const byKey = new Map<string, { day: number; ev: Ev }[]>();
@@ -169,6 +189,7 @@ export function spanRuns(events: Ev[], ws: Date, dayCount: number): Span[] {
         firstDay: run[0].day,
         days: run.length,
         ids: run.map((r) => r.ev.id),
+        members: run.map((r) => ({ day: r.day, ev: r.ev })),
       });
     };
     for (let i = 1; i < items.length; i++) {
@@ -178,6 +199,28 @@ export function spanRuns(events: Ev[], ws: Date, dayCount: number): Span[] {
     flush();
   }
   return out;
+}
+
+/**
+ * What colour to draw an event's label in.
+ *
+ * An explicit choice wins. Otherwise it is decided from the *background the
+ * chip actually has*, which is 26% of the event colour over the card — so it
+ * follows the theme, and a yellow event is not black text in dark mode and
+ * white text in light. sRGB relative luminance, the same sum WCAG uses.
+ */
+export function chipInk(ev: Pick<Ev, 'color' | 'text_color'>, dark: boolean): string {
+  if (ev.text_color) return ev.text_color;
+  const hex = /^#([0-9a-f]{6})$/i.exec(ev.color.trim());
+  if (!hex) return 'var(--tx)';
+  const n = parseInt(hex[1], 16);
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => lin(c / 255));
+  const evL = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // The chip is mostly card, not event colour, so the ground's own lightness
+  // dominates; the event tint only nudges it.
+  const groundL = dark ? 0.06 : 0.96;
+  return evL * 0.26 + groundL * 0.74 > 0.45 ? '#141220' : '#F4F2FB';
 }
 
 /* ---- Mutations (registered so offline writes replay after a restart) ---- */
@@ -224,6 +267,15 @@ const CLEAR_ALL = defineMutation('event.clearAll', async () => {
   const { error } = await supabase.from('bd_events')
     .update({ deleted_at: new Date().toISOString() }).is('deleted_at', null);
   if (error) throw error;
+});
+
+/** Soft-delete a named set — one run of a repeating class, usually. */
+const DELETE_MANY = defineMutation('event.deleteMany', async (v: { ids: string[] }) => {
+  for (let i = 0; i < v.ids.length; i += 200) {
+    const { error } = await supabase.from('bd_events')
+      .update({ deleted_at: new Date().toISOString() }).in('id', v.ids.slice(i, i + 200));
+    if (error) throw error;
+  }
 });
 
 const RESTORE_MANY = defineMutation('event.restoreMany', async (v: { ids: string[] }) => {
@@ -299,6 +351,7 @@ export function useEventActions(ws: Date) {
 
   const restore = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE, onSettled: settle });
   const restoreMany = useMutation<unknown, Error, { ids: string[] }>({ mutationKey: RESTORE_MANY, onSettled: settle });
+  const deleteMany = useMutation<unknown, Error, { ids: string[] }>({ mutationKey: DELETE_MANY, onSettled: settle });
 
   const clearAll = useMutation<unknown, Error, void, [readonly unknown[], Ev[] | undefined][]>({
     mutationKey: CLEAR_ALL,
@@ -403,6 +456,23 @@ export function useEventActions(ws: Date) {
     toast(`Deleted “${ev.title}”`, () => restore.mutate({ id: ev.id }));
   };
 
+  /**
+   * Every day of one run, in one press and one Undo.
+   *
+   * A run is N separate rows that only *look* like one bar, so removing "the
+   * whole thing" is N deletes — and N toasts, each with its own Undo, would be
+   * unusable. One `in.(...)` update and one restore, which is also what makes
+   * "I meant the other one" recoverable.
+   */
+  const wipeRun = (evs: Ev[]) => {
+    const ids = evs.map((e) => e.id);
+    if (!ids.length) return;
+    optimistic((prev) => prev.filter((e) => !ids.includes(e.id)));
+    deleteMany.mutate({ ids });
+    toast(`Deleted ${ids.length} day${ids.length === 1 ? '' : 's'} of “${evs[0].title}”`,
+      () => restoreMany.mutate({ ids }));
+  };
+
   /** Everything, soft-deleted, with the ids kept so Undo is one restore. */
   const wipe = (ids: string[]) => {
     clearAll.mutate(undefined);
@@ -411,6 +481,6 @@ export function useEventActions(ws: Date) {
 
   return {
     create, update, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
-    duplicate, removeWithUndo, wipe,
+    duplicate, removeWithUndo, wipe, wipeRun,
   };
 }

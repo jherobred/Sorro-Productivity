@@ -11,13 +11,16 @@ import { confirmAsk } from '@/lib/ask';
 import { PeoplePicker } from './PeoplePicker';
 import { ago } from '@/lib/scratch';
 import { useSignedUrl } from '@/lib/uploads';
-import { useProfiles, displayOf, type Person } from '@/lib/people';
+import { Lightbox } from './MediaFrame';
+import { ContextMenu } from './ContextMenu';
+import { usePrefs } from '@/lib/prefs';
+import { useProfiles, displayOf, type Person, type Display } from '@/lib/people';
 import {
   useConversations, useMembers, useMessages, useMessageActions,
   startDm, startGroup, titleOf, unreadOf, putAttachment, attachFromDrive, driveFiles,
-  sizeLabel, kindOfFile,
+  sizeLabel, kindOfFile, REPORT_REASONS,
   MEMBERS,
-  type Conversation, type Member, type Message, type Attachment, type DriveFile,
+  type Conversation, type Member, type Message, type Attachment, type DriveFile, type ReportReason,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
 
@@ -114,6 +117,34 @@ export function Messages({ me }: { me: string }) {
   );
 }
 
+/**
+ * Somebody's face.
+ *
+ * Every avatar in messaging was initials on a coloured disc, including for
+ * people whose photo the app already had on `bd_profiles.photo_url` and was
+ * drawing correctly in the feed, on projects and in the header. A chat list of
+ * two-letter discs is the one place a picture does most work: you find the
+ * conversation you want by the face, not by reading four names.
+ */
+export function Avatar({ who, size, ring }: { who: Display; size: number; ring?: string }) {
+  const common: React.CSSProperties = {
+    width: size, height: size, flex: 'none', borderRadius: '50%',
+    border: ring ? `2px solid ${ring}` : undefined,
+  };
+  if (who.photo) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={who.photo} alt="" style={{ ...common, objectFit: 'cover', display: 'block' }} />;
+  }
+  return (
+    <span aria-hidden style={{
+      ...common, background: who.hue, display: 'grid', placeItems: 'center',
+      fontSize: size * 0.36, fontWeight: 700, color: '#0C0F16',
+    }}>
+      {who.initials}
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------------- list */
 
 export function ChatList({
@@ -158,14 +189,16 @@ export function ChatList({
               background: on ? 'color-mix(in srgb, var(--acc) 12%, transparent)' : 'var(--card)',
               boxShadow: on ? 'none' : 'var(--sh)',
             }}>
-            <span aria-hidden style={{
-              width: 30, height: 30, flex: 'none', borderRadius: '50%',
-              background: c.is_group ? 'var(--card2)' : who.hue,
-              display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700,
-              color: c.is_group ? 'var(--tx2)' : '#0C0F16',
-            }}>
-              {c.is_group ? <Icon name="people" size={14} color="var(--tx2)" /> : who.initials}
-            </span>
+            {c.is_group ? (
+              <span aria-hidden style={{
+                width: 34, height: 34, flex: 'none', borderRadius: '50%', background: 'var(--card2)',
+                display: 'grid', placeItems: 'center',
+              }}>
+                <Icon name="people" size={15} color="var(--tx2)" />
+              </span>
+            ) : (
+              <Avatar who={who} size={34} />
+            )}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{
                 display: 'block', fontSize: 12.5, fontWeight: unread ? 800 : 700,
@@ -200,6 +233,9 @@ export function Thread({
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [busy, setBusy] = useState(false);
   const [drive, setDrive] = useState(false);
+  /** Which message is open in its own editor, and which is being reported. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<Message | null>(null);
   const qc = useQueryClient();
   const foot = useRef<HTMLDivElement>(null);
 
@@ -281,7 +317,17 @@ export function Thread({
         {messages.map((m, i) => (
           <Bubble key={m.id} msg={m} me={me} profiles={profiles}
             first={i === 0 || messages[i - 1].author_id !== m.author_id}
-            onUnsend={() => A.unsend.mutate({ id: m.id, conversation_id: convo.id })} />
+            editing={editingId === m.id}
+            onEditStart={() => setEditingId(m.id)}
+            onEditCancel={() => setEditingId(null)}
+            onEditSave={(body) => {
+              setEditingId(null);
+              const v = body.trim();
+              if (!v || v === m.body) return;
+              A.edit.mutate({ id: m.id, conversation_id: convo.id, body: v });
+            }}
+            onRemove={() => A.takeBack(m)}
+            onReport={() => setReporting(m)} />
         ))}
         <div ref={foot} />
       </div>
@@ -361,48 +407,245 @@ export function Thread({
         <PeoplePicker title="Add to this chat" me={me} exclude={here} multi askName={false}
           confirmLabel="Add" onClose={() => setAdding(false)} onPick={(ids) => void addPeople(ids)} />
       )}
+
+      {reporting && (
+        <ReportSheet msg={reporting} onClose={() => setReporting(null)}
+          onSend={(reason, note) => {
+            A.report.mutate({
+              message_id: reporting.id, conversation_id: reporting.conversation_id, reason, note,
+            }, {
+              onSuccess: () => toast('Reported — thanks, we keep a record of it'),
+              onError: (e) => toast(`Could not report that — ${e.message}`),
+            });
+            setReporting(null);
+          }} />
+      )}
     </div>
   );
 }
 
 function Bubble({
-  msg, me, profiles, first, onUnsend,
-}: { msg: Message; me: string; profiles: Record<string, Person>; first: boolean; onUnsend: () => void }) {
+  msg, me, profiles, first, editing, onEditStart, onEditCancel, onEditSave, onRemove, onReport,
+}: {
+  msg: Message; me: string; profiles: Record<string, Person>; first: boolean;
+  editing: boolean;
+  onEditStart: () => void;
+  onEditCancel: () => void;
+  onEditSave: (body: string) => void;
+  onRemove: () => void;
+  onReport: () => void;
+}) {
+  const { prefs } = usePrefs();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [draft, setDraft] = useState(msg.body);
   const mine = msg.author_id === me;
   const who = displayOf(profiles, msg.author_id, me);
 
+  useEffect(() => { if (editing) setDraft(msg.body); }, [editing, msg.body]);
+
+  /**
+   * One menu, three verbs, and which of them you get depends on whose message
+   * it is. Yours: edit and remove. Somebody else's: report. Nobody can edit
+   * another person's words, and RLS says so as well as this does.
+   *
+   * Double-click still unsends, because that shortcut existed and people were
+   * using it - but it is no longer the *only* way, which it was, and which is
+   * why nobody found it.
+   */
+  const open = (x: number, y: number) => setMenu({ x, y });
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', gap: 3 }}>
-      {first && !mine && (
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 4 }}>{who.label}</span>
+    <div style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 7 }}>
+      {/* Their face, once per run of messages. A column of the same avatar
+          repeated eight times is noise; a gap that keeps the alignment is not. */}
+      {!mine && (
+        first
+          ? <Avatar who={who} size={26} />
+          : <span aria-hidden style={{ width: 26, flex: 'none' }} />
       )}
 
-      {msg.share_kind && msg.share_id && (
-        <SharedPost kind={msg.share_kind} id={msg.share_id} profiles={profiles} me={me} />
-      )}
+      <div
+        onContextMenu={(e) => { e.preventDefault(); open(e.clientX, e.clientY); }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', gap: 3, minWidth: 0, maxWidth: '82%' }}>
+        {first && !mine && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 4 }}>{who.label}</span>
+        )}
 
-      {msg.attach_path && (
-        <AttachedFile path={msg.attach_path} name={msg.attach_name ?? 'File'}
-          kind={msg.attach_kind ?? 'file'} size={msg.attach_size ?? 0} mine={mine} />
-      )}
+        {msg.share_kind && msg.share_id && (
+          <SharedPost kind={msg.share_kind} id={msg.share_id} profiles={profiles} me={me} />
+        )}
 
-      {msg.body && (
-        <span onDoubleClick={() => mine && onUnsend()}
-          title={mine ? 'Double-click to unsend' : undefined}
-          style={{
-            maxWidth: '78%', padding: '8px 12px', borderRadius: 14,
-            borderBottomRightRadius: mine ? 4 : 14, borderBottomLeftRadius: mine ? 14 : 4,
-            background: mine ? 'var(--acc)' : 'var(--card2)',
-            color: mine ? '#0A0912' : 'var(--tx)',
-            fontSize: 12.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-          }}>
-          {msg.body}
+        {msg.attach_path && (
+          <AttachedFile path={msg.attach_path} name={msg.attach_name ?? 'File'}
+            kind={msg.attach_kind ?? 'file'} size={msg.attach_size ?? 0} mine={mine} />
+        )}
+
+        {editing ? (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 'min(320px, 74vw)' }}>
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus rows={2}
+              aria-label="Edit your message"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') onEditCancel();
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onEditSave(draft); }
+              }}
+              style={{
+                width: '100%', padding: '8px 11px', borderRadius: 12, resize: 'vertical',
+                border: '1px solid var(--acc)', background: 'var(--card2)', color: 'var(--tx)',
+                fontSize: 12.5, lineHeight: 1.5, fontFamily: 'inherit',
+              }} />
+            <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button onClick={onEditCancel} className="hov"
+                style={{ padding: '5px 11px', borderRadius: 9, fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
+                Cancel
+              </button>
+              <button onClick={() => onEditSave(draft)} className="k-squish"
+                style={{ padding: '5px 12px', borderRadius: 9, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11, fontWeight: 800 }}>
+                Save
+              </button>
+            </span>
+          </span>
+        ) : msg.body ? (
+          <span onDoubleClick={() => mine && onRemove()}
+            onPointerDown={(e) => {
+              // Long press is the only way in on a touch screen, where there is
+              // no right mouse button.
+              const t = window.setTimeout(() => open(e.clientX, e.clientY), 460);
+              const stop = () => { clearTimeout(t); window.removeEventListener('pointerup', stop); window.removeEventListener('pointermove', stop); };
+              window.addEventListener('pointerup', stop);
+              window.addEventListener('pointermove', stop);
+            }}
+            title={mine ? 'Double-click to remove, right-click or hold for more' : 'Right-click or hold to report'}
+            style={{
+              padding: '8px 12px', borderRadius: 14,
+              borderBottomRightRadius: mine ? 4 : 14, borderBottomLeftRadius: mine ? 14 : 4,
+              background: mine ? 'var(--acc)' : 'var(--card2)',
+              color: mine ? '#0A0912' : 'var(--tx)',
+              fontSize: 12.5, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+              cursor: 'default', touchAction: 'manipulation',
+            }}>
+            {msg.body}
+          </span>
+        ) : null}
+
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9.5, color: 'var(--tx3)', padding: '0 4px' }}>
+          {ago(msg.created_at)}
+          {msg.edited_at && <span title={`Edited ${ago(msg.edited_at)}`}>· edited</span>}
         </span>
-      )}
+      </div>
 
-      <span style={{ fontSize: 9.5, color: 'var(--tx3)', padding: '0 4px' }}>{ago(msg.created_at)}</span>
+      {menu && (
+        <ContextMenu
+          x={menu.x} y={menu.y} kind="message"
+          label={msg.body ? msg.body.slice(0, 40) : 'Attachment'}
+          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          onClose={() => setMenu(null)}
+          items={mine
+            ? [
+              ...(msg.body ? [{ label: 'Edit', icon: 'edit' as const, run: onEditStart }] : []),
+              { label: 'Copy text', icon: 'copy' as const, run: () => void navigator.clipboard?.writeText(msg.body) },
+              { label: 'Remove for everyone', icon: 'trash' as const, danger: true, run: onRemove },
+            ]
+            : [
+              { label: 'Copy text', icon: 'copy' as const, run: () => void navigator.clipboard?.writeText(msg.body) },
+              { label: 'Report', icon: 'flag' as const, danger: true, run: onReport },
+            ]} />
+      )}
     </div>
   );
+}
+
+/**
+ * Reporting a message.
+ *
+ * A reason, from a fixed list, and room to say what happened. The list is an
+ * enum in the database (0012) rather than free text, because a queue of
+ * hand-typed categories cannot be sorted, counted or triaged.
+ *
+ * What this does *not* do is delete anything. The message stays where it is and
+ * the row goes to a queue - a report that hid content on the strength of one
+ * press would be a mute button pointed at whoever you disagreed with.
+ */
+function ReportSheet({
+  msg, onClose, onSend,
+}: { msg: Message; onClose: () => void; onSend: (reason: ReportReason, note: string) => void }) {
+  const { phone } = useLayout();
+  const [reason, setReason] = useState<ReportReason>('harassment');
+  const [note, setNote] = useState('');
+  useOverlayBack(true, onClose);
+
+  const body = (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,.55)',
+      display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center', padding: phone ? 0 : 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Report this message"
+        className="k-bloom"
+        style={{
+          width: 420, maxWidth: '100%', display: 'flex', flexDirection: 'column',
+          background: 'var(--card)', border: '1px solid var(--line2)',
+          borderRadius: phone ? '18px 18px 0 0' : 18, boxShadow: 'var(--shl)',
+          padding: phone ? '16px 16px calc(20px + env(safe-area-inset-bottom))' : 18,
+        }}>
+        <h2 style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>Report this message</h2>
+        <p style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.65, margin: '0 0 12px' }}>
+          It stays visible for now. Reporting sends it to be looked at, and what happened to it is
+          on record either way.
+        </p>
+
+        {msg.body && (
+          <p style={{
+            fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx2)', margin: '0 0 12px', padding: '8px 11px',
+            borderRadius: 10, background: 'var(--card2)', border: '1px solid var(--line)',
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {msg.body}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
+          {REPORT_REASONS.map((r) => (
+            <button key={r.id} onClick={() => setReason(r.id)} role="radio" aria-checked={reason === r.id}
+              className="hov"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 10,
+                minHeight: 42, textAlign: 'left', fontSize: 12, fontWeight: 700,
+                border: `1px solid ${reason === r.id ? 'var(--acc)' : 'var(--line2)'}`,
+                background: reason === r.id ? 'color-mix(in srgb, var(--acc) 12%, transparent)' : 'transparent',
+                color: reason === r.id ? 'var(--tx)' : 'var(--tx2)',
+              }}>
+              <span aria-hidden style={{
+                width: 15, height: 15, flex: 'none', borderRadius: '50%',
+                border: `1.5px solid ${reason === r.id ? 'var(--acc)' : 'var(--line2)'}`,
+                background: reason === r.id ? 'var(--acc)' : 'transparent',
+              }} />
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={600}
+          placeholder="Anything that helps (optional)" aria-label="More detail"
+          style={{
+            width: '100%', padding: '9px 11px', borderRadius: 11, resize: 'vertical', marginBottom: 12,
+            border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)',
+            fontSize: 12, lineHeight: 1.6, fontFamily: 'inherit',
+          }} />
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose} className="hov"
+            style={{ flex: 1, minHeight: 42, borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
+            Cancel
+          </button>
+          <button onClick={() => onSend(reason, note.trim())} className="k-squish"
+            style={{ flex: 1, minHeight: 42, borderRadius: 11, background: 'var(--pal-coral)', color: '#fff', fontSize: 12.5, fontWeight: 800 }}>
+            Send report
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
 
 /**
@@ -452,11 +695,17 @@ function SharedPost({
 
 function SharedImage({ path }: { path: string }) {
   const url = useSignedUrl('bd-feed', path);
+  const [zoom, setZoom] = useState(false);
   return (
     <span style={{ display: 'block', aspectRatio: '4 / 3', background: 'var(--card)' }}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <img src={url} alt="" onClick={(e) => { e.stopPropagation(); setZoom(true); }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }} />
+      )}
+      {zoom && (
+        <Lightbox items={[{ src: url, alt: 'Shared photo' }]} index={0}
+          onClose={() => setZoom(false)} onIndex={() => {}} />
       )}
     </span>
   );
@@ -482,16 +731,27 @@ function AttachedFile({
   path, name, kind, size, mine,
 }: { path: string; name: string; kind: string; size: number; mine: boolean }) {
   const url = useSignedUrl('bd-feed', path);
+  const [zoom, setZoom] = useState(false);
 
   if (kind === 'image') {
     return (
-      <a href={url ?? undefined} target="_blank" rel="noreferrer" title={name}
-        style={{ display: 'block', maxWidth: '78%', borderRadius: 14, overflow: 'hidden', background: 'var(--card2)' }}>
-        {url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={name} style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />
+      <>
+        {/* Opens in Basedly, not in the browser. `target="_blank"` handed the
+            picture to the browser's own viewer: a different background, no way
+            back but the tab button, a download prompt on Android, and a signed
+            storage URL left in history. */}
+        <button onClick={() => setZoom(true)} title={name} aria-label={`Open ${name}`}
+          style={{ display: 'block', maxWidth: '78%', borderRadius: 14, overflow: 'hidden', background: 'var(--card2)', cursor: 'zoom-in' }}>
+          {url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={name} style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />
+          )}
+        </button>
+        {zoom && (
+          <Lightbox items={[{ src: url, alt: name, caption: name }]} index={0}
+            onClose={() => setZoom(false)} onIndex={() => {}} />
         )}
-      </a>
+      </>
     );
   }
 

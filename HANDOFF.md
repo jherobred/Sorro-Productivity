@@ -3,8 +3,8 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-23 (accounts are reachable from every layout, profiles
-have links, and a challenge you join shows up in Habits).
+Last updated: 2026-08-23 (a multi-day run edits the day you clicked, messages
+keep a record of what happened to them, and pictures zoom inside the app).
 
 ---
 
@@ -133,11 +133,121 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    control is the only way to do something, it belongs somewhere both layouts
    render: the header, or a sheet both can open. `AccountSheet` is that pattern.
 
-10. **The browser pane does not composite when hidden** — CSS animations sit at
+10. **A `Span` is N rows drawn as one bar.** Every path that acts on one —
+    click, long press, drag — must resolve which *column* the pointer is over
+    (`spanHit`) before it touches anything. Reaching for `span.ev` gets you the
+    first day of the run, which is never the day the person meant, and that was
+    live for two sessions: delete removed Monday and drag moved the whole week.
+
+11. **The browser pane does not composite when hidden** — CSS animations sit at
    `currentTime: 0`, so `getBoundingClientRect()` on anything with an entry
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-23, fifth pass (runs, message moderation, in-app zoom)
+
+**A multi-day run acted on the wrong day, in every direction.** `spanRuns`
+merges same-title, same-hour events on consecutive days into one bar, and every
+path through that bar used `s.ev` — which is `run[0].ev`, the **first** day.
+So clicking Thursday of a Wed–Fri class and pressing delete removed Wednesday,
+and dragging the bar moved all three days because `moveRun` patched every
+member.
+
+`Span` carries `members: { day, ev }[]` now, and `spanHit(span, clientX)` turns
+a pointer position into the row under it. Click, long press and drag all ask it
+first. **Drag moves the one day you grabbed** — and the bar visibly shrinks to
+that single column the moment the drag starts, which is both what happens on
+drop and the only honest picture of it. The run redraws itself afterwards
+because `spanRuns` is a grouping pass over rows, not a record. Deleting the
+whole thing is still one press: the bubble grows a "Delete all N days" row
+(`wipeRun`, one `in.(...)` update and one Undo, not N toasts).
+
+*Verified by measurement*: clicking the first/middle/last third of a three-day
+bar opens Wednesday/Thursday/Friday; dragging from the middle showed a single
+124px chip during the drag against a 379px bar before it, and left three
+separate chips and one "Moved to Fri 9:00 AM" after.
+
+**Calendar colours.** `bd_events.color` has always been the *background* and the
+label was drawn in the theme's own text colour on top — unreadable on a pale
+swatch in dark mode and on a dark one in light. `text_color` (0012) is the
+override; `chipInk()` is the fallback, and it computes sRGB relative luminance
+of *the colour the chip actually has* (26% event over the card), not of the
+event colour, so it follows the theme. Twelve backgrounds and six label presets,
+each with a custom colour well beside it, and a live chip preview in the sheet.
+
+**Messages can be edited, taken back, restored and reported — and there is a
+record.** `0012` adds `bd_message_log`, written by an `after update or delete`
+trigger on `bd_messages`.
+
+- **A trigger, not the client.** A log the app writes is a log a modified client
+  simply does not write, and the whole point of it is the person acting badly.
+  It runs in the same transaction as the change, so there is no version of
+  events where the edit lands and the record does not.
+- **RLS on, no policies at all.** That denies every request from `anon` and
+  `authenticated`; the service role bypasses RLS, which is how the admin panel
+  will read it. If a policy is added later it should be for an admin claim,
+  never for `authenticated`.
+- **Unsend stays a soft delete.** A row that is still there can be restored by
+  Undo *and* can still be read by whoever reviews a report. A hard delete would
+  make "say something vile, then unsend" a complete escape.
+- `bd_message_reports` has a reason enum (not free text, or the queue cannot be
+  triaged) and one report per person per message. Reporting hides nothing —
+  a report that removed content on one press is a mute button pointed at
+  whoever you disagree with.
+
+*Verified against production*: an insert, an edit, a soft delete, a restore and
+a hard delete produced four log rows with the right before/after bodies; the
+probe rows were then removed.
+
+**Zooming happens in Basedly.** Image attachments were `<a target="_blank">` to
+a signed URL, which hands the picture to the browser's own viewer: a different
+background, no way back but the tab button, a download prompt on Android, and a
+signed storage URL left in history. They open `Lightbox` now, which gained wheel
+and pinch zoom **about the pointer** (about the centre means the thing you were
+looking at slides away from you), double-tap toggle, drag-to-pan once zoomed,
+and `+`/`-`/`0`. Non-image attachments still open outside — a spreadsheet
+should go to whatever handles spreadsheets.
+
+**Profile pictures in messaging.** Every avatar was initials on a disc,
+including for people whose photo the app already had and was drawing correctly
+in the feed and the header. `Avatar` in `Messages.tsx` is the shared one; the
+chat list uses it at 34px and a bubble shows the sender's at 26px, once per run
+of messages rather than beside every line.
+
+**Smaller things**
+
+- The phone Home header drew a second avatar directly under the Shell's own.
+  Gone; a spacer keeps the wordmark centred.
+- Body said "Body" in the page *and* in the Shell header on a phone. The `h1`
+  is `sronly` there and the date is the visible heading; the desktop keeps it,
+  since nothing else names the page.
+- **Always-fullscreen is phone-only now**, in the hook (`phone && pref`) and in
+  Settings, which hides the toggle on a desktop. A window that takes the whole
+  screen on the first click of a session took it without asking.
+- **Backing out of fullscreen asks.** A back swipe in Chrome on Android leaves
+  fullscreen and there is no cancelling it — `preventDefault` on a back gesture
+  is not something a page may do. So the interception is after the fact: notice
+  we are suddenly not fullscreen, ask whether that was meant, and let the
+  dialog's own button be the gesture that re-enters. Answering "leave it" is
+  remembered for the session, or the prompt becomes the thing you cannot escape.
+
+**Migrations applied to production**: `0012_event_text_and_message_log.sql`.
+
+**Verified in the browser (fixture mode)**, beyond the run measurements above:
+the edit sheet showing 12 background swatches, 6 label presets, 2 custom colour
+wells and a live preview; a span chip carrying `#F4F2FB` as its computed label
+colour; three real profile photographs in the thread at 34/26/26px; the bubble
+menu offering Edit / Copy / Remove on your own message and Copy / Report on
+somebody else's; the report sheet with its five reasons. All nine check files
+pass, `tsc` and `next build` are clean.
+
+**Not exercised**: the lightbox against a real attachment (fixture mode is
+signed out, so `useSignedUrl` returns null and no image renders), and every
+write — including the edit/report round trips and whether the trigger fires for
+a real client, which it will, since it is on the table rather than in the app.
 
 ---
 
