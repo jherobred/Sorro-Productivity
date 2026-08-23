@@ -10,6 +10,9 @@ import { ContextMenu } from '@/components/ContextMenu';
 import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit, type Tick } from '@/lib/habits';
 import { Streak, bestStreakFrom } from '@/components/Streak';
 import { Buddy } from '@/components/Buddy';
+import { useRouter } from 'next/navigation';
+import { useChallenges } from '@/lib/challenges';
+import { metricDef } from '@/lib/metrics';
 
 /** Ported from Basedly.dc.html markup 1020–1078; cell grid at 4433 (40px desktop). */
 
@@ -22,6 +25,7 @@ const KIND_LABEL: Record<string, string> = { bin: 'Binary · daily', count: 'Qua
 export default function HabitsPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
+  const router = useRouter();
   const [year, setYear] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const lp = useLongPress();
@@ -29,7 +33,21 @@ export default function HabitsPage() {
   const days = year ? 365 : 7;
   const { data: habits = [] } = useHabits();
   const { data: ticks = [] } = useTicks(days);
+  const { data: challenges = [] } = useChallenges();
   const A = useHabitActions(days);
+
+  /**
+   * Two lists, one page.
+   *
+   * A challenge you joined writes a habit here (lib/challenges.ts), which is
+   * the whole point - a scoreboard in Community is not somewhere anybody looks
+   * at 7am. But mixed into your own habits they are noise: you did not choose
+   * them, you cannot rename them usefully, and leaving one is done elsewhere.
+   * So they sit under their own heading, below yours, in the order they arrived.
+   */
+  const own = habits.filter((h) => !h.challenge_id);
+  const fromChallenges = habits.filter((h) => h.challenge_id);
+  const chalOf = (id: string | null) => challenges.find((c) => c.id === id) ?? null;
 
   const week = lastDays(7);
   const today = ymd(new Date());
@@ -75,8 +93,26 @@ export default function HabitsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {habits.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No habits yet.</div>}
 
-        {habits.map((h) => {
+        {([
+          { key: 'own', label: 'Yours', items: own },
+          { key: 'chal', label: 'From challenges', items: fromChallenges },
+        ] as const).flatMap((group) => (group.items.length === 0 ? [] : [
+          <div key={`h-${group.key}`} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            // The divider. Only drawn above the second group, because a rule
+            // over the first one separates it from nothing.
+            marginTop: group.key === 'chal' ? 10 : 0,
+            paddingTop: group.key === 'chal' ? 14 : 0,
+            borderTop: group.key === 'chal' ? '1px solid var(--line)' : 'none',
+          }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+              {group.label}
+            </span>
+            <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{group.items.length}</span>
+          </div>,
+          ...group.items.map((h) => {
           const s = streak(ticks, h.id);
+          const chal = chalOf(h.challenge_id);
           return (
             <div key={h.id} style={CARD}
               onPointerDown={(e) => lp.start(e, 'habit', h.id, h.name)}
@@ -90,6 +126,18 @@ export default function HabitsPage() {
                     fontSize: phone ? 14.5 : 15, fontWeight: 800, letterSpacing: '-.015em',
                     minWidth: 0, overflowWrap: 'anywhere',
                   }}>{h.name}</span>
+                  {h.challenge_id && (
+                    <span title={chal ? `Counts: ${metricDef(chal.metric).label}` : 'From a challenge'}
+                      style={{
+                        flex: 'none', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                        borderRadius: 999, fontSize: 10, fontWeight: 700,
+                        background: `color-mix(in srgb, ${h.color} 18%, transparent)`,
+                        color: 'var(--tx2)',
+                      }}>
+                      <Icon name="trophy" size={10} color={h.color} />
+                      {chal ? metricDef(chal.metric).label : 'Challenge'}
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: phone ? 0 : 'auto' }}>
@@ -102,10 +150,19 @@ export default function HabitsPage() {
                     style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="edit" size={14} color="var(--tx2)" />
                   </button>
-                  <button onClick={() => A.removeWithUndo(h)} className="hov" title="Delete habit"
-                    style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="trash" size={14} color="var(--tx2)" />
-                  </button>
+                  {h.challenge_id ? (
+                    // Deleting this would leave you in the challenge with
+                    // nothing to tick. Leaving is done where you joined.
+                    <button onClick={() => router.push('/community/')} className="hov" title="Open the challenge"
+                      style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="chev" size={14} color="var(--tx2)" />
+                    </button>
+                  ) : (
+                    <button onClick={() => A.removeWithUndo(h)} className="hov" title="Delete habit"
+                      style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="trash" size={14} color="var(--tx2)" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -180,7 +237,8 @@ export default function HabitsPage() {
               )}
             </div>
           );
-        })}
+        }),
+        ]))}
       </div>
 
       {lp.ctx && (

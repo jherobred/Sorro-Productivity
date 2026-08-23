@@ -33,7 +33,20 @@ export default function AuthCallback() {
         .maybeSingle();
 
       if (cancelled) return;
-      router.replace(profile?.onboarded_at ? '/home/' : '/onboarding/');
+
+      // Where they were headed before the sign-in interrupted them — a shared
+      // profile link, usually. Onboarding still wins the first time round,
+      // because a half-made account has nothing to show anybody.
+      let back: string | null = null;
+      try {
+        back = sessionStorage.getItem('basedly-after-auth');
+        sessionStorage.removeItem('basedly-after-auth');
+      } catch { /* private mode */ }
+
+      if (!profile?.onboarded_at) { router.replace('/onboarding/'); return; }
+      // Only same-origin app paths, so a stored value can never become an
+      // open redirect: it must start with a single slash.
+      router.replace(back && /^\/[^/]/.test(back) ? back : '/home/');
     })();
 
     return () => {

@@ -7,12 +7,31 @@ import { PAL } from '@/lib/pal';
 import { uploadAvatar } from '@/lib/uploads';
 import { ON_ACCENT } from '@/lib/glass';
 import { useLayout } from '@/lib/useLayout';
+import { useOverlayBack } from '@/lib/nav';
+import { profileLink, hueOf, ME_KEY } from '@/lib/people';
+import { startDm } from '@/lib/messages';
+import { queryClient } from '@/lib/offline';
 import { Icon } from '@/components/Icon';
+import { useRouter } from 'next/navigation';
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered
  * SVG exactly as the prototype does; README flags the illustrated art as an
  * asset still to be sourced, so these vector parts are the same placeholder.
+ *
+ * Two things changed here.
+ *
+ * **The builder is behind a button.** Eleven categories and a swatch grid took
+ * half the page, permanently, for a thing most people touch once. Your name,
+ * handle, picture and link are what this page is for day to day; the workbench
+ * opens when you ask for it.
+ *
+ * **`?u=<handle>` shows somebody else's.** That is what a shareable profile
+ * link points at. A query parameter rather than `/u/[handle]`, because this is
+ * a static export and handles are made after the build — see `profileLink` in
+ * lib/people.ts. Read-only, with one button on it: message them. That button is
+ * the whole point — it is how somebody reaches you *deliberately*, instead of
+ * every account in the database being one tap from your inbox.
  */
 
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
@@ -80,8 +99,22 @@ const pick = (a: Avatar, k: AvKey) => AV[k].find((o) => o.id === a[k]) ?? AV[k][
 
 export default function ProfilePage() {
   const { phone } = useLayout();
+  /**
+   * Whose profile. Read off `window.location.search` rather than
+   * `useSearchParams`, which forces the page into a Suspense boundary under
+   * `output: 'export'` — this is a client page that already waits for a fetch.
+   */
+  const [visiting, setVisiting] = useState<string | null>(null);
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search).get('u');
+    setVisiting(u ? u.replace(/^@/, '').trim() || null : null);
+  }, []);
+
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [cat, setCat] = useState<AvKey>('bg');
+  /** The builder is a workbench, not a setting — it opens when asked. */
+  const [building, setBuilding] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
   const [bio, setBio] = useState('');
@@ -154,15 +187,39 @@ export default function ProfilePage() {
   const skin = pick(avatar, 'skin').v;
   const hairColor = pick(avatar, 'hairColor').v;
   const [eyeRx, eyeRy] = pick(avatar, 'eyes').v.split(',');
+  const myLink = profileLink(handle);
+
+  // Somebody else's link. Their card, and a button to message them.
+  if (visiting && visiting.toLowerCase() !== (handle ?? '').toLowerCase()) {
+    return <Visitor handle={visiting} phone={phone} />;
+  }
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <h1 className="sronly">Profile</h1>
         <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Your face across Basedly</div>
-        <button onClick={surprise} className="hov"
-          style={{ marginLeft: 'auto', flex: 'none', padding: '10px 16px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
-          Surprise me
+
+        {/* Your link. This is how somebody gets to you on purpose - see the
+            header of this file for why that matters to the inbox. */}
+        <button
+          onClick={() => {
+            if (!myLink) { toast('Set a handle first — your link is built from it'); return; }
+            if (navigator.share) { void navigator.share({ title: name || 'Basedly', url: myLink }); return; }
+            void navigator.clipboard.writeText(myLink).then(() => { setCopied(true); toast('Link copied'); });
+          }}
+          className="hov" title={myLink ?? 'Set a handle to get a link'}
+          style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+          <Icon name={copied ? 'check' : 'upload'} size={14} color="var(--accTx)" />
+          Share link
+        </button>
+
+        {/* The builder used to be half the page, permanently, for something
+            most people set once. It is an icon now. */}
+        <button onClick={() => setBuilding((v) => !v)} className="hov k-squish"
+          aria-expanded={building} aria-label="Build your avatar" title="Build your avatar"
+          style={{ flex: 'none', width: 40, height: 40, borderRadius: 11, border: `1px solid ${building ? 'var(--acc)' : 'var(--line2)'}`, display: 'grid', placeItems: 'center', background: building ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent' }}>
+          <Icon name="pen" size={15} color={building ? 'var(--accTx)' : 'var(--tx2)'} />
         </button>
         <button onClick={save} className="acc" style={{
           flex: 'none', padding: '10px 18px', borderRadius: 11,
@@ -173,7 +230,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : '1fr 1fr', gap: 12, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: phone || !building ? '1fr' : '1fr 1fr', gap: 12, alignItems: 'start' }}>
         <div style={CARD}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div style={{ width: 132, height: 132, flex: 'none', position: 'relative' }}>
@@ -251,10 +308,18 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div style={CARD}>
+        {building && (
+        <div style={CARD} className="rise">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
             <div style={KICKER}>Build your avatar</div>
-            <div style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>{AV_ORDER.length} categories</div>
+            <button onClick={surprise} className="hov"
+              style={{ marginLeft: 'auto', padding: '5px 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
+              Surprise me
+            </button>
+            <button onClick={() => setBuilding(false)} className="hov" aria-label="Close the builder"
+              style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+              <Icon name="close" size={12} color="var(--tx3)" />
+            </button>
           </div>
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -289,6 +354,106 @@ export default function ProfilePage() {
               );
             })}
           </div>
+        </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ somebody else */
+
+/**
+ * A profile reached by its link.
+ *
+ * Deliberately thin: a face, a name, what they study, and Message. No stats and
+ * no mutual-anything - the job is to let a person check they have the right
+ * Jules before they say hello, and then to say hello.
+ */
+function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
+  const router = useRouter();
+  const [who, setWho] = useState<{
+    user_id: string; name: string; handle: string; bio: string; course: string; campus: string; photo: string | null;
+  } | null | undefined>(undefined);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('bd_profiles')
+        .select('user_id,name,handle,bio,course,year,campus,photo_url')
+        .eq('handle', handle).maybeSingle();
+      setWho(data
+        ? {
+          user_id: data.user_id, name: data.name ?? '', handle: data.handle ?? handle,
+          bio: data.bio ?? '', course: [data.course, data.year].filter(Boolean).join(' · '),
+          campus: data.campus ?? '', photo: data.photo_url ?? null,
+        }
+        : null);
+    })();
+  }, [handle]);
+
+  const pad = phone ? '14px 14px 24px' : '20px 24px 28px';
+
+  if (who === undefined) {
+    return <div style={{ padding: pad, fontSize: 12.5, color: 'var(--tx3)' }}>Looking for @{handle}…</div>;
+  }
+
+  if (who === null) {
+    return (
+      <div style={{ padding: pad, maxWidth: 520 }}>
+        <div style={{ ...CARD, textAlign: 'center', padding: '32px 20px' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>No @{handle} here</div>
+          <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: '0 0 14px' }}>
+            The link may be old, or the handle may have changed.
+          </p>
+          <button onClick={() => router.replace('/profile/')} className="acc k-squish"
+            style={{ padding: '10px 16px', borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800 }}>
+            Your own profile
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = (who.name || who.handle).split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+  return (
+    <div style={{ padding: pad, maxWidth: 520 }}>
+      <div style={CARD}>
+        <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
+          {who.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={who.photo} alt="" style={{ width: 78, height: 78, borderRadius: 18, objectFit: 'cover', flex: 'none' }} />
+          ) : (
+            <span style={{
+              width: 78, height: 78, flex: 'none', borderRadius: 18, display: 'grid', placeItems: 'center',
+              background: hueOf(who.user_id), fontSize: 26, fontWeight: 800, color: '#0C0F16',
+            }}>{initials}</span>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.02em' }}>{who.name || `@${who.handle}`}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginTop: 2 }}>@{who.handle}</div>
+            {who.course && <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accTx)', marginTop: 6 }}>{who.course}</div>}
+            {who.campus && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{who.campus}</div>}
+          </div>
+        </div>
+
+        {who.bio && (
+          <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--tx2)', margin: '14px 0 0', textWrap: 'pretty' }}>
+            {who.bio}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button
+            onClick={() => void startDm(who.user_id).then((id) => { if (id) router.push('/community/'); })}
+            className="acc k-squish"
+            style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800 }}>
+            Message {who.name.split(' ')[0] || `@${who.handle}`}
+          </button>
+          <button onClick={() => router.replace('/profile/')} className="hov"
+            style={{ flex: 'none', padding: '0 16px', minHeight: 44, borderRadius: 12, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
+            Yours
+          </button>
         </div>
       </div>
     </div>

@@ -281,6 +281,7 @@ function Toggle({ label, hint, on, onChange, icon }: {
  */
 function AppTab() {
   const fs = useFullscreen();
+  const { prefs, update } = usePrefs();
   const { state, check } = useAppUpdate();
 
   const row: React.CSSProperties = {
@@ -291,7 +292,7 @@ function AppTab() {
 
   return (
     <>
-      <Group label="Display" hint="Hides the browser and system bars. Tap again, or press Escape, to come back.">
+      <Group label="Display" hint="Hides the browser's address bar and the system bars. Escape, or the system gesture, comes back.">
         <button onClick={() => void fs.toggle()} disabled={!fs.supported} className="hov k-squish"
           style={{ ...row, opacity: fs.supported ? 1 : 0.5, borderColor: fs.on ? 'var(--acc)' : 'var(--line2)' }}>
           <Icon name={fs.on ? 'collapse' : 'expand'} size={15} color={fs.on ? 'var(--accTx)' : 'var(--tx2)'} />
@@ -300,6 +301,20 @@ function AppTab() {
           </span>
           {fs.on && <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accTx)' }}>ON</span>}
         </button>
+
+        {/* The switch the button could not be. A browser will not grant
+            fullscreen on page load — only inside a user gesture — so this does
+            not ask on load: it arms the very first tap of the session and asks
+            then. In practice that is you opening the first tab, which is why it
+            feels like the app simply launches fullscreen. */}
+        <div style={{ marginTop: 8 }}>
+          <Toggle
+            icon="expand"
+            label="Always start fullscreen"
+            hint="Asks again on the first tap of every launch. The APK is already edge to edge and ignores this."
+            on={prefs.alwaysFullscreen}
+            onChange={(v) => void update({ alwaysFullscreen: v })} />
+        </div>
       </Group>
 
       <Group label="Version">

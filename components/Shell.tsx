@@ -23,8 +23,12 @@ import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { useAutoSync } from '@/lib/integrations';
-import { useAccounts, watchAccounts, switchTo, addAccount, forget, signOutAll } from '@/lib/accounts';
+import { watchAccounts } from '@/lib/accounts';
+import { AccountSheet, Face } from './AccountSheet';
+import { MessagesSheet, useUnreadCount } from './MessagesSheet';
+import { useAlwaysFullscreen } from '@/lib/appUpdate';
 import { useLiveSync } from '@/lib/realtime';
+import { useMyIdentity } from '@/lib/people';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 
@@ -86,13 +90,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [sheet, setSheet] = useState<CaptureKind | null>(null);
   const [search, setSearch] = useState(false);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
-  const [wsOpen, setWsOpen] = useState(false);
+  /** The combined you/accounts/space sheet, opened from your face. */
+  const [account, setAccount] = useState(false);
+  /** Messages, full screen, on a phone. The desktop has the dock instead. */
+  const [msgs, setMsgs] = useState(false);
   const { data: workspaces = [] } = useWorkspaces();
   const WA = useWorkspaceActions();
-  const me = useMe();
-  // Every account signed in on this device. Kept current through refresh-token
-  // rotation by watchAccounts below; see lib/accounts.ts.
-  const accounts = useAccounts();
+  const me = useMyIdentity();
   const spaceName = prefs.workspace
     ? workspaces.find((w) => w.id === prefs.workspace)?.name ?? 'Personal'
     : 'Personal';
@@ -100,6 +104,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
   const { data: tasks = [] } = useTasks();
+  const unread = useUnreadCount();
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
   // Only collaborative surfaces get a presence room; everywhere else this is
@@ -117,6 +122,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useLiveSync();
   // Remember whoever signs in, so switching back needs no round trip.
   useEffect(watchAccounts, []);
+  // Web only, and only on the first tap — the Fullscreen API refuses anything
+  // that is not a user gesture. See lib/appUpdate.ts.
+  useAlwaysFullscreen(prefs.alwaysFullscreen);
 
   /**
    * Ctrl/Cmd+\ collapses the sidebar, the shortcut Notion and VS Code use.
@@ -143,7 +151,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleRail]);
   useOverlayBack(!!capture, () => setCapture(null));
-  useOverlayBack(wsOpen, () => setWsOpen(false));
 
   useEffect(() => {
     // Dev-only preview. `NODE_ENV` is inlined at build time, so this whole
@@ -153,8 +160,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
     if (devFixturesOn()) { setGuard('ok'); return; }
 
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace('/');
-      else setGuard('ok');
+      if (!data.session) {
+        // Remember where they were trying to go. Without this, opening
+        // somebody's profile link while signed out signs you in and drops you
+        // on Home — the link works only for people who were already inside,
+        // which is every case except the one it exists for.
+        try { sessionStorage.setItem('basedly-after-auth', location.pathname + location.search); } catch { /* private mode */ }
+        router.replace('/');
+      } else setGuard('ok');
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { if (!s) router.replace('/'); });
     return () => sub.subscription.unsubscribe();
@@ -383,21 +396,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                   <Icon name="cog" size={13} color="var(--tx3)" />All settings
                 </button>
-                <button onClick={() => void signOutAll()} className="hov"
+                <button onClick={() => setAccount(true)} className="hov"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="back" size={13} color="var(--tx3)" />Sign out
+                  <Icon name="people" size={13} color="var(--tx3)" />Accounts and sign out
                 </button>
               </div>
             )}
           </div>
 
-          {/* Who you are, and which space you are in — the two things every
-              other app puts in this corner, and the two things this corner used
-              to only pretend to do. The switcher listed three invented
-              workspaces and changing it changed a label and nothing else. */}
+          {/* Who you are, and which space you are in. This used to open an
+              inline menu that held the account switcher, the space list and
+              sign out — and it lived only here, in a sidebar a phone does not
+              have, so on the layout this app is mostly used in there was no way
+              to switch accounts at all. All of it moved to AccountSheet, which
+              opens from your face in the top right on both layouts. */}
           <div style={{ padding: '8px 10px 4px', borderTop: '1px solid var(--line)' }}>
-            <button onClick={() => setWsOpen((v) => !v)} className="hov"
-              aria-haspopup="menu" aria-expanded={wsOpen}
+            <button onClick={() => setAccount(true)} className="hov"
+              aria-haspopup="dialog"
               style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 9, minHeight: 42 }}>
               <Face name={me.name} photo={me.photo} size={26} />
               <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -408,99 +423,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   {spaceName}
                 </span>
               </span>
-              <Icon name={wsOpen ? 'collapse' : 'expand'} size={13} color="var(--tx3)" />
+              <Icon name="expand" size={13} color="var(--tx3)" />
             </button>
-
-            {wsOpen && (
-              <div className="rise" role="menu" aria-label="Account and workspaces"
-                style={{ margin: '4px 0 8px', padding: 6, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)' }}>
-
-                <div style={{ ...MENU_KICKER }}>Spaces</div>
-
-                <button role="menuitemradio" aria-checked={prefs.workspace === null}
-                  onClick={() => { void update({ workspace: null }); setWsOpen(false); }}
-                  className="hov" style={MENU_ITEM}>
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: acc, flex: 'none' }} />
-                  <span style={{ flex: 1, textAlign: 'left' }}>Personal</span>
-                  {prefs.workspace === null && <Icon name="check" size={13} color="var(--accTx)" />}
-                </button>
-
-                {workspaces.map((w) => (
-                  <button key={w.id} role="menuitemradio" aria-checked={prefs.workspace === w.id}
-                    onClick={() => { void update({ workspace: w.id }); setWsOpen(false); toast(`Switched to ${w.name}`); }}
-                    className="hov" style={MENU_ITEM}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: w.color, flex: 'none' }} />
-                    <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.role}</span>
-                    {prefs.workspace === w.id && <Icon name="check" size={13} color="var(--accTx)" />}
-                  </button>
-                ))}
-
-                <button onClick={() => {
-                  setWsOpen(false);
-                  void ask('New workspace', { placeholder: 'Team or org name', confirmLabel: 'Create' })
-                    .then((n) => { if (n) WA.add(n, PAL.violet); });
-                }} className="hov" style={{ ...MENU_ITEM, color: 'var(--tx3)' }}>
-                  <Icon name="plus" size={13} color="var(--tx3)" />
-                  <span style={{ flex: 1, textAlign: 'left' }}>New workspace</span>
-                </button>
-
-                <div style={{ height: 1, background: 'var(--line)', margin: '6px 4px' }} />
-                <div style={{ ...MENU_KICKER }}>Accounts</div>
-
-                {/* Switching is a stored session, not a sign-in: no round trip,
-                    no leaving the app. The page reloads on purpose — see
-                    lib/accounts.ts for why that is the safe way to do it. */}
-                {accounts.map((a) => {
-                  const on = a.user_id === me.id;
-                  return (
-                    <button key={a.user_id} role="menuitemradio" aria-checked={on}
-                      onClick={() => { if (on) { setWsOpen(false); go('profile'); } else void switchTo(a.user_id); }}
-                      className="hov" style={{ ...MENU_ITEM, minHeight: 38 }}>
-                      <Face name={a.name} photo={a.photo} size={22} />
-                      <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                        <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {a.name}
-                        </span>
-                        <span style={{ display: 'block', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {a.email}
-                        </span>
-                      </span>
-                      {on
-                        ? <Icon name="check" size={13} color="var(--accTx)" />
-                        : <span onClick={(e) => { e.stopPropagation(); forget(a.user_id); toast(`Removed ${a.name}`); }}
-                            role="button" tabIndex={0} aria-label={`Remove ${a.name}`} title="Remove from this device"
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); forget(a.user_id); } }}
-                            style={{ display: 'grid', placeItems: 'center', width: 20, height: 20, borderRadius: 6 }}>
-                            <Icon name="close" size={11} color="var(--tx3)" />
-                          </span>}
-                    </button>
-                  );
-                })}
-
-                <button onClick={() => { setWsOpen(false); void addAccount(); }} className="hov"
-                  style={{ ...MENU_ITEM, color: 'var(--tx3)' }}>
-                  <Icon name="plus" size={13} color="var(--tx3)" />
-                  <span style={{ flex: 1, textAlign: 'left' }}>Add another account</span>
-                </button>
-
-                <div style={{ height: 1, background: 'var(--line)', margin: '6px 4px' }} />
-
-                <button onClick={() => { setWsOpen(false); go('profile'); }} className="hov" style={MENU_ITEM}>
-                  <Icon name="people" size={13} color="var(--tx3)" />
-                  <span style={{ flex: 1, textAlign: 'left' }}>Your profile</span>
-                </button>
-                <button onClick={() => { setWsOpen(false); setSettings(true); }} className="hov" style={MENU_ITEM}>
-                  <Icon name="cog" size={13} color="var(--tx3)" />
-                  <span style={{ flex: 1, textAlign: 'left' }}>Settings</span>
-                </button>
-                <button onClick={() => { void signOutAll(); toast('Signed out'); }}
-                  className="hov" style={{ ...MENU_ITEM, color: 'var(--pal-coral)' }}>
-                  <Icon name="back" size={13} color="var(--pal-coral)" />
-                  <span style={{ flex: 1, textAlign: 'left' }}>Sign out</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -582,8 +506,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <Icon name="cog" size={17} color="var(--tx2)" />
               </button>
 
-              <button onClick={() => go('profile')} className="k-squish" title="Your profile" aria-label="Your profile"
-                style={{ width: 28, height: 28, borderRadius: '50%', background: PAL.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: ON_ACCENT }}>MR</button>
+              {/* Your face, and everything about being you behind it: profile,
+                  accounts, space, settings, sign out. This was a hardcoded
+                  disc reading "MR" on every account. */}
+              <button onClick={() => setAccount(true)} className="k-squish"
+                title="Your account" aria-label="Your account" aria-haspopup="dialog"
+                style={{ width: 30, height: 30, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
+                <Face name={me.name} photo={me.photo} size={30} />
+              </button>
             </div>
           </div>
         )}
@@ -597,7 +527,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
             </span>
             <span style={{ marginLeft: 'auto' }} />
+            {/* Messages, with the count on it. The desktop's floating dock is
+                wrong on a phone — it lands on the nav bar and a window inside a
+                window is just the window. This opens full screen instead, and
+                obstructs nothing until it is asked for. */}
+            <button onClick={() => setMsgs(true)} className="hov k-squish"
+              aria-label={unread ? `Messages, ${unread} unread` : 'Messages'}
+              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', position: 'relative' }}>
+              <Icon name="send" size={15} color={unread ? 'var(--accTx)' : 'var(--tx2)'} />
+              {unread > 0 && (
+                <span style={{
+                  position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, padding: '0 3px',
+                  borderRadius: 8, background: 'var(--pal-coral)', color: '#fff',
+                  fontSize: 9, fontWeight: 800, lineHeight: '15px', textAlign: 'center',
+                  border: '2px solid var(--bg)', fontVariantNumeric: 'tabular-nums',
+                }}>{unread > 9 ? '9+' : unread}</span>
+              )}
+            </button>
+
             <NotificationBell compact />
+
             {/* Capture moved up here when the FAB left the nav bar. */}
             <button onClick={openCapture} className="k-squish" aria-label="Capture" aria-expanded={!!capture}
               style={{
@@ -608,9 +557,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
               }}>
               <Icon name="plus" size={16} color={ON_ACCENT} />
             </button>
-            <button onClick={() => setSettings(true)} className="hov k-squish" aria-label="Settings"
-              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="cog" size={16} color="var(--tx2)" />
+
+            {/* The cog was here. Settings is one row inside the account sheet
+                now, because on a phone this corner has room for one control and
+                "who am I" is the one people reach for. */}
+            <button onClick={() => setAccount(true)} className="k-squish"
+              aria-label="Your account" aria-haspopup="dialog"
+              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, display: 'grid', placeItems: 'center' }}>
+              <Face name={me.name} photo={me.photo} size={34} />
             </button>
           </div>
         )}
@@ -645,6 +599,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ))}
         </div>
       )}
+
+      {account && (
+        <AccountSheet me={me} onClose={() => setAccount(false)} onSettings={() => setSettings(true)} />
+      )}
+      {msgs && phone && <MessagesSheet onClose={() => setMsgs(false)} />}
 
       {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
       {search && <SearchPalette onClose={() => setSearch(false)} />}
@@ -785,45 +744,4 @@ function hueOfId(id: string): string {
   return Object.values(PAL)[v % 10];
 }
 
-const MENU_ITEM: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-  padding: '7px 8px', borderRadius: 8, minHeight: 34,
-  fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)',
-};
 
-const MENU_KICKER: React.CSSProperties = {
-  fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
-  color: 'var(--tx3)', padding: '4px 8px 3px',
-};
-
-/** Your name and picture, read once. */
-function useMe() {
-  // The id is here so the account switcher can tick the row you are on.
-  const [me, setMe] = useState<{ id: string; name: string; photo: string | null }>({ id: '', name: '', photo: null });
-  useEffect(() => {
-    void (async () => {
-      const id = await currentUserId().catch(() => null);
-      if (!id) return;
-      const { data } = await supabase.from('bd_profiles')
-        .select('name,photo_url').eq('user_id', id).maybeSingle();
-      setMe({ id, name: data?.name ?? '', photo: data?.photo_url ?? null });
-    })();
-  }, []);
-  return me;
-}
-
-/** A photo when there is one, initials when there is not. */
-function Face({ name, photo, size }: { name: string; photo: string | null; size: number }) {
-  if (photo) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={photo} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />;
-  }
-  const initials = (name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: '50%', background: 'var(--card2)', flex: 'none',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.38, fontWeight: 700, color: 'var(--tx2)',
-    }}>{initials}</span>
-  );
-}

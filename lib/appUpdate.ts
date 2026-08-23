@@ -90,6 +90,54 @@ export function useFullscreen() {
   return { on, supported, toggle };
 }
 
+/**
+ * Stay fullscreen, across reloads.
+ *
+ * The Fullscreen API only answers to a user gesture, which is why the App tab
+ * has always had a button rather than a switch — a remembered "on" would come
+ * back to a screen that was plainly not fullscreen and a toggle that lied.
+ *
+ * The way round it is not to ask on load. This arms a one-shot listener for the
+ * *first* thing the person does — a tap, a key, a scroll — and asks then, inside
+ * a gesture the browser accepts. In practice that is the moment they touch the
+ * first tab, so the address bar goes on the way in and the switch tells the
+ * truth. It never re-arms while fullscreen, and leaving fullscreen deliberately
+ * (Escape, the system gesture) arms it again for the next launch rather than
+ * fighting the person who just left.
+ *
+ * Native is exempt: the APK is already edge to edge (capacitor.config.ts) and
+ * has no browser chrome to hide.
+ */
+export function useAlwaysFullscreen(want: boolean) {
+  useEffect(() => {
+    if (!want) return;
+    if (typeof document === 'undefined') return;
+    if (!document.documentElement.requestFullscreen) return;
+    const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform?.()) return;
+
+    let done = false;
+    const ask = () => {
+      if (done || document.fullscreenElement) return;
+      done = true;
+      // A refusal is fine and needs no handling: `fullscreenchange` never
+      // fires, so nothing in the UI claims to be fullscreen when it is not.
+      void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    };
+
+    const opts = { once: true, capture: true } as const;
+    document.addEventListener('pointerdown', ask, opts);
+    document.addEventListener('keydown', ask, opts);
+    document.addEventListener('touchstart', ask, opts);
+
+    return () => {
+      document.removeEventListener('pointerdown', ask, opts);
+      document.removeEventListener('keydown', ask, opts);
+      document.removeEventListener('touchstart', ask, opts);
+    };
+  }, [want]);
+}
+
 /* ---- self-check ---------------------------------------------------------- */
 if (process.env.NODE_ENV !== 'production' && typeof window === 'undefined') {
   console.assert(isNewer('1.1.0', '1.0.0'), 'minor bump is newer');

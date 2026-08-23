@@ -3,8 +3,8 @@
 Written for whoever picks this up next, human or model. Read this before
 touching anything; it is the difference between fixing a bug and re-fixing one.
 
-Last updated: 2026-08-23 (Body is one black page, the whole app is live-synced,
-and you can hold more than one account).
+Last updated: 2026-08-23 (accounts are reachable from every layout, profiles
+have links, and a challenge you join shows up in Habits).
 
 ---
 
@@ -127,11 +127,140 @@ These are the non-obvious ones. Every one of them cost a debugging session.
    `supabase_realtime` publication is silent however good the client is — that
    was the whole sync bug, and `0009` is the fix.
 
-9. **The browser pane does not composite when hidden** — CSS animations sit at
+9. **Anything in the chrome must exist on both layouts.** The account switcher
+   shipped in the desktop sidebar only, and a phone has no sidebar — so the
+   feature was complete, tested, and unreachable for most of the app's use. If a
+   control is the only way to do something, it belongs somewhere both layouts
+   render: the header, or a sheet both can open. `AccountSheet` is that pattern.
+
+10. **The browser pane does not composite when hidden** — CSS animations sit at
    `currentTime: 0`, so `getBoundingClientRect()` on anything with an entry
    animation reports the *from* keyframe. Neutralise animations before
    measuring, or you will chase phantom layout bugs. (`.pop` starts at
    `scale(.4)`.)
+
+---
+
+## Touched 2026-08-23, fourth pass (accounts reachable, links, challenge habits)
+
+**The account switcher was built and unreachable.** Last pass put it in a menu
+at the foot of the **desktop sidebar** — and a phone has no sidebar, so on the
+layout this app is mostly used in there was no way to switch account, add one,
+or sign out at all. It was reported as "I still don't see the account switching
+thing", and that was exactly right.
+
+`components/AccountSheet.tsx` is now the one place all of it lives: your face,
+your handle, your shareable link, every account signed in on this device, the
+space switcher, Settings and Sign out. It opens from **your own picture in the
+top right**, on both layouts, and from a card at the top of More. The sidebar's
+inline menu is gone rather than duplicated — one room, three doors.
+
+Two hardcoded identities went with it: the desktop header drew a disc reading
+`MR` on every account, and `PhoneHome` fell back to the initials `MR` when a
+name was missing. Both read `useMyIdentity()` now (`lib/people.ts`), which is
+one cached query the header, More and the sheet share.
+
+**Always fullscreen, on the web.** `useAlwaysFullscreen(prefs.alwaysFullscreen)`
+in `lib/appUpdate.ts`. The App tab has had a fullscreen *button* for a while
+with a comment explaining why it could not be a switch — the Fullscreen API only
+answers to a user gesture, so a remembered "on" would come back to a screen that
+was plainly not fullscreen. The way round it is not to ask on load: arm a
+one-shot listener for the first `pointerdown`/`keydown`/`touchstart` of the
+session and ask inside *that*. In practice that is the person opening their
+first tab, so it reads as launching fullscreen. Native is exempt — the APK is
+already edge to edge. There is a row for it in More as well, and toggling it on
+*there* takes effect immediately, because that tap is itself a gesture.
+
+**The avatar builder is behind an icon.** Eleven categories and a swatch grid
+took half the Profile page permanently, for something most people set once. The
+page is your name, handle, picture and link; the workbench opens on a pencil.
+
+**Shareable profile links, and an inbox that is not everybody.** These are one
+change, because they are one problem.
+
+`PeoplePicker` listed **every profile in the database** — `bd_profiles` is
+world-readable, so the list was free. That makes a stranger and a groupmate the
+same single tap: nobody is a contact because everybody already is.
+
+- The default list is now **people you have actually met** — `useKnownPeople()`
+  derives it from conversations you share, projects you are both on, and
+  challenges you both joined. No friends table, no accept step: the connection
+  is something you both already did, so there is nothing to approve.
+- Challenge membership is filtered to *your* challenges in a second query rather
+  than read whole. A public challenge with two hundred people in it would
+  otherwise put two hundred strangers straight back in the list.
+- Anyone else is found **by handle only**, minimum two characters, prefix match,
+  and deliberately **not by name** — a name search over every profile is a
+  directory, and a directory is what made everyone a contact.
+- `profileLink()` builds `/profile/?u=<handle>`. A query parameter, not
+  `/u/[handle]`: this is a static export and handles are made after the build.
+  `?u=` renders a read-only card with one button on it — Message them.
+
+**The link had to survive the sign-in wall.** `/profile/` is inside the
+auth-gated shell, so opening somebody's link while signed out bounced you to
+sign-in and then to Home — the link worked for everyone except the person it was
+sent to. The gate stashes `pathname + search` in sessionStorage and
+`/auth/callback/` returns you there. The stored value must match `/^\/[^/]/`
+before it is used, so it can never become an open redirect.
+
+**A challenge you join lands on your Habits page.** `0011_challenge_habits.sql`
+adds `bd_habits.challenge_id` with a *partial* unique index
+(`where challenge_id is not null`) so a double-tap on Join cannot leave two
+mirrors. `enrol()` in `lib/challenges.ts` runs on create and on join; leaving
+archives the mirror rather than deleting it, because the ticks are yours and a
+streak should not vanish because you stepped out of somebody's sprint.
+
+**Which challenges get the scoring link is the load-bearing detail.**
+`bd_challenge_members.habit_id` has existed since messaging landed and was never
+filled in — and `bd_habit_tick` already recomputes a member's progress as the
+number of ticks of their linked habit in the window. So the plumbing was there;
+only the connection was missing. But that recomputation is *right* only for
+`habit` and `manual` metrics. Link a `steps` or `task` challenge and ticking a
+square would overwrite a real count with "how many times you tapped". So every
+challenge gets the habit row; only those two get `habit_id`, and lib/metrics.ts
+keeps owning the rest. `Challenges.tsx` also stopped passing `null` as the
+habit id to `useMyMetric`, which meant a "habit" challenge counted *any* tick
+you made.
+
+The Habits page splits at a divider: **Yours**, then **From challenges** with a
+chip saying what each one counts. A mirror has no Delete — deleting it would
+leave you in the challenge with nothing to tick — it has a chevron to the
+challenge instead.
+
+**Messages, on a phone.** `MessengerDock` is desktop-only for good reasons (it
+would sit on the phone's own navigation, and a 328px window inside a 375px
+screen is just the screen with a border), so the phone had nothing and answering
+a message meant leaving the page you were on. `components/MessagesSheet.tsx` is
+the phone's answer and is deliberately **not** a floating bubble: a count on a
+header icon, and the conversation full screen when you ask for it. Nothing
+hovers over anything.
+
+**Also**: the notification panel hung off the left edge of a phone — it was
+340px anchored `right: 0` to a 34px button a few pixels from the screen edge, so
+its left edge landed off-screen and "NOTIFICATIONS" was cut in half.
+`maxWidth: calc(100vw - 28px)` never helped because 340 was already under that;
+the overflow was in the *position*. It is pinned to the viewport on phones now.
+
+**Migrations applied to production**: `0011_challenge_habits.sql`.
+
+**Verified in the browser (fixture mode).** The account sheet opening from the
+header face on desktop and from the More card on a phone, flush to the bottom at
+360px once the entry animation is neutralised. More's settings list reading
+Light mode / Always fullscreen / Customise nav / All settings. The phone header
+carrying Messages (1 unread), Notifications (4 unread), Capture and your face —
+no cog. The notification panel measured inside the viewport (17→358 of 375). The
+messages sheet full bleed at 375×812 with the chat list in it. Habits showing
+YOURS 3 then FROM CHALLENGES 2, chips reading "A habit kept" and "Gym days". The
+picker listing only Bea/Jules/Rain by default, finding `@csss` on "css", and
+finding **nothing** for a stranger searched by name. Profile's builder hidden
+until the pencil, and `?u=` rendering the not-found card (signed out, which is
+what `bd_profiles`' `to authenticated` read policy gives an anonymous client —
+the found path needs a session and was not exercised). All seven check files
+pass; `tsc` and `next build` are clean.
+
+**Not verified signed in**: every write, the switcher's `setSession` round trip,
+the post-sign-in return to a shared link, and a real challenge writing its
+mirror habit.
 
 ---
 

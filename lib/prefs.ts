@@ -20,6 +20,11 @@ export type Prefs = {
   hideBot: boolean;
   /** Seven slots, Monday first: which split each weekday carries, or ''. */
   gymPlan: string[];
+  /**
+   * Go fullscreen on the first tap, every launch. Web only — the APK is already
+   * edge to edge and has no browser chrome to hide. See useAlwaysFullscreen.
+   */
+  alwaysFullscreen: boolean;
 
   /* Accessibility. Each of these maps to a WCAG success criterion:
      fontScale → 1.4.4 Resize Text, contrast → 1.4.6, underlineLinks → 1.4.1
@@ -55,6 +60,7 @@ export const DEFAULT_PREFS: Prefs = {
   journalMode: null,
   hideBot: false,
   gymPlan: EMPTY_PLAN,
+  alwaysFullscreen: false,
 
   fontScale: 1,
   density: 'comfortable',

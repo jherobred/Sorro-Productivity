@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { TabRail } from './TabRail';
 import { Icon, type IconName } from './Icon';
 import { PAL, K } from '@/lib/pal';
+import { useMyIdentity } from '@/lib/people';
+import { Face } from './AccountSheet';
 import { usePrefs } from '@/lib/prefs';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd } from '@/lib/habits';
@@ -22,6 +24,7 @@ type Tab = (typeof TABS)[number];
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
 
 export function PhoneHome({ name }: { name: string }) {
+  const me = useMyIdentity();
   const router = useRouter();
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('Dashboard');
@@ -88,9 +91,11 @@ export function PhoneHome({ name }: { name: string }) {
 
         <div style={{ flex: 1, textAlign: 'center', fontSize: 21, fontWeight: 800, letterSpacing: '-.04em' }}>basedly</div>
 
-        <button onClick={() => router.push('/profile/')}
-          style={{ width: 32, height: 32, borderRadius: '50%', background: PAL.indigo, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: '#0C0F16', flex: 'none' }}>
-          {(name || 'MR').slice(0, 2).toUpperCase()}
+        {/* Your real picture. This fell back to the initials "MR" — one
+            person's, on everybody's phone. */}
+        <button onClick={() => router.push('/profile/')} aria-label="Your profile"
+          style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <Face name={me.name || name} photo={me.photo} size={32} />
         </button>
       </div>
 

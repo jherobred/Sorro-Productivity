@@ -144,10 +144,16 @@ export function seedDevFixtures() {
     { id: 'e17', title: 'Math 114 midterm', starts_at: iso(D(4), 0), ends_at: iso(D(4), 23, 59), all_day: true, location: '', color: '#FFC24B', source: 'app', remind_minutes: null, snoozed_until: null, deleted_at: null },
   ]);
 
+  // `challenge_id` is what splits this page in two: null is one of yours, an id
+  // is a challenge you joined writing itself here. h4 and h5 are the mirrors of
+  // ch1 and ch2 below, so the divider and the second group have something to
+  // draw in the preview.
   seed(['habits'], [
-    { id: 'h1', name: 'Read 20 pages', color: '#FF6B6B', kind: 'bin', target: null, position: 0, archived_at: null },
-    { id: 'h2', name: 'Drink 8 glasses', color: '#38D6F2', kind: 'bin', target: null, position: 1, archived_at: null },
-    { id: 'h3', name: 'No phone before bed', color: '#B07CFF', kind: 'bin', target: null, position: 2, archived_at: null },
+    { id: 'h1', name: 'Read 20 pages', color: '#FF6B6B', kind: 'bin', target: null, position: 0, archived_at: null, challenge_id: null },
+    { id: 'h2', name: 'Drink 8 glasses', color: '#38D6F2', kind: 'bin', target: null, position: 1, archived_at: null, challenge_id: null },
+    { id: 'h3', name: 'No phone before bed', color: '#B07CFF', kind: 'bin', target: null, position: 2, archived_at: null, challenge_id: null },
+    { id: 'h4', name: '6 a.m. club', color: '#FFC24B', kind: 'bin', target: null, position: 3, archived_at: null, challenge_id: 'ch1' },
+    { id: 'h5', name: 'No-skip gym', color: '#FF6B6B', kind: 'bin', target: null, position: 4, archived_at: null, challenge_id: 'ch2' },
   ]);
   const ticks: { habit_id: string; on_date: string; value: number }[] = [];
   for (let g = 0; g <= 5; g++) ticks.push({ habit_id: 'h1', on_date: ymdOf(-g), value: 1 });
@@ -277,6 +283,11 @@ export function seedDevFixtures() {
   });
 
   seed(['comment_counts'], { 'discussion:th1': 2, 'photo:po1': 1 });
+
+  // Who the picker offers by default. Everybody else has to be found by handle
+  // — see useKnownPeople in lib/people.ts. 'csss' is deliberately absent so the
+  // handle-only path has something to prove.
+  seed(['known_people'], ['jl', 'rt', 'bc']);
 
   // Messages. One direct chat and one group, with a shared post in each, so
   // the panel, the bubbles and the shared-post card all have something to draw.

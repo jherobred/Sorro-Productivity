@@ -14,6 +14,15 @@ export type Habit = {
   target: number | null;
   position: number;
   archived_at: string | null;
+  /**
+   * The challenge this habit mirrors, or null for one you made yourself.
+   *
+   * Joining a challenge used to leave you with a scoreboard in Community and
+   * nothing on the page you open every morning, so people joined and then
+   * forgot. Every challenge now writes a habit here (lib/challenges.ts), and
+   * the Habits page keeps them in their own group below your own.
+   */
+  challenge_id: string | null;
 };
 
 export type Tick = { habit_id: string; on_date: string; value: number };
@@ -43,7 +52,7 @@ export function useHabits() {
     queryFn: async (): Promise<Habit[]> => {
       const { data, error } = await supabase
         .from('bd_habits')
-        .select('id,name,color,kind,target,position,archived_at')
+        .select('id,name,color,kind,target,position,archived_at,challenge_id')
         .is('archived_at', null)
         .order('position');
       if (error) throw error;
@@ -101,6 +110,43 @@ const CREATE = defineMutation('habit.create', async (v: { id: string; name: stri
   if (error) throw error;
 });
 
+/**
+ * The habit that stands for a challenge, made once and found thereafter.
+ *
+ * Not an upsert: the uniqueness is a *partial* index (`where challenge_id is
+ * not null`, migration 0011) and PostgREST cannot describe that predicate to
+ * ON CONFLICT, so the inference would fail at run time. Insert, and treat a
+ * refusal as somebody else's insert having won the race - then read theirs.
+ */
+export async function mirrorHabit(v: {
+  challenge_id: string; name: string; color: string;
+}): Promise<string | null> {
+  const user_id = await currentUserId();
+
+  const found = await supabase.from('bd_habits')
+    .select('id').eq('user_id', user_id).eq('challenge_id', v.challenge_id).maybeSingle();
+  if (found.data?.id) return found.data.id;
+
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from('bd_habits')
+    .insert({ id, user_id, name: v.name, color: v.color, challenge_id: v.challenge_id });
+  if (!error) return id;
+
+  const again = await supabase.from('bd_habits')
+    .select('id').eq('user_id', user_id).eq('challenge_id', v.challenge_id).maybeSingle();
+  if (again.data?.id) return again.data.id;
+  throw error;
+}
+
+/** Put the mirror away when you leave. Archived, never deleted: the ticks are
+ *  yours and a streak should not vanish because a challenge ended. */
+export async function retireMirror(challenge_id: string) {
+  const user_id = await currentUserId();
+  await supabase.from('bd_habits')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('user_id', user_id).eq('challenge_id', challenge_id);
+}
+
 // Habits archive rather than soft-delete — the schema has archived_at, not deleted_at.
 const ARCHIVE = defineMutation('habit.archive', async (v: { id: string; at: string | null }) => {
   const { error } = await supabase.from('bd_habits').update({ archived_at: v.at }).eq('id', v.id);
@@ -148,7 +194,7 @@ export function useHabitActions(days: number) {
       const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
       queryClient.setQueryData<Habit[]>(HABITS_KEY, [
         ...prev,
-        { id: v.id, name: v.name, color: v.color, kind: 'bin', target: null, position: prev.length, archived_at: null },
+        { id: v.id, name: v.name, color: v.color, kind: 'bin', target: null, position: prev.length, archived_at: null, challenge_id: null },
       ]);
       return prev;
     },

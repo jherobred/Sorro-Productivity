@@ -431,7 +431,10 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
      while the challenge is live and I am in it; writes only the days that
      moved, so opening the tab on a quiet afternoon costs nothing. */
   const auto = metric.auto && joined && phase !== 'upcoming';
-  const { data: series } = useMyMetric(kind, c.starts_on, c.ends_on, null, auto);
+  // A "habit" challenge counts *the* habit this challenge put on your Habits
+  // page (bd_challenge_members.habit_id), not any tick you happen to make.
+  // Passing null here meant ticking an unrelated habit scored you a day.
+  const { data: series } = useMyMetric(kind, c.starts_on, c.ends_on, mine?.habit_id ?? null, auto);
   const syncRef = useRef(A.sync);
   syncRef.current = A.sync;
 
@@ -549,7 +552,13 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
         </div>
 
         <JoinButton phase={phase} joined={joined} color={c.color}
-          onJoin={() => A.join.mutate({ challenge_id: c.id }, { onSuccess: () => toast(`Joined ${c.name}`) })}
+          onJoin={() => A.join.mutate(
+            // The name, colour and metric ride along so the habit this writes
+            // to your Habits page can be made without a second read — and so
+            // the scoring link is only set where a tick is the score. See
+            // enrol() in lib/challenges.ts.
+            { challenge_id: c.id, name: c.name, color: c.color, metric: c.metric },
+            { onSuccess: () => toast(`Joined ${c.name} — it is on your Habits page too`) })}
           onLeave={() => A.leave.mutate({ challenge_id: c.id }, { onSuccess: () => toast(`Left ${c.name}`) })} />
 
         {/* Only the owner's, and only theirs: RLS refuses anyone else's write,

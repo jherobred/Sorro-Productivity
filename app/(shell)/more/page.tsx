@@ -8,6 +8,9 @@ import { SECHUE, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
 import { MAX_NAV_SLOTS } from '@/components/Shell';
+import { AccountSheet, Face } from '@/components/AccountSheet';
+import { SettingsSheet } from '@/components/SettingsSheet';
+import { useMyIdentity } from '@/lib/people';
 import { toast } from '@/lib/toast';
 
 /**
@@ -26,10 +29,16 @@ const ITEMS: { id: string; n: string; meta: string; ic: IconName }[] = [
   { id: 'profile', n: 'Profile', meta: 'Your avatar and identity', ic: 'focus' },
 ];
 
+/** Everything but Profile, which now has the card at the top of this page. */
+const TILES = ITEMS.filter((m) => m.id !== 'profile');
+
 export default function MorePage() {
   const router = useRouter();
   const { prefs, update } = usePrefs();
   const [navOpen, setNavOpen] = useState(false);
+  const [account, setAccount] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const me = useMyIdentity();
   const dark = prefs.theme === 'dark';
 
   return (
@@ -39,8 +48,31 @@ export default function MorePage() {
         Everything that isn’t on the tab bar
       </div>
 
+      {/* You, first. Switching account used to live only in the desktop
+          sidebar, which a phone does not have — so on this layout there was no
+          way to switch, add or sign out at all. Same sheet as the face in the
+          top right; two doors to one room, because this is the page people
+          actually look in. */}
+      <button onClick={() => setAccount(true)} className="row k-squish"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 13px',
+          borderRadius: 14, background: 'var(--card)', border: '1px solid var(--line)',
+          minHeight: 62, textAlign: 'left', marginBottom: 14,
+        }}>
+        <Face name={me.name} photo={me.photo} size={40} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {me.name || 'Your account'}
+          </span>
+          <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
+            {me.handle ? `@${me.handle} · profile, accounts, sign out` : 'Profile, accounts, sign out'}
+          </span>
+        </span>
+        <Icon name="chev" size={14} color="var(--tx3)" />
+      </button>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 11 }}>
-        {ITEMS.map((m, i) => {
+        {TILES.map((m, i) => {
           const hue = SECHUE[m.id] ?? prefs.accent;
           return (
             <button key={m.id} onClick={() => router.push(`/${m.id}/`)} className="rise"
@@ -91,11 +123,30 @@ export default function MorePage() {
         <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>Settings</div>
         <Row label={dark ? 'Light mode' : 'Dark mode'} ic="moon"
           onClick={() => void update({ theme: dark ? 'light' : 'dark' })} />
+        <Row label="Always fullscreen" ic="expand" meta={prefs.alwaysFullscreen ? 'On' : 'Off'}
+          onClick={() => {
+            const next = !prefs.alwaysFullscreen;
+            void update({ alwaysFullscreen: next });
+            // This tap *is* a user gesture, which is the only moment a browser
+            // will grant fullscreen — so turning it on takes effect now rather
+            // than waiting for the next launch.
+            if (next && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+              void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+            } else if (!next && document.fullscreenElement) {
+              void document.exitFullscreen().catch(() => {});
+            }
+            toast(next ? 'Fullscreen on every launch' : 'Fullscreen off');
+          }} />
         <Row label="Customise nav" ic="grid" meta={`${prefs.navPicks.filter((x) => x !== 'more').length} of ${MAX_PICKS}`}
           onClick={() => setNavOpen(true)} />
+        <Row label="All settings" ic="cog" onClick={() => setSettings(true)} />
       </div>
 
       {navOpen && <NavPicker onClose={() => setNavOpen(false)} />}
+      {account && (
+        <AccountSheet me={me} onClose={() => setAccount(false)} onSettings={() => setSettings(true)} />
+      )}
+      {settings && <SettingsSheet onClose={() => setSettings(false)} />}
     </div>
   );
 }

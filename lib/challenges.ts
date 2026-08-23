@@ -7,6 +7,7 @@ import { toast } from './toast';
 import { rpFor, standings, type RuleId } from './rank';
 import { settler } from './settle';
 import { normaliseMetric, type MetricId } from './metrics';
+import { mirrorHabit, retireMirror } from './habits';
 import { diffSeries, totalOf, bestStreak, type Series } from './series';
 
 export type Challenge = {
@@ -135,9 +136,40 @@ const CREATE = defineMutation('chal.create', async (v: Partial<Challenge> & { id
   const owner_id = await currentUserId();
   const { error } = await supabase.from('bd_challenges').insert({ ...v, owner_id });
   if (error) throw error;
-  // The owner is always a competitor — a challenge with nobody in it is a note.
+  // The owner is always a competitor - a challenge with nobody in it is a note.
   await supabase.from('bd_challenge_members').insert({ challenge_id: v.id, user_id: owner_id, progress: 0 });
+  await enrol({ challenge_id: v.id, name: v.name, color: v.color ?? '#7C6CFF', metric: v.metric ?? 'manual' });
 });
+
+/**
+ * Put the challenge on your Habits page, and wire the scoring where it counts.
+ *
+ * **Every** challenge gets a habit row, because the ask was that joining one
+ * shows up where you actually look each morning rather than only on a
+ * scoreboard in Community.
+ *
+ * **`bd_challenge_members.habit_id` is set only when a tick *is* the score.**
+ * `bd_habit_tick` recomputes a member's progress as the number of ticks of
+ * their linked habit inside the window - which is exactly right for `habit`
+ * and `manual`, and would be a lie for `steps`, `task` or `body`, where the
+ * number comes from a different table entirely. Linking those would overwrite a
+ * real count with "how many times you tapped a square". So they get the row and
+ * not the link, and lib/metrics.ts keeps owning their number.
+ *
+ * A failure here never fails the join. Being in the challenge is the thing the
+ * person pressed the button for; the mirror is a convenience and it can be
+ * made again next time the page loads.
+ */
+async function enrol(v: { challenge_id: string; name: string; color: string; metric: MetricId }) {
+  try {
+    const habit_id = await mirrorHabit({ challenge_id: v.challenge_id, name: v.name, color: v.color });
+    if (habit_id && (v.metric === 'habit' || v.metric === 'manual')) {
+      const user_id = await currentUserId();
+      await supabase.from('bd_challenge_members').update({ habit_id })
+        .eq('challenge_id', v.challenge_id).eq('user_id', user_id);
+    }
+  } catch { /* the challenge is joined; the habit can be mirrored again later */ }
+}
 
 const EDIT = defineMutation('chal.edit', async (v: { id: string; patch: Partial<Challenge> }) => {
   const { error } = await supabase.from('bd_challenges').update(v.patch as never).eq('id', v.id);
@@ -164,11 +196,21 @@ const STAR = defineMutation('chal.star', async (v: { challenge_id: string; on: b
   if (error) throw error;
 });
 
-const JOIN = defineMutation('chal.join', async (v: { challenge_id: string; habit_id?: string | null }) => {
+const JOIN = defineMutation('chal.join', async (v: {
+  challenge_id: string; habit_id?: string | null;
+  /** Carried so the mirrored habit can be named without a second read. */
+  name?: string; color?: string; metric?: MetricId;
+}) => {
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_challenge_members')
     .insert({ challenge_id: v.challenge_id, user_id, habit_id: v.habit_id ?? null, progress: 0 });
   if (error) throw error;
+  if (v.name) {
+    await enrol({
+      challenge_id: v.challenge_id, name: v.name,
+      color: v.color ?? '#7C6CFF', metric: v.metric ?? 'manual',
+    });
+  }
 });
 
 const LEAVE = defineMutation('chal.leave', async (v: { challenge_id: string }) => {
@@ -176,6 +218,9 @@ const LEAVE = defineMutation('chal.leave', async (v: { challenge_id: string }) =
   const { error } = await supabase.from('bd_challenge_members')
     .delete().eq('challenge_id', v.challenge_id).eq('user_id', user_id);
   if (error) throw error;
+  // Archived, not deleted: the ticks are yours and a streak should not vanish
+  // because you stepped out of somebody's five-day sprint.
+  await retireMirror(v.challenge_id).catch(() => {});
 });
 
 /**
@@ -326,7 +371,15 @@ export function useChallengeActions() {
     onSettled: settle,
   });
 
-  const join = useMutation<unknown, Error, { challenge_id: string; habit_id?: string | null }>({ mutationKey: JOIN, onSettled: settle });
+  const join = useMutation<unknown, Error, {
+    challenge_id: string; habit_id?: string | null;
+    name?: string; color?: string; metric?: MetricId;
+  }>({
+    mutationKey: JOIN,
+    // Habits gains a row on the same press, so settle it too or the new
+    // challenge group on that page waits for the next refetch to appear.
+    onSettled: () => { settle(); void qc.invalidateQueries({ queryKey: ['habits'] }); },
+  });
   const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
   const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({
     mutationKey: BUMP,

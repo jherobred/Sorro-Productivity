@@ -9,6 +9,13 @@ import { useNotifications, useNotifActions, NOTIF_HUE, NOTIF_ICON, ago, type Not
 /**
  * The bell in the top bar. Unread count pulses; the panel blooms open (kinetics
  * "Command Palette Bloom") with rows staggering in behind the wipe.
+ *
+ * The panel is anchored to the button on a desktop and to the *viewport* on a
+ * phone. Anchored to the button it is 340px wide hanging off `right: 0` of a
+ * 34px control that sits a few pixels from the screen edge — so on a 375px
+ * phone its left edge landed off-screen and the word "NOTIFICATIONS" was cut in
+ * half. `maxWidth: calc(100vw - 28px)` did not save it, because 340 was already
+ * under that; the overflow was in the *position*, not the width.
  */
 export function NotificationBell({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
@@ -74,11 +81,13 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
           aria-label="Notifications"
           className="k-bloom"
           style={{
-            position: 'absolute', top: size + 8, right: 0, zIndex: 90,
-            width: 340, maxWidth: 'calc(100vw - 28px)', maxHeight: 460,
+            zIndex: 90, maxHeight: 460,
             display: 'flex', flexDirection: 'column',
             borderRadius: 14, background: 'var(--card2)',
             border: '1px solid var(--line2)', boxShadow: 'var(--shl)', overflow: 'hidden',
+            ...(compact
+              ? { position: 'fixed', top: 'calc(52px + env(safe-area-inset-top))', left: 12, right: 12 }
+              : { position: 'absolute', top: size + 8, right: 0, width: 340, maxWidth: 'calc(100vw - 28px)' }),
           }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 13px', borderBottom: '1px solid var(--line)' }}>
             <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
