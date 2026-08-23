@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from './Icon';
 import { useLayout } from '@/lib/useLayout';
@@ -227,6 +228,7 @@ export function Thread({
   /** The docked window: same thread, tighter, no Leave button. */
   compact?: boolean;
 }) {
+  const router = useRouter();
   const { data: messages = [] } = useMessages(convo.id);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
@@ -285,12 +287,24 @@ export function Thread({
             <Icon name="back" size={14} color="var(--tx2)" />
           </button>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div
+          onClick={() => {
+            const other = members.find((m) => m.conversation_id === convo.id && m.user_id !== me);
+            if (other) {
+              const p = profiles[other.user_id];
+              const target = p?.handle || other.user_id;
+              if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+            }
+          }}
+          className="hov"
+          title="View profile"
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer', padding: '2px 4px', borderRadius: 8 }}
+        >
+          <div style={{ fontSize: 12.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--tx)' }}>
             {titleOf(convo, members, me, nameOf)}
           </div>
           <div style={{ fontSize: 10, color: 'var(--tx3)' }}>
-            {members.filter((m) => m.conversation_id === convo.id).length} in this chat
+            {members.filter((m) => m.conversation_id === convo.id).length} in this chat · View profile ›
           </div>
         </div>
         {convo.is_group && (
@@ -310,7 +324,7 @@ export function Thread({
         </button>}
       </header>
 
-      <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 13px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div className="navsb" style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '14px 13px', display: 'flex', flexDirection: 'column', gap: 9 }}>
         {messages.length === 0 && (
           <div style={{ margin: 'auto', fontSize: 11.5, color: 'var(--tx3)' }}>Say something.</div>
         )}
@@ -358,42 +372,34 @@ export function Thread({
           <label className="hov" title="Send a photo" style={ATTACH_BTN}>
             <Icon name="image" size={15} color="var(--tx2)" />
             <input type="file" accept="image/*" hidden disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (f) void take(() => putAttachment(f));
-              }} />
+              aria-label="Send a photo"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void take(() => putAttachment(f)); e.target.value = ''; }} />
           </label>
-
-          <label className="hov" title="Send a file" style={ATTACH_BTN}>
+          <label className="hov" title="Send a file from your device" style={ATTACH_BTN}>
             <Icon name="files" size={15} color="var(--tx2)" />
             <input type="file" hidden disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (f) void take(() => putAttachment(f));
-              }} />
+              aria-label="Send a file from your device"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void take(() => putAttachment(f)); e.target.value = ''; }} />
           </label>
-
-          <button onClick={() => setDrive(true)} className="hov" title="Send a file from your Files"
-            aria-label="Send a file from your Files" style={ATTACH_BTN} disabled={busy}>
-            <Icon name="folderPlus" size={15} color="var(--tx2)" />
+          <button onClick={() => setDrive(true)} className="hov" title="Send from your Files" style={ATTACH_BTN}>
+            <Icon name="files" size={15} color="var(--tx2)" />
           </button>
 
           <input value={draft} onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-            placeholder={busy ? 'Attaching…' : 'Message'} aria-label="Message"
+            placeholder="Write a message…" aria-label="Write a message"
             style={{
-              flex: 1, minWidth: 0, minHeight: 38, padding: '9px 12px', borderRadius: 11,
+              flex: 1, minHeight: 38, padding: '9px 12px', borderRadius: 11,
               border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5,
             }} />
-
-          <button onClick={send} disabled={!draft.trim() && !attach} className="acc k-squish" aria-label="Send"
+          <button onClick={send} disabled={!draft.trim() && !attach} className="hov k-squish" aria-label="Send"
             style={{
-              flex: 'none', width: 42, minHeight: 38, borderRadius: 11, display: 'grid', placeItems: 'center',
-              background: 'var(--acc)', opacity: draft.trim() || attach ? 1 : 0.45,
+              width: 38, height: 38, flex: 'none', borderRadius: 11,
+              background: draft.trim() || attach ? 'var(--acc)' : 'var(--card2)',
+              color: draft.trim() || attach ? 'var(--ink)' : 'var(--tx3)',
+              display: 'grid', placeItems: 'center',
             }}>
-            <Icon name="send" size={15} color="#0A0912" />
+            <Icon name="send" size={15} color={draft.trim() || attach ? 'var(--ink)' : 'var(--tx3)'} />
           </button>
         </div>
       </div>
@@ -435,6 +441,7 @@ function Bubble({
   onRemove: () => void;
   onReport: () => void;
 }) {
+  const router = useRouter();
   const { prefs } = usePrefs();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState(msg.body);
@@ -460,7 +467,20 @@ function Bubble({
           repeated eight times is noise; a gap that keeps the alignment is not. */}
       {!mine && (
         first
-          ? <Avatar who={who} size={26} />
+          ? (
+            <button
+              onClick={() => {
+                const p = profiles[msg.author_id];
+                const target = p?.handle || msg.author_id;
+                if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+              }}
+              className="hov k-squish"
+              title={`View ${who.label}'s profile`}
+              style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            >
+              <Avatar who={who} size={26} />
+            </button>
+          )
           : <span aria-hidden style={{ width: 26, flex: 'none' }} />
       )}
 
@@ -468,7 +488,17 @@ function Bubble({
         onContextMenu={(e) => { e.preventDefault(); open(e.clientX, e.clientY); }}
         style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', gap: 3, minWidth: 0, maxWidth: '82%' }}>
         {first && !mine && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 4 }}>{who.label}</span>
+          <span
+            onClick={() => {
+              const p = profiles[msg.author_id];
+              const target = p?.handle || msg.author_id;
+              if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+            }}
+            className="hov"
+            style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 4, cursor: 'pointer' }}
+          >
+            {who.label}
+          </span>
         )}
 
         {msg.share_kind && msg.share_id && (

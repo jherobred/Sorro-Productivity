@@ -532,9 +532,69 @@ export default function ProfilePage() {
           </div>
         </div>
         )}
-      </div>
 
-      {uid && <ProfileTimeline userId={uid} currentUserId={uid} phone={phone} />}
+        {/* Instagram Style Highlights Strip */}
+        <div style={{ margin: '18px 0 6px', overflowX: 'auto', paddingBottom: 6 }} className="navsb">
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            {[
+              { id: 'streaks', label: 'Streaks', emoji: '🔥', hue: '#FF5500' },
+              { id: 'gains', label: 'Gym Gains', emoji: '🏋️', hue: '#3888FF' },
+              { id: 'focus', label: 'Deep Focus', emoji: '⚡', hue: '#FFC24B' },
+              { id: 'coding', label: 'Building', emoji: '💻', hue: '#34D399' },
+              { id: 'notes', label: 'Notes', emoji: '💡', hue: '#A855F7' },
+              { id: 'wins', label: 'Wins', emoji: '🏆', hue: '#FF4365' },
+            ].map((h) => (
+              <button
+                key={h.id}
+                onClick={() => toast(`Highlight: ${h.label}`)}
+                className="hov k-squish"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  flex: 'none',
+                }}
+              >
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: '50%',
+                    padding: 2,
+                    background: `linear-gradient(135deg, ${h.hue}, var(--acc))`,
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      background: 'var(--card2)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 22,
+                      border: '2px solid var(--card)',
+                    }}
+                  >
+                    {h.emoji}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+                  {h.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {uid && <ProfileTimeline userId={uid} currentUserId={uid} phone={phone} />}
+      </div>
     </div>
   );
 }
@@ -554,12 +614,13 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
     user_id: string; name: string; handle: string; bio: string; course: string; campus: string;
     photo: string | null; cover: string | null; photoFit: Fit; coverFit: Fit; animal: Animal | null;
   } | null | undefined>(undefined);
+  const [allied, setAllied] = useState(false);
 
   useEffect(() => {
     void (async () => {
       const { data } = await supabase.from('bd_profiles')
         .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
-        .eq('handle', handle).maybeSingle();
+        .or(`handle.eq.${handle},user_id.eq.${handle}`).maybeSingle();
       setWho(data
         ? {
           user_id: data.user_id, name: data.name ?? '', handle: data.handle ?? handle,
@@ -580,7 +641,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
 
   if (who === null) {
     return (
-      <div style={{ padding: pad, maxWidth: 520 }}>
+      <div style={{ padding: pad, maxWidth: 640, marginInline: 'auto' }}>
         <div style={{ ...CARD, textAlign: 'center', padding: '32px 20px' }}>
           <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>No @{handle} here</div>
           <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.7, margin: '0 0 14px' }}>
@@ -598,9 +659,9 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
   const initials = (who.name || who.handle).split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
-    <div style={{ padding: pad, maxWidth: 520 }}>
+    <div style={{ padding: pad, maxWidth: 840, marginInline: 'auto' }}>
       <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
-        {/* Their cover, framed the way they framed it. */}
+        {/* Cover */}
         <div style={{
           position: 'relative', width: '100%', aspectRatio: '3', maxHeight: 200, overflow: 'hidden',
           background: who.cover ? 'var(--card2)'
@@ -609,48 +670,158 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
           <PhotoFrame src={who.cover} fit={who.coverFit} alt="" />
         </div>
 
-        <div style={{ padding: '15px 16px' }}>
-        <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
-          {who.photo ? (
-            <span style={{ width: 78, height: 78, flex: 'none', borderRadius: 18, overflow: 'hidden', marginTop: -34, border: '3px solid var(--card)', display: 'block' }}>
-              <PhotoFrame src={who.photo} fit={who.photoFit} alt="" />
-            </span>
-          ) : (
-            <span style={{
-              width: 78, height: 78, flex: 'none', borderRadius: 18, display: 'grid', placeItems: 'center',
-              marginTop: -34, border: '3px solid var(--card)',
-              background: hueOf(who.user_id), fontSize: 26, fontWeight: 800, color: '#0C0F16',
-            }}>{initials}</span>
-          )}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.02em' }}>{who.name || `@${who.handle}`}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginTop: 2 }}>@{who.handle}</div>
-            {who.course && <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accTx)', marginTop: 6 }}>{who.course}</div>}
-            {who.campus && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{who.campus}</div>}
+        <div style={{ padding: '16px 20px' }}>
+          {/* Instagram Header Layout */}
+          <div style={{ display: 'flex', gap: phone ? 14 : 24, alignItems: 'flex-start' }}>
+            {/* Left Circular Avatar with Story Ring */}
+            <div style={{ position: 'relative', flex: 'none', marginTop: -42 }}>
+              <div
+                style={{
+                  width: phone ? 88 : 110,
+                  height: phone ? 88 : 110,
+                  borderRadius: '50%',
+                  padding: 3,
+                  background: 'linear-gradient(135deg, var(--acc), #FF4365, #FFC24B)',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    background: 'var(--card)',
+                    border: '3px solid var(--card)',
+                  }}
+                >
+                  {who.photo ? (
+                    <PhotoFrame src={who.photo} fit={who.photoFit} alt="" />
+                  ) : (
+                    <span style={{
+                      width: '100%', height: '100%', display: 'grid', placeItems: 'center',
+                      background: hueOf(who.user_id), fontSize: 26, fontWeight: 800, color: '#0C0F16',
+                    }}>{initials}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Info & Stats */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                  @{who.handle}
+                </h1>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
+                  background: 'color-mix(in srgb, var(--acc) 16%, transparent)', color: 'var(--accTx)',
+                }}>
+                  {who.animal ?? animalOf(who.user_id)}
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => { setAllied((v) => !v); toast(allied ? 'Removed ally' : 'Connected as Ally!'); }}
+                  className="acc k-squish"
+                  style={{
+                    padding: '8px 18px', borderRadius: 10,
+                    background: allied ? 'var(--card2)' : 'var(--acc)',
+                    color: allied ? 'var(--tx)' : 'var(--ink)',
+                    fontSize: 12.5, fontWeight: 800, border: allied ? '1px solid var(--line2)' : 'none',
+                  }}
+                >
+                  {allied ? 'Allied ✓' : 'Add Ally +'}
+                </button>
+                <button
+                  onClick={() => void startDm(who.user_id).then((id) => { if (id) router.push('/community/'); })}
+                  className="hov k-squish"
+                  style={{
+                    padding: '8px 18px', borderRadius: 10, border: '1px solid var(--line2)',
+                    background: 'var(--card2)', color: 'var(--tx)', fontSize: 12.5, fontWeight: 700,
+                  }}
+                >
+                  Message
+                </button>
+                <button
+                  onClick={() => { void navigator.clipboard?.writeText(window.location.href); toast('Profile link copied'); }}
+                  className="hov k-squish"
+                  style={{
+                    width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)',
+                    display: 'grid', placeItems: 'center', background: 'var(--card2)',
+                  }}
+                >
+                  <Icon name="share" size={14} color="var(--tx2)" />
+                </button>
+              </div>
+            </div>
           </div>
-          <span style={{ marginLeft: 'auto', flex: 'none' }} title={`${who.animal ?? animalOf(who.user_id)}`}>
-            <Mascot id={who.user_id} animal={who.animal ?? undefined} mood="keen" hue={hueOf(who.user_id)} size={38} />
-          </span>
-        </div>
 
-        {who.bio && (
-          <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--tx2)', margin: '14px 0 0', textWrap: 'pretty' }}>
-            {who.bio}
-          </p>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button
-            onClick={() => void startDm(who.user_id).then((id) => { if (id) router.push('/community/'); })}
-            className="acc k-squish"
-            style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800 }}>
-            Message {who.name.split(' ')[0] || `@${who.handle}`}
-          </button>
-          <button onClick={() => router.replace('/profile/')} className="hov"
-            style={{ flex: 'none', padding: '0 16px', minHeight: 44, borderRadius: 12, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
-            Yours
-          </button>
+          {/* User Bio & Meta */}
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)' }}>{who.name || `@${who.handle}`}</div>
+            {who.course && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accTx)', marginTop: 2 }}>{who.course}</div>}
+            {who.campus && <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>{who.campus}</div>}
+            {who.bio && (
+              <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', margin: '8px 0 0', textWrap: 'pretty' }}>
+                {who.bio}
+              </p>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Highlights Strip */}
+      <div style={{ margin: '18px 0 6px', overflowX: 'auto', paddingBottom: 6 }} className="navsb">
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          {[
+            { id: 'streaks', label: 'Streaks', emoji: '🔥', hue: '#FF5500' },
+            { id: 'gains', label: 'Gym Gains', emoji: '🏋️', hue: '#3888FF' },
+            { id: 'focus', label: 'Deep Focus', emoji: '⚡', hue: '#FFC24B' },
+            { id: 'notes', label: 'Notes', emoji: '💡', hue: '#A855F7' },
+          ].map((h) => (
+            <div
+              key={h.id}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                flex: 'none',
+              }}
+            >
+              <div
+                style={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: '50%',
+                  padding: 2,
+                  background: `linear-gradient(135deg, ${h.hue}, var(--acc))`,
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    background: 'var(--card2)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: 22,
+                    border: '2px solid var(--card)',
+                  }}
+                >
+                  {h.emoji}
+                </div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+                {h.label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

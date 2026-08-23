@@ -5,22 +5,35 @@ import { Icon } from './Icon';
 import { PAL } from '@/lib/pal';
 import { playClick, playTick, playCelebration } from '@/lib/audio';
 
-export type ReactionType = 'like' | 'love' | 'fire' | 'insight' | 'wow' | 'sad';
+export type ReactionType =
+  | 'like'
+  | 'love'
+  | 'laugh'
+  | 'fire'
+  | 'insight'
+  | 'celebrate'
+  | 'support'
+  | 'wow'
+  | 'sad';
 
 export type ReactionDef = {
   id: ReactionType;
   label: string;
   emoji: string;
+  animal: string;
+  species: string;
   color: string;
 };
 
 export const FB_REACTIONS: ReactionDef[] = [
-  { id: 'like', label: 'Like', emoji: '👍', color: '#3888FF' },
-  { id: 'love', label: 'Love', emoji: '❤️', color: '#FF4365' },
-  { id: 'fire', label: 'Fire', emoji: '🔥', color: '#FF8C00' },
-  { id: 'insight', label: 'Insight', emoji: '💡', color: '#FFC24B' },
-  { id: 'wow', label: 'Wow', emoji: '😮', color: '#FFA500' },
-  { id: 'sad', label: 'Sad', emoji: '😢', color: '#4A90E2' },
+  { id: 'like', label: 'Like', emoji: '👍', animal: '🦝', species: 'Raccoon', color: '#3888FF' },
+  { id: 'love', label: 'Love', emoji: '❤️', animal: '🐱', species: 'Cat', color: '#FF4365' },
+  { id: 'laugh', label: 'Haha', emoji: '😆', animal: '🦊', species: 'Fox', color: '#FF7A30' },
+  { id: 'fire', label: 'Fire', emoji: '🔥', animal: '🐉', species: 'Dragon', color: '#FF5500' },
+  { id: 'celebrate', label: 'Celebrate', emoji: '🎉', animal: '🐸', species: 'Frog', color: '#34D399' },
+  { id: 'insight', label: 'Insight', emoji: '💡', animal: '🦉', species: 'Owl', color: '#FFC24B' },
+  { id: 'support', label: 'Support', emoji: '🤝', animal: '🐻', species: 'Bear', color: '#4A90E2' },
+  { id: 'wow', label: 'Wow', emoji: '😮', animal: '🐼', species: 'Panda', color: '#A855F7' },
 ];
 
 export function getReaction(id: string | null | undefined): ReactionDef {
@@ -228,7 +241,7 @@ export function FacebookReactionButton({
                       bottom: 'calc(100% + 4px)',
                       padding: '2px 7px',
                       borderRadius: 999,
-                      background: 'rgba(0,0,0,0.82)',
+                      background: 'rgba(0,0,0,0.85)',
                       color: '#fff',
                       fontSize: 10,
                       fontWeight: 800,
@@ -237,7 +250,7 @@ export function FacebookReactionButton({
                       boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
                     }}
                   >
-                    {r.label}
+                    {r.animal} {r.label}
                   </span>
                 )}
               </button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { RowsSkeleton } from '@/components/Skeleton';
@@ -37,6 +38,7 @@ const DEL = defineMutation('people.del', async (v: { id: string }) => {
 });
 
 export default function PeoplePage() {
+  const router = useRouter();
   const { phone } = useLayout();
   const qc = useQueryClient();
   const settle = settler(qc, KEY);
@@ -177,6 +179,31 @@ export default function PeoplePage() {
         <button onClick={() => { del.mutate({ id: person.id }); setSel(null); toast(`Removed ${person.name}`); }}
           className="hov" aria-label={`Remove ${person.name}`} title="Remove" style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
           <Icon name="trash" size={14} color="var(--tx2)" />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button
+          onClick={() => router.push(`/profile/?u=${encodeURIComponent(person.name.toLowerCase().replace(/\s+/g, ''))}`)}
+          className="hov k-squish"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 9,
+            border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12, fontWeight: 700,
+          }}
+        >
+          <Icon name="people" size={13} color="var(--accTx)" />
+          View Profile
+        </button>
+        <button
+          onClick={() => router.push('/community/?tab=messages')}
+          className="hov k-squish"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 9,
+            border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)', fontSize: 12, fontWeight: 700,
+          }}
+        >
+          <Icon name="send" size={13} color="var(--accTx)" />
+          Message
         </button>
       </div>
 

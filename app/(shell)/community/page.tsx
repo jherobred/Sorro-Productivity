@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
 import { Composer } from '@/components/Composer';
@@ -266,6 +267,7 @@ function FeedCard({
   onOpen: () => void;
   onShare: () => void;
 }) {
+  const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
 
@@ -275,17 +277,28 @@ function FeedCard({
       background: 'var(--card)', boxShadow: 'var(--sh)', border: '1px solid var(--line)',
     }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 13px 10px' }}>
-        <Avatar id={item.author_id} profiles={profiles} me={me} size={32} />
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {who.label}
+        <div
+          onClick={() => {
+            const p = profiles[item.author_id];
+            const target = p?.handle || item.author_id;
+            if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+          }}
+          className="hov k-squish"
+          title={`View ${who.label}'s profile`}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minWidth: 0, flex: 1 }}
+        >
+          <Avatar id={item.author_id} profiles={profiles} me={me} size={32} />
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {who.label}
+              </span>
+              {who.bot && <BotTag />}
             </span>
-            {who.bot && <BotTag />}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>
-            {who.sub ? `${who.sub} · ` : ''}{ago(item.created_at)}
-          </span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)' }}>
+              {who.sub ? `${who.sub} · ` : ''}{ago(item.created_at)}
+            </span>
+          </div>
         </div>
 
         {item.tag && (
@@ -367,6 +380,7 @@ function CommentPanel({
 }: {
   item: Item; me: string; profiles: Record<string, import('@/lib/people').Person>; onComment: (b: string) => void;
 }) {
+  const router = useRouter();
   const { data: comments = [], isLoading } = useComments(item.kind, item.id, true);
   const [draft, setDraft] = useState('');
 
@@ -391,10 +405,29 @@ function CommentPanel({
         const who = displayOf(profiles, c.author_id, me);
         return (
           <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <Avatar id={c.author_id} profiles={profiles} me={me} size={24} />
+            <button
+              onClick={() => {
+                const p = profiles[c.author_id];
+                const target = p?.handle || c.author_id;
+                if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+              }}
+              className="hov k-squish"
+              title={`View ${who.label}'s profile`}
+              style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            >
+              <Avatar id={c.author_id} profiles={profiles} me={me} size={24} />
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', marginBottom: 2 }}>
-                {who.label} · {ago(c.created_at)}
+              <div
+                onClick={() => {
+                  const p = profiles[c.author_id];
+                  const target = p?.handle || c.author_id;
+                  if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
+                }}
+                className="hov"
+                style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', marginBottom: 2, cursor: 'pointer', display: 'inline-block' }}
+              >
+                {who.label} · <span style={{ color: 'var(--tx3)', fontWeight: 500 }}>{ago(c.created_at)}</span>
               </div>
               <div style={{ fontSize: 12.5, lineHeight: 1.55, textWrap: 'pretty' }}>{c.body}</div>
             </div>

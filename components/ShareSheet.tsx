@@ -10,22 +10,8 @@ import { useProfiles, displayOf } from '@/lib/people';
 import {
   useConversations, useMembers, useMessageActions, startDm, titleOf,
 } from '@/lib/messages';
+import { repostPost, isItemReposted, useReposts } from '@/lib/reposts';
 import type { Item } from '@/lib/community';
-
-/**
- * Sharing a post, to somewhere it can actually go.
- *
- * The old share button copied a URL to the clipboard and said nothing else,
- * which is the least useful third of what sharing means. This offers the three
- * that matter: send it to somebody here, hand it to the phone's own share
- * sheet (which is where Messenger, Messages and everything else lives), or
- * copy the link.
- *
- * A post sent in a chat travels as a *reference* — kind and id — so it renders
- * from the live post. If the author edits or deletes it, the message follows.
- * Copying the caption into the message would publish a snapshot of something
- * they may since have taken back.
- */
 
 export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onClose: () => void }) {
   const { phone } = useLayout();
@@ -35,15 +21,44 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
   const { data: convos = [] } = useConversations();
   const { data: members = [] } = useMembers();
   const A = useMessageActions(me);
+  const reposts = useReposts();
 
   const [q, setQ] = useState('');
   const [sent, setSent] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
+  const [quoting, setQuoting] = useState(false);
+  const [quoteThoughts, setQuoteThoughts] = useState('');
 
   const link = typeof location === 'undefined' ? '' : `${location.origin}/community/#${item.kind}-${item.id}`;
   const label = item.title || item.body || 'a post';
+  const isReposted = isItemReposted(item.id, me);
 
   const nameOf = (id: string) => displayOf(profiles, id, me).label;
+
+  const handleInstantRepost = () => {
+    repostPost({
+      itemId: item.id,
+      kind: item.kind,
+      authorId: item.author_id,
+      userId: me,
+    });
+    onClose();
+  };
+
+  const handleQuoteRepost = () => {
+    if (!quoteThoughts.trim()) {
+      toast('Add a few words to your quote repost');
+      return;
+    }
+    repostPost({
+      itemId: item.id,
+      kind: item.kind,
+      authorId: item.author_id,
+      userId: me,
+      quoteText: quoteThoughts.trim(),
+    });
+    onClose();
+  };
 
   /** Chats you already have, then everybody else you could start one with. */
   const rows = useMemo(() => {
@@ -75,11 +90,9 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
   };
 
   const native = async () => {
-    // The OS sheet is where Messenger, Mail and the rest actually live. It is
-    // absent on desktop Chrome, so the button only shows when it exists.
     try {
       await navigator.share?.({ title: label.slice(0, 60), text: label.slice(0, 140), url: link });
-    } catch { /* the user dismissed it */ }
+    } catch { /* dismissed */ }
   };
 
   const body = (
@@ -96,14 +109,80 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderBottom: '1px solid var(--line)' }}>
           <Icon name="send" size={15} color="var(--accTx)" />
-          <h2 style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: '-.02em', flex: 1 }}>Share</h2>
+          <h2 style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: '-.02em', flex: 1 }}>Share & Repost</h2>
           <button onClick={onClose} className="hov k-squish" aria-label="Close"
             style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
             <Icon name="close" size={14} color="var(--tx2)" />
           </button>
         </div>
 
+        {/* Repost Options Banner */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'var(--card2)' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 8 }}>
+            Repost to your profile
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleInstantRepost}
+              className="hov k-squish"
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '8px 12px', borderRadius: 10,
+                border: `1px solid ${isReposted ? 'var(--acc)' : 'var(--line2)'}`,
+                background: isReposted ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'var(--card)',
+                color: isReposted ? 'var(--accTx)' : 'var(--tx)', fontSize: 12, fontWeight: 700,
+              }}
+            >
+              <Icon name="refresh" size={13} color={isReposted ? 'var(--accTx)' : 'var(--tx2)'} />
+              {isReposted ? 'Reposted' : 'Instant Repost'}
+            </button>
+            <button
+              onClick={() => setQuoting((v) => !v)}
+              className="hov k-squish"
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '8px 12px', borderRadius: 10,
+                border: `1px solid ${quoting ? 'var(--acc)' : 'var(--line2)'}`,
+                background: quoting ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'var(--card)',
+                color: quoting ? 'var(--accTx)' : 'var(--tx)', fontSize: 12, fontWeight: 700,
+              }}
+            >
+              <Icon name="edit" size={13} color={quoting ? 'var(--accTx)' : 'var(--tx2)'} />
+              Quote Repost
+            </button>
+          </div>
+
+          {quoting && (
+            <div className="rise" style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea
+                value={quoteThoughts}
+                onChange={(e) => setQuoteThoughts(e.target.value)}
+                placeholder="Add your thoughts before reposting..."
+                rows={2}
+                style={{
+                  width: '100%', padding: '8px 10px', borderRadius: 8,
+                  border: '1px solid var(--acc)', background: 'var(--card)', color: 'var(--tx)',
+                  fontSize: 12, lineHeight: 1.4, resize: 'none',
+                }}
+              />
+              <button
+                onClick={handleQuoteRepost}
+                className="acc k-squish"
+                style={{
+                  alignSelf: 'flex-end', padding: '6px 14px', borderRadius: 8,
+                  background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800,
+                }}
+              >
+                Post with Quote
+              </button>
+            </div>
+          )}
+        </div>
+
         <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+            Send in Messages
+          </div>
           <label style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36,
             borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card2)',
