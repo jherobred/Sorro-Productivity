@@ -114,7 +114,7 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 1000);
+    const t = setInterval(() => tick((n) => n + 1), 15000);
     return () => clearInterval(t);
   }, []);
 

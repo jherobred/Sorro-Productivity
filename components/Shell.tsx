@@ -508,19 +508,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               <NotificationBell />
 
-              <button
-                onClick={() => {
-                  setSettingsTab('appearance');
-                  setSettings(true);
-                }}
-                className="hov k-squish"
-                title="Settings"
-                aria-label="Settings"
-                style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Icon name="cog" size={17} color="var(--tx2)" />
-              </button>
-
               {/* Centralized profile & settings entry point on top right */}
               <button
                 onClick={() => {

@@ -33,12 +33,14 @@ export function BuddyCompanion({
 
   useEffect(() => {
     void currentUserId().then((id) => {
-      setMe(id);
-      if (id) {
-        const baseMood = moodOf({ daysSince, leading: streak > 3 });
-        setCurrentMood(baseMood);
-      }
-    }).catch(() => setMe(''));
+      setMe(id || 'me');
+      const baseMood = moodOf({ daysSince, leading: streak > 3 });
+      setCurrentMood(baseMood);
+    }).catch(() => {
+      setMe('me');
+      const baseMood = moodOf({ daysSince, leading: streak > 3 });
+      setCurrentMood(baseMood);
+    });
   }, [daysSince, streak]);
 
   if (!me) return null;

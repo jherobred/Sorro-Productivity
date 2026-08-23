@@ -28,6 +28,9 @@ export function FocusHub({
 
   useEffect(() => {
     void currentUserId().then(setMe).catch(() => setMe(''));
+    return () => {
+      stopAmbient();
+    };
   }, []);
 
   useEffect(() => {
