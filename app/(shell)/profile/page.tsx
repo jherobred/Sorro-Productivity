@@ -16,6 +16,7 @@ import { startDm } from '@/lib/messages';
 import { queryClient } from '@/lib/offline';
 import { Icon } from '@/components/Icon';
 import { useRouter } from 'next/navigation';
+import { ProfileTimeline } from '@/components/ProfileTimeline';
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered
@@ -532,6 +533,8 @@ export default function ProfilePage() {
         </div>
         )}
       </div>
+
+      {uid && <ProfileTimeline userId={uid} currentUserId={uid} phone={phone} />}
     </div>
   );
 }
@@ -650,6 +653,8 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
         </div>
         </div>
       </div>
+
+      {who.user_id && <ProfileTimeline userId={who.user_id} phone={phone} />}
     </div>
   );
 }

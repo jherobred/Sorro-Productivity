@@ -156,7 +156,7 @@ export default function HabitsPage() {
                   {h.challenge_id ? (
                     // Deleting this would leave you in the challenge with
                     // nothing to tick. Leaving is done where you joined.
-                    <button onClick={() => router.push('/community/')} className="hov" title="Open the challenge"
+                    <button onClick={() => router.push('/community/?focus=Challenges')} className="hov" title="Open the challenge"
                       style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Icon name="chev" size={14} color="var(--tx2)" />
                     </button>

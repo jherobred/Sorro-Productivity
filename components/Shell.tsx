@@ -203,7 +203,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const go = (id: string) => { if (BUILT.has(id)) router.push(`/${id}/`); };
   /** Same navigation, plus `?focus=` so the page can open on that sub-item. */
   const goFiltered = (id: string, focus: string) => {
-    if (BUILT.has(id)) router.push(`/${id}/?focus=${encodeURIComponent(focus)}`);
+    if (BUILT.has(id)) {
+      router.push(`/${id}/?focus=${encodeURIComponent(focus)}`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('basedly:focus', { detail: { section: id, focus } }));
+      }
+    }
   };
   const hueTx = (hue: string) =>
     dark ? `color-mix(in srgb, ${hue} 84%, #FFFFFF)` : `color-mix(in srgb, ${hue} 62%, #1C1A26)`;
@@ -236,13 +241,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {!phone && railOpen && (
         <div className="bd-rail" style={{
           ...lg({ tint: acc, strength: 1, dark }),
-          // Collapsing to 0 rather than to an icon rail: the point of the ask
-          // was writing space in Notebooks, and a 60px strip still eats it. The
-          // hover edge and Ctrl+\\ bring it straight back.
-          // Width lives in the inline style, not a class. The rail is only in
-          // the tree at all when open (see the guard above), so there is no
-          // collapsed state to express in CSS — and an inline value cannot be
-          // out-cascaded by the design system the way the class rule was.
           width: 236, minWidth: 236,
           flex: 'none', position: 'relative', zIndex: 2,
           display: 'flex', flexDirection: 'column', padding: '14px 0', overflow: 'hidden',
@@ -253,8 +251,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px 14px 14px' }}>
-            <div style={{ width: 22, height: 22, background: acc, borderRadius: 6, flex: 'none' }} />
-            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', flex: 1 }}>Basedly</div>
+            <button
+              onClick={() => router.push('/home/')}
+              className="hov k-squish"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, textAlign: 'left', cursor: 'pointer' }}
+              title="Go to Home"
+            >
+              <div style={{ width: 22, height: 22, background: acc, borderRadius: 6, flex: 'none' }} />
+              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', color: 'var(--tx)' }}>Basedly</div>
+            </button>
             <button
               onClick={() => toggleRail(false)}
               className="hov k-squish" title="Collapse sidebar (Ctrl+\\)" aria-label="Collapse sidebar"
@@ -531,9 +536,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           // bar directly above this, and duplicating it wasted 44px of a small
           // screen to say the same thing twice.
           <div style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 16px' }}>
-            <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em' }}>
+            <button
+              onClick={() => router.push('/home/')}
+              style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left' }}
+              title="Go to Home"
+            >
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
-            </span>
+            </button>
             <span style={{ marginLeft: 'auto' }} />
             {/* Messages, with the count on it */}
             <button onClick={() => setMsgs(true)} className="hov k-squish"

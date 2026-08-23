@@ -10,6 +10,7 @@ import { ago } from '@/lib/scratch';
 import { PAL } from '@/lib/pal';
 import { displayOf, type Person } from '@/lib/people';
 import { useComments, type Item } from '@/lib/community';
+import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
 
 /**
  * A post, opened.
@@ -209,15 +210,15 @@ function Panel({
       </div>
 
       <div style={{ flex: 'none', borderTop: '1px solid var(--line)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '11px 15px 6px' }}>
-          <button onClick={() => onReact(!reacted)} className="tap" aria-pressed={reacted}
-            aria-label={photo ? 'Like' : 'Upvote'}
-            style={{ display: 'flex' }}>
-            <span className={reacted ? 'heartpop' : undefined} style={{ display: 'flex' }}>
-              <Icon name={photo ? 'heart' : 'up'} size={19}
-                color={reacted ? (photo ? PAL.coral : 'var(--accTx)') : 'var(--tx2)'} />
-            </span>
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 15px 6px' }}>
+          <FacebookReactionButton
+            itemId={item.id}
+            kind={item.kind}
+            mine={reacted}
+            count={reactions}
+            onReact={onReact}
+            size="md"
+          />
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx2)' }}>
             <Icon name="chat" size={18} color="var(--tx2)" />{comments}
           </span>

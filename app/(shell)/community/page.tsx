@@ -10,6 +10,7 @@ import { PostView } from '@/components/PostView';
 import { ShareSheet } from '@/components/ShareSheet';
 import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
+import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
 import { currentUserId } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
 import { BOT_NAME } from '@/lib/bot';
@@ -67,6 +68,38 @@ export default function CommunityPage() {
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncFocus = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const focus = sp.get('focus') || sp.get('tab');
+      if (focus) {
+        const lower = focus.toLowerCase();
+        if (lower === 'feed') setTab('feed');
+        else if (lower === 'messages') setTab('messages');
+        else if (lower === 'challenges') setTab('challenges');
+      }
+    };
+
+    syncFocus();
+    window.addEventListener('popstate', syncFocus);
+    const onCustomFocus = (e: Event) => {
+      const detail = (e as CustomEvent<{ section: string; focus: string }>).detail;
+      if (detail && detail.section === 'community' && detail.focus) {
+        const lower = detail.focus.toLowerCase();
+        if (lower === 'feed') setTab('feed');
+        else if (lower === 'messages') setTab('messages');
+        else if (lower === 'challenges') setTab('challenges');
+      }
+    };
+    window.addEventListener('basedly:focus', onCustomFocus);
+
+    return () => {
+      window.removeEventListener('popstate', syncFocus);
+      window.removeEventListener('basedly:focus', onCustomFocus);
+    };
+  }, []);
 
   const { data: profiles = {} } = useProfiles();
   const { data: likes = [] } = useLikes();
@@ -300,7 +333,13 @@ function FeedCard({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '11px 13px 12px' }}>
-        <ReactButton kind={item.kind} mine={reacted} count={reactions} onToggle={() => onReact(!reacted)} />
+        <FacebookReactionButton
+          itemId={key(item)}
+          kind={item.kind}
+          mine={reacted}
+          count={reactions}
+          onReact={onReact}
+        />
         <button onClick={onToggleComments} className="tap" aria-expanded={open}
           style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: open ? 'var(--accTx)' : 'var(--tx2)' }}>
           <Icon name="chat" size={15} color={open ? 'var(--accTx)' : 'var(--tx2)'} />{comments}
