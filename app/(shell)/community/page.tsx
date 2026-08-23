@@ -21,6 +21,8 @@ import { ago } from '@/lib/scratch';
 import { useSignedUrls } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
 import { useReposts } from '@/lib/reposts';
+import { useBookmarks, toggleBookmark } from '@/lib/bookmarks';
+import { usePostViews, recordPostView } from '@/lib/views';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort,
@@ -33,7 +35,7 @@ const SORTS: { id: Sort; label: string }[] = [
   { id: 'top', label: 'Top' },
 ];
 
-type SubTab = 'posts' | 'replies' | 'reposts' | 'media' | 'challenges';
+type SubTab = 'posts' | 'replies' | 'reposts' | 'media' | 'bookmarks' | 'challenges';
 
 export default function CommunityPage() {
   const router = useRouter();
@@ -50,7 +52,7 @@ export default function CommunityPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [followed, setFollowed] = useState<Set<string>>(() => new Set(['bcherny', 'basedly_bot']));
+  const [followed, setFollowed] = useState<Set<string>>(() => new Set());
   const [showMoreTrends, setShowMoreTrends] = useState(false);
 
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
@@ -92,6 +94,8 @@ export default function CommunityPage() {
   const { data: votes = [] } = useVotes();
   const { data: counts = {} } = useCommentCounts();
   const reposts = useReposts();
+  const bookmarks = useBookmarks();
+  const views = usePostViews();
   const A = useCommunityActions(me);
 
   const reactions = useMemo(() => {
@@ -121,6 +125,9 @@ export default function CommunityPage() {
     } else if (subTab === 'reposts') {
       const repostedIds = new Set(reposts.map((r) => r.itemId));
       list = list.filter((i) => repostedIds.has(i.id));
+    } else if (subTab === 'bookmarks') {
+      const bSet = new Set(bookmarks);
+      list = list.filter((i) => bSet.has(key(i)));
     }
 
     if (searchQuery.trim()) {
@@ -137,7 +144,7 @@ export default function CommunityPage() {
     }
 
     return list;
-  }, [rawItems, subTab, searchQuery, counts, reposts, profiles]);
+  }, [rawItems, subTab, searchQuery, counts, reposts, bookmarks, profiles]);
 
   const photos = items.filter((i) => i.image_path);
   const open_ = viewing ? items.find((i) => key(i) === viewing) ?? null : null;
@@ -158,22 +165,57 @@ export default function CommunityPage() {
     });
   };
 
-  const SUGGESTIONS = [
-    { name: 'Boris Cherny', handle: 'bcherny', badge: 'blue', desc: 'Creator & Engineer', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop' },
-    { name: 'Elon Musk', handle: 'elonmusk', badge: 'gold', desc: 'X / Tesla / SpaceX', avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop' },
-    { name: 'TeamYouTube', handle: 'TeamYouTube', badge: 'gold', desc: 'Official updates', avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&h=100&fit=crop' },
-    { name: 'Basedly Bot', handle: 'basedly_bot', badge: 'bot', desc: 'AI Sprint Companion', avatar: null },
-  ];
+  const storeBasedlyUsers = useMemo(() => {
+    const list: Array<{
+      userId: string;
+      name: string;
+      handle: string;
+      photo: string | null;
+      animal: string | null;
+      desc?: string;
+    }> = [];
 
-  const TRENDS = [
-    { cat: 'Trending in Philippines', tag: '#MissUniverseThailand2026', count: '42.8K posts' },
-    { cat: 'Entertainment · Trending', tag: '#StarMagicAllStarGames2026', count: '28.6K posts' },
-    { cat: 'Productivity · Trending', tag: '#FocusSprint2026', count: '19.4K posts' },
-    { cat: 'Only on Basedly · Trending', tag: '#Aston_lv', count: '14.8K posts' },
-    { cat: 'Habits · Trending', tag: 'SB19 LOLLAPALOOZA JOURNEY', count: '88.3K posts' },
-    { cat: 'Technology · Trending', tag: '#NextJS15', count: '12.5K posts' },
-    { cat: 'Design · Trending', tag: '#Glassmorphism', count: '9.2K posts' },
-  ];
+    const dbUsers = Object.values(profiles).filter((p) => p.user_id !== me);
+    for (const p of dbUsers) {
+      list.push({
+        userId: p.user_id,
+        name: p.name || 'Basedly Pioneer',
+        handle: p.handle || p.user_id.slice(0, 8),
+        photo: p.photo_url || null,
+        animal: p.animal || null,
+        desc: 'Basedly Member',
+      });
+    }
+
+    return list;
+  }, [profiles, me]);
+
+  const realBasedlyTrends = useMemo(() => {
+    const tagCounts: Record<string, number> = {};
+    for (const item of rawItems) {
+      if (item.tag && item.tag.trim()) {
+        const clean = item.tag.replace(/^#/, '').trim();
+        if (clean) {
+          tagCounts[clean] = (tagCounts[clean] ?? 0) + 1;
+        }
+      }
+    }
+
+    const sorted = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length === 0) {
+      return [
+        { cat: 'Basedly · Habits', tag: '#DeepFocus', rawTag: 'DeepFocus', count: '1 post' },
+        { cat: 'Basedly · Challenges', tag: '#WeeklySprint', rawTag: 'WeeklySprint', count: '1 post' },
+      ];
+    }
+
+    return sorted.map(([tag, count]) => ({
+      cat: 'Trending on Basedly',
+      tag: `#${tag}`,
+      rawTag: tag,
+      count: `${count} ${count === 1 ? 'post' : 'posts'}`,
+    }));
+  }, [rawItems]);
 
   return (
     <div style={{
@@ -270,17 +312,18 @@ export default function CommunityPage() {
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(5, 1fr)',
+              gridTemplateColumns: 'repeat(6, 1fr)',
               borderBottom: '1px solid var(--line)',
               background: 'var(--card)',
             }}>
-              {(['posts', 'replies', 'reposts', 'media', 'challenges'] as SubTab[]).map((st) => {
+              {(['posts', 'replies', 'reposts', 'media', 'bookmarks', 'challenges'] as SubTab[]).map((st) => {
                 const on = subTab === st;
                 const labels: Record<SubTab, string> = {
                   posts: 'Posts ▾',
                   replies: 'Replies',
                   reposts: 'Reposts',
                   media: 'Media',
+                  bookmarks: 'Saved',
                   challenges: 'Challenges',
                 };
                 return (
@@ -295,7 +338,7 @@ export default function CommunityPage() {
                     }}
                     className="hov"
                     style={{
-                      padding: '12px 6px',
+                      padding: '12px 4px',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
@@ -306,7 +349,7 @@ export default function CommunityPage() {
                     }}
                   >
                     <span style={{
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontWeight: on ? 800 : 600,
                       color: on ? 'var(--tx)' : 'var(--tx3)',
                       transition: 'color 0.15s',
@@ -318,7 +361,7 @@ export default function CommunityPage() {
                         position: 'absolute',
                         bottom: 0,
                         height: 3.5,
-                        width: 44,
+                        width: 36,
                         borderRadius: 999,
                         background: 'var(--acc)',
                       }} />
@@ -416,6 +459,30 @@ export default function CommunityPage() {
               </button>
             </div>
 
+            {searchQuery && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 16px',
+                background: 'var(--card2)',
+                borderBottom: '1px solid var(--line)',
+                fontSize: 12,
+                color: 'var(--tx2)',
+              }}>
+                <span>Filtered by: <strong>{searchQuery}</strong></span>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    border: 'none', background: 'transparent', color: 'var(--accTx)',
+                    fontWeight: 700, cursor: 'pointer', fontSize: 12,
+                  }}
+                >
+                  Clear filter
+                </button>
+              </div>
+            )}
+
             {loading && <FeedSkeleton count={3} />}
 
             {!loading && items.length === 0 && (
@@ -445,6 +512,7 @@ export default function CommunityPage() {
                 onDelete={() => A.remove(item)}
                 onOpen={() => setViewing(key(item))}
                 onShare={() => setSharing(item)}
+                onTagClick={(tag) => { setSearchQuery(tag.replace(/^#/, '')); toast(`Filter: ${tag}`); }}
               />
             ))}
           </main>
@@ -491,13 +559,13 @@ export default function CommunityPage() {
                       placeItems: 'center',
                       cursor: 'pointer',
                       fontSize: 11,
-                    }}
-                  >
+                    }}>
                     ✕
                   </button>
                 )}
               </div>
 
+              {/* "You might like" Widget Card */}
               <div style={{
                 background: 'var(--card)',
                 border: '1px solid var(--line)',
@@ -510,7 +578,13 @@ export default function CommunityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {SUGGESTIONS.map((s) => {
+                  {storeBasedlyUsers.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '6px 0', lineHeight: 1.5 }}>
+                      No other members yet. Invite your friends from the People tab!
+                    </div>
+                  )}
+
+                  {storeBasedlyUsers.slice(0, 5).map((s) => {
                     const isFollowed = followed.has(s.handle);
                     return (
                       <div key={s.handle} style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
@@ -519,25 +593,21 @@ export default function CommunityPage() {
                           className="hov k-squish"
                           style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minWidth: 0, flex: 1 }}
                         >
-                          {s.avatar ? (
-                            <img src={s.avatar} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+                          {s.photo ? (
+                            <img src={s.photo} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
                           ) : (
                             <span style={{
-                              width: 38, height: 38, borderRadius: '50%', background: 'var(--acc)',
-                              display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, color: '#0A0912',
+                              width: 38, height: 38, borderRadius: '50%', background: 'var(--card2)',
+                              border: '1px solid var(--line2)',
+                              display: 'grid', placeItems: 'center', fontSize: 17,
                             }}>
-                              🤖
+                              {s.animal || '🦝'}
                             </span>
                           )}
                           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {s.name}
-                              </span>
-                              {s.badge === 'blue' && <span style={{ color: '#1D9BF0', fontSize: 12 }}>✓</span>}
-                              {s.badge === 'gold' && <span style={{ color: '#E2B714', fontSize: 12 }}>★</span>}
-                              {s.badge === 'bot' && <BotTag />}
-                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.name}
+                            </span>
                             <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
                               @{s.handle}
                             </span>
@@ -588,6 +658,7 @@ export default function CommunityPage() {
                 </button>
               </div>
 
+              {/* "What's happening" Trends Widget Card */}
               <div style={{
                 background: 'var(--card)',
                 border: '1px solid var(--line)',
@@ -600,10 +671,10 @@ export default function CommunityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {(showMoreTrends ? TRENDS : TRENDS.slice(0, 5)).map((t, idx) => (
+                  {(showMoreTrends ? realBasedlyTrends : realBasedlyTrends.slice(0, 5)).map((t, idx) => (
                     <div
                       key={idx}
-                      onClick={() => { setSearchQuery(t.tag.replace('#', '')); toast(`Filter: ${t.tag}`); }}
+                      onClick={() => { setSearchQuery(t.rawTag); toast(`Filter: ${t.tag}`); }}
                       className="hov"
                       style={{ cursor: 'pointer' }}
                     >
@@ -673,7 +744,7 @@ export default function CommunityPage() {
 
 function XPostCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
-  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare,
+  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick,
 }: {
   item: Item;
   me: string;
@@ -692,15 +763,25 @@ function XPostCard({
   onDelete: () => void;
   onOpen: () => void;
   onShare: () => void;
+  onTagClick?: (tag: string) => void;
 }) {
   const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
   const targetHandle = profiles[item.author_id]?.handle || item.author_id;
 
-  const viewsCount = useMemo(() => {
-    return Math.floor(((item.title?.length || 10) * 47 + item.id.charCodeAt(0) * 11) % 4500 + 320);
-  }, [item.title, item.id]);
+  const views = usePostViews();
+  const bookmarks = useBookmarks();
+  const reposts = useReposts();
+
+  const itemKey = key(item);
+  const isSaved = bookmarks.includes(itemKey);
+  const repostCount = reposts.filter((r) => r.itemId === item.id).length;
+  const viewCount = views[itemKey] ?? 1;
+
+  useEffect(() => {
+    recordPostView(itemKey);
+  }, [itemKey]);
 
   return (
     <article style={{
@@ -743,12 +824,18 @@ function XPostCard({
           </span>
 
           {item.tag && (
-            <span style={{
-              marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 800,
-              color: who.hue, background: `color-mix(in srgb, ${who.hue} 16%, transparent)`,
-            }}>
+            <button
+              onClick={() => onTagClick?.(item.tag)}
+              className="hov k-squish"
+              title={`Filter by ${item.tag}`}
+              style={{
+                marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+                color: who.hue, background: `color-mix(in srgb, ${who.hue} 16%, transparent)`,
+                border: 'none', cursor: 'pointer',
+              }}
+            >
               {item.tag}
-            </span>
+            </button>
           )}
 
           {isMine && (
@@ -813,11 +900,11 @@ function XPostCard({
             aria-label="Repost"
             style={{
               display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
-              border: 'none', color: 'var(--tx3)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: 'none', color: repostCount > 0 ? 'var(--accTx)' : 'var(--tx3)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
             }}
           >
-            <Icon name="undo" size={14} color="var(--tx3)" />
-            <span>{Math.floor(reactions * 0.4) || ''}</span>
+            <Icon name="undo" size={14} color={repostCount > 0 ? 'var(--accTx)' : 'var(--tx3)'} />
+            <span>{repostCount || ''}</span>
           </button>
 
           <FacebookReactionButton
@@ -831,22 +918,22 @@ function XPostCard({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>
             <Icon name="eye" size={14} color="var(--tx3)" />
-            <span>{viewsCount}</span>
+            <span>{viewCount}</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
-              onClick={() => { playClick(); toast('Post saved to bookmarks'); }}
+              onClick={() => toggleBookmark(itemKey)}
               className="hov k-squish"
-              title="Bookmark"
-              style={{ background: 'transparent', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}
+              title={isSaved ? 'Remove bookmark' : 'Bookmark'}
+              style={{ background: 'transparent', border: 'none', color: isSaved ? 'var(--accTx)' : 'var(--tx3)', cursor: 'pointer' }}
             >
-              <Icon name="star" size={14} color="var(--tx3)" />
+              <Icon name="star" size={14} color={isSaved ? 'var(--accTx)' : 'var(--tx3)'} />
             </button>
             <button
               onClick={onShare}
               className="hov k-squish"
-              title="Send"
+              title="Share / Send"
               style={{ background: 'transparent', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}
             >
               <Icon name="send" size={14} color="var(--tx3)" />
