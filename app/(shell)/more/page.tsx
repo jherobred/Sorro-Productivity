@@ -8,8 +8,8 @@ import { SECHUE, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
 import { MAX_NAV_SLOTS } from '@/components/Shell';
-import { AccountSheet, Face } from '@/components/AccountSheet';
-import { SettingsSheet } from '@/components/SettingsSheet';
+import { Face } from '@/components/AccountSheet';
+import { SettingsModal, type SettingsTab } from '@/components/SettingsModal';
 import { useMyIdentity } from '@/lib/people';
 import { toast } from '@/lib/toast';
 
@@ -53,7 +53,7 @@ export default function MorePage() {
           way to switch, add or sign out at all. Same sheet as the face in the
           top right; two doors to one room, because this is the page people
           actually look in. */}
-      <button onClick={() => setAccount(true)} className="row k-squish"
+      <button onClick={() => setSettings(true)} className="row k-squish"
         style={{
           display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 13px',
           borderRadius: 14, background: 'var(--card)', border: '1px solid var(--line)',
@@ -143,10 +143,7 @@ export default function MorePage() {
       </div>
 
       {navOpen && <NavPicker onClose={() => setNavOpen(false)} />}
-      {account && (
-        <AccountSheet me={me} onClose={() => setAccount(false)} onSettings={() => setSettings(true)} />
-      )}
-      {settings && <SettingsSheet onClose={() => setSettings(false)} />}
+      {settings && <SettingsModal initialTab="general" onClose={() => setSettings(false)} />}
     </div>
   );
 }

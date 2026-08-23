@@ -19,7 +19,7 @@ import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 import { SearchPalette } from './SearchPalette';
 import { NotificationBell } from './NotificationBell';
-import { SettingsSheet } from './SettingsSheet';
+import { SettingsModal, type SettingsTab } from './SettingsModal';
 import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
@@ -103,6 +103,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     : 'Personal';
   const [sideMore, setSideMore] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
   const { data: tasks = [] } = useTasks();
   const unread = useUnreadCount();
@@ -297,7 +298,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
                       { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
                       { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
-                      { label: 'Settings', icon: 'cog', run: () => setSettings(true) },
+                      { label: 'Settings & Profile', icon: 'cog', run: () => { setSettingsTab('general'); setSettings(true); } },
                     ],
                   });
                 }}>
@@ -507,17 +508,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               <NotificationBell />
 
-              <button onClick={() => setSettings(true)} className="hov k-squish" title="Settings" aria-label="Settings"
-                style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  setSettingsTab('appearance');
+                  setSettings(true);
+                }}
+                className="hov k-squish"
+                title="Settings"
+                aria-label="Settings"
+                style={{ width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
                 <Icon name="cog" size={17} color="var(--tx2)" />
               </button>
 
-              {/* Your face, and everything about being you behind it: profile,
-                  accounts, space, settings, sign out. This was a hardcoded
-                  disc reading "MR" on every account. */}
-              <button onClick={() => setAccount(true)} className="k-squish"
-                title="Your account" aria-label="Your account" aria-haspopup="dialog"
-                style={{ width: 30, height: 30, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
+              {/* Centralized profile & settings entry point on top right */}
+              <button
+                onClick={() => {
+                  setSettingsTab('general');
+                  setSettings(true);
+                }}
+                className="k-squish"
+                title="Profile & Settings"
+                aria-label="Profile & Settings"
+                aria-haspopup="dialog"
+                style={{ width: 30, height: 30, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}
+              >
                 <Face name={me.name} photo={me.photo} size={30} />
               </button>
             </div>
@@ -533,10 +548,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
             </span>
             <span style={{ marginLeft: 'auto' }} />
-            {/* Messages, with the count on it. The desktop's floating dock is
-                wrong on a phone — it lands on the nav bar and a window inside a
-                window is just the window. This opens full screen instead, and
-                obstructs nothing until it is asked for. */}
+            {/* Messages, with the count on it */}
             <button onClick={() => setMsgs(true)} className="hov k-squish"
               aria-label={unread ? `Messages, ${unread} unread` : 'Messages'}
               style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', position: 'relative' }}>
@@ -553,7 +565,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
             <NotificationBell compact />
 
-            {/* Capture moved up here when the FAB left the nav bar. */}
+            {/* Capture */}
             <button onClick={openCapture} className="k-squish" aria-label="Capture" aria-expanded={!!capture}
               style={{
                 width: 34, height: 34, flex: 'none', borderRadius: 17, background: acc,
@@ -564,20 +576,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <Icon name="plus" size={16} color={ON_ACCENT} />
             </button>
 
-            {/* The cog was here. Settings is one row inside the account sheet
-                now, because on a phone this corner has room for one control and
-                "who am I" is the one people reach for. */}
-            <button onClick={() => setAccount(true)} className="k-squish"
-              aria-label="Your account" aria-haspopup="dialog"
-              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, display: 'grid', placeItems: 'center' }}>
+            {/* Centralized profile & settings entry point on mobile */}
+            <button
+              onClick={() => {
+                setSettingsTab('general');
+                setSettings(true);
+              }}
+              className="k-squish"
+              aria-label="Profile & Settings"
+              aria-haspopup="dialog"
+              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, display: 'grid', placeItems: 'center' }}
+            >
               <Face name={me.name} photo={me.photo} size={34} />
             </button>
           </div>
         )}
 
-        {/* Full width, matching the reference screenshots: the fixed 353px
-            tiles hold their size and the flexible middle column takes the
-            slack, which is how the design reads on a wide monitor. */}
+        {/* Full width, matching the reference screenshots */}
         <main id="bd-main" key={pathname} className="pagein" tabIndex={-1}
           style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
           {children}
@@ -589,8 +604,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-      {/* Capture fan — it drops from the header button on both layouts now,
-          so it always appears next to the control that opened it. */}
+      {/* Capture fan */}
       {capture && (
         <div style={phone
           ? { position: 'fixed', right: 12, top: 'calc(52px + env(safe-area-inset-top))', zIndex: 31, display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'flex-end' }
@@ -607,13 +621,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       {account && (
-        <AccountSheet me={me} onClose={() => setAccount(false)} onSettings={() => setSettings(true)} />
+        <AccountSheet me={me} onClose={() => setAccount(false)} onSettings={() => { setSettingsTab('general'); setSettings(true); }} />
       )}
       {msgs && phone && <MessagesSheet onClose={() => setMsgs(false)} />}
 
       {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
       {search && <SearchPalette onClose={() => setSearch(false)} />}
-      {settings && <SettingsSheet onClose={() => setSettings(false)} />}
+      {settings && <SettingsModal initialTab={settingsTab} onClose={() => setSettings(false)} />}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}
           onClose={() => setMenu(null)} accent={acc} dark={dark} />
