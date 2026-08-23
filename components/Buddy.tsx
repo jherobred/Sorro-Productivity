@@ -25,7 +25,7 @@ import { moodOf, type Mood } from '@/lib/mascot';
  * board, so the two can never drift apart.
  */
 export function Buddy({
-  daysSince, size = 44, racing = false, note,
+  daysSince, size = 44, racing = false, note, variant = 'head', accessory = 'sweatband',
 }: {
   daysSince: number | null;
   size?: number;
@@ -33,6 +33,8 @@ export function Buddy({
   racing?: boolean;
   /** A line beside it. Nothing when there is nothing worth saying. */
   note?: string;
+  variant?: 'head' | 'full';
+  accessory?: 'none' | 'sweatband' | 'headphones' | 'crown' | 'cape' | 'glasses' | 'hoodie';
 }) {
   const [me, setMe] = useState('');
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
@@ -46,7 +48,15 @@ export function Buddy({
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-      <Mascot id={me} mood={mood} hue={hueOf(me)} size={size} racing={racing && mood !== 'resting'} />
+      <Mascot
+        id={me}
+        mood={mood}
+        hue={hueOf(me)}
+        size={size}
+        racing={racing && mood !== 'resting'}
+        variant={variant}
+        accessory={accessory}
+      />
       {note && (
         <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', lineHeight: 1.4, textWrap: 'pretty' }}>
           {note}

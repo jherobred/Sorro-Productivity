@@ -9,11 +9,15 @@ import { PAL, K } from '@/lib/pal';
 import { supabase } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
-import { useHabits, useTicks, useHabitActions, ymd } from '@/lib/habits';
+import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
 import { useEvents, type Ev } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
+import { BuddyCompanion } from './BuddyCompanion';
+import { DailyQuests } from './DailyQuests';
+import { FocusHub } from './FocusHub';
+import { playTick } from '@/lib/audio';
 
 /**
  * Phone Home — its own composition, not the desktop grid reflowed.
@@ -27,9 +31,7 @@ import { PhoneHomeSkeleton } from './Skeleton';
  *
  * **Dashboard leads with today.** The rings were at the top because they are
  * the prettiest thing here, and underneath them sat the scratchpad, then
- * tasks. So the first thing the screen said in the morning was "here are eight
- * circles", and the question actually being asked — what is happening today —
- * was below the fold. Now: what is next, then what is on you, then the rings,
+ * tasks. Now: what is next, then what is on you, companion & quests, then the rings,
  * then the scratchpad. Ordered by how often somebody opens the phone to find
  * out.
  */
@@ -43,6 +45,7 @@ export function PhoneHome({ name }: { name: string }) {
   const router = useRouter();
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('Dashboard');
+  const [focusOpen, setFocusOpen] = useState(false);
 
   const today = ymd(new Date());
   const { data: tasks = [], isPending } = useTasks();
@@ -54,8 +57,7 @@ export function PhoneHome({ name }: { name: string }) {
   const { data: txns = [] } = useTransactions();
   const { data: budgets = [] } = useBudgets();
 
-  // A week from this morning, not from Monday: the phone is asked "what is
-  // next", and next never means "three days ago".
+  // A week from this morning, not from Monday
   const from = startOfToday();
   const { data: events = [] } = useEvents(from, 7);
 
@@ -90,7 +92,10 @@ export function PhoneHome({ name }: { name: string }) {
     c: h.color,
     ic: 'habit',
     pct: ticks.some((t) => t.habit_id === h.id && t.on_date === today) ? 1 : 0,
-    go: () => { HA.tick.mutate({ habitId: h.id, date: today }); },
+    go: () => {
+      playTick();
+      HA.tick.mutate({ habitId: h.id, date: today });
+    },
   }));
 
   const standing: Ring[] = [
@@ -101,12 +106,15 @@ export function PhoneHome({ name }: { name: string }) {
   const ringsDone = rings.filter((r) => r.pct >= 1).length;
 
   const complete = (t: Task) => {
+    playTick();
     setLeaving((s) => new Set(s).add(t.id));
     setTimeout(() => {
       TA.complete.mutate({ id: t.id, done: true });
       setLeaving((s) => { const n = new Set(s); n.delete(t.id); return n; });
     }, K.taskExitMs);
   };
+
+  const bestStreak = habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0);
 
   return (
     <div style={{ padding: '6px 14px 26px' }}>
@@ -128,18 +136,25 @@ export function PhoneHome({ name }: { name: string }) {
 
         <div style={{ flex: 1, textAlign: 'center' }}>
           <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.04em' }}>basedly</div>
-          {/* The greeting used to be nowhere on the phone, so the screen opened
-              with a wordmark and no idea whose it was. */}
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
             {greeting()}{name ? `, ${name.split(' ')[0]}` : ''}
           </div>
         </div>
 
-        {/* No avatar here. The Shell's phone header draws your face directly
-            above this row and it opens the account sheet — two of them a
-            centimetre apart, one of which only navigated, was the same control
-            asked twice. The spacer keeps the wordmark centred. */}
-        <span aria-hidden style={{ width: 38, flex: 'none' }} />
+        <button
+          onClick={() => setFocusOpen(true)}
+          className="k-squish"
+          title="Focus Station"
+          style={{
+            width: 38, height: 38, borderRadius: '50%', flex: 'none',
+            display: 'grid', placeItems: 'center',
+            background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--acc) 35%, transparent)',
+            color: 'var(--accTx)',
+          }}
+        >
+          <Icon name="clock" size={16} color="var(--accTx)" />
+        </button>
       </div>
 
       <div style={{ marginBottom: 14 }}>
@@ -150,8 +165,7 @@ export function PhoneHome({ name }: { name: string }) {
 
       {tab === 'Dashboard' && !isPending && (
         <>
-          {/* What is next. One line, and it is the reason most people unlock
-              the phone between classes. */}
+          {/* What is next */}
           <button onClick={() => router.push('/calendar/')} className="hov k-squish" style={{
             ...CARD, width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 11,
             padding: '13px 14px',
@@ -175,8 +189,7 @@ export function PhoneHome({ name }: { name: string }) {
             <Icon name="chev" size={14} color="var(--tx3)" />
           </button>
 
-          {/* Overdue only appears when it exists. A red bar that is always
-              there stops meaning anything. */}
+          {/* Overdue */}
           {overdue.length > 0 && (
             <button onClick={() => router.push('/tasks/')} className="hov k-squish" style={{
               width: '100%', marginTop: 10, display: 'flex', alignItems: 'center', gap: 10,
@@ -191,6 +204,24 @@ export function PhoneHome({ name }: { name: string }) {
               <Icon name="chev" size={13} color={PAL.coral} />
             </button>
           )}
+
+          {/* Interactive Pet Companion */}
+          <div style={{ marginTop: 12 }}>
+            <BuddyCompanion
+              streak={bestStreak}
+              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
+              onStartFocus={() => setFocusOpen(true)}
+            />
+          </div>
+
+          {/* Daily Quests */}
+          <div style={{ marginTop: 12 }}>
+            <DailyQuests
+              tasks={tasks}
+              habits={habits}
+              ticks={ticks}
+            />
+          </div>
 
           <SectionHead label="Assigned to me" note="What’s on your plate" onAll={() => router.push('/tasks/')} />
 
@@ -374,6 +405,29 @@ export function PhoneHome({ name }: { name: string }) {
             <Icon name="cal" size={14} color="var(--tx3)" />
             Open the calendar
           </button>
+        </div>
+      )}
+
+      {/* Focus Station Dialog Modal */}
+      {focusOpen && (
+        <div
+          onClick={() => setFocusOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 150,
+            background: 'rgba(4,4,8,.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16,
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440 }}>
+            <FocusHub onClose={() => setFocusOpen(false)} />
+          </div>
         </div>
       )}
     </div>

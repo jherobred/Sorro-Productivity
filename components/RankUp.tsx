@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { TierBadge } from './TierBadge';
+import { playCelebration } from '@/lib/audio';
 import { rankOf, type Rank } from '@/lib/rank';
 import { useOverlayBack } from '@/lib/nav';
 
@@ -12,14 +14,6 @@ import { useOverlayBack } from '@/lib/nav';
  * total crosses a division boundary is the one moment the competitive mode has
  * to spend something on, so it interrupts: the old badge dissolves, the new one
  * arrives with a ring and a burst, and the card names both.
- *
- * It fires on the transition, not on the value, so it appears once per
- * promotion and never on a reload. The last rank seen is kept in localStorage
- * against the user's id, because that is what "since you last looked" means
- * across a page refresh.
- *
- * A demotion gets the same card in a quieter key. Hiding a drop would make the
- * number stop matching the badge, and that is worse than being told.
  */
 
 const LS_KEY = 'bd.lastRank';
@@ -38,17 +32,11 @@ function write(uid: string, seen: Seen) {
     const all = JSON.parse(localStorage.getItem(LS_KEY) ?? '{}') as Record<string, Seen>;
     all[uid] = seen;
     localStorage.setItem(LS_KEY, JSON.stringify(all));
-  } catch { /* private mode, or a full quota — the card is not worth throwing over */ }
+  } catch { /* private mode, or a full quota */ }
 }
 
-/**
- * Watches an RP total and returns the promotion to announce, if any.
- * `uid` scopes the memory so two accounts on one device do not inherit each
- * other's ladder.
- */
 export function useRankUp(rp: number | undefined, uid: string) {
   const [move, setMove] = useState<{ from: Rank; to: Rank; up: boolean } | null>(null);
-  // The first render after data arrives is a read, not a change.
   const primed = useRef(false);
 
   useEffect(() => {
@@ -61,9 +49,12 @@ export function useRankUp(rp: number | undefined, uid: string) {
 
     const before = rankOf(seen.rp);
     write(uid, { label: now.label, rp });
-    // Only announce a move we watched happen, not one that happened while the
-    // app was closed and is already reflected everywhere on screen.
-    if (primed.current) setMove({ from: before, to: now, up: rp > seen.rp });
+    if (primed.current) {
+      setMove({ from: before, to: now, up: rp > seen.rp });
+      if (rp > seen.rp) {
+        playCelebration();
+      }
+    }
     primed.current = true;
   }, [rp, uid]);
 
@@ -76,10 +67,11 @@ export function RankUpCard({ from, to, up, onClose }: {
   useOverlayBack(true, onClose);
 
   useEffect(() => {
+    if (up) playCelebration();
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, up]);
 
   const hue = to.tier.hue;
   const tierChanged = from.tier.name !== to.tier.name;
@@ -99,7 +91,7 @@ export function RankUpCard({ from, to, up, onClose }: {
           boxShadow: `0 24px 60px -20px color-mix(in srgb, ${hue} 55%, transparent), var(--shl)`,
           ['--hue' as string]: hue,
         }}>
-        {/* Light behind the badge, so the card reads as lit rather than tinted. */}
+        {/* Light behind the badge */}
         <span aria-hidden className="rankup-aur" style={{
           position: 'absolute', left: '50%', top: -60, width: 260, height: 260, marginLeft: -130,
           borderRadius: '50%', pointerEvents: 'none',
@@ -113,20 +105,14 @@ export function RankUpCard({ from, to, up, onClose }: {
           {up ? (tierChanged ? 'New tier' : 'Promoted') : 'Demoted'}
         </div>
 
-        <div style={{ position: 'relative', margin: '18px auto 0', width: 108, height: 108 }}>
+        <div style={{ position: 'relative', margin: '18px auto 0', width: 108, height: 108, display: 'grid', placeItems: 'center' }}>
           {up && (
             <>
               <span aria-hidden className="rankup-ring" />
               <span aria-hidden className="rankup-ring rankup-ring2" />
             </>
           )}
-          <span className="rankup-badge" style={{
-            position: 'absolute', inset: 0, borderRadius: 30, display: 'grid', placeItems: 'center',
-            background: `color-mix(in srgb, ${hue} 22%, var(--card2))`,
-            border: `2px solid color-mix(in srgb, ${hue} 62%, transparent)`,
-          }}>
-            <Icon name="trophy" size={46} color={hue} />
-          </span>
+          <TierBadge tierName={to.tier.name} size={78} />
           {up && Array.from({ length: 10 }, (_, i) => (
             <span key={i} aria-hidden className="rankup-spark" style={{
               ['--a' as string]: `${i * 36}deg`,

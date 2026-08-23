@@ -44,6 +44,10 @@ export type Prefs = {
   landing: string;                // section to open on launch
   confirmDelete: boolean;
 
+  /* Sound & Companions. */
+  soundEnabled: boolean;
+  mascotVariant: 'head' | 'full';
+
   /* Which kinds of event may raise a notification. */
   notify: { tasks: boolean; events: boolean; social: boolean; challenges: boolean; canvas: boolean };
 };
@@ -74,6 +78,9 @@ export const DEFAULT_PREFS: Prefs = {
   haptics: true,
   landing: 'home',
   confirmDelete: false,
+
+  soundEnabled: true,
+  mascotVariant: 'head',
 
   notify: { tasks: true, events: true, social: true, challenges: true, canvas: true },
 };

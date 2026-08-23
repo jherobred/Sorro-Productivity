@@ -10,6 +10,10 @@ import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
 import { Buddy } from '@/components/Buddy';
+import { BuddyCompanion } from '@/components/BuddyCompanion';
+import { DailyQuests } from '@/components/DailyQuests';
+import { FocusHub } from '@/components/FocusHub';
+import { playTick } from '@/lib/audio';
 import { useLayout } from '@/lib/useLayout';
 import { PAL } from '@/lib/pal';
 import { Icon, type IconName } from '@/components/Icon';
@@ -64,6 +68,7 @@ export default function HomePage() {
   const dark = prefs.theme === 'dark';
 
   const [name, setName] = useState('');
+  const [focusOpen, setFocusOpen] = useState(false);
   const [tod, setTod] = useState<Tod>(() => {
     const h = new Date().getHours();
     return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
@@ -227,6 +232,27 @@ export default function HomePage() {
                     </button>
                   ))}
                 </div>
+
+                <button
+                  onClick={() => setFocusOpen(true)}
+                  className="k-squish"
+                  style={{
+                    marginLeft: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 9,
+                    background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--acc) 35%, transparent)',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: 'var(--accTx)',
+                  }}
+                >
+                  <Icon name="clock" size={13} color="var(--accTx)" />
+                  <span>Focus Station</span>
+                </button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 6 }}>
@@ -353,6 +379,24 @@ export default function HomePage() {
         <Announcements phone={phone} />
 
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
+          {/* Interactive Study Buddy Companion */}
+          <div style={{ gridColumn: phone ? 'span 1' : 'span 2' }}>
+            <BuddyCompanion
+              daysSince={daysSinceDone}
+              streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
+              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
+              onStartFocus={() => setFocusOpen(true)}
+            />
+          </div>
+
+          {/* Daily RPG Quests */}
+          <DailyQuests
+            tasks={tasks}
+            habits={habits}
+            ticks={ticks}
+            notesCount={recent.length}
+          />
+
           {/* Today */}
           <div style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
@@ -387,8 +431,6 @@ export default function HomePage() {
           <div style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
               <div style={KICKER}>Habits</div>
-              {/* The best live run across every habit — one number that says
-                  whether the week is going well. */}
               <div style={{ marginLeft: 'auto' }}>
                 <Streak size="sm" label="best run"
                   days={habits.reduce((m, h) => Math.max(m, streakFrom(ticks.filter((t) => t.habit_id === h.id).map((t) => t.on_date))), 0)} />
@@ -398,15 +440,16 @@ export default function HomePage() {
               {habits.map((h) => {
                 const tick = ticks.find((t) => t.habit_id === h.id && t.on_date === today);
                 const on = !!tick;
-                // qcLabel: '+' when untracked today, '✓' for binary, else the
-                // formatted value (a count, or h/m for a duration habit).
                 const label = !on ? '+' : h.kind === 'bin' ? '✓' : h.kind === 'dur'
                   ? `${Math.floor(Number(tick!.value) / 60)}h${Math.round(Number(tick!.value) % 60)}m`
                   : String(Number(tick!.value));
                 return (
                   <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button
-                      onClick={() => HA.tick.mutate({ habitId: h.id, date: today })}
+                      onClick={() => {
+                        playTick();
+                        HA.tick.mutate({ habitId: h.id, date: today });
+                      }}
                       className={on ? 'cellpop' : ''}
                       style={{
                         width: 28, height: 28, borderRadius: 9, flex: 'none',
@@ -505,6 +548,29 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Focus Station Dialog Modal */}
+      {focusOpen && (
+        <div
+          onClick={() => setFocusOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 150,
+            background: 'rgba(4,4,8,.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16,
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440 }}>
+            <FocusHub onClose={() => setFocusOpen(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

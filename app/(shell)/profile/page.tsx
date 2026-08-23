@@ -58,7 +58,8 @@ const AV: Record<AvKey, { id: string; v: string }[]> = {
   bg: [
     { id: 'violet', v: '#7C6CFF,#38D6F2' }, { id: 'sunset', v: '#FF6B6B,#FFC24B' },
     { id: 'mint', v: '#34D9A0,#38BDF8' }, { id: 'rose', v: '#FF6FA8,#B07CFF' },
-    { id: 'slate', v: '#3A3550,#211F2C' },
+    { id: 'slate', v: '#3A3550,#211F2C' }, { id: 'cyber', v: '#0F2027,#2C5364' },
+    { id: 'neon', v: '#F72585,#7209B7' }, { id: 'aurora', v: '#0575E6,#00F260' },
   ],
   skin: [
     { id: 'porcelain', v: '#F3D7C2' }, { id: 'sand', v: '#E7BE9A' }, { id: 'tan', v: '#C98F63' },
@@ -73,13 +74,17 @@ const AV: Record<AvKey, { id: string; v: string }[]> = {
     { id: 'short', v: 'M24 44c0-16 11-26 26-26s26 10 26 26c0-8-9-13-26-13s-26 5-26 13z' },
     { id: 'wave', v: 'M23 46c2-18 12-28 27-28s25 10 27 28c-4-10-12-14-27-14s-23 4-27 14z' },
     { id: 'bun', v: 'M24 44c0-16 11-26 26-26s26 10 26 26c0-8-9-13-26-13s-26 5-26 13zM50 8a7 7 0 1 1 0 14 7 7 0 0 1 0-14z' },
+    { id: 'spikes', v: 'M22 42 L26 22 L34 30 L42 16 L50 28 L58 16 L66 30 L74 22 L78 42 C78 30 65 24 50 24 C35 24 22 30 22 42 Z' },
+    { id: 'fade', v: 'M26 38 C26 22 36 18 50 18 C64 18 74 22 74 38 C74 30 65 25 50 25 C35 25 26 30 26 38 Z' },
+    { id: 'curtain', v: 'M22 46 C24 22 36 20 50 26 C64 20 76 22 78 46 C76 34 68 28 50 32 C32 28 24 34 22 46 Z' },
     { id: 'bald', v: '' },
   ],
   hairColor: [
     { id: 'ink', v: '#221F2E' }, { id: 'brown', v: '#5A3A26' }, { id: 'sand', v: '#C8964F' },
-    { id: 'auburn', v: '#8E3B24' }, { id: 'violet', v: '#7C6CFF' },
+    { id: 'auburn', v: '#8E3B24' }, { id: 'violet', v: '#7C6CFF' }, { id: 'ice', v: '#E0F7FA' },
+    { id: 'crimson', v: '#E63946' }, { id: 'emerald', v: '#2A9D8F' },
   ],
-  eyes: [{ id: 'round', v: '3.6,3.6' }, { id: 'narrow', v: '4.2,2.4' }, { id: 'wide', v: '4.4,4.2' }],
+  eyes: [{ id: 'round', v: '3.6,3.6' }, { id: 'narrow', v: '4.2,2.4' }, { id: 'wide', v: '4.4,4.2' }, { id: 'focus', v: '4.6,1.8' }],
   brows: [
     { id: 'flat', v: 'M31 43h11M58 43h11' },
     { id: 'raised', v: 'M31 44c4-3 8-3 11-1M58 43c3-2 7-2 11 1' },
@@ -94,11 +99,14 @@ const AV: Record<AvKey, { id: string; v: string }[]> = {
     { id: 'none', v: '' },
     { id: 'round', v: 'M31 52a6 6 0 1 0 12 0 6 6 0 0 0-12 0M57 52a6 6 0 1 0 12 0 6 6 0 0 0-12 0M43 52h14' },
     { id: 'square', v: 'M31 47h12v10H31zM57 47h12v10H57zM43 52h14' },
+    { id: 'aviator', v: 'M28 46 L44 46 L42 58 L30 58 Z M56 46 L72 46 L70 58 L58 58 Z M44 49 L56 49' },
   ],
   hat: [
     { id: 'none', v: '' },
     { id: 'cap', v: 'M24 40c0-15 11-24 26-24s26 9 26 24H24z' },
     { id: 'beanie', v: 'M25 42c0-16 11-25 25-25s25 9 25 25z' },
+    { id: 'headphones', v: 'M18 54 V44 C18 26 32 16 50 16 C68 16 82 26 82 44 V54 M14 46 H22 V58 H14 Z M78 46 H86 V58 H78 Z' },
+    { id: 'headband', v: 'M22 36 C30 30 70 30 78 36 L78 42 C70 36 30 36 22 42 Z' },
   ],
 };
 

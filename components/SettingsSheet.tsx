@@ -100,6 +100,17 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
                 />
               </Group>
 
+              <Group label="Mascot display" hint="Classic compact avatar head or expressive full-body character.">
+                <Segment
+                  value={prefs.mascotVariant ?? 'head'}
+                  options={[{ v: 'head', n: 'Classic Head' }, { v: 'full', n: 'Full Body' }]}
+                  onChange={(v) => set('mascotVariant', v as Prefs['mascotVariant'])}
+                />
+              </Group>
+
+              <Toggle label="Audio soundscapes & cues" hint="Tactile clicks, checkmark pops, focus bells, and level-up fanfare."
+                on={prefs.soundEnabled ?? true} onChange={(v) => set('soundEnabled', v)} />
+
               <Toggle label="Motion" hint="Backgrounds drift, cards spring, the sky band cycles."
                 on={prefs.motion} onChange={(v) => set('motion', v)} />
               <Toggle label="Reduce transparency" hint="Turns the frosted glass into solid panels."

@@ -1,43 +1,23 @@
 'use client';
 
-import { animalOf, type Animal, type Mood } from '@/lib/mascot';
+import { animalOf, type Animal, type Mood, type Accessory } from '@/lib/mascot';
 import { useProfiles } from '@/lib/people';
 
 /**
- * A competitor, drawn.
+ * Mascot renderer for Basedly.
  *
- * Eight animals, one head each, built from the same parts: ears behind, a head,
- * a muzzle, two eyes, two brows and a mouth. Sharing the skeleton is what keeps
- * this at one file instead of eight, and the ears plus the muzzle are enough to
- * tell a fox from a bear at 26 pixels — which is the size it is usually drawn.
- *
- * Cute, and *competitive*: every one of them wears a sweatband in its person's
- * colour and has its brows down. A gym mascot with a soft neutral face is a
- * sticker; the brows are what make it look like it came to do something.
- *
- * **The mood never comes from the standings** — see `lib/mascot.ts`. It comes
- * from whether that person did the thing recently, so the animal belonging to
- * whoever is last but went this morning is as bright as the leader's.
- *
- * Everything moves a little and nothing moves much. The bob is under two
- * pixels, the blink is four frames in six seconds, and both run on
- * `--anim`, the variable the motion preference sets to `paused` — so a person
- * who has asked the app to hold still gets a picture that holds still.
+ * 14 distinct species with expressive mood states, gear customization,
+ * and support for both classic compact head and expressive full-body rendering.
  */
 
-/** Ink for the eyes and the line work. Dark enough to read on every fur colour. */
 const INK = '#20232E';
 
 type Skin = {
-  /** Fur, and the lighter belly/muzzle patch. */
   coat: string;
   muzzle: string;
   ear: string;
-  /** Drawn behind the head. */
   ears: (mood: Mood) => React.ReactNode;
-  /** Nose, whiskers, beak — whatever makes it that animal. */
   face?: React.ReactNode;
-  /** Big round eye discs, for the owl. */
   goggles?: boolean;
 };
 
@@ -153,57 +133,143 @@ const SKINS: Record<Animal, Skin> = {
     ),
     face: <path d="M21.6 30.6 h4.8 l-2.4 2.4 z" fill={INK} />,
   },
+  shiba: {
+    coat: '#EBA052', muzzle: '#FFF6EB', ear: '#C8782E',
+    ears: () => (
+      <>
+        <path d={point(13, -3)} fill="#EBA052" />
+        <path d={point(35, 3)} fill="#EBA052" />
+        <path d="M10 15 L12 9 L15 15 Z" fill="#FFF6EB" />
+        <path d="M38 15 L36 9 L33 15 Z" fill="#FFF6EB" />
+      </>
+    ),
+    face: (
+      <>
+        <circle cx="16.5" cy="23.5" r="1.4" fill="#FFF6EB" />
+        <circle cx="31.5" cy="23.5" r="1.4" fill="#FFF6EB" />
+        <ellipse cx="24" cy="31.5" rx="2.6" ry="2" fill={INK} />
+      </>
+    ),
+  },
+  capybara: {
+    coat: '#9A7150', muzzle: '#D2AB8B', ear: '#6E492E',
+    ears: () => (
+      <>
+        <circle cx="10" cy="17" r="4.8" fill="#6E492E" />
+        <circle cx="38" cy="17" r="4.8" fill="#6E492E" />
+        <circle cx="10" cy="17" r="2.2" fill="#4B311E" />
+        <circle cx="38" cy="17" r="2.2" fill="#4B311E" />
+      </>
+    ),
+    face: (
+      <>
+        <rect x="18" y="27" width="12" height="7" rx="3.5" fill="#D2AB8B" />
+        <ellipse cx="24" cy="31" rx="3" ry="1.8" fill={INK} />
+      </>
+    ),
+  },
+  dragon: {
+    coat: '#2EB8A6', muzzle: '#C2F5EE', ear: '#FF9F1C',
+    ears: () => (
+      <>
+        <path d="M10 17 L7 5 L17 12 Z" fill="#FF9F1C" />
+        <path d="M38 17 L41 5 L31 12 Z" fill="#FF9F1C" />
+      </>
+    ),
+    face: (
+      <>
+        <circle cx="21" cy="31" r="1" fill={INK} />
+        <circle cx="27" cy="31" r="1" fill={INK} />
+      </>
+    ),
+  },
+  raccoon: {
+    coat: '#636E80', muzzle: '#EAEFF8', ear: '#424A59',
+    ears: () => (
+      <>
+        <circle cx="12" cy="13" r="6" fill="#424A59" />
+        <circle cx="36" cy="13" r="6" fill="#424A59" />
+        <circle cx="12" cy="13" r="3" fill="#EAEFF8" />
+        <circle cx="36" cy="13" r="3" fill="#EAEFF8" />
+      </>
+    ),
+    face: (
+      <>
+        <path d="M10 24 q14 -2 28 0 q-4 8 -14 7 q-10 1 -14 -7 z" fill="#252A36" opacity=".92" />
+        <ellipse cx="24" cy="32" rx="2.5" ry="1.8" fill={INK} />
+      </>
+    ),
+  },
+  penguin: {
+    coat: '#22283A', muzzle: '#FFFFFF', ear: '#1A1E2C',
+    ears: () => null,
+    face: (
+      <>
+        <ellipse cx="24" cy="27" rx="11" ry="12" fill="#FFFFFF" />
+        <path d="M20 29 l4 4 l4 -4 z" fill="#FFB703" />
+      </>
+    ),
+  },
+  otter: {
+    coat: '#82593E', muzzle: '#F0E5DB', ear: '#5C3822',
+    ears: () => (
+      <>
+        <circle cx="10" cy="16" r="4.5" fill="#5C3822" />
+        <circle cx="38" cy="16" r="4.5" fill="#5C3822" />
+      </>
+    ),
+    face: (
+      <>
+        <ellipse cx="24" cy="31.5" rx="3.2" ry="2.2" fill={INK} />
+        <g stroke={INK} strokeWidth="0.8" opacity=".5" strokeLinecap="round">
+          <path d="M12 33 h5M12 35 h5M36 33 h-5M36 35 h-5" />
+        </g>
+      </>
+    ),
+  },
 };
 
-/** Brow angle by mood. Down and in reads as effort; level reads as curiosity. */
 const BROW: Record<Mood, { drop: number; tilt: number }> = {
   blazing: { drop: 0, tilt: 4.5 },
   keen: { drop: 1, tilt: 3 },
   waiting: { drop: 2.5, tilt: -1.5 },
   resting: { drop: 3, tilt: 0.5 },
+  grinding: { drop: 1.5, tilt: 4 },
+  celebrating: { drop: -1.5, tilt: 1 },
+  coffee: { drop: 2, tilt: 0 },
 };
 
 export function Mascot({
-  id, mood, hue, size = 34, crown = false, animal, racing = false,
+  id, mood = 'keen', hue = '#7C6CFF', size = 34, crown = false, animal, racing = false,
+  variant = 'head', accessory = 'sweatband',
 }: {
   id: string;
-  mood: Mood;
-  /** Their colour, worn as a sweatband so a row of foxes is still a row of people. */
-  hue: string;
+  mood?: Mood;
+  hue?: string;
   size?: number;
   crown?: boolean;
-  /**
-   * Force a particular creature — the picker previewing a choice, and the
-   * fixtures. Left off, the animal is looked up from the person's profile and
-   * only falls back to the id-derived one if they never picked.
-   */
   animal?: Animal;
-  /**
-   * On the trail, where the animals are going somewhere. Adds the lean, the
-   * gallop, the dust and the speed lines — the difference between eight heads
-   * sitting on a chart and eight competitors trying to beat each other there.
-   */
   racing?: boolean;
+  variant?: 'head' | 'full';
+  accessory?: Accessory;
 }) {
-  // Resolved here rather than at every call site. Six components draw a
-  // mascot and none of them should have to know that an animal is now a
-  // stored preference — they pass a person, they get that person's creature.
-  // useProfiles is one cached query shared by the whole page, so a row of
-  // eight of these costs nothing extra.
   const { data: profiles = {} } = useProfiles();
-  const kind = animal ?? profiles[id]?.animal ?? animalOf(id);
-  const skin = SKINS[kind];
-  const brow = BROW[mood];
+  const kind = (animal ?? (profiles[id]?.animal as Animal) ?? animalOf(id));
+  const skin = SKINS[kind] ?? SKINS.fox;
+  const brow = BROW[mood] ?? BROW.keen;
   const asleep = mood === 'resting';
-  // Asleep is asleep. A resting animal that gallops is a bug you can see.
   const running = racing && !asleep;
+  const isFull = variant === 'full';
+
+  const viewBox = isFull ? '0 0 48 64' : '0 0 48 48';
+  const height = isFull ? Math.round(size * 1.33) : size;
 
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} role="img"
-      aria-label={`${kind}, ${LABEL[mood]}`}
+    <svg viewBox={viewBox} width={size} height={height} role="img"
+      aria-label={`${kind}, ${LABEL[mood] ?? mood}`}
       style={{ overflow: 'visible', flex: 'none' }}>
-      {/* Dust and speed lines go behind, so they read as left behind rather
-          than stuck to the animal's face. */}
+      
+      {/* Running particles */}
       {running && (
         <>
           <g className="mc-zoom" stroke={hue} strokeWidth="2.2" strokeLinecap="round" opacity=".55">
@@ -218,16 +284,82 @@ export function Mascot({
         </>
       )}
 
+      {/* Shadow for full body */}
+      {isFull && (
+        <ellipse cx="24" cy="61" rx="14" ry="3" fill="#000000" opacity=".24" />
+      )}
+
       <g className={`mc${running ? ' race' : ''}${mood === 'blazing' ? ' quick' : asleep ? ' slow' : ''}`}>
+        
+        {/* Full-body torso, arms, legs */}
+        {isFull && (
+          <g className="mc-body">
+            {/* Legs */}
+            <rect x="16" y="50" width="5.5" height="9" rx="2.7" fill={skin.coat} />
+            <rect x="26.5" y="50" width="5.5" height="9" rx="2.7" fill={skin.coat} />
+            {/* Shoes */}
+            <ellipse cx="18" cy="58.5" rx="3.8" ry="2.2" fill={hue} />
+            <ellipse cx="29.5" cy="58.5" rx="3.8" ry="2.2" fill={hue} />
+
+            {/* Torso */}
+            <rect x="12" y="34" width="24" height="20" rx="9" fill={skin.coat} />
+            {/* Chest patch */}
+            <ellipse cx="24" cy="44" rx="7.5" ry="8" fill={skin.muzzle} opacity=".95" />
+
+            {/* Arms / Pose */}
+            {mood === 'celebrating' ? (
+              <>
+                <path d="M12 39 Q5 27 6 22" stroke={skin.coat} strokeWidth="5" strokeLinecap="round" fill="none" />
+                <path d="M36 39 Q43 27 42 22" stroke={skin.coat} strokeWidth="5" strokeLinecap="round" fill="none" />
+              </>
+            ) : mood === 'coffee' ? (
+              <>
+                <path d="M12 42 Q18 48 22 47" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                <path d="M36 42 Q30 48 26 47" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                {/* Coffee Mug */}
+                <rect x="21" y="44" width="6" height="7" rx="1.5" fill="#FFFFFF" />
+                <path d="M27 46 h2 v3 h-2" stroke="#FFFFFF" strokeWidth="1" fill="none" />
+                <path d="M23 42 q1 -2 0 -4 M25 42 q1 -2 0 -4" stroke="#FFF" strokeWidth="0.8" fill="none" opacity=".7" />
+              </>
+            ) : mood === 'grinding' ? (
+              <>
+                <path d="M12 43 Q18 49 22 50" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                <path d="M36 43 Q30 49 26 50" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                {/* Book / Laptop */}
+                <rect x="19" y="48" width="10" height="5" rx="1" fill={hue} />
+              </>
+            ) : (
+              <>
+                <path d="M13 40 Q8 48 10 52" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                <path d="M35 40 Q40 48 38 52" stroke={skin.coat} strokeWidth="4.5" strokeLinecap="round" fill="none" />
+              </>
+            )}
+          </g>
+        )}
+
+        {/* Ears */}
         <g className="mc-ears">{skin.ears(mood)}</g>
 
-        {/* head */}
+        {/* Head */}
         <ellipse cx="24" cy="26" rx="15.5" ry="14.5" fill={skin.coat} />
         <ellipse cx="24" cy="32.5" rx="9" ry="7" fill={skin.muzzle} opacity=".95" />
 
-        {/* the sweatband — their colour, and the reason a team reads as people */}
-        <path d="M9.6 21.5 a15.5 14.5 0 0 1 28.8 0 a15.5 14.5 0 0 0 -28.8 0 z" fill={hue} opacity=".95" />
-        <rect x="8.8" y="18.4" width="30.4" height="4.6" rx="2.3" fill={hue} />
+        {/* Sweatband */}
+        {accessory === 'sweatband' && (
+          <>
+            <path d="M9.6 21.5 a15.5 14.5 0 0 1 28.8 0 a15.5 14.5 0 0 0 -28.8 0 z" fill={hue} opacity=".95" />
+            <rect x="8.8" y="18.4" width="30.4" height="4.6" rx="2.3" fill={hue} />
+          </>
+        )}
+
+        {/* Headphones accessory */}
+        {accessory === 'headphones' && (
+          <>
+            <path d="M8 25 A16 16 0 0 1 40 25" stroke="#1A1C24" strokeWidth="3" fill="none" />
+            <rect x="6" y="21" width="5" height="10" rx="2.5" fill={hue} />
+            <rect x="37" y="21" width="5" height="10" rx="2.5" fill={hue} />
+          </>
+        )}
 
         {skin.goggles && (
           <>
@@ -238,11 +370,16 @@ export function Mascot({
 
         {skin.face}
 
-        {/* eyes */}
+        {/* Eyes */}
         {asleep ? (
           <g stroke={INK} strokeWidth="1.8" strokeLinecap="round" fill="none">
             <path d="M14 27 q3.5 3 7 0" />
             <path d="M27 27 q3.5 3 7 0" />
+          </g>
+        ) : mood === 'celebrating' ? (
+          <g fill="#FFC24B" stroke={INK} strokeWidth="0.8">
+            <polygon points="17.5,23 18.5,26 21.5,26.5 19,28.5 20,31.5 17.5,29.5 15,31.5 16,28.5 13.5,26.5 16.5,26" />
+            <polygon points="30.5,23 31.5,26 34.5,26.5 32,28.5 33,31.5 30.5,29.5 28,31.5 29,28.5 26.5,26.5 29.5,26" />
           </g>
         ) : (
           <g className="mc-eyes">
@@ -253,20 +390,20 @@ export function Mascot({
           </g>
         )}
 
-        {/* brows — the whole difference between cute and competitive */}
+        {/* Eyebrows */}
         <g stroke={INK} strokeWidth="1.9" strokeLinecap="round" opacity={asleep ? 0.4 : 0.9}>
           <path d={`M13.4 ${22.6 + brow.drop} L21 ${22.6 + brow.drop + brow.tilt}`} />
           <path d={`M34.6 ${22.6 + brow.drop} L27 ${22.6 + brow.drop + brow.tilt}`} />
         </g>
 
-        {/* mouth */}
-        {mood === 'blazing' && (
+        {/* Mouth */}
+        {(mood === 'blazing' || mood === 'celebrating') && (
           <path d="M20 34.6 q4 4.4 8 0 q-4 1.6 -8 0 z" fill={INK} />
         )}
-        {mood === 'keen' && (
+        {(mood === 'keen' || mood === 'grinding') && (
           <path d="M20.6 34.8 q3.4 2.8 6.8 0" stroke={INK} strokeWidth="1.7" fill="none" strokeLinecap="round" />
         )}
-        {mood === 'waiting' && (
+        {(mood === 'waiting' || mood === 'coffee') && (
           <circle cx="24" cy="35.6" r="1.5" fill={INK} opacity=".8" />
         )}
         {asleep && (
@@ -274,10 +411,17 @@ export function Mascot({
         )}
       </g>
 
-      {/* one small thing per mood, outside the head, so it reads at a glance */}
+      {/* Mood badges / particles */}
       {mood === 'blazing' && (
         <g className="mc-spark" fill="#FFC24B">
           <path d="M42 12 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5 z" />
+        </g>
+      )}
+      {mood === 'celebrating' && (
+        <g className="mc-spark" fill="#FF6B6B">
+          <circle cx="43" cy="10" r="2" fill="#FFC24B" />
+          <circle cx="5" cy="12" r="1.8" fill="#38D6F2" />
+          <circle cx="39" cy="4" r="1.5" fill="#FF6FA8" />
         </g>
       )}
       {asleep && (
@@ -300,4 +444,7 @@ const LABEL: Record<Mood, string> = {
   keen: 'went today',
   waiting: 'not started yet',
   resting: 'resting',
+  grinding: 'deep in focus',
+  celebrating: 'celebrating milestone',
+  coffee: 'taking a coffee recharge',
 };

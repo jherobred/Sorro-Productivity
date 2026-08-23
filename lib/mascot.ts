@@ -23,30 +23,35 @@
  * creature everywhere without a column to store it in.
  */
 
-export type Animal = 'fox' | 'cat' | 'bear' | 'owl' | 'frog' | 'panda' | 'rabbit' | 'wolf';
+export type LegacyAnimal = 'fox' | 'cat' | 'bear' | 'owl' | 'frog' | 'panda' | 'rabbit' | 'wolf';
+export type NewAnimal = 'shiba' | 'capybara' | 'dragon' | 'raccoon' | 'penguin' | 'otter';
+export type Animal = LegacyAnimal | NewAnimal;
 
-export const ANIMALS: Animal[] = ['fox', 'cat', 'bear', 'owl', 'frog', 'panda', 'rabbit', 'wolf'];
+export const LEGACY_ANIMALS: LegacyAnimal[] = ['fox', 'cat', 'bear', 'owl', 'frog', 'panda', 'rabbit', 'wolf'];
+export const ALL_ANIMALS: Animal[] = [...LEGACY_ANIMALS, 'shiba', 'capybara', 'dragon', 'raccoon', 'penguin', 'otter'];
+export const ANIMALS = ALL_ANIMALS;
 
-/** Stable per-person creature. Same hash shape as `hueOf`, so the two agree. */
+/** Stable per-person creature. */
 export function animalOf(id: string): Animal {
   let n = 0;
   for (const c of id) n = (n + c.charCodeAt(0) * 31) % 9973;
-  return ANIMALS[n % ANIMALS.length];
+  return ALL_ANIMALS[n % ALL_ANIMALS.length];
 }
 
 /**
  * How the creature looks.
  *
- * - `blazing` — moved today, and top of the board. The one place standing
- *   matters at all.
- * - `keen` — moved today, or within the last couple of days. Most of the time
- *   this is everyone, which is the intended feeling.
- * - `waiting` — has never logged anything here. Curious, not disappointed:
- *   nothing has gone wrong yet.
- * - `resting` — nothing for three days or more. Asleep, not sad. A rest day is
- *   a real thing and the picture says so.
+ * - `blazing` — moved today, and top of the board.
+ * - `keen` — moved today, or within the last couple of days.
+ * - `waiting` — has never logged anything here. Curious, not disappointed.
+ * - `resting` — nothing for three days or more. Asleep, not sad.
+ * - `grinding` — currently in a focus session, studying with determination.
+ * - `celebrating` — just completed a milestone, quest, or level-up.
+ * - `coffee` — relaxing with a warm brew.
  */
-export type Mood = 'blazing' | 'keen' | 'waiting' | 'resting';
+export type Mood = 'blazing' | 'keen' | 'waiting' | 'resting' | 'grinding' | 'celebrating' | 'coffee';
+
+export type Accessory = 'none' | 'sweatband' | 'headphones' | 'crown' | 'cape' | 'glasses' | 'hoodie';
 
 export function moodOf(v: { daysSince: number | null; leading: boolean }): Mood {
   if (v.daysSince === null) return 'waiting';
@@ -70,11 +75,6 @@ export function daysSince(series: Record<string, number>, today: string): number
 
 /**
  * The line under your own row.
- *
- * Addressed to you, about you, and never about how far behind you are — the
- * gap is on the board already and repeating it in words is just a second way
- * of saying the same discouraging thing. What a person can act on is the next
- * day, so that is what this talks about.
  */
 export function nudge(v: {
   mood: Mood; streak: number; leading: boolean; leader: string | null; daysLeft: number;
@@ -92,6 +92,12 @@ export function nudge(v: {
       return v.leader
         ? `${v.leader} has started. One session puts you on the board.`
         : 'Nobody has started yet. First one on the board sets the pace.';
+    case 'grinding':
+      return 'Deep in the zone right now. Let\'s get this done.';
+    case 'celebrating':
+      return 'Milestone unlocked! High five!';
+    case 'coffee':
+      return 'Fueling up for the next sprint.';
     case 'resting':
     default:
       return v.daysLeft > 3
@@ -112,3 +118,15 @@ export function streakOf(series: Record<string, number>, today: string): number 
   }
   return n;
 }
+
+/** Quirky, motivational student pet quotes */
+export const BUDDY_QUOTES = [
+  'A 25-minute sprint beats 3 hours of doomscrolling.',
+  'Hydrate, stretch your shoulders, and lock in.',
+  'One task at a time. The mountain moves pebble by pebble.',
+  'Future you is going to thank today you.',
+  'Consistency is a superpower disguised as routine.',
+  'Your streak looks gorgeous today!',
+  'Ready when you are! What are we conquering next?',
+  'Deep work mode: Activated.',
+];
