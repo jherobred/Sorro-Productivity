@@ -17,6 +17,8 @@ import { queryClient } from '@/lib/offline';
 import { Icon } from '@/components/Icon';
 import { useRouter } from 'next/navigation';
 import { ProfileTimeline } from '@/components/ProfileTimeline';
+import { HighlightsTray } from '@/components/stories/HighlightsTray';
+import { StoryArchiveModal } from '@/components/stories/StoryArchiveModal';
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered
@@ -241,6 +243,8 @@ export default function ProfilePage() {
     toast('Profile saved');
   }
 
+  const [showArchive, setShowArchive] = useState(false);
+
   const [bg0, bg1] = pick(avatar, 'bg').v.split(',');
   const skin = pick(avatar, 'skin').v;
   const hairColor = pick(avatar, 'hairColor').v;
@@ -258,6 +262,21 @@ export default function ProfilePage() {
         <h1 className="sronly">Profile</h1>
         <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Your face across Basedly</div>
 
+        {/* Stories Archive Modal Button */}
+        <button
+          onClick={() => setShowArchive(true)}
+          className="hov k-squish"
+          title="View stories archive"
+          style={{
+            marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: 7,
+            padding: '10px 14px', borderRadius: 11, border: '1px solid var(--line2)',
+            fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap',
+          }}
+        >
+          <Icon name="archive" size={14} color="var(--accTx)" />
+          Stories Archive
+        </button>
+
         {/* Your link. This is how somebody gets to you on purpose - see the
             header of this file for why that matters to the inbox. */}
         <button
@@ -267,7 +286,7 @@ export default function ProfilePage() {
             void navigator.clipboard.writeText(myLink).then(() => { setCopied(true); toast('Link copied'); });
           }}
           className="hov" title={myLink ?? 'Set a handle to get a link'}
-          style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
+          style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
           <Icon name={copied ? 'check' : 'upload'} size={14} color="var(--accTx)" />
           Share link
         </button>
@@ -523,7 +542,7 @@ export default function ProfilePage() {
                   background: swatch,
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
                   fontSize: 9.5, fontWeight: 700, textTransform: 'capitalize',
-                  color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
+color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
                 }}>
                   {o.id}
                 </button>
@@ -533,67 +552,16 @@ export default function ProfilePage() {
         </div>
         )}
 
-        {/* Instagram Style Highlights Strip */}
-        <div style={{ margin: '18px 0 6px', overflowX: 'auto', paddingBottom: 6 }} className="navsb">
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            {[
-              { id: 'streaks', label: 'Streaks', emoji: '🔥', hue: '#FF5500' },
-              { id: 'gains', label: 'Gym Gains', emoji: '🏋️', hue: '#3888FF' },
-              { id: 'focus', label: 'Deep Focus', emoji: '⚡', hue: '#FFC24B' },
-              { id: 'coding', label: 'Building', emoji: '💻', hue: '#34D399' },
-              { id: 'notes', label: 'Notes', emoji: '💡', hue: '#A855F7' },
-              { id: 'wins', label: 'Wins', emoji: '🏆', hue: '#FF4365' },
-            ].map((h) => (
-              <button
-                key={h.id}
-                onClick={() => toast(`Highlight: ${h.label}`)}
-                className="hov k-squish"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  flex: 'none',
-                }}
-              >
-                <div
-                  style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: '50%',
-                    padding: 2,
-                    background: `linear-gradient(135deg, ${h.hue}, var(--acc))`,
-                    display: 'grid',
-                    placeItems: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      background: 'var(--card2)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontSize: 22,
-                      border: '2px solid var(--card)',
-                    }}
-                  >
-                    {h.emoji}
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
-                  {h.label}
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* Real Instagram Highlights Tray */}
+        <div style={{ margin: '14px 0 6px' }}>
+          {uid && <HighlightsTray userId={uid} isMe={true} me={uid} />}
         </div>
 
         {uid && <ProfileTimeline userId={uid} currentUserId={uid} phone={phone} />}
+
+        {showArchive && uid && (
+          <StoryArchiveModal me={uid} onClose={() => setShowArchive(false)} />
+        )}
       </div>
     </div>
   );
@@ -772,57 +740,9 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
         </div>
       </div>
 
-      {/* Highlights Strip */}
-      <div style={{ margin: '18px 0 6px', overflowX: 'auto', paddingBottom: 6 }} className="navsb">
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          {[
-            { id: 'streaks', label: 'Streaks', emoji: '🔥', hue: '#FF5500' },
-            { id: 'gains', label: 'Gym Gains', emoji: '🏋️', hue: '#3888FF' },
-            { id: 'focus', label: 'Deep Focus', emoji: '⚡', hue: '#FFC24B' },
-            { id: 'notes', label: 'Notes', emoji: '💡', hue: '#A855F7' },
-          ].map((h) => (
-            <div
-              key={h.id}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 6,
-                flex: 'none',
-              }}
-            >
-              <div
-                style={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: '50%',
-                  padding: 2,
-                  background: `linear-gradient(135deg, ${h.hue}, var(--acc))`,
-                  display: 'grid',
-                  placeItems: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '50%',
-                    background: 'var(--card2)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 22,
-                    border: '2px solid var(--card)',
-                  }}
-                >
-                  {h.emoji}
-                </div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
-                {h.label}
-              </span>
-            </div>
-          ))}
-        </div>
+      {/* Real Instagram Highlights Tray */}
+      <div style={{ margin: '14px 0 6px' }}>
+        {who.user_id && <HighlightsTray userId={who.user_id} isMe={false} me="" />}
       </div>
 
       {who.user_id && <ProfileTimeline userId={who.user_id} phone={phone} />}

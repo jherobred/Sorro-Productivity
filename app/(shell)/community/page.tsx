@@ -23,6 +23,9 @@ import { useProfiles, displayOf } from '@/lib/people';
 import { useReposts } from '@/lib/reposts';
 import { useBookmarks, toggleBookmark } from '@/lib/bookmarks';
 import { usePostViews, recordPostView } from '@/lib/views';
+import { StoriesTray } from '@/components/stories/StoriesTray';
+import { StoryViewer } from '@/components/stories/StoryViewer';
+import { StoryCreator } from '@/components/stories/StoryCreator';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort,
@@ -54,6 +57,8 @@ export default function CommunityPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [followed, setFollowed] = useState<Set<string>>(() => new Set());
   const [showMoreTrends, setShowMoreTrends] = useState(false);
+  const [activeStoryUser, setActiveStoryUser] = useState<string | null>(null);
+  const [isCreatingStory, setIsCreatingStory] = useState(false);
 
   useEffect(() => { void currentUserId().then(setMe).catch(() => setMe('')); }, []);
 
@@ -309,6 +314,13 @@ export default function CommunityPage() {
                 </Chip>
               </div>
             </div>
+
+            {/* Instagram Stories Tray */}
+            <StoriesTray
+              me={me}
+              onOpenViewer={(userId) => setActiveStoryUser(userId)}
+              onCreateStory={() => setIsCreatingStory(true)}
+            />
 
             <div style={{
               display: 'grid',
@@ -738,6 +750,25 @@ export default function CommunityPage() {
       )}
 
       {sharing && <ShareSheet item={sharing} me={me} onClose={() => setSharing(null)} />}
+
+      {activeStoryUser && (
+        <StoryViewer
+          initialUserId={activeStoryUser}
+          me={me}
+          onClose={() => setActiveStoryUser(null)}
+          onOpenHighlightEditor={(storyId) => {
+            setActiveStoryUser(null);
+            router.push('/profile');
+          }}
+        />
+      )}
+
+      {isCreatingStory && (
+        <StoryCreator
+          me={me}
+          onClose={() => setIsCreatingStory(false)}
+        />
+      )}
     </div>
   );
 }
