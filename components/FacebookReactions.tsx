@@ -92,12 +92,12 @@ export function FacebookReactionButton({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (mine && !activeReaction) {
-      setActiveReaction(getStoredUserReactions()[itemId] || 'like');
-    } else if (!mine && activeReaction) {
+    if (mine) {
+      setActiveReaction((prev) => prev || getStoredUserReactions()[itemId] || 'like');
+    } else {
       setActiveReaction(null);
     }
-  }, [mine, itemId, activeReaction]);
+  }, [mine, itemId]);
 
   const onMouseEnter = () => {
     if (timerRef.current) clearTimeout(timerRef.current);

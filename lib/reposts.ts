@@ -15,26 +15,36 @@ export type RepostItem = {
 };
 
 const LS_KEY = 'basedly-reposts';
+const EMPTY_REPOSTS: RepostItem[] = [];
 const listeners = new Set<() => void>();
+
+let cachedRaw: string | null = null;
+let cachedSnapshot: RepostItem[] = EMPTY_REPOSTS;
 
 function emit() {
   for (const l of listeners) l();
 }
 
 function readStorage(): RepostItem[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return EMPTY_REPOSTS;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (raw === cachedRaw) return cachedSnapshot;
+    cachedRaw = raw;
+    cachedSnapshot = raw ? JSON.parse(raw) : EMPTY_REPOSTS;
+    return cachedSnapshot;
   } catch {
-    return [];
+    return EMPTY_REPOSTS;
   }
 }
 
 function writeStorage(items: RepostItem[]) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(items));
+    const raw = JSON.stringify(items);
+    localStorage.setItem(LS_KEY, raw);
+    cachedRaw = raw;
+    cachedSnapshot = items;
     emit();
   } catch {
     // quota
@@ -46,7 +56,10 @@ export function useReposts(): RepostItem[] {
     (onStoreChange) => {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
-        if (e.key === LS_KEY) onStoreChange();
+        if (e.key === LS_KEY) {
+          cachedRaw = null;
+          onStoreChange();
+        }
       };
       window.addEventListener('storage', onStorage);
       return () => {
@@ -55,7 +68,7 @@ export function useReposts(): RepostItem[] {
       };
     },
     readStorage,
-    () => []
+    () => EMPTY_REPOSTS
   );
 }
 
