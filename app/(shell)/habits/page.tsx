@@ -1,279 +1,586 @@
 'use client';
 
-import { useState } from 'react';
-import { Icon } from '@/components/Icon';
+import { useState, useMemo } from 'react';
+import { Icon, type IconName } from '@/components/Icon';
 import { RowsSkeleton } from '@/components/Skeleton';
-import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
-import { useLongPress } from '@/lib/useLongPress';
-import { ContextMenu } from '@/components/ContextMenu';
-import { useHabits, useTicks, useHabitActions, lastDays, ymd, streak, type Habit, type Tick } from '@/lib/habits';
-import { Streak, bestStreakFrom } from '@/components/Streak';
+import {
+  useHabits,
+  useTicks,
+  useHabitActions,
+  useStreakFreezes,
+  lastDays,
+  ymd,
+  calculateHabitGamification,
+  type Habit,
+  type HabitCategory,
+  type TimeOfDay,
+  type HabitLog,
+  HABIT_CATEGORIES,
+} from '@/lib/habits';
 import { Buddy } from '@/components/Buddy';
-import { useRouter } from 'next/navigation';
-import { useChallenges } from '@/lib/challenges';
-import { metricDef } from '@/lib/metrics';
+import { HabitCard } from '@/components/habits/HabitCard';
+import { HabitCreatorModal } from '@/components/habits/HabitCreatorModal';
+import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
+import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
+import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';
 
-/** Ported from Basedly.dc.html markup 1020–1078; cell grid at 4433 (40px desktop). */
-
-const DAYS_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-const CELL = 40;
-const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
-
-const KIND_LABEL: Record<string, string> = { bin: 'Binary · daily', count: 'Quantity · daily', dur: 'Duration · daily' };
+type ViewMode = 'week' | 'day' | 'year' | 'analytics';
 
 export default function HabitsPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
-  const router = useRouter();
-  const [year, setYear] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const lp = useLongPress();
 
-  const days = year ? 365 : 7;
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [selectedCategory, setSelectedCategory] = useState<HabitCategory | 'all'>('all');
+  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<TimeOfDay | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [search, setSearch] = useState('');
+
+  // Modals state
+  const [creating, setCreating] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [timingHabit, setTimingHabit] = useState<Habit | null>(null);
+  const [detailHabit, setDetailHabit] = useState<Habit | null>(null);
+
+  const daysCount = viewMode === 'year' ? 365 : 30;
   const { data: habits = [], isPending } = useHabits();
-  const { data: ticks = [] } = useTicks(days);
-  const { data: challenges = [] } = useChallenges();
-  const A = useHabitActions(days);
+  const { data: ticks = [] } = useTicks(daysCount);
+  const A = useHabitActions(daysCount);
+  const { freezes } = useStreakFreezes();
 
-  /**
-   * Two lists, one page.
-   *
-   * A challenge you joined writes a habit here (lib/challenges.ts), which is
-   * the whole point - a scoreboard in Community is not somewhere anybody looks
-   * at 7am. But mixed into your own habits they are noise: you did not choose
-   * them, you cannot rename them usefully, and leaving one is done elsewhere.
-   * So they sit under their own heading, below yours, in the order they arrived.
-   */
-  const own = habits.filter((h) => !h.challenge_id);
-  const fromChallenges = habits.filter((h) => h.challenge_id);
-  const chalOf = (id: string | null) => challenges.find((c) => c.id === id) ?? null;
-
-  const week = lastDays(7);
+  const week = useMemo(() => lastDays(7), []);
   const today = ymd(new Date());
 
-  /**
-   * Whole days since anything at all was ticked. The creature's face reads off
-   * this and nothing else — never off how many habits are kept or missed, which
-   * is the rule the challenge mascots are built on and the reason it is safe to
-   * put one on the page somebody opens on the morning they are failing.
-   */
-  const lastTick = ticks.map((t) => t.on_date).sort().at(-1) ?? null;
-  const daysSince = lastTick
-    ? Math.round((Date.parse(`${today}T12:00`) - Date.parse(`${lastTick}T12:00`)) / 864e5)
-    : null;
-  const keptToday = ticks.filter((t) => t.on_date === today).length;
+  const gamification = useMemo(
+    () => calculateHabitGamification(habits, ticks),
+    [habits, ticks]
+  );
 
-  const label = (h: Habit, t: Tick | undefined) =>
-    !t ? '' : h.kind === 'bin' ? '✓'
-      : h.kind === 'dur' ? `${Math.floor(Number(t.value) / 60)}h`
-        : String(Number(t.value));
+  // Filtered habits
+  const filteredHabits = useMemo(() => {
+    return habits.filter((h) => {
+      if (selectedCategory !== 'all' && (h.category || 'health') !== selectedCategory) {
+        return false;
+      }
+      if (selectedTimeOfDay !== 'all' && (h.time_of_day || 'anytime') !== selectedTimeOfDay) {
+        return false;
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchName = h.name.toLowerCase().includes(q);
+        const matchCue = h.cue?.toLowerCase().includes(q);
+        if (!matchName && !matchCue) return false;
+      }
+      const isDone = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
+      if (statusFilter === 'pending' && isDone) return false;
+      if (statusFilter === 'done' && !isDone) return false;
+
+      return true;
+    });
+  }, [habits, selectedCategory, selectedTimeOfDay, search, statusFilter, ticks, today]);
+
+  const ownHabits = filteredHabits.filter((h) => !h.challenge_id);
+  const challengeHabits = filteredHabits.filter((h) => h.challenge_id);
 
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <h1 className="sronly">Habits</h1>
-        <Buddy daysSince={daysSince} size={46} racing={keptToday > 0}
-          note={daysSince === null ? 'Tick one and we start'
-            : keptToday > 0 ? `${keptToday} kept today — keep going`
-              : daysSince === 0 ? 'Back at it' : 'Ready when you are'} />
-        <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
-          {weekLabel(week[0], week[6])}
+    <div style={{ padding: phone ? '14px 14px 28px' : '20px 24px 36px', maxWidth: 1240, marginInline: 'auto' }}>
+      {/* Hero Gamification & Buddy Banner */}
+      <div
+        style={{
+          background: 'var(--card)',
+          borderRadius: 20,
+          padding: phone ? '16px' : '18px 22px',
+          border: '1px solid var(--line)',
+          boxShadow: 'var(--sh)',
+          marginBottom: 18,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          {/* Left: Study Buddy & Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Buddy
+              daysSince={gamification.todayCompleted > 0 ? 0 : 1}
+              size={54}
+              racing={gamification.todayCompleted > 0}
+              note={
+                gamification.isPerfectToday
+                  ? 'All habits done today! Legendary discipline 🔥'
+                  : gamification.todayCompleted > 0
+                    ? `${gamification.todayCompleted}/${gamification.activeCount} completed — keep momentum!`
+                    : 'Ready to build atomic habits today?'
+              }
+            />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h1 style={{ fontSize: phone ? 20 : 22, fontWeight: 900, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                  Daily Habits
+                </h1>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
+                    color: 'var(--accTx)',
+                  }}
+                >
+                  Level {gamification.level} ({gamification.multiplier}x Multiplier)
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>
+                {gamification.todayCompleted} of {gamification.activeCount} routines completed today ({gamification.todayPercent}%)
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Gamification Badges & Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 12,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                fontSize: 12,
+                fontWeight: 800,
+                color: 'var(--pal-amber)',
+              }}
+            >
+              <span>🔥</span>
+              <span>{gamification.topStreak} Day Streak</span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 12,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                fontSize: 12,
+                fontWeight: 800,
+                color: '#38D6F2',
+              }}
+              title="Streak Freezes available to protect consistency"
+            >
+              <span>🛡️</span>
+              <span>{freezes} Freezes</span>
+            </div>
+
+            <button
+              onClick={() => setCreating(true)}
+              className="acc k-squish"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '9px 16px',
+                borderRadius: 12,
+                background: 'var(--acc)',
+                color: 'var(--ink)',
+                fontSize: 12.5,
+                fontWeight: 800,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="plus" size={15} color="var(--ink)" />
+              New Habit
+            </button>
+          </div>
         </div>
-        <button onClick={() => setYear((v) => !v)} className="hov" title="Switch week / year view"
-          style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={year ? 'week' : 'grid'} size={15} color="var(--tx2)" />
-        </button>
-        <button onClick={() => A.create.mutate({ id: crypto.randomUUID(), name: 'New habit', color: PAL.coral })} className="acc"
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
-          <Icon name="plus" size={15} color="#0C0F16" />Add habit
-        </button>
+
+        {/* Level XP Progress Bar */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', marginBottom: 4 }}>
+            <span>Rank Progress: Level {gamification.level}</span>
+            <span>{gamification.currentLevelXp} / 250 XP to Level {gamification.level + 1}</span>
+          </div>
+          <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'var(--card2)', overflow: 'hidden' }}>
+            <div
+              style={{
+                width: `${gamification.levelProgress}%`,
+                height: '100%',
+                borderRadius: 3,
+                background: 'linear-gradient(90deg, var(--acc), #FFC24B)',
+                transition: 'width .4s ease',
+              }}
+            />
+          </div>
+        </div>
       </div>
 
-      {isPending && <RowsSkeleton rows={5} label="Loading your habits" lead="square" />}
+      {/* View Mode & Global Actions Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        {/* View mode switcher */}
+        <div style={{ display: 'flex', gap: 4, background: 'var(--card)', padding: 3, borderRadius: 12, border: '1px solid var(--line)' }}>
+          {(
+            [
+              { id: 'week', label: 'Week Grid', icon: 'week' },
+              { id: 'day', label: 'Day Focus', icon: 'task' },
+              { id: 'year', label: 'Year Grid', icon: 'grid' },
+              { id: 'analytics', label: 'Analytics', icon: 'spark' },
+            ] as const
+          ).map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setViewMode(v.id)}
+              className="k-squish"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 9,
+                fontSize: 12,
+                fontWeight: 700,
+                border: 'none',
+                background: viewMode === v.id ? 'var(--card2)' : 'transparent',
+                color: viewMode === v.id ? 'var(--tx)' : 'var(--tx3)',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name={v.icon as IconName} size={13} color={viewMode === v.id ? 'var(--accTx)' : 'var(--tx3)'} />
+              {v.label}
+            </button>
+          ))}
+        </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {!isPending && habits.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No habits yet.</div>}
+        {/* Batch Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => A.completeAllToday(habits)}
+            className="hov k-squish"
+            title="Complete all habits for today"
+            style={{
+              padding: '7px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--line2)',
+              background: 'var(--card)',
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: '#52C41A',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Icon name="check" size={13} color="#52C41A" />
+            Complete All Today
+          </button>
+          <button
+            onClick={() => A.resetToday(habits)}
+            className="hov k-squish"
+            title="Reset today's progress"
+            style={{
+              padding: '7px 12px',
+              borderRadius: 10,
+              border: '1px solid var(--line2)',
+              background: 'var(--card)',
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: 'var(--tx3)',
+            }}
+          >
+            Reset Today
+          </button>
+        </div>
+      </div>
 
-        {([
-          { key: 'own', label: 'Yours', items: own },
-          { key: 'chal', label: 'From challenges', items: fromChallenges },
-        ] as const).flatMap((group) => (group.items.length === 0 ? [] : [
-          <div key={`h-${group.key}`} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            // The divider. Only drawn above the second group, because a rule
-            // over the first one separates it from nothing.
-            marginTop: group.key === 'chal' ? 10 : 0,
-            paddingTop: group.key === 'chal' ? 14 : 0,
-            borderTop: group.key === 'chal' ? '1px solid var(--line)' : 'none',
-          }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
-              {group.label}
-            </span>
-            <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{group.items.length}</span>
-          </div>,
-          ...group.items.map((h) => {
-          const s = streak(ticks, h.id);
-          const chal = chalOf(h.challenge_id);
-          return (
-            <div key={h.id} style={CARD}
-              onPointerDown={(e) => lp.start(e, 'habit', h.id, h.name)}
-              onContextMenu={(e) => lp.onContextMenu(e, 'habit', h.id, h.name)}>
-              <div style={phone
-                ? { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 13 }
-                : { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 1 auto', minWidth: 0 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 3, background: h.color, flex: 'none' }} />
-                  <span title={h.name} style={{
-                    fontSize: phone ? 14.5 : 15, fontWeight: 800, letterSpacing: '-.015em',
-                    minWidth: 0, overflowWrap: 'anywhere',
-                  }}>{h.name}</span>
-                  {h.challenge_id && (
-                    <span title={chal ? `Counts: ${metricDef(chal.metric).label}` : 'From a challenge'}
-                      style={{
-                        flex: 'none', display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                        borderRadius: 999, fontSize: 10, fontWeight: 700,
-                        background: `color-mix(in srgb, ${h.color} 18%, transparent)`,
-                        color: 'var(--tx2)',
-                      }}>
-                      <Icon name="trophy" size={10} color={h.color} />
-                      {chal ? metricDef(chal.metric).label : 'Challenge'}
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: phone ? 0 : 'auto' }}>
-                  <span style={{ flex: 'none', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
-                    {KIND_LABEL[h.kind] ?? 'Daily'}
-                  </span>
-                  <Streak days={s} label="" size="sm" hue={h.color}
-                    best={bestStreakFrom(ticks.filter((t) => t.habit_id === h.id).map((t) => t.on_date))} />
-                  <button onClick={() => setEditing(editing === h.id ? null : h.id)} className="hov" title="Edit habit"
-                    style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="edit" size={14} color="var(--tx2)" />
-                  </button>
-                  {h.challenge_id ? (
-                    // Deleting this would leave you in the challenge with
-                    // nothing to tick. Leaving is done where you joined.
-                    <button onClick={() => router.push('/community/?focus=Challenges')} className="hov" title="Open the challenge"
-                      style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="chev" size={14} color="var(--tx2)" />
-                    </button>
-                  ) : (
-                    <button onClick={() => A.removeWithUndo(h)} className="hov" title="Delete habit"
-                      style={{ width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="trash" size={14} color="var(--tx2)" />
-                    </button>
-                  )}
-                </div>
+      {viewMode === 'analytics' ? (
+        <HabitsAnalytics habits={habits} ticks={ticks} />
+      ) : (
+        <>
+          {/* Filters & Search Rail */}
+          <div
+            style={{
+              background: 'var(--card)',
+              padding: '12px 14px',
+              borderRadius: 16,
+              border: '1px solid var(--line)',
+              marginBottom: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Search */}
+              <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search habits by name or trigger cue..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 34px',
+                    borderRadius: 10,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    fontSize: 12.5,
+                    color: 'var(--tx)',
+                  }}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}>
+                  <Icon name="spark" size={14} color="var(--tx3)" />
+                </span>
               </div>
 
-              {editing === h.id && (
-                <div className="rise" style={{
-                  display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12,
-                  padding: '10px 12px', borderRadius: 11, background: 'var(--card2)',
-                }}>
-                  <input defaultValue={h.name}
-                    onBlur={(e) => e.target.value !== h.name && A.rename.mutate({ id: h.id, name: e.target.value })}
-                    style={{ flex: 1, minWidth: 140, fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', padding: '5px 9px', borderRadius: 8, border: '1px solid var(--line2)' }} />
-                  <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--tx2)', flexWrap: 'wrap' }}>
-                    {(['bin', 'count', 'dur'] as const).map((k) => (
-                      <button key={k} onClick={() => A.setKind.mutate({ id: h.id, kind: k })} style={{
-                        padding: '5px 10px', borderRadius: 8,
-                        border: `1px solid ${h.kind === k ? 'var(--acc)' : 'var(--line2)'}`,
-                        color: h.kind === k ? 'var(--accTx)' : 'var(--tx2)',
-                      }}>
-                        {k === 'bin' ? 'Binary' : k === 'count' ? 'Quantity' : 'Duration'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Status Filter */}
+              <div style={{ display: 'flex', gap: 4, background: 'var(--card2)', padding: 3, borderRadius: 10 }}>
+                {(['all', 'pending', 'done'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 7,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      border: 'none',
+                      background: statusFilter === s ? 'var(--card)' : 'transparent',
+                      color: statusFilter === s ? 'var(--tx)' : 'var(--tx3)',
+                      textTransform: 'capitalize',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {s === 'all' ? 'All Habits' : s === 'pending' ? 'Pending' : 'Done Today'}
+                  </button>
+                ))}
+              </div>
 
-              {!year ? (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: phone ? 'repeat(7,1fr)' : `repeat(7, ${CELL}px)`,
-                  gap: phone ? 7 : 6,
-                }}>
-                  {week.map((d, i) => {
-                    const key = ymd(d);
-                    const t = ticks.find((x) => x.habit_id === h.id && x.on_date === key);
-                    const on = !!t;
-                    return (
-                      <div key={key}>
-                        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--tx3)', textAlign: 'center', marginBottom: 4 }}>
-                          {DAYS_SHORT[i]}
-                        </div>
-                        <button
-                          onClick={() => A.tick.mutate({ habitId: h.id, date: key })}
-                          className={on ? 'cellpop' : undefined}
-                          title={key}
-                          style={{
-                            width: '100%', height: phone ? 38 : CELL, borderRadius: 9,
-                            display: 'grid', placeItems: 'center',
-                            background: on ? h.color : 'var(--card2)',
-                            border: key === today ? `1px solid ${on ? 'transparent' : h.color}` : '1px solid transparent',
-                            color: on ? '#0C0F16' : 'var(--tx3)', fontSize: 11, fontWeight: 800,
-                          }}
-                        >
-                          {label(h, t)}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m) => <span key={m}>{m}</span>)}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateRows: 'repeat(7,1fr)', gridAutoFlow: 'column', gridAutoColumns: '1fr', gap: 2 }}>
-                    {lastDays(364).map((d) => {
-                      const key = ymd(d);
-                      const on = ticks.some((x) => x.habit_id === h.id && x.on_date === key);
-                      return <div key={key} title={key} style={{ aspectRatio: '1', borderRadius: 2, background: on ? h.color : 'var(--card2)', opacity: on ? 1 : 0.6 }} />;
-                    })}
-                  </div>
-                </>
-              )}
+              {/* Time of Day Filter */}
+              <div style={{ display: 'flex', gap: 4, background: 'var(--card2)', padding: 3, borderRadius: 10 }}>
+                {(['all', 'morning', 'afternoon', 'evening'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTimeOfDay(t)}
+                    style={{
+                      padding: '5px 9px',
+                      borderRadius: 7,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      border: 'none',
+                      background: selectedTimeOfDay === t ? 'var(--card)' : 'transparent',
+                      color: selectedTimeOfDay === t ? 'var(--tx)' : 'var(--tx3)',
+                      textTransform: 'capitalize',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t === 'all' ? 'All Day' : t}
+                  </button>
+                ))}
+              </div>
             </div>
-          );
-        }),
-        ]))}
-      </div>
 
-      {lp.ctx && (
-        <ContextMenu
-          x={lp.ctx.x} y={lp.ctx.y} kind="habit" label={lp.ctx.label}
-          accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={lp.close}
-          items={[
-            { label: 'Tick today', icon: 'task', run: () => A.tick.mutate({ habitId: lp.ctx!.id, date: today }) },
-            { label: 'Rename', icon: 'edit', run: () => setEditing(lp.ctx!.id) },
-            {
-              label: 'Delete', icon: 'trash', danger: true,
-              run: () => { const h = habits.find((x) => x.id === lp.ctx!.id); if (h) A.removeWithUndo(h); },
-            },
-          ]}
+            {/* Category Filter Chips */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }} className="navsb">
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className="k-squish"
+                style={{
+                  padding: '5px 11px',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: `1px solid ${selectedCategory === 'all' ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: selectedCategory === 'all' ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
+                  color: selectedCategory === 'all' ? 'var(--accTx)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                  flex: 'none',
+                }}
+              >
+                All Categories ({habits.length})
+              </button>
+
+              {HABIT_CATEGORIES.map((c) => {
+                const count = habits.filter((h) => (h.category || 'health') === c.id).length;
+                if (count === 0) return null;
+                const on = selectedCategory === c.id;
+
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCategory(c.id)}
+                    className="k-squish"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '5px 11px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      border: `1px solid ${on ? c.color : 'var(--line2)'}`,
+                      background: on ? `color-mix(in srgb, ${c.color} 16%, transparent)` : 'transparent',
+                      color: on ? 'var(--tx)' : 'var(--tx3)',
+                      cursor: 'pointer',
+                      flex: 'none',
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.color }} />
+                    {c.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Habits Grid / List */}
+          {isPending && <RowsSkeleton rows={5} label="Loading your habits" lead="square" />}
+
+          {!isPending && filteredHabits.length === 0 && (
+            <div
+              style={{
+                background: 'var(--card)',
+                borderRadius: 16,
+                padding: '36px 20px',
+                textAlign: 'center',
+                color: 'var(--tx3)',
+                fontSize: 13,
+                border: '1px solid var(--line)',
+              }}
+            >
+              {search || selectedCategory !== 'all' || statusFilter !== 'all'
+                ? 'No habits match your filters.'
+                : 'No habits created yet. Tap "New Habit" to start building your streak!'}
+            </div>
+          )}
+
+          {/* Your Habits Section */}
+          {ownHabits.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 800, color: 'var(--tx3)', letterSpacing: '.1em', textTransform: 'uppercase' }}>
+                <span>Personal Routines</span>
+                <span style={{ opacity: 0.6 }}>({ownHabits.length})</span>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: phone || viewMode === 'week' ? '1fr' : 'repeat(auto-fill, minmax(360px, 1fr))',
+                  gap: 10,
+                }}
+              >
+                {ownHabits.map((h) => (
+                  <HabitCard
+                    key={h.id}
+                    habit={h}
+                    ticks={ticks}
+                    week={week}
+                    today={today}
+                    phone={phone}
+                    viewMode={viewMode === 'day' ? 'day' : 'week'}
+                    onTick={(id, date, val) => A.tick.mutate({ habitId: id, date, value: val })}
+                    onOpenTimer={() => setTimingHabit(h)}
+                    onOpenDetail={() => setDetailHabit(h)}
+                    onOpenEdit={() => setEditingHabit(h)}
+                    onDelete={() => A.removeWithUndo(h)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Challenge Habits Section */}
+          {challengeHabits.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 800, color: 'var(--tx3)', letterSpacing: '.1em', textTransform: 'uppercase', marginTop: 10 }}>
+                <span>From Active Challenges</span>
+                <span style={{ opacity: 0.6 }}>({challengeHabits.length})</span>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: phone || viewMode === 'week' ? '1fr' : 'repeat(auto-fill, minmax(360px, 1fr))',
+                  gap: 10,
+                }}
+              >
+                {challengeHabits.map((h) => (
+                  <HabitCard
+                    key={h.id}
+                    habit={h}
+                    ticks={ticks}
+                    week={week}
+                    today={today}
+                    phone={phone}
+                    viewMode={viewMode === 'day' ? 'day' : 'week'}
+                    onTick={(id, date, val) => A.tick.mutate({ habitId: id, date, value: val })}
+                    onOpenTimer={() => setTimingHabit(h)}
+                    onOpenDetail={() => setDetailHabit(h)}
+                    onOpenEdit={() => setEditingHabit(h)}
+                    onDelete={() => A.removeWithUndo(h)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modals */}
+      {creating && (
+        <HabitCreatorModal
+          onClose={() => setCreating(false)}
+          onSave={(h) => {
+            A.create.mutate(h);
+            setCreating(false);
+          }}
+        />
+      )}
+
+      {editingHabit && (
+        <HabitCreatorModal
+          initial={editingHabit}
+          onClose={() => setEditingHabit(null)}
+          onSave={(h) => {
+            const { id, ...patch } = h;
+            A.edit.mutate({ id, patch });
+            setEditingHabit(null);
+          }}
+        />
+      )}
+
+      {timingHabit && (
+        <HabitTimerModal
+          habit={timingHabit}
+          onClose={() => setTimingHabit(null)}
+          onComplete={(loggedMins) => {
+            A.tick.mutate({ habitId: timingHabit.id, date: today, value: loggedMins });
+          }}
+        />
+      )}
+
+      {detailHabit && (
+        <HabitDetailModal
+          habit={detailHabit}
+          ticks={ticks}
+          onClose={() => setDetailHabit(null)}
+          onEdit={() => {
+            const h = detailHabit;
+            setDetailHabit(null);
+            setEditingHabit(h);
+          }}
+          onDelete={() => {
+            A.removeWithUndo(detailHabit);
+            setDetailHabit(null);
+          }}
+          onToggleToday={(note, mood) => {
+            A.tick.mutate({ habitId: detailHabit.id, date: today, note, mood });
+          }}
         />
       )}
     </div>
   );
-}
-
-/**
- * "Aug 13 – 19, 2026", or "Aug 30 – Sep 5, 2026" across a month boundary.
- *
- * Built from parts rather than a second toLocaleDateString call: asking for
- * `{ day, year }` without a month is a combination most locales have no pattern
- * for, and Chrome falls back to its field-listing style — the heading read
- * "Aug 13 – 2026 (day: 19)".
- */
-function weekLabel(from: Date, to: Date): string {
-  const md = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const tail = `${to.getDate()}, ${to.getFullYear()}`;
-  return from.getMonth() === to.getMonth()
-    ? `${md(from)} – ${tail}`
-    : `${md(from)} – ${md(to)}, ${to.getFullYear()}`;
 }

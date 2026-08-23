@@ -18,6 +18,7 @@ import { Mascot } from './challenges/Mascot';
 import { moodOf, daysSince, streakOf, nudge, type Mood } from '@/lib/mascot';
 import { TrophyRoom, type Won } from './challenges/TrophyRoom';
 import { uploadResult } from './challenges/resultCard';
+import { ChallengeDetailModal } from './challenges/ChallengeDetailModal';
 import {
   useChallenges, useMembers, useRanked, useStars, useChallengeDays, useChallengeActions,
   phaseOf, daysLeft, payout, scoreOf, normaliseMetric,
@@ -75,7 +76,10 @@ export function Challenges() {
   const [picking, setPicking] = useState(false);
   /** The challenge being edited, if any. The composer doubles as the editor. */
   const [editing, setEditing] = useState<Challenge | null>(null);
-  const [filter, setFilter] = useState<'live' | 'upcoming' | 'over'>('live');
+  const [inspecting, setInspecting] = useState<Challenge | null>(null);
+  const [filter, setFilter] = useState<'live' | 'upcoming' | 'over' | 'mine'>('live');
+  const [search, setSearch] = useState('');
+  const [metricFilter, setMetricFilter] = useState<string>('all');
 
   const byChallenge = useMemo(() => {
     const m = new Map<string, Member[]>();
@@ -83,7 +87,33 @@ export function Challenges() {
     return m;
   }, [members]);
 
-  const shown = challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === filter);
+  const shown = useMemo(() => {
+    return challenges.filter((c) => {
+      const cMembers = byChallenge.get(c.id) ?? [];
+      const phase = phaseOf(c, cMembers);
+
+      if (filter === 'mine') {
+        const isJoined = cMembers.some((m) => m.user_id === me);
+        const isCreator = c.owner_id === me;
+        if (!isJoined && !isCreator) return false;
+      } else if (phase !== filter) {
+        return false;
+      }
+
+      if (metricFilter !== 'all' && c.metric !== metricFilter) {
+        return false;
+      }
+
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchName = c.name.toLowerCase().includes(q);
+        const matchDesc = c.description?.toLowerCase().includes(q);
+        if (!matchName && !matchDesc) return false;
+      }
+
+      return true;
+    });
+  }, [challenges, byChallenge, filter, metricFilter, search, me]);
 
   /** Everything you placed in, for the shelf. */
   const won: Won[] = useMemo(() => challenges
@@ -103,6 +133,7 @@ export function Challenges() {
     live: challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === 'live').length,
     upcoming: challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === 'upcoming').length,
     over: challenges.filter((c) => phaseOf(c, byChallenge.get(c.id) ?? []) === 'over').length,
+    mine: challenges.filter((c) => (byChallenge.get(c.id) ?? []).some((m) => m.user_id === me) || c.owner_id === me).length,
   };
 
   return (
@@ -110,8 +141,9 @@ export function Challenges() {
       <RankCard ranked={ranked} />
       {move && <RankUpCard {...move} onClose={dismiss} />}
 
+      {/* Filter & Actions Bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-        {(['live', 'upcoming', 'over'] as const).map((f) => (
+        {(['live', 'upcoming', 'over', 'mine'] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} className="k-chip" aria-pressed={filter === f}
             style={{
               padding: '7px 14px', borderRadius: 999, minHeight: 36, fontSize: 11.5, fontWeight: 700,
@@ -119,7 +151,7 @@ export function Challenges() {
               background: filter === f ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
               color: filter === f ? 'var(--accTx)' : 'var(--tx2)',
             }}>
-            {f[0].toUpperCase() + f.slice(1)} <span style={{ opacity: .65 }}>{counts[f]}</span>
+            {f === 'mine' ? 'My Challenges' : f[0].toUpperCase() + f.slice(1)} <span style={{ opacity: .65 }}>{counts[f]}</span>
           </button>
         ))}
 
@@ -132,9 +164,67 @@ export function Challenges() {
         </button>
       </div>
 
+      {/* Search & Metric Filter Rail */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: 'var(--card)', padding: '10px 12px', borderRadius: 14, border: '1px solid var(--line)' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search challenges by title or goal..."
+            style={{
+              width: '100%',
+              padding: '7px 12px',
+              borderRadius: 9,
+              border: '1px solid var(--line2)',
+              background: 'var(--card2)',
+              fontSize: 12,
+              color: 'var(--tx)',
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 4, overflowX: 'auto' }} className="navsb">
+          <button
+            onClick={() => setMetricFilter('all')}
+            style={{
+              padding: '5px 10px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 700,
+              border: `1px solid ${metricFilter === 'all' ? 'var(--acc)' : 'var(--line2)'}`,
+              background: metricFilter === 'all' ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
+              color: metricFilter === 'all' ? 'var(--accTx)' : 'var(--tx3)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            All Metrics
+          </button>
+          {METRICS.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMetricFilter(m.id)}
+              style={{
+                padding: '5px 10px',
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                border: `1px solid ${metricFilter === m.id ? 'var(--acc)' : 'var(--line2)'}`,
+                background: metricFilter === m.id ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
+                color: metricFilter === m.id ? 'var(--accTx)' : 'var(--tx3)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {m.label.split(' ')[0]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {shown.length === 0 && (
         <div style={{ ...CARD, padding: '34px 20px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)', lineHeight: 1.7 }}>
-          {filter === 'live' ? 'Nothing running. Start one and drag a friend in.' : `No ${filter} challenges.`}
+          {search || metricFilter !== 'all' ? 'No challenges match your filters.' : filter === 'live' ? 'Nothing running. Start one and drag a friend in.' : `No ${filter} challenges.`}
         </div>
       )}
 
@@ -145,7 +235,8 @@ export function Challenges() {
               profiles={profiles} days={daysByChallenge.get(c.id) ?? []}
               stars={stars.filter((x) => x.challenge_id === c.id).length}
               starred={stars.some((x) => x.challenge_id === c.id && x.user_id === me)}
-              onEdit={() => setEditing(c)} />
+              onEdit={() => setEditing(c)}
+              onInspect={() => setInspecting(c)} />
           </div>
         ))}
       </div>
@@ -170,6 +261,68 @@ export function Challenges() {
             setEditing(null);
             toast(`${c.name} updated`);
           }} />
+      )}
+
+      {inspecting && (
+        <ChallengeDetailModal
+          challenge={inspecting}
+          members={byChallenge.get(inspecting.id) ?? []}
+          days={daysByChallenge.get(inspecting.id) ?? []}
+          profiles={profiles}
+          me={me}
+          isOwner={inspecting.owner_id === me}
+          onClose={() => setInspecting(null)}
+          onEdit={() => {
+            const c = inspecting;
+            setInspecting(null);
+            setEditing(c);
+          }}
+          onDelete={() => {
+            const c = inspecting;
+            const cMembers = byChallenge.get(c.id) ?? [];
+            setInspecting(null);
+            A.removeWithUndo(c, cMembers);
+          }}
+          onLeave={() => {
+            const c = inspecting;
+            setInspecting(null);
+            A.leave.mutate({ challenge_id: c.id });
+          }}
+          onBump={(val) => {
+            A.bump.mutate({ challenge_id: inspecting.id, progress: val });
+          }}
+          onSettle={() => {
+            const c = inspecting;
+            const cMembers = byChallenge.get(c.id) ?? [];
+            setInspecting(null);
+            A.finish(c, cMembers);
+          }}
+          onShareToFeed={async () => {
+            const c = inspecting;
+            const cMembers = byChallenge.get(c.id) ?? [];
+            const { rows: stRows } = standings(cMembers, c.rule, c.target);
+            try {
+              const path = await uploadResult(
+                c.name,
+                `${metricDef(c.metric).label}`,
+                stRows.map((r) => ({
+                  label: r.user_id === me ? 'You' : r.display_name || 'Player',
+                  score: r.progress,
+                  place: r.place,
+                  color: r.place === 1 ? c.color : '#5A6178',
+                  you: r.user_id === me,
+                })),
+                prefs.accent,
+              );
+              if (path) {
+                await postImage(`${c.name} Leaderboard Standings`, 'Challenge', path);
+                toast('Posted challenge standings to Basedly Feed! 🎉');
+              }
+            } catch (err) {
+              toast('Could not generate share image');
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -400,13 +553,14 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
 
 /* --------------------------------------------------------- one challenge */
 
-function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars, starred, onEdit }: {
+function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars, starred, onEdit, onInspect }: {
   challenge: Challenge; members: Member[]; A: ReturnType<typeof useChallengeActions>;
   accent: string;
   profiles: Record<string, import('@/lib/people').Person>;
   days: Day[];
   stars: number; starred: boolean;
   onEdit: () => void;
+  onInspect?: () => void;
 }) {
   const phase = phaseOf(c, members);
   const { rows, winner } = standings(members, c.rule, c.target);
@@ -514,16 +668,27 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
   return (
     <div style={{ ...CARD, padding: '14px 15px 15px', borderColor: phase === 'live' ? `color-mix(in srgb, ${c.color} 34%, transparent)` : 'var(--line)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 11 }}>
-        <span style={{
-          width: 34, height: 34, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center',
-          background: `color-mix(in srgb, ${c.color} 20%, transparent)`,
-        }}>
+        <span
+          onClick={onInspect}
+          style={{
+            width: 34, height: 34, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center',
+            background: `color-mix(in srgb, ${c.color} 20%, transparent)`, cursor: onInspect ? 'pointer' : 'default',
+          }}
+        >
           <Icon name={(metric?.icon ?? 'trophy') as IconName} size={16} color={c.color} />
         </span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-.015em', overflowWrap: 'anywhere' }}>{c.name}</span>
+            <span
+              onClick={onInspect}
+              style={{
+                fontSize: 13.5, fontWeight: 800, letterSpacing: '-.015em', overflowWrap: 'anywhere',
+                cursor: onInspect ? 'pointer' : 'default',
+              }}
+            >
+              {c.name}
+            </span>
             {isBot(c.owner_id) && (
               <span style={{
                 flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9, fontWeight: 800,
@@ -652,23 +817,37 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
         </div>
       )}
 
-      {rows.length > 0 && (
-        <button onClick={() => setOnTrail((v) => !v)} className="hov k-squish"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '5px 11px',
-            borderRadius: 999, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700,
-            color: onTrail ? 'var(--accTx)' : 'var(--tx3)',
-          }}>
-          <Icon name={onTrail ? 'list' : 'walk'} size={12} color={onTrail ? 'var(--accTx)' : 'var(--tx3)'} />
-          {onTrail ? 'Standings' : 'The trail'}
-        </button>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        {rows.length > 0 && (
+          <button onClick={() => setOnTrail((v) => !v)} className="hov k-squish"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px',
+              borderRadius: 999, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700,
+              color: onTrail ? 'var(--accTx)' : 'var(--tx3)',
+            }}>
+            <Icon name={onTrail ? 'list' : 'walk'} size={12} color={onTrail ? 'var(--accTx)' : 'var(--tx3)'} />
+            {onTrail ? 'Standings' : 'The trail'}
+          </button>
+        )}
 
-      {c.target != null && (
-        <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 9, textAlign: 'right' }}>
-          Target {c.target} {c.unit}
-        </div>
-      )}
+        {onInspect && (
+          <button onClick={onInspect} className="hov k-squish"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px',
+              borderRadius: 999, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700,
+              color: 'var(--tx2)', background: 'var(--card2)',
+            }}>
+            <Icon name="spark" size={12} color="var(--accTx)" />
+            Arena & Rules
+          </button>
+        )}
+
+        {c.target != null && (
+          <div style={{ fontSize: 10, color: 'var(--tx3)', marginLeft: 'auto' }}>
+            Target {c.target} {c.unit}
+          </div>
+        )}
+      </div>
 
       {/* Logging is manual here because the metric sources are per-user and
           private; the counters the app already keeps drive the suggestion. */}

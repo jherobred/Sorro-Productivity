@@ -430,14 +430,19 @@ export default function HomePage() {
           {/* Habits — tick inline */}
           <div style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
-              <div style={KICKER}>Habits</div>
+              <button
+                onClick={() => router.push('/habits/')}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', ...KICKER }}
+              >
+                Habits ({ticks.filter((t) => t.on_date === today).length}/{habits.length})
+              </button>
               <div style={{ marginLeft: 'auto' }}>
                 <Streak size="sm" label="best run"
                   days={habits.reduce((m, h) => Math.max(m, streakFrom(ticks.filter((t) => t.habit_id === h.id).map((t) => t.on_date))), 0)} />
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {habits.map((h) => {
+              {habits.slice(0, 7).map((h) => {
                 const tick = ticks.find((t) => t.habit_id === h.id && t.on_date === today);
                 const on = !!tick;
                 const label = !on ? '+' : h.kind === 'bin' ? '✓' : h.kind === 'dur'
@@ -450,23 +455,33 @@ export default function HomePage() {
                         playTick();
                         HA.tick.mutate({ habitId: h.id, date: today });
                       }}
-                      className={on ? 'cellpop' : ''}
+                      className={on ? 'cellpop' : 'k-squish'}
                       style={{
                         width: 28, height: 28, borderRadius: 9, flex: 'none',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         border: on ? 'none' : '1.5px solid var(--line2)',
                         background: on ? h.color : 'transparent',
                         color: on ? '#0C0F16' : 'var(--tx3)',
-                        fontSize: 11, fontWeight: 700,
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       }}
                     >
                       {label}
                     </button>
-                    <div style={{ flex: 1, fontSize: 12.5, fontWeight: 500 }}>{h.name}</div>
+                    <div
+                      onClick={() => router.push('/habits/')}
+                      style={{ flex: 1, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {h.name}
+                    </div>
                     <Streak days={streak(ticks, h.id)} label="" size="sm" hue={h.color} />
                   </div>
                 );
               })}
+              {habits.length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--tx3)', textAlign: 'center', padding: '10px 0' }}>
+                  No habits set yet. <button onClick={() => router.push('/habits/')} style={{ color: 'var(--accTx)', background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Add habit</button>
+                </div>
+              )}
             </div>
           </div>
 
