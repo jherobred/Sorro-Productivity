@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from '@/components/Icon';
+import { FolderGridSkeleton } from '@/components/Skeleton';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { RowActions } from '@/components/MoneyRows';
@@ -57,9 +58,14 @@ const RESTORE = defineMutation('files.restore', async (v: { id: string }) => {
   const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_files', p_id: v.id });
   if (error) throw error;
 });
-const NEW_FOLDER = defineMutation('files.newFolder', async (v: { name: string; parent_id: string | null }) => {
+// The id is the caller's, not the database's. It was being passed in, used for
+// the optimistic row, and then dropped on the way to the insert — so the
+// folder you could see had one id and the folder that existed had another, and
+// anything holding the first (a rename opened on the new folder, a file
+// dropped into it) addressed a row that was never there.
+const NEW_FOLDER = defineMutation('files.newFolder', async (v: { id: string; name: string; parent_id: string | null }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_folders').insert({ user_id, name: v.name, parent_id: v.parent_id });
+  const { error } = await supabase.from('bd_folders').insert({ id: v.id, user_id, name: v.name, parent_id: v.parent_id });
   if (error) throw error;
 });
 
@@ -91,7 +97,7 @@ export default function FilesPage() {
   const [grid, setGrid] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const { data: files = [] } = useQuery({
+  const { data: files = [], isPending: filesPending } = useQuery({
     queryKey: FILES,
     queryFn: async (): Promise<FileRow[]> => {
       const { data, error } = await supabase.from('bd_files')
@@ -240,7 +246,15 @@ export default function FilesPage() {
           </button>
           <input ref={inputRef} type="file" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }} />
-          <button onClick={() => void ask('New folder', { placeholder: 'Folder name', confirmLabel: 'Create' }).then((n) => { if (n) newFolder.mutate({ id: crypto.randomUUID(), name: n, parent_id: folder }); })}
+          {/* Same order as Projects: the folder exists first, the name is a
+              correction. Dismissing the rename leaves you an "Untitled folder"
+              rather than nothing at all. */}
+          <button onClick={() => {
+            const id = crypto.randomUUID();
+            newFolder.mutate({ id, name: 'Untitled folder', parent_id: folder });
+            void ask('Name the folder', { initial: 'Untitled folder', placeholder: 'Folder name', confirmLabel: 'Rename' })
+              .then((n) => { if (n && n !== 'Untitled folder') renameFolder.mutate({ id, name: n }); });
+          }}
             className="hov" title="New folder" style={tool}>
             <Icon name="folderPlus" size={15} color="var(--tx2)" />
           </button>
@@ -322,7 +336,9 @@ export default function FilesPage() {
 
       <div style={{ ...KICKER, marginBottom: 10 }}>Files{busy ? ' · uploading…' : ''}</div>
 
-      {grid ? (
+      {filesPending && <FolderGridSkeleton phone={phone} count={6} label="Loading your files" />}
+
+      {filesPending ? null : grid ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
           {/* Grid used to be the read-only view: renaming or deleting meant
               switching to the list first. Same handles in both. */}

@@ -19,7 +19,6 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@supabase/supabase-js": "^2.47.10",
-    "@tanstack/query-sync-storage-persister": "^5.62.11",
     "@tanstack/react-query": "^5.62.11",
     "@tanstack/react-query-persist-client": "^5.62.11",
     "next": "^15.1.3",

@@ -133,7 +133,7 @@ export function Avatar({ who, size, ring }: { who: Display; size: number; ring?:
   };
   if (who.photo) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={who.photo} alt="" style={{ ...common, objectFit: 'cover', display: 'block' }} />;
+    return <img src={who.photo} alt="" style={{ ...common, objectFit: 'cover', display: 'block', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{

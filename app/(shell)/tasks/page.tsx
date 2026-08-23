@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { TasksSkeleton } from '@/components/Skeleton';
 import { Page } from '@/components/Page';
 import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
@@ -55,7 +56,7 @@ export default function TasksPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
   const { data: lists = [] } = useLists();
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isPending } = useTasks();
   const A = useTaskActions();
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
@@ -91,11 +92,20 @@ export default function TasksPage() {
       : order === 'Title' ? a.task.title.localeCompare(b.task.title)
       : (a.task.due_on ?? '9999').localeCompare(b.task.due_on ?? '9999'));
 
+  /**
+   * All three, always — an empty one is information.
+   *
+   * These used to be filtered out when they had nothing in them, so a good
+   * week collapsed the screen to a single "Today" card and you could not tell
+   * whether Overdue was empty or whether the app had forgotten to draw it.
+   * Nothing overdue is the best thing this page can tell you and it was the
+   * one state it refused to show. Each group now says so in a line.
+   */
   const groups = [
-    { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}` },
-    { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight' },
-    { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week' },
-  ].filter((g) => g.items.length);
+    { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}`, empty: 'Nothing late.' },
+    { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight', empty: 'Nothing due today.' },
+    { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week', empty: 'Nothing scheduled yet.' },
+  ];
 
   const complete = (r: Row) => {
     setLeaving((s) => new Set(s).add(r.task.id));
@@ -134,7 +144,11 @@ export default function TasksPage() {
         defaultListId={lists[0]?.id ?? null}
         onCreate={(t) => { A.create.mutate(t); toast(`Added “${t.title}”`); }} />
 
-      {groups.map((g) => (
+      {/* Pending, not empty. Once the offline cache has been restored there is
+          data on the first frame and this never renders. */}
+      {isPending && <TasksSkeleton tints={[PAL.coral, PAL.amber, PAL.mint]} />}
+
+      {!isPending && groups.map((g) => (
         <div key={g.n}
           style={{
             background: 'var(--card)', borderRadius: 16, padding: '14px 14px 6px', marginTop: 12,
@@ -153,8 +167,12 @@ export default function TasksPage() {
             <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
               {g.items.length}
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.note}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.items.length ? g.note : ''}</span>
           </div>
+
+          {g.items.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '2px 2px 12px' }}>{g.empty}</div>
+          )}
 
           {g.items.map((r) => (
             <TaskRow

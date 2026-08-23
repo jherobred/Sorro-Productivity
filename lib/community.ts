@@ -28,18 +28,30 @@ import { isBot } from './bot';
  * never has to know which.
  */
 
+/**
+ * Which table the row lives in — no longer which *kind of post* it is.
+ *
+ * A reader cannot tell any more and should not care: both carry a title, a
+ * body, a tag and pictures, all optional. The name survives because every
+ * reaction, comment and delete has to know which table to address.
+ */
 export type Kind = 'photo' | 'discussion';
 
 export type Item = {
   id: string;
   kind: Kind;
   author_id: string;
-  /** Discussions have one; photos do not. */
+  /** Optional on both now. Empty means the body speaks for itself. */
   title: string;
   /** The caption, or the discussion's detail. May be empty. */
   body: string;
+  /** '' when the writer chose not to tag it, which is allowed. */
   tag: string;
+  /** The cover picture, or null. Kept separate because everything that shows
+   *  one picture — the feed card, a notification — wants exactly this one. */
   image_path: string | null;
+  /** Every picture, cover first. Length 0 or 1 for almost every old row. */
+  images: string[];
   created_at: string;
 };
 
@@ -50,13 +62,25 @@ export const THREADS = ['threads'] as const;
 export const LIKES = ['post_likes'] as const;
 export const VOTES = ['thread_votes'] as const;
 export const COMMENT_COUNTS = ['comment_counts'] as const;
+export const POST_IMAGES = ['post_images'] as const;
 export const commentsKey = (kind: Kind, id: string) => ['comments', kind, id] as const;
 
 export const TAGS = ['Update', 'Ask', 'Win', 'Help', 'Rant', 'Resource'] as const;
 
+/**
+ * How many pictures one post may carry.
+ *
+ * Ten, because a gallery is for "here is the whole thing from six angles" and
+ * past that it is an album, which is a different feature with a different
+ * screen. The cap is enforced in the composer rather than the database: a
+ * limit you are told about while adding beats an insert that fails after the
+ * upload already cost you the data.
+ */
+export const MAX_IMAGES = 10;
+
 /* ------------------------------------------------------------------- reads */
 
-type PostRow = { id: string; author_id: string; caption: string; tag: string; image_path: string | null; created_at: string };
+type PostRow = { id: string; author_id: string; title: string; caption: string; tag: string; image_path: string | null; created_at: string };
 type ThreadRow = { id: string; author_id: string; title: string; body: string; tag: string; created_at: string };
 
 export function usePosts() {
@@ -64,7 +88,7 @@ export function usePosts() {
     queryKey: POSTS,
     queryFn: async (): Promise<PostRow[]> => {
       const { data, error } = await supabase.from('bd_posts')
-        .select('id,author_id,caption,tag,image_path,created_at').is('deleted_at', null)
+        .select('id,author_id,title,caption,tag,image_path,created_at').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(40);
       if (error) throw error;
       return data ?? [];
@@ -79,6 +103,25 @@ export function useThreads() {
       const { data, error } = await supabase.from('bd_threads')
         .select('id,author_id,title,body,tag,created_at').is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(40);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/**
+ * The pictures after the cover, for every post on screen, in one query.
+ *
+ * One request for the whole feed rather than one per card: forty cards each
+ * asking "do you have any more pictures?" is forty round trips to learn that
+ * thirty-eight of them do not.
+ */
+export function usePostImages() {
+  return useQuery({
+    queryKey: POST_IMAGES,
+    queryFn: async (): Promise<{ post_id: string; path: string; position: number }[]> => {
+      const { data, error } = await supabase.from('bd_post_images')
+        .select('post_id,path,position').order('position');
       if (error) throw error;
       return data ?? [];
     },
@@ -157,16 +200,21 @@ export type Filter = 'all' | 'photo' | 'discussion';
 export function useFeed(sort: Sort, filter: Filter, reactions: Record<string, number>, hideBot = false) {
   const { data: posts = [] } = usePosts();
   const { data: threads = [] } = useThreads();
+  const { data: extra = [] } = usePostImages();
 
   return useMemo(() => {
+    const gallery = new Map<string, string[]>();
+    for (const r of extra) gallery.set(r.post_id, [...(gallery.get(r.post_id) ?? []), r.path]);
+
     const items: Item[] = [
       ...posts.map((p): Item => ({
-        id: p.id, kind: 'photo', author_id: p.author_id, title: '',
+        id: p.id, kind: 'photo', author_id: p.author_id, title: p.title ?? '',
         body: p.caption, tag: p.tag, image_path: p.image_path, created_at: p.created_at,
+        images: [p.image_path, ...(gallery.get(p.id) ?? [])].filter((x): x is string => !!x),
       })),
       ...threads.map((t): Item => ({
         id: t.id, kind: 'discussion', author_id: t.author_id, title: t.title,
-        body: t.body, tag: t.tag, image_path: null, created_at: t.created_at,
+        body: t.body, tag: t.tag, image_path: null, created_at: t.created_at, images: [],
       })),
     ].filter((i) => (filter === 'all' || i.kind === filter) && !(hideBot && isBot(i.author_id)));
 
@@ -175,17 +223,46 @@ export function useFeed(sort: Sort, filter: Filter, reactions: Record<string, nu
     return items.sort((a, b) => (sort === 'top'
       ? (reactions[key(b)] ?? 0) - (reactions[key(a)] ?? 0) || b.created_at.localeCompare(a.created_at)
       : b.created_at.localeCompare(a.created_at)));
-  }, [posts, threads, sort, filter, reactions, hideBot]);
+  }, [posts, threads, extra, sort, filter, reactions, hideBot]);
 }
 
 export const key = (i: Item | { kind: Kind; id: string }) => `${i.kind}:${i.id}`;
 
+/**
+ * True only before either table has ever answered.
+ *
+ * `useFeed` returns an array, so a loading feed and an empty feed were the
+ * same value and the page said "Nothing here yet" to somebody whose posts
+ * were still in flight. Calling the same hooks again is free — React Query
+ * dedupes by key, so this is the existing two queries, read for their status.
+ */
+export function useFeedPending(): boolean {
+  const posts = usePosts();
+  const threads = useThreads();
+  return posts.isPending || threads.isPending;
+}
+
 /* --------------------------------------------------------------- mutations */
 
-const ADD_POST = defineMutation('cm2.addPost', async (v: { id: string; caption: string; tag: string; image_path: string | null }) => {
+const ADD_POST = defineMutation('cm2.addPost', async (v: {
+  id: string; title: string; caption: string; tag: string;
+  image_path: string | null;
+  /** Everything after the cover. Empty for a single-picture post. */
+  extra: string[];
+}) => {
   const author_id = await currentUserId();
-  const { error } = await supabase.from('bd_posts').insert({ ...v, author_id });
+  const { extra, ...row } = v;
+  const { error } = await supabase.from('bd_posts').insert({ ...row, author_id });
   if (error) throw error;
+
+  // The gallery is a second insert on purpose: the rows point at the post, so
+  // the post has to exist first. A failure here loses the extra pictures and
+  // not the post, which is the right way round — the post is what was written.
+  if (extra.length) {
+    const { error: e2 } = await supabase.from('bd_post_images')
+      .insert(extra.map((path, i) => ({ post_id: v.id, path, position: i + 1 })));
+    if (e2) throw e2;
+  }
 });
 
 const ADD_THREAD = defineMutation('cm2.addThread', async (v: { id: string; title: string; body: string; tag: string }) => {
@@ -195,8 +272,11 @@ const ADD_THREAD = defineMutation('cm2.addThread', async (v: { id: string; title
 });
 
 const EDIT = defineMutation('cm2.edit', async (v: { kind: Kind; id: string; title: string; body: string }) => {
+  // Both tables carry a title now, so both take the same patch. This used to
+  // drop the title on a photo, which was correct when a photo could not have
+  // one and became a silent data loss the moment it could.
   const { error } = v.kind === 'photo'
-    ? await supabase.from('bd_posts').update({ caption: v.body }).eq('id', v.id)
+    ? await supabase.from('bd_posts').update({ title: v.title, caption: v.body }).eq('id', v.id)
     : await supabase.from('bd_threads').update({ title: v.title, body: v.body }).eq('id', v.id);
   if (error) throw error;
 });
@@ -238,7 +318,7 @@ const COMMENT = defineMutation('cm2.comment', async (v: { kind: Kind; id: string
  */
 export async function postImage(caption: string, tag: string, image_path: string) {
   const author_id = await currentUserId();
-  const { error } = await supabase.from('bd_posts').insert({ author_id, caption, tag, image_path });
+  const { error } = await supabase.from('bd_posts').insert({ author_id, title: '', caption, tag, image_path });
   if (error) throw error;
   void queryClient.invalidateQueries({ queryKey: POSTS });
 }
@@ -247,7 +327,7 @@ export async function postImage(caption: string, tag: string, image_path: string
 
 export function useCommunityActions(me: string) {
   const qc = useQueryClient();
-  const settle = settler(qc, POSTS, THREADS, LIKES, VOTES, COMMENT_COUNTS);
+  const settle = settler(qc, POSTS, THREADS, LIKES, VOTES, COMMENT_COUNTS, POST_IMAGES);
 
   const patch = <T,>(k: readonly unknown[], fn: (p: T[]) => T[]) => {
     const prev = queryClient.getQueryData<T[]>(k) ?? [];
@@ -255,9 +335,16 @@ export function useCommunityActions(me: string) {
     return prev;
   };
 
-  const addPost = useMutation<unknown, Error, { id: string; caption: string; tag: string; image_path: string | null }>({
+  const addPost = useMutation<unknown, Error, {
+    id: string; title: string; caption: string; tag: string; image_path: string | null; extra: string[];
+  }>({
     mutationKey: ADD_POST,
-    onMutate: (v) => patch<PostRow>(POSTS, (p) => [{ ...v, author_id: me, created_at: new Date().toISOString() }, ...p]),
+    onMutate: (v) => {
+      const { extra, ...row } = v;
+      patch<PostRow>(POSTS, (p) => [{ ...row, author_id: me, created_at: new Date().toISOString() }, ...p]);
+      patch<{ post_id: string; path: string; position: number }>(POST_IMAGES,
+        (p) => [...p, ...extra.map((path, i) => ({ post_id: v.id, path, position: i + 1 }))]);
+    },
     onSettled: settle,
   });
 
@@ -270,7 +357,7 @@ export function useCommunityActions(me: string) {
   const edit = useMutation<unknown, Error, { kind: Kind; id: string; title: string; body: string }>({
     mutationKey: EDIT,
     onMutate: (v) => {
-      if (v.kind === 'photo') patch<PostRow>(POSTS, (p) => p.map((r) => (r.id === v.id ? { ...r, caption: v.body } : r)));
+      if (v.kind === 'photo') patch<PostRow>(POSTS, (p) => p.map((r) => (r.id === v.id ? { ...r, title: v.title, caption: v.body } : r)));
       else patch<ThreadRow>(THREADS, (p) => p.map((r) => (r.id === v.id ? { ...r, title: v.title, body: v.body } : r)));
     },
     onSettled: settle,
@@ -322,6 +409,27 @@ export function useCommunityActions(me: string) {
 
   return {
     addPost, addThread, edit, react, comment,
+    /**
+     * One post, whichever table it belongs in.
+     *
+     * The composer no longer asks what kind of thing you are writing, so
+     * something has to decide, and the rule is the only one that matters to
+     * storage: pictures live in `bd_posts`, words on their own live in
+     * `bd_threads`. Both carry a title and a tag now, so nothing is lost
+     * either way and the writer never sees the seam.
+     */
+    post(v: { title: string; body: string; tag: string; images: string[] }) {
+      const id = crypto.randomUUID();
+      if (v.images.length) {
+        addPost.mutate({
+          id, title: v.title, caption: v.body, tag: v.tag,
+          image_path: v.images[0], extra: v.images.slice(1),
+        });
+      } else {
+        addThread.mutate({ id, title: v.title, body: v.body, tag: v.tag });
+      }
+      toast(v.title ? `Posted “${v.title.slice(0, 30)}”` : 'Posted');
+    },
     /** Soft delete, with the row kept so Undo is a single flag. */
     remove(item: Item) {
       del.mutate({ kind: item.kind, id: item.id });

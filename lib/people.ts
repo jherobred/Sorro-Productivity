@@ -5,6 +5,8 @@ import { supabase } from './supabase';
 import { fixture } from './devFixtures';
 import { PAL } from './pal';
 import { isBot, BOT_NAME } from './bot';
+import { animalOf, type Animal } from './mascot';
+import { toFit, type Fit } from '@/components/PhotoFrame';
 
 /**
  * Who wrote this.
@@ -20,7 +22,15 @@ import { isBot, BOT_NAME } from './bot';
  * kind of thing that only shows up on someone else's connection.
  */
 
-export type Person = { user_id: string; name: string; handle: string | null; photo_url: string | null };
+export type Person = {
+  user_id: string; name: string; handle: string | null; photo_url: string | null;
+  /** The creature they picked, or null to fall back to the one their id hashes
+   *  to. Read here so a leaderboard shows everybody's *chosen* animal without
+   *  a second query per row. */
+  animal: Animal | null;
+  /** {x, y, zoom} — how their picture is framed. See components/PhotoFrame. */
+  photo_fit: unknown;
+};
 
 export const PROFILES = ['profiles'] as const;
 
@@ -29,7 +39,7 @@ export function useProfiles() {
     queryKey: PROFILES,
     staleTime: 300_000,
     queryFn: async (): Promise<Record<string, Person>> => {
-      const { data, error } = await supabase.from('bd_profiles').select('user_id,name,handle,photo_url').limit(500);
+      const { data, error } = await supabase.from('bd_profiles').select('user_id,name,handle,photo_url,animal,photo_fit').limit(500);
       if (error) throw error;
       const out: Record<string, Person> = {};
       for (const p of (data ?? []) as Person[]) out[p.user_id] = p;
@@ -147,7 +157,17 @@ export function hueOf(id: string): string {
   return Object.values(PAL)[v % 10];
 }
 
-export type Display = { label: string; sub: string; initials: string; photo: string | null; hue: string; bot: boolean };
+export type Display = {
+  label: string; sub: string; initials: string; photo: string | null; hue: string; bot: boolean;
+  /** Always resolved: their pick if they made one, the id-derived one if not. */
+  animal: Animal;
+  /**
+   * How to frame their picture. Every avatar in the app applies this, or the
+   * face somebody carefully centred on their own profile is off-centre
+   * everywhere else — which makes the framing control decorative.
+   */
+  fit: Fit;
+};
 
 /**
  * What to put next to a post: the handle if they have one, their name if not,
@@ -168,5 +188,8 @@ export function displayOf(profiles: Record<string, Person>, id: string, me: stri
   const seed = name || handle || id;
   const initials = bot ? 'BB' : (seed.replace(/^@/, '').trim().slice(0, 2) || '??').toUpperCase();
 
-  return { label, sub, initials, photo: p?.photo_url ?? null, hue: hueOf(id), bot };
+  return {
+    label, sub, initials, photo: p?.photo_url ?? null, hue: hueOf(id), bot,
+    animal: p?.animal ?? animalOf(id), fit: toFit(p?.photo_fit),
+  };
 }

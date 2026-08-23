@@ -17,12 +17,13 @@ import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
-import { useSignedUrl } from '@/lib/uploads';
+import { useSignedUrls } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
 import {
-  useFeed, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
+  useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort,
 } from '@/lib/community';
+import { FeedSkeleton } from '@/components/Skeleton';
 
 /**
  * Community: one stream.
@@ -89,6 +90,7 @@ export default function CommunityPage() {
   }, [likes, votes, me]);
 
   const items = useFeed(sort, filter, reactions, prefs.hideBot);
+  const loading = useFeedPending();
   // The arrows in the opened post step through the pictures, the way a gallery
   // does; a discussion opens on its own.
   const photos = items.filter((i) => i.image_path);
@@ -137,22 +139,29 @@ export default function CommunityPage() {
 
             {/* The bot posts on a timer. On a quiet week it is most of what is
                 here, which is when a room of people starts reading like a
-                noticeboard — so it can be switched off, and the switch says
-                whose posts it is hiding. */}
+                noticeboard — so it can be switched off.
+
+                The chip is labelled with the *action*, not the subject. It
+                used to read just "Gemini" when off, sitting in a row of filter
+                chips, so it looked like "show me Gemini's posts" — the exact
+                opposite of what pressing it does. A control says what it will
+                do to you. */}
             <Chip on={prefs.hideBot} icon={prefs.hideBot ? 'eye' : 'spark'}
               onClick={() => { void update({ hideBot: !prefs.hideBot }); toast(prefs.hideBot ? `${BOT_NAME} is back in the feed` : `${BOT_NAME} hidden`); }}>
-              {prefs.hideBot ? `${BOT_NAME} hidden` : BOT_NAME}
+              {prefs.hideBot ? `Show ${BOT_NAME}` : `Hide ${BOT_NAME}`}
             </Chip>
           </div>
 
-          {items.length === 0 && (
+          {loading && <FeedSkeleton count={3} />}
+
+          {!loading && items.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)', lineHeight: 1.8 }}>
               Nothing here yet.<br />
               <span style={{ fontSize: 11 }}>Post a photo of what you are working on, or ask the room something.</span>
             </div>
           )}
 
-          {items.map((item) => (
+          {!loading && items.map((item) => (
             <FeedCard
               key={key(item)} item={item} me={me} profiles={profiles}
               reactions={reactions[key(item)] ?? 0}
@@ -178,10 +187,7 @@ export default function CommunityPage() {
       {tab === 'challenges' && <Challenges />}
 
       {composing && (
-        <Composer
-          onClose={() => setComposing(false)}
-          onPhoto={(v) => { A.addPost.mutate({ id: crypto.randomUUID(), ...v }); toast('Posted'); }}
-          onDiscussion={(v) => { A.addThread.mutate({ id: crypto.randomUUID(), ...v }); toast('Posted'); }} />
+        <Composer onClose={() => setComposing(false)} onPost={A.post} />
       )}
 
       {open_ && (
@@ -281,7 +287,9 @@ function FeedCard({
             </h2>
           )}
 
-          {item.image_path && <PostImage path={item.image_path} tint={who.hue} alt={item.body || 'Post image'} onOpen={onOpen} />}
+          {item.images.length > 0 && (
+            <PostImages paths={item.images} tint={who.hue} alt={item.title || item.body || 'Post image'} onOpen={onOpen} />
+          )}
 
           {item.body && (
             <div style={{ padding: '11px 13px 0', fontSize: 12.5, lineHeight: 1.6, fontWeight: 500, textWrap: 'pretty' }}>
@@ -383,7 +391,7 @@ function Avatar({
 }: { id: string; profiles: Record<string, import('@/lib/people').Person>; me: string; size: number }) {
   const who = displayOf(profiles, id, me);
   if (who.photo) {
-    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover' }} />;
+    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{
@@ -401,12 +409,69 @@ function Avatar({
  * the top and bottom of a photographed whiteboard, which is most of what gets
  * posted here.
  */
-function PostImage({ path, tint, alt, onOpen }: { path: string | null; tint: string; alt: string; onOpen: () => void }) {
-  const url = useSignedUrl('bd-feed', path);
-  if (!path) return null;
+/**
+ * One picture, or several you swipe through.
+ *
+ * Scroll-snap rather than a carousel library: the browser already does
+ * momentum, rubber-banding, snapping and keyboard scrolling, and it does all
+ * of them better on a phone than any JavaScript reimplementation. The only
+ * thing added is the dot row, which needs to know where the scroll got to.
+ */
+function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: string; alt: string; onOpen: () => void }) {
+  const urls = useSignedUrls('bd-feed', paths);
+  const [at, setAt] = useState(0);
+  const wrap = { background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 22%, var(--card2)), var(--card2))` };
+
+  if (paths.length === 0) return null;
+
+  if (paths.length === 1) {
+    return (
+      <div style={wrap}>
+        <MediaFrame src={urls[0] ?? null} alt={alt} ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 22%, var(--card2)), var(--card2))` }}>
-      <MediaFrame src={url ?? null} alt={alt} ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
+    <div style={{ ...wrap, position: 'relative' }}>
+      <div
+        className="hbar"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+        style={{
+          display: 'grid', gridAutoFlow: 'column', gridAutoColumns: '100%',
+          overflowX: 'auto', scrollSnapType: 'x mandatory', scrollBehavior: 'smooth',
+        }}>
+        {paths.map((path, i) => (
+          <div key={path} style={{ scrollSnapAlign: 'center' }}>
+            <MediaFrame src={urls[i] ?? null} alt={i === 0 ? alt : `${alt} (${i + 1} of ${paths.length})`}
+              ratio={4 / 5} maxHeight={520} rounded={0} onOpen={onOpen} />
+          </div>
+        ))}
+      </div>
+
+      <div aria-hidden style={{
+        position: 'absolute', left: 0, right: 0, bottom: 10,
+        display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none',
+      }}>
+        {paths.map((path, i) => (
+          <span key={path} style={{
+            width: i === at ? 16 : 5, height: 5, borderRadius: 3,
+            background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
+            transition: 'width .2s',
+          }} />
+        ))}
+      </div>
+
+      <span style={{
+        position: 'absolute', right: 10, top: 10, padding: '3px 9px', borderRadius: 8,
+        background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+      }}>
+        {at + 1}/{paths.length}
+      </span>
     </div>
   );
 }

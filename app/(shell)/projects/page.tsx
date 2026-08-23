@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from '@/components/Icon';
+import { FolderGridSkeleton } from '@/components/Skeleton';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { RowActions } from '@/components/MoneyRows';
@@ -115,7 +116,7 @@ export default function ProjectsPage() {
 
   const settle = settler(qc, PROJ, CARDS, CMTS);
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isPending: projectsPending } = useQuery({
     queryKey: PROJ,
     queryFn: async (): Promise<Project[]> => {
       const { data, error } = await supabase.from('bd_projects')
@@ -286,7 +287,17 @@ export default function ProjectsPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
             <Icon name="sort" size={14} color="var(--tx2)" />{sort}
           </button>
-          <button onClick={() => setEditing('proj:new')} className="acc k-squish"
+          {/* Make it, then name it — the order Finder, Drive and Notion use.
+              Naming first means answering a question before you have done the
+              thing you came to do, and an empty field with a Cancel next to it
+              is a chance to abandon a folder you already decided you wanted.
+              The folder appears as "Untitled project" with its name selected,
+              so typing renames it and walking away still leaves you a folder. */}
+          <button onClick={() => {
+            const id = crypto.randomUUID();
+            newProj.mutate({ id, name: 'Untitled project', color: PAL.amber });
+            setEditing(`proj:${id}`);
+          }} className="acc k-squish"
             style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 14px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
             <Icon name="plus" size={15} color="#0C0F16" />New project
           </button>
@@ -298,8 +309,10 @@ export default function ProjectsPage() {
             and it cost half the row's width, so six folders filled a screen
             that now holds fifteen. Finder, Explorer and Drive all draw the
             icon on the bare background; so do we. */}
+        {projectsPending && <FolderGridSkeleton phone={phone} count={8} label="Loading your projects" />}
+
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${phone ? 104 : 124}px,1fr))`, gap: phone ? 6 : 10 }}>
-          {shown.map((p) => {
+          {!projectsPending && shown.map((p) => {
             const dragProps = cardDrag.propsFor(p.id);
             const n = cards.filter((c) => c.project_id === p.id).length;
             if (editing === `proj:${p.id}`) {
@@ -332,18 +345,13 @@ export default function ProjectsPage() {
             );
           })}
 
-          {editing === 'proj:new' && (
-            <NameField initial="" color={PAL.amber} phone={phone} placeholder="Folder name"
-              onCancel={() => setEditing(null)}
-              onSave={(name) => {
-                newProj.mutate({ id: crypto.randomUUID(), name, color: PAL.amber });
-                setEditing(null);
-                toast(`Created \u201C${name}\u201D`);
-              }} />
-          )}
         </div>
 
-        {shown.length === 0 && <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>Nothing matches that search.</div>}
+        {!projectsPending && shown.length === 0 && (
+          <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>
+            {projects.length === 0 ? 'No projects yet. Press New project.' : 'Nothing matches that search.'}
+          </div>
+        )}
 
         {look && (() => {
           const p = projects.find((x) => x.id === look);
@@ -581,10 +589,24 @@ function NameField({ initial, color, phone, placeholder, onSave, onCancel }: {
   onSave: (name: string) => void; onCancel: () => void;
 }) {
   const [v, setV] = useState(initial);
+  const box = useRef<HTMLInputElement>(null);
+
+  // Focus *and select*, from an effect rather than `autoFocus` + `onFocus`.
+  // The field usually opens on a name the app chose ("Untitled project"), so
+  // the first keystroke has to replace it rather than append to it — and
+  // React's autoFocus focuses during commit, before onFocus is any use, which
+  // left the caret sitting at the end of the placeholder name.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: phone ? '10px 4px' : '12px 6px' }}>
       <FolderIcon color={color} count={0} size={phone ? 52 : 60} />
-      <input autoFocus value={v} onChange={(e) => setV(e.target.value)}
+      <input ref={box} value={v} onChange={(e) => setV(e.target.value)}
         placeholder={placeholder}
         onBlur={() => (v.trim() ? onSave(v.trim()) : onCancel())}
         onKeyDown={(e) => {

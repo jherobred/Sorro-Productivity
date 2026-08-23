@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { RowsSkeleton } from '@/components/Skeleton';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
@@ -31,7 +32,7 @@ export default function HabitsPage() {
   const lp = useLongPress();
 
   const days = year ? 365 : 7;
-  const { data: habits = [] } = useHabits();
+  const { data: habits = [], isPending } = useHabits();
   const { data: ticks = [] } = useTicks(days);
   const { data: challenges = [] } = useChallenges();
   const A = useHabitActions(days);
@@ -90,8 +91,10 @@ export default function HabitsPage() {
         </button>
       </div>
 
+      {isPending && <RowsSkeleton rows={5} label="Loading your habits" lead="square" />}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {habits.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No habits yet.</div>}
+        {!isPending && habits.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No habits yet.</div>}
 
         {([
           { key: 'own', label: 'Yours', items: own },

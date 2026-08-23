@@ -7,7 +7,8 @@ import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
-import { useWorkspaces, useWorkspaceActions } from '@/lib/workspaces';
+import { useWorkspaces, useWorkspaceActions, type Workspace } from '@/lib/workspaces';
+import { SpaceSheet } from './SpaceSheet';
 import { useAccounts, switchTo, addAccount, forget, signOutAll } from '@/lib/accounts';
 import { profileLink } from '@/lib/people';
 import { ask } from '@/lib/ask';
@@ -42,6 +43,8 @@ export function AccountSheet({
   const WA = useWorkspaceActions();
   const accounts = useAccounts();
   const [copied, setCopied] = useState(false);
+  /** The space being managed, on top of this sheet. */
+  const [managing, setManaging] = useState<Workspace | null>(null);
   useOverlayBack(true, onClose);
 
   const link = profileLink(me.handle);
@@ -181,14 +184,25 @@ export function AccountSheet({
             {prefs.workspace === null && <Icon name="check" size={13} color="var(--accTx)" />}
           </button>
 
+          {/* Switching and managing are two different intentions, so they are
+              two different targets in one row. The row switches; the cog opens
+              the space — rename, colour, people, delete. A long list of spaces
+              with no way in was the whole complaint. */}
           {workspaces.map((w) => (
-            <button key={w.id} onClick={() => { void update({ workspace: w.id }); toast(`Switched to ${w.name}`); }}
-              role="menuitemradio" aria-checked={prefs.workspace === w.id} className="hov" style={ROW}>
-              <span style={{ width: 8, height: 8, borderRadius: 3, background: w.color, flex: 'none' }} />
-              <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
-              <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.role}</span>
-              {prefs.workspace === w.id && <Icon name="check" size={13} color="var(--accTx)" />}
-            </button>
+            <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <button onClick={() => { void update({ workspace: w.id }); toast(`Switched to ${w.name}`); }}
+                role="menuitemradio" aria-checked={prefs.workspace === w.id} className="hov" style={{ ...ROW, flex: 1, minWidth: 0 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 3, background: w.color, flex: 'none' }} />
+                <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{w.role}</span>
+                {prefs.workspace === w.id && <Icon name="check" size={13} color="var(--accTx)" />}
+              </button>
+              <button onClick={() => setManaging(w)} className="hov k-squish"
+                aria-label={`Manage ${w.name}`} title={`Manage ${w.name}`}
+                style={{ flex: 'none', width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
+                <Icon name="cog" size={13} color="var(--tx3)" />
+              </button>
+            </div>
           ))}
 
           <button onClick={() => {
@@ -215,6 +229,10 @@ export function AccountSheet({
           </button>
         </div>
       </div>
+
+      {managing && (
+        <SpaceSheet space={managing} me={me.id} onClose={() => setManaging(null)} />
+      )}
     </div>
   );
 

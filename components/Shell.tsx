@@ -10,6 +10,7 @@ import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { usePresence, roomFor, type Peer } from '@/lib/presence';
 import { useWorkspaces, useWorkspaceActions } from '@/lib/workspaces';
+import { prefetchSection } from '@/lib/prefetch';
 import { ask } from '@/lib/ask';
 import { SECHUE, PAL } from '@/lib/pal';
 import { supabase, currentUserId } from '@/lib/supabase';
@@ -324,7 +325,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       background: hue, opacity: on ? 1 : 0, transform: on ? 'scaleY(1)' : 'scaleY(.3)',
                       transition: 'opacity .3s cubic-bezier(.22,1,.36,1), transform .3s cubic-bezier(.22,1,.36,1)',
                     }} />
-                    <button onClick={() => go(sec.id)} style={{
+                    {/* pointerdown, not click: the fetch starts while the
+                        finger is still down, so the round trip overlaps the
+                        page transition instead of following it. */}
+                    <button onClick={() => go(sec.id)} onPointerDown={() => prefetchSection(sec.id)} style={{
                       display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
                       padding: '7px 4px 7px 8px', borderRadius: 8, fontSize: 12.5, fontWeight: on ? 700 : 500,
                       background: 'transparent', color: on ? hueTx(hue) : 'var(--tx2)',
@@ -655,7 +659,8 @@ function BottomNav({
   const slot = (s: Section) => {
     const on = s.id === section;
     return (
-      <button key={s.id} onClick={() => go(s.id)} title={s.name} aria-label={s.name} aria-current={on ? 'page' : undefined}
+      <button key={s.id} onClick={() => go(s.id)} onPointerDown={() => prefetchSection(s.id)}
+        title={s.name} aria-label={s.name} aria-current={on ? 'page' : undefined}
         className="k-squish"
         style={{
           flex: '1 1 0', minWidth: 0, height: showLabels ? 52 : 44,

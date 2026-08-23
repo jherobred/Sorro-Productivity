@@ -59,6 +59,8 @@ const MEMBERS = ['challenge_members'] as const;
 const DAYS = ['challenge_days'] as const;
 const RANKED = ['ranked'] as const;
 const STARS = ['challenge_stars'] as const;
+/** lib/habits.ts owns this key; challenge actions write rows under it. */
+const HABITS = ['habits'] as const;
 
 export function useChallenges() {
   return useQuery({
@@ -299,7 +301,14 @@ function cachedUserId(): string | null {
 
 export function useChallengeActions() {
   const qc = useQueryClient();
-  const settle = settler(qc, CHALS, MEMBERS, RANKED, STARS);
+  // Habits is in this list because every action here can move a row on that
+  // page: create and join write a mirror habit (`enrol`), leave archives it,
+  // delete drops its challenge_id and hands it back as a personal habit.
+  // It used to be invalidated in `join` alone, so a challenge you *made* wrote
+  // its mirror to the database and then never appeared under "From challenges"
+  // — the row existed, the cache did not know. Gemini's challenges showed up
+  // only because you join those and create your own.
+  const settle = settler(qc, CHALS, MEMBERS, RANKED, STARS, HABITS);
   const patchMembers = (fn: (p: Member[]) => Member[]) => {
     const prev = queryClient.getQueryData<Member[]>(MEMBERS) ?? [];
     queryClient.setQueryData<Member[]>(MEMBERS, fn(prev));
@@ -376,9 +385,7 @@ export function useChallengeActions() {
     name?: string; color?: string; metric?: MetricId;
   }>({
     mutationKey: JOIN,
-    // Habits gains a row on the same press, so settle it too or the new
-    // challenge group on that page waits for the next refetch to appear.
-    onSettled: () => { settle(); void qc.invalidateQueries({ queryKey: ['habits'] }); },
+    onSettled: settle,
   });
   const leave = useMutation<unknown, Error, { challenge_id: string }>({ mutationKey: LEAVE, onSettled: settle });
   const bump = useMutation<unknown, Error, { challenge_id: string; progress: number }, Member[]>({

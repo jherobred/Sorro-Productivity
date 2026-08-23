@@ -1,5 +1,5 @@
 import { QueryClient, type MutationFunction } from '@tanstack/react-query';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import type { Persister, PersistedClient } from '@tanstack/react-query-persist-client';
 
 /**
  * Offline reads + queued writes.
@@ -14,8 +14,21 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
  * including across a full app restart, which is why every mutation must be
  * registered by key below (a persisted mutation has no closure to resume into).
  *
- * ponytail: localStorage persister, ~5MB ceiling. Swap in the IndexedDB async
- * persister if a heavy user's cache starts getting evicted.
+ * **The cache lives in IndexedDB, not localStorage.** This was the app's worst
+ * source of felt slowness and it was invisible in any network trace, because
+ * it was not the network. `localStorage.setItem` is synchronous and it blocks
+ * the main thread; the sync persister called it with the *entire serialised
+ * query cache* on a one-second throttle. Every tick a note, a tick, a message
+ * or a drag caused, the phone stopped to `JSON.stringify` every screen you had
+ * opened this session and write the whole string out again. On a mid-range
+ * Android that is tens of milliseconds of dropped frames on a timer, felt as
+ * stutter while typing and dragging. It also capped the cache at localStorage's
+ * ~5MB, which a few weeks of notes and a feed of images will pass.
+ *
+ * IndexedDB is asynchronous, so the write happens off the critical path, and
+ * its quota is measured in hundreds of megabytes. The `Persister` interface is
+ * three methods and takes promises, so this needs no new dependency — the one
+ * that was here (`query-sync-storage-persister`) can go.
  */
 
 export const queryClient = new QueryClient({
@@ -35,14 +48,107 @@ export const queryClient = new QueryClient({
   },
 });
 
+const DB = 'basedly';
+const STORE = 'cache';
+const CACHE_KEY = 'basedly-cache';
+
+/** One connection for the session; opening a database per write is the slow way. */
+let dbPromise: Promise<IDBDatabase> | null = null;
+
+function openAt(version?: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, version);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('idb blocked'));
+  });
+}
+
+/**
+ * The database, with its store guaranteed to exist.
+ *
+ * `onupgradeneeded` only fires when the version goes *up*, so a database that
+ * already exists at this version but has no store would never get one — every
+ * read and write would fail silently for as long as that database lived, and
+ * the app would look like it simply had no offline cache. That state is
+ * reachable: another build, an interrupted upgrade, or anything else that
+ * opened `basedly` first. So the store is checked after opening, and if it is
+ * missing the database is reopened one version higher, which is the only way
+ * to get an upgrade transaction.
+ */
+function open(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise;
+  dbPromise = openAt().then((db) => {
+    if (db.objectStoreNames.contains(STORE)) return db;
+    const next = db.version + 1;
+    db.close();
+    return openAt(next);
+  });
+  return dbPromise;
+}
+
+function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest): Promise<T> {
+  return open().then((db) => new Promise<T>((resolve, reject) => {
+    const req = run(db.transaction(STORE, mode).objectStore(STORE));
+    req.onsuccess = () => resolve(req.result as T);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+/**
+ * Structured clone, not JSON.
+ *
+ * IndexedDB stores the object graph directly, so there is no stringify on the
+ * way in and no parse on the way out — which is most of what made the old
+ * persister expensive, and all of what made restoring the cache on launch slow
+ * enough to see.
+ */
+function makePersister(): Persister {
+  // Still throttled. The write is off the main thread now, but a cache that
+  // hits disk on every keystroke is still a phone writing for no reason.
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: PersistedClient | null = null;
+
+  const flush = () => {
+    timer = null;
+    const value = pending;
+    pending = null;
+    if (value) void tx('readwrite', (s) => s.put(value, CACHE_KEY)).catch(() => {});
+  };
+
+  return {
+    persistClient(client) {
+      pending = client;
+      if (!timer) timer = setTimeout(flush, 1000);
+    },
+    restoreClient() {
+      return tx<PersistedClient | undefined>('readonly', (s) => s.get(CACHE_KEY))
+        // A corrupt or unreadable store must not stop the app from starting.
+        // Losing the offline cache costs a refetch; throwing costs the session.
+        .catch(() => undefined);
+    },
+    removeClient() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      pending = null;
+      return tx('readwrite', (s) => s.delete(CACHE_KEY)).then(() => undefined).catch(() => undefined);
+    },
+  };
+}
+
 export const persister =
-  typeof window === 'undefined'
+  typeof window === 'undefined' || typeof indexedDB === 'undefined'
     ? undefined
-    : createSyncStoragePersister({
-        storage: window.localStorage,
-        key: 'basedly-cache',
-        throttleTime: 1000,
-      });
+    : makePersister();
+
+// The old localStorage cache is dead weight after the move — up to 5MB of a
+// budget the app still shares with prefs and the auth session. Cleared once,
+// on first load after the upgrade.
+if (typeof window !== 'undefined') {
+  try { window.localStorage.removeItem('basedly-cache'); } catch { /* private mode */ }
+}
 
 /**
  * Register a mutation so it survives a restart. Call at module scope, then pass

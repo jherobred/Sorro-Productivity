@@ -1,6 +1,7 @@
 'use client';
 
 import { animalOf, type Animal, type Mood } from '@/lib/mascot';
+import { useProfiles } from '@/lib/people';
 
 /**
  * A competitor, drawn.
@@ -171,7 +172,11 @@ export function Mascot({
   hue: string;
   size?: number;
   crown?: boolean;
-  /** Override the derived creature. Only the fixtures do this. */
+  /**
+   * Force a particular creature — the picker previewing a choice, and the
+   * fixtures. Left off, the animal is looked up from the person's profile and
+   * only falls back to the id-derived one if they never picked.
+   */
   animal?: Animal;
   /**
    * On the trail, where the animals are going somewhere. Adds the lean, the
@@ -180,7 +185,13 @@ export function Mascot({
    */
   racing?: boolean;
 }) {
-  const kind = animal ?? animalOf(id);
+  // Resolved here rather than at every call site. Six components draw a
+  // mascot and none of them should have to know that an animal is now a
+  // stored preference — they pass a person, they get that person's creature.
+  // useProfiles is one cached query shared by the whole page, so a row of
+  // eight of these costs nothing extra.
+  const { data: profiles = {} } = useProfiles();
+  const kind = animal ?? profiles[id]?.animal ?? animalOf(id);
   const skin = SKINS[kind];
   const brow = BROW[mood];
   const asleep = mood === 'resting';

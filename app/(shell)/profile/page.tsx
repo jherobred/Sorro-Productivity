@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
-import { uploadAvatar } from '@/lib/uploads';
+import { uploadAvatar, uploadCover } from '@/lib/uploads';
+import { PhotoFrame, FrameEditor, toFit, CENTRED, type Fit } from '@/components/PhotoFrame';
+import { Mascot } from '@/components/challenges/Mascot';
+import { ANIMALS, animalOf, type Animal } from '@/lib/mascot';
 import { ON_ACCENT } from '@/lib/glass';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
@@ -36,6 +39,13 @@ import { useRouter } from 'next/navigation';
 
 const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
+
+/** The controls that sit on top of the cover. Dark enough to read on any photo. */
+const PILL: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', borderRadius: 999,
+  background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+  backdropFilter: 'blur(6px)',
+};
 
 const AV_ORDER = ['bg', 'skin', 'face', 'hair', 'hairColor', 'eyes', 'brows', 'nose', 'mouth', 'glasses', 'hat'] as const;
 type AvKey = (typeof AV_ORDER)[number];
@@ -124,7 +134,16 @@ export default function ProfilePage() {
   const [uid, setUid] = useState('');
   /** A real photo, when there is one. It wins over the drawn avatar. */
   const [photo, setPhoto] = useState<string | null>(null);
+  const [cover, setCover] = useState<string | null>(null);
+  /** Where each picture sits inside its frame. Numbers, never a new file. */
+  const [photoFit, setPhotoFit] = useState<Fit>(CENTRED);
+  const [coverFit, setCoverFit] = useState<Fit>(CENTRED);
+  /** Which frame is open for dragging. One at a time — two draggable pictures
+   *  on screen is two things competing for the same gesture. */
+  const [adjusting, setAdjusting] = useState<'photo' | 'cover' | null>(null);
+  const [animal, setAnimal] = useState<Animal | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyCover, setBusyCover] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -132,12 +151,17 @@ export default function ProfilePage() {
       if (!id) return;
       setUid(id);
       const { data: p } = await supabase.from('bd_profiles')
-        .select('name,handle,bio,course,year,campus,avatar,photo_url').eq('user_id', id).maybeSingle();
+        .select('name,handle,bio,course,year,campus,avatar,photo_url,cover_url,photo_fit,cover_fit,animal')
+        .eq('user_id', id).maybeSingle();
       if (!p) return;
       setName(p.name ?? ''); setHandle(p.handle ?? ''); setBio(p.bio ?? '');
       setCourse([p.course, p.year].filter(Boolean).join(' · ')); setCampus(p.campus ?? '');
       if (p.avatar && Object.keys(p.avatar).length) setAvatar({ ...DEFAULT_AVATAR, ...p.avatar });
       setPhoto(p.photo_url ?? null);
+      setCover(p.cover_url ?? null);
+      setPhotoFit(toFit(p.photo_fit));
+      setCoverFit(toFit(p.cover_fit));
+      setAnimal((p.animal as Animal | null) ?? null);
     })();
   }, []);
 
@@ -155,12 +179,34 @@ export default function ProfilePage() {
     try {
       const url = await uploadAvatar(file);
       setPhoto(url);
+      // A new picture starts centred. Keeping the old frame would apply one
+      // photo's cropping to a completely different photo.
+      setPhotoFit(CENTRED);
+      setAdjusting('photo');
       setDirty(true);
-      toast('Picture updated — save to keep it');
+      toast('Picture updated — drag to frame it, then save');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function pickCover(file: File) {
+    if (!uid) return toast('Sign in to change your cover');
+    if (file.size > 8_000_000) return toast('That image is over 8 MB');
+    setBusyCover(true);
+    try {
+      const url = await uploadCover(file);
+      setCover(url);
+      setCoverFit(CENTRED);
+      setAdjusting('cover');
+      setDirty(true);
+      toast('Cover updated — drag to frame it, then save');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusyCover(false);
     }
   }
 
@@ -177,7 +223,10 @@ export default function ProfilePage() {
     if (!uid) return toast('Sign in to save your profile');
     if (!dirty) return toast('Nothing to save');
     const { error } = await supabase.from('bd_profiles')
-      .update({ name, handle: handle || null, bio, avatar, photo_url: photo }).eq('user_id', uid);
+      .update({
+        name, handle: handle || null, bio, avatar, photo_url: photo,
+        cover_url: cover, photo_fit: photoFit, cover_fit: coverFit, animal,
+      }).eq('user_id', uid);
     if (error) return toast(error.message);
     setDirty(false);
     toast('Profile saved');
@@ -231,14 +280,69 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: phone || !building ? '1fr' : '1fr 1fr', gap: 12, alignItems: 'start' }}>
-        <div style={CARD}>
+        <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+          {/* The cover.
+              A profile that is one square picture on a flat card is an ID
+              badge. A banner is the strip every social profile has had for
+              fifteen years, and it is the only part of this page that is
+              purely yours to decorate. Empty, it is a soft wash of your accent
+              rather than a grey box asking to be filled — nothing has gone
+              wrong if you never add one.
+              3:1 because it has to survive a 375px phone and a 1240px desktop
+              at the same crop, and taller than that eats the screen on the
+              phone. */}
+          <div style={{
+            position: 'relative', width: '100%', aspectRatio: '3',
+            maxHeight: 220, overflow: 'hidden',
+            background: cover ? 'var(--card2)'
+              : `linear-gradient(120deg, color-mix(in srgb, var(--acc) 40%, transparent), color-mix(in srgb, ${hueOf(uid || 'x')} 30%, transparent))`,
+          }}>
+            <PhotoFrame src={cover} fit={coverFit} alt="Your cover picture" />
+
+            <div style={{ position: 'absolute', right: 10, bottom: 10, display: 'flex', gap: 7 }}>
+              {cover && (
+                <button
+                  onClick={() => setAdjusting(adjusting === 'cover' ? null : 'cover')}
+                  className="k-squish"
+                  aria-pressed={adjusting === 'cover'}
+                  title="Reposition your cover"
+                  style={PILL}>
+                  <Icon name="hand" size={13} color="#fff" />
+                  {adjusting === 'cover' ? 'Done' : 'Adjust'}
+                </button>
+              )}
+              <label title={cover ? 'Change your cover' : 'Add a cover'} style={{ ...PILL, cursor: 'pointer', opacity: busyCover ? 0.5 : 1 }}>
+                <Icon name={busyCover ? 'refresh' : 'photo'} size={13} color="#fff" />
+                {busyCover ? 'Uploading…' : cover ? 'Change' : 'Add cover'}
+                <input type="file" accept="image/*" hidden disabled={busyCover}
+                  aria-label={cover ? 'Change your cover' : 'Add a cover'}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void pickCover(f); e.target.value = ''; }} />
+              </label>
+              {cover && (
+                <button
+                  onClick={() => { setCover(null); setCoverFit(CENTRED); setAdjusting(null); setDirty(true); toast('Cover removed'); }}
+                  className="k-squish" aria-label="Remove your cover" title="Remove your cover"
+                  style={{ ...PILL, padding: '6px 8px' }}>
+                  <Icon name="close" size={12} color="#fff" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {adjusting === 'cover' && cover && (
+            <div style={{ padding: '13px 16px 0' }} className="rise">
+              <div style={{ ...KICKER, marginBottom: 8 }}>Frame your cover</div>
+              <FrameEditor src={cover} fit={coverFit} ratio={3} radius={12}
+                onChange={(f) => { setCoverFit(f); setDirty(true); }} />
+            </div>
+          )}
+
+          <div style={{ padding: '15px 16px' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ width: 132, height: 132, flex: 'none', position: 'relative' }}>
-            <div style={{ width: 132, height: 132, borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--sh)', background: 'var(--card2)' }}>
+            <div style={{ width: 132, height: 132, flex: 'none', position: 'relative', marginTop: -46 }}>
+            <div style={{ width: 132, height: 132, borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shl)', background: 'var(--card2)', border: '3px solid var(--card)' }}>
               {photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo} alt="Your profile picture" className="fade"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <PhotoFrame src={photo} fit={photoFit} alt="Your profile picture" />
               ) : (
               <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', display: 'block' }}>
                 <defs>
@@ -281,14 +385,26 @@ export default function ProfilePage() {
             </label>
 
             {photo && (
-              <button onClick={() => { setPhoto(null); setDirty(true); toast('Back to your drawn avatar'); }}
-                className="hov k-squish" aria-label="Remove your picture" title="Remove your picture"
-                style={{
-                  position: 'absolute', left: -6, bottom: -6, width: 32, height: 32, borderRadius: 16,
-                  background: 'var(--card)', border: '1px solid var(--line2)', display: 'grid', placeItems: 'center',
-                }}>
-                <Icon name="close" size={13} color="var(--tx2)" />
-              </button>
+              <>
+                <button onClick={() => { setPhoto(null); setPhotoFit(CENTRED); setAdjusting(null); setDirty(true); toast('Back to your drawn avatar'); }}
+                  className="hov k-squish" aria-label="Remove your picture" title="Remove your picture"
+                  style={{
+                    position: 'absolute', left: -6, bottom: -6, width: 32, height: 32, borderRadius: 16,
+                    background: 'var(--card)', border: '1px solid var(--line2)', display: 'grid', placeItems: 'center',
+                  }}>
+                  <Icon name="close" size={13} color="var(--tx2)" />
+                </button>
+                <button onClick={() => setAdjusting(adjusting === 'photo' ? null : 'photo')}
+                  className="hov k-squish" aria-pressed={adjusting === 'photo'}
+                  aria-label="Reposition your picture" title="Reposition your picture"
+                  style={{
+                    position: 'absolute', left: -6, top: -6, width: 32, height: 32, borderRadius: 16,
+                    background: adjusting === 'photo' ? 'var(--acc)' : 'var(--card)',
+                    border: '1px solid var(--line2)', display: 'grid', placeItems: 'center',
+                  }}>
+                  <Icon name="hand" size={13} color={adjusting === 'photo' ? ON_ACCENT : 'var(--tx2)'} />
+                </button>
+              </>
             )}
             </div>
 
@@ -305,6 +421,57 @@ export default function ProfilePage() {
               <textarea value={bio} onChange={(e) => { setBio(e.target.value); setDirty(true); }} rows={3} placeholder="A line about you"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 11, border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical', fontFamily: 'inherit' }} />
             </div>
+          </div>
+
+          {adjusting === 'photo' && photo && (
+            <div style={{ marginTop: 14, maxWidth: 320 }} className="rise">
+              <div style={{ ...KICKER, marginBottom: 8 }}>Frame your picture</div>
+              <FrameEditor src={photo} fit={photoFit} ratio={1} radius={16}
+                onChange={(f) => { setPhotoFit(f); setDirty(true); }} />
+            </div>
+          )}
+
+          {/* Your creature.
+              It was derived from your user id, which made it stable and made it
+              nobody's choice — the one thing on a leaderboard that is visibly
+              *you*, assigned by a hash. Picking one writes it to your profile,
+              so everybody else's screen shows the animal you chose rather than
+              the animal your id spelled. */}
+          <div style={{ marginTop: 18, paddingTop: 15, borderTop: '1px solid var(--line)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={KICKER}>Your creature</div>
+              <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                {animal ? 'Shown to everyone on challenges' : `Unset — you appear as a ${animalOf(uid || 'x')}`}
+              </span>
+              {animal && (
+                <button onClick={() => { setAnimal(null); setDirty(true); }} className="hov"
+                  style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(64px,1fr))', gap: 8 }}>
+              {ANIMALS.map((a) => {
+                const on = animal === a;
+                return (
+                  <button key={a} onClick={() => { setAnimal(a); setDirty(true); }} aria-pressed={on}
+                    className="k-squish" title={a}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                      padding: '10px 4px 8px', borderRadius: 14,
+                      border: `1.5px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
+                      background: on ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent',
+                    }}>
+                    <Mascot id={`pick-${a}`} animal={a} mood={on ? 'blazing' : 'keen'}
+                      hue={hueOf(uid || a)} size={34} />
+                    <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'capitalize', color: on ? 'var(--tx)' : 'var(--tx3)' }}>
+                      {a}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           </div>
         </div>
 
@@ -373,19 +540,22 @@ export default function ProfilePage() {
 function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
   const router = useRouter();
   const [who, setWho] = useState<{
-    user_id: string; name: string; handle: string; bio: string; course: string; campus: string; photo: string | null;
+    user_id: string; name: string; handle: string; bio: string; course: string; campus: string;
+    photo: string | null; cover: string | null; photoFit: Fit; coverFit: Fit; animal: Animal | null;
   } | null | undefined>(undefined);
 
   useEffect(() => {
     void (async () => {
       const { data } = await supabase.from('bd_profiles')
-        .select('user_id,name,handle,bio,course,year,campus,photo_url')
+        .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
         .eq('handle', handle).maybeSingle();
       setWho(data
         ? {
           user_id: data.user_id, name: data.name ?? '', handle: data.handle ?? handle,
           bio: data.bio ?? '', course: [data.course, data.year].filter(Boolean).join(' · '),
-          campus: data.campus ?? '', photo: data.photo_url ?? null,
+          campus: data.campus ?? '', photo: data.photo_url ?? null, cover: data.cover_url ?? null,
+          photoFit: toFit(data.photo_fit), coverFit: toFit(data.cover_fit),
+          animal: (data.animal as Animal | null) ?? null,
         }
         : null);
     })();
@@ -418,14 +588,26 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
 
   return (
     <div style={{ padding: pad, maxWidth: 520 }}>
-      <div style={CARD}>
+      <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+        {/* Their cover, framed the way they framed it. */}
+        <div style={{
+          position: 'relative', width: '100%', aspectRatio: '3', maxHeight: 200, overflow: 'hidden',
+          background: who.cover ? 'var(--card2)'
+            : `linear-gradient(120deg, color-mix(in srgb, ${hueOf(who.user_id)} 42%, transparent), transparent)`,
+        }}>
+          <PhotoFrame src={who.cover} fit={who.coverFit} alt="" />
+        </div>
+
+        <div style={{ padding: '15px 16px' }}>
         <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
           {who.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={who.photo} alt="" style={{ width: 78, height: 78, borderRadius: 18, objectFit: 'cover', flex: 'none' }} />
+            <span style={{ width: 78, height: 78, flex: 'none', borderRadius: 18, overflow: 'hidden', marginTop: -34, border: '3px solid var(--card)', display: 'block' }}>
+              <PhotoFrame src={who.photo} fit={who.photoFit} alt="" />
+            </span>
           ) : (
             <span style={{
               width: 78, height: 78, flex: 'none', borderRadius: 18, display: 'grid', placeItems: 'center',
+              marginTop: -34, border: '3px solid var(--card)',
               background: hueOf(who.user_id), fontSize: 26, fontWeight: 800, color: '#0C0F16',
             }}>{initials}</span>
           )}
@@ -435,6 +617,9 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
             {who.course && <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accTx)', marginTop: 6 }}>{who.course}</div>}
             {who.campus && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{who.campus}</div>}
           </div>
+          <span style={{ marginLeft: 'auto', flex: 'none' }} title={`${who.animal ?? animalOf(who.user_id)}`}>
+            <Mascot id={who.user_id} animal={who.animal ?? undefined} mood="keen" hue={hueOf(who.user_id)} size={38} />
+          </span>
         </div>
 
         {who.bio && (
@@ -454,6 +639,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
             style={{ flex: 'none', padding: '0 16px', minHeight: 44, borderRadius: 12, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
             Yours
           </button>
+        </div>
         </div>
       </div>
     </div>

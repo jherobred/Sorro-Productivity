@@ -33,9 +33,24 @@ export async function uploadTo(bucket: Bucket, file: File): Promise<string> {
  * cache-busting, since the path never changes.
  */
 export async function uploadAvatar(file: File): Promise<string> {
+  return uploadProfileImage(file, 'avatar');
+}
+
+/**
+ * Your cover picture, in the same bucket at its own stable name.
+ *
+ * A second bucket would need its own RLS policy saying the same thing the
+ * avatar bucket's already says — first path segment is your user id — so it
+ * shares that one. `avatar.jpg` and `cover.jpg` cannot collide.
+ */
+export async function uploadCover(file: File): Promise<string> {
+  return uploadProfileImage(file, 'cover');
+}
+
+async function uploadProfileImage(file: File, kind: 'avatar' | 'cover'): Promise<string> {
   const user_id = await currentUserId();
   const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().slice(0, 5);
-  const path = `${user_id}/avatar.${ext}`;
+  const path = `${user_id}/${kind}.${ext}`;
   const { error } = await supabase.storage.from('bd-avatars').upload(path, file, {
     cacheControl: '3600',
     contentType: file.type || undefined,
@@ -47,25 +62,83 @@ export async function uploadAvatar(file: File): Promise<string> {
 }
 
 /**
- * Signed URL for a private object. Buckets are private, so images need a
+ * Signed URLs for private objects. Buckets are private, so images need a
  * short-lived signed link rather than a public URL.
  *
- * ponytail: one request per image, cached in module scope for the signing
- * window. Batch via createSignedUrls if a feed page ever gets long enough
- * to make the round-trips show.
+ * **Requests are batched by a microtask.** The old version signed one path per
+ * call, which meant one round trip per `<img>`: a feed of forty cards, each
+ * now able to carry ten pictures, is four hundred requests to render one
+ * screen, and on a phone they queue. Every `signedUrl` in the same tick is
+ * collected and sent as a single `createSignedUrls`, so a whole page of images
+ * costs one request no matter how many components ask.
  */
 const cache = new Map<string, { url: string; until: number }>();
 const TTL = 3600;
 
-export async function signedUrl(bucket: Bucket, path: string): Promise<string | null> {
+type Waiter = { path: string; resolve: (v: string | null) => void };
+const queued = new Map<Bucket, Waiter[]>();
+
+/** Supabase caps a batch; well above a screenful, but not unbounded. */
+const BATCH = 100;
+
+async function flush(bucket: Bucket) {
+  const waiters = queued.get(bucket) ?? [];
+  queued.delete(bucket);
+  if (!waiters.length) return;
+
+  for (let i = 0; i < waiters.length; i += BATCH) {
+    const slice = waiters.slice(i, i + BATCH);
+    // Deduplicate: the same picture can be asked for by a card and by the
+    // full-screen view of that card at the same moment.
+    const paths = [...new Set(slice.map((w) => w.path))];
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrls(paths, TTL);
+
+    const byPath = new Map<string, string>();
+    if (!error) {
+      for (const row of data ?? []) {
+        if (row.signedUrl && row.path) byPath.set(row.path, row.signedUrl);
+      }
+    }
+    for (const [path, url] of byPath) {
+      cache.set(`${bucket}/${path}`, { url, until: Date.now() + (TTL - 60) * 1000 });
+    }
+    for (const w of slice) w.resolve(byPath.get(w.path) ?? null);
+  }
+}
+
+export function signedUrl(bucket: Bucket, path: string): Promise<string | null> {
   const key = `${bucket}/${path}`;
   const hit = cache.get(key);
-  if (hit && hit.until > Date.now()) return hit.url;
+  if (hit && hit.until > Date.now()) return Promise.resolve(hit.url);
 
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, TTL);
-  if (error || !data) return null;
-  cache.set(key, { url: data.signedUrl, until: Date.now() + (TTL - 60) * 1000 });
-  return data.signedUrl;
+  return new Promise((resolve) => {
+    const list = queued.get(bucket);
+    if (list) { list.push({ path, resolve }); return; }
+    queued.set(bucket, [{ path, resolve }]);
+    // One tick is enough: React mounts a whole page's images in the same
+    // commit, so they all land in this batch.
+    queueMicrotask(() => { void flush(bucket); });
+  });
+}
+
+/**
+ * Several paths at once, in the order given — for a gallery, where the number
+ * of pictures is not known at compile time and a hook cannot go in a loop.
+ * Shares the batch above, so this is still one request.
+ */
+export function useSignedUrls(bucket: Bucket, paths: string[]): (string | null)[] {
+  const joined = paths.join('|');
+  const [urls, setUrls] = useState<(string | null)[]>(() => paths.map(() => null));
+
+  useEffect(() => {
+    let alive = true;
+    const list = joined ? joined.split('|') : [];
+    Promise.all(list.map((p) => signedUrl(bucket, p)))
+      .then((r) => { if (alive) setUrls(r); });
+    return () => { alive = false; };
+  }, [bucket, joined]);
+
+  return urls;
 }
 
 /** Resolve a storage path to a displayable URL; null while loading or absent. */

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
 import { useLayout } from '@/lib/useLayout';
-import { useSignedUrl } from '@/lib/uploads';
+import { useSignedUrls } from '@/lib/uploads';
 import { ago } from '@/lib/scratch';
 import { PAL } from '@/lib/pal';
 import { displayOf, type Person } from '@/lib/people';
@@ -97,20 +97,20 @@ export function PostView({
           borderRadius: phone ? 0 : 16, overflow: 'hidden',
         }}>
 
-        {item.image_path && (
+        {item.images.length > 0 && (
           <div style={{
             flex: phone ? '0 0 auto' : '1 1 auto', minWidth: 0,
             background: '#08080C', display: 'grid', placeItems: 'center',
             maxHeight: phone ? '46dvh' : undefined,
           }}>
-            <Photo path={item.image_path} alt={item.body || 'Post'} />
+            <Photos paths={item.images} alt={item.title || item.body || 'Post'} />
           </div>
         )}
 
         <aside style={{
-          flex: phone ? '1 1 auto' : `0 0 ${item.image_path ? 400 : 620}px`,
+          flex: phone ? '1 1 auto' : `0 0 ${item.images.length ? 400 : 620}px`,
           minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column',
-          borderLeft: phone || !item.image_path ? 'none' : '1px solid var(--line)',
+          borderLeft: phone || !item.images.length ? 'none' : '1px solid var(--line)',
         }}>
           <Panel
             item={item} me={me} profiles={profiles}
@@ -254,17 +254,63 @@ function Panel({
 
 /* ----------------------------------------------------------------- pieces */
 
-function Photo({ path, alt }: { path: string; alt: string }) {
-  const url = useSignedUrl('bd-feed', path);
-  if (!url) {
-    return <div style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', color: 'var(--tx3)' }}>
-      <Icon name="image" size={26} color="var(--tx3)" />
-    </div>;
+/**
+ * The post's pictures at full size. One fills the pane; several become a
+ * scroll-snap strip, the same gesture as the card in the feed so the picture
+ * you swiped to is the picture you keep looking at.
+ */
+function Photos({ paths, alt }: { paths: string[]; alt: string }) {
+  const urls = useSignedUrls('bd-feed', paths);
+  const [at, setAt] = useState(0);
+
+  if (paths.length === 1) {
+    const url = urls[0];
+    if (!url) {
+      return <div style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', color: 'var(--tx3)' }}>
+        <Icon name="image" size={26} color="var(--tx3)" />
+      </div>;
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={url} alt={alt} className="k-zoomfade"
+        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+    );
   }
+
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={alt} className="k-zoomfade"
-      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div
+        className="hbar"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+        style={{
+          display: 'grid', gridAutoFlow: 'column', gridAutoColumns: '100%',
+          width: '100%', height: '100%', overflowX: 'auto',
+          scrollSnapType: 'x mandatory', scrollBehavior: 'smooth',
+        }}>
+        {paths.map((path, i) => (
+          <div key={path} style={{ scrollSnapAlign: 'center', display: 'grid', placeItems: 'center', minWidth: 0 }}>
+            {urls[i] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urls[i] as string} alt={i === 0 ? alt : `${alt} (${i + 1} of ${paths.length})`}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+            ) : (
+              <Icon name="image" size={26} color="var(--tx3)" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <span style={{
+        position: 'absolute', right: 12, top: 12, padding: '4px 10px', borderRadius: 8,
+        background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+      }}>
+        {at + 1}/{paths.length}
+      </span>
+    </div>
   );
 }
 
@@ -272,7 +318,7 @@ function Face({ id, profiles, me, size }: { id: string; profiles: Record<string,
   const who = displayOf(profiles, id, me);
   if (who.photo) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover' }} />;
+    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{
