@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useLayout } from '@/lib/useLayout';
 import { Icon } from '@/components/Icon';
+import { MoneySkeleton } from '@/components/Skeleton';
 import { PAL } from '@/lib/pal';
 import {
   useTransactions, useAccounts, useBudgets, useToBuy, useMoneyActions,
@@ -86,7 +87,7 @@ function Money() {
   const [tab, setTab] = useState<Tab>('Overview');
   const [adding, setAdding] = useState(false);
 
-  const { data: txns = [] } = useTransactions();
+  const { data: txns = [], isPending } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: budgets = [] } = useBudgets();
   const { data: toBuy = [] } = useToBuy();
@@ -136,7 +137,9 @@ function Money() {
         </button>
       </div>
 
-      {tab === 'Overview' && (
+      {isPending && <MoneySkeleton />}
+
+      {!isPending && tab === 'Overview' && (
         <>
           {/* The one number the screen is for. Balance divided by your own
               rate of spending, which is a question a bank statement never

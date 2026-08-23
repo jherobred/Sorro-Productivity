@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { ShelfSkeleton } from '@/components/Skeleton';
 import { TabRail } from '@/components/TabRail';
 import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
@@ -48,7 +49,7 @@ export default function NotebooksPage() {
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('notebooks');
 
-  const { data: notebooks = [] } = useNotebooks();
+  const { data: notebooks = [], isPending } = useNotebooks();
   const { data: notes = [] } = useNotes();
   const { data: trash = [] } = useTrash();
   const { data: tags = {} } = useTags();
@@ -191,7 +192,11 @@ export default function NotebooksPage() {
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
         padding: phone ? '0 14px 20px' : '0 22px 20px',
       }}>
-        {tab === 'notebooks' && (
+        {/* Only the shelf waits on a query; the tab rail and the trash list
+            above it are already drawn. */}
+        {tab === 'notebooks' && isPending && !inTrash && !notebook && <ShelfSkeleton count={6} />}
+
+        {tab === 'notebooks' && !(isPending && !inTrash && !notebook) && (
           inTrash ? (
             <TrashList
               notes={trash}

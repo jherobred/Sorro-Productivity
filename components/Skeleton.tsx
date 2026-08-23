@@ -216,6 +216,71 @@ export function CalendarSkeleton({ days = 7 }: { days?: number }) {
   );
 }
 
+/* ------------------------------------------------------------------ money */
+
+/**
+ * Money's Overview: the runway gauge, the spend stacks, then rows. The gauge
+ * is the one number the screen exists for, so it gets its real height rather
+ * than a generic bar — it is what the eye goes to and what would otherwise
+ * jump when the figure lands.
+ */
+export function MoneySkeleton() {
+  return (
+    <Frame label="Loading your money">
+      <div style={{ ...CARD, padding: '15px 16px', display: 'grid', gap: 10 }}>
+        <Bar w={168} h={9} r={4} />
+        <Bar w="100%" h={64} r={12} />
+        <div style={{ display: 'flex', gap: 18, justifyContent: 'center', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <span key={i} style={{ display: 'grid', gap: 5, justifyItems: 'center' }}>
+              <Bar w={62} h={14} r={5} />
+              <Bar w={44} h={8} r={4} />
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ ...CARD, padding: '15px 16px', marginTop: 12 }}>
+        <Bar w={92} h={9} r={4} />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 96, marginTop: 14 }}>
+          {[62, 88, 41, 73, 30].map((h, i) => (
+            <span key={i} style={{ flex: 1, display: 'grid', gap: 6, justifyItems: 'center' }}>
+              <Bar w="100%" h={h} r={8} />
+              <Bar w={34} h={7} r={4} />
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <RowsSkeleton rows={4} label="Loading transactions" lead="square" />
+      </div>
+    </Frame>
+  );
+}
+
+/* -------------------------------------------------------------- notebooks */
+
+/** The shelf: notebook cards with a coloured spine, a name and two counts. */
+export function ShelfSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <Frame label="Loading your notebooks" style={{
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12,
+    }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ ...CARD, padding: 14, display: 'flex', gap: 12 }}>
+          <Bar w={6} h={54} r={3} style={{ flex: 'none' }} />
+          <span style={{ flex: 1, minWidth: 0, display: 'grid', gap: 8, alignContent: 'start' }}>
+            <Bar w={`${52 + ((i * 13) % 34)}%`} h={13} />
+            <Bar w={72} h={8} r={4} />
+            <Bar w={104} h={8} r={4} />
+          </span>
+        </div>
+      ))}
+    </Frame>
+  );
+}
+
 /* ------------------------------------------------------------ phone home */
 
 /** The phone dashboard: up-next card, task rows, ring grid. */

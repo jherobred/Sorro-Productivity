@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, type IconName } from '@/components/Icon';
+import { CalendarSkeleton } from '@/components/Skeleton';
 import { ScheduleImport } from '@/components/ScheduleImport';
 import { CalPopover, PopoverActions } from '@/components/CalPopover';
 import { K, SECHUE } from '@/lib/pal';
@@ -70,7 +71,7 @@ export default function CalendarPage() {
     return weekStart(first, prefs.weekStart);
   }, [view, ws, prefs.weekStart]);
 
-  const { data: events = [] } = useEvents(windowStart, windowDays);
+  const { data: events = [], isPending } = useEvents(windowStart, windowDays);
   const { data: tasks = [] } = useTasks();
   const A = useEventActions(ws);
   const TA = useTaskActions();
@@ -281,18 +282,25 @@ export default function CalendarPage() {
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {view === 'week' && (
+          {/* The chrome above is not data-dependent and paints immediately;
+              only the grid waits, so only the grid is outlined. */}
+          {isPending && (
+            <div style={{ padding: phone ? '0 14px 14px' : '0 22px 16px' }}>
+              <CalendarSkeleton days={view === 'day' ? 1 : 7} />
+            </div>
+          )}
+          {!isPending && view === 'week' && (
             <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
               sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
           )}
-          {view === 'day' && (
+          {!isPending && view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
               <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
                 sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
-          {view === 'month' && (
+          {!isPending && view === 'month' && (
             <Month ws={windowStart} month={ws.getMonth()} events={events} tasks={windowTasks}
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The
@@ -304,8 +312,8 @@ export default function CalendarPage() {
                 setCalView('day');
               }} />
           )}
-          {view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} />}
-          {view === 'countdown' && <Countdown events={events} A={A} />}
+          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} />}
+          {!isPending && view === 'countdown' && <Countdown events={events} A={A} />}
         </div>
       </div>
 

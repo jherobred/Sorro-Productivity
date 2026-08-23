@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
+import { RowsSkeleton } from '@/components/Skeleton';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { defineMutation, queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
@@ -46,7 +47,7 @@ export default function PeoplePage() {
   const [dEmail, setDEmail] = useState('');
   const [dCat, setDCat] = useState(CATS[0]);
 
-  const { data: people = [] } = useQuery({
+  const { data: people = [], isPending } = useQuery({
     queryKey: KEY,
     queryFn: async (): Promise<Person[]> => {
       const { data, error } = await supabase.from('bd_people')
@@ -100,7 +101,9 @@ export default function PeoplePage() {
     setDName(''); setDEmail(''); setAdding(false);
   };
 
-  const list = (
+  const list = isPending ? (
+    <RowsSkeleton rows={6} label="Loading your people" lead="circle" />
+  ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <div style={KICKER}>All people</div>
