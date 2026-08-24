@@ -78,6 +78,7 @@ In addition to clearly communicating. It's important that we clearly communicate
 - Do not speculate on abstractions for future requirements.
 - Do not claim completion without evidence.
 - Never add a co-author to a commit message.
+- Always deploy to live (push to master) whenever you change or finish something.
 - For completed work, concisely restate it but do not overload with response detail.
 
 ### 4. Aliases
