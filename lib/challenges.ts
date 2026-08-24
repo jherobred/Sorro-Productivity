@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
+import { ymd } from './days';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { rpFor, standings, type RuleId } from './rank';
@@ -417,8 +418,8 @@ export function useChallengeActions() {
       const span = Math.max(1, Math.round(
         (new Date(c.ends_on).getTime() - new Date(c.starts_on).getTime()) / 86_400_000));
       const from = new Date();
-      const to = new Date(from.getTime() + span * 86_400_000);
-      const ymd = (d: Date) => d.toISOString().slice(0, 10);
+      const to = new Date(from);
+      to.setDate(to.getDate() + span);
       const copy = {
         ...c, id: crypto.randomUUID(), name: `${c.name} (copy)`,
         starts_on: ymd(from), ends_on: ymd(to),
@@ -454,7 +455,7 @@ export function useChallengeActions() {
  */
 export function phaseOf(c: Challenge, members: Member[]): 'upcoming' | 'live' | 'over' {
   if (c.settled_at) return 'over';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ymd(new Date());
   if (c.starts_on > today) return 'upcoming';
   if (c.ends_on < today) return 'over';
   if (c.rule === 'first_to' && c.target != null && members.some((m) => m.progress >= c.target!)) return 'over';

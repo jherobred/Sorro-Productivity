@@ -143,6 +143,12 @@ export const persister =
     ? undefined
     : makePersister();
 
+/** Drop the in-memory cache and its IndexedDB copy — called on account switch, so the next account cannot rehydrate into the previous one's rows. */
+export async function resetPersistedCache() {
+  queryClient.clear();
+  await persister?.removeClient();
+}
+
 // The old localStorage cache is dead weight after the move — up to 5MB of a
 // budget the app still shares with prefs and the auth session. Cleared once,
 // on first load after the upgrade.

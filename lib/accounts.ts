@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import { signInWithGoogle } from './nativeAuth';
 import { toast } from './toast';
+import { resetPersistedCache, pendingWriteCount } from './offline';
 
 /**
  * More than one account, one tap apart.
@@ -53,8 +54,8 @@ export type Stored = {
 const KEY = 'basedly-accounts';
 /** Who the caches below currently belong to. */
 const CURRENT = 'basedly-account-current';
-/** Caches wiped on a switch. Every one of them is scoped to one account. */
-const SCOPED = ['basedly-cache', 'basedly-prefs'];
+/** localStorage caches wiped on a switch. The query cache is IndexedDB now — see resetPersistedCache(). */
+const SCOPED = ['basedly-prefs'];
 
 const listeners = new Set<() => void>();
 let cache: Stored[] | null = null;
@@ -100,10 +101,10 @@ const EMPTY: Stored[] = [];
  * sitting in memory, and coming back from Google is a client-side route change,
  * not a fresh document.
  */
-export function remember(session: {
+export async function remember(session: {
   access_token: string; refresh_token: string;
   user: { id: string; email?: string; user_metadata?: Record<string, unknown> };
-} | null): boolean {
+} | null): Promise<boolean> {
   if (!session?.user?.id || !session.refresh_token) return false;
   const m = session.user.user_metadata ?? {};
   const row: Stored = {
@@ -123,28 +124,35 @@ export function remember(session: {
   try {
     const was = localStorage.getItem(CURRENT);
     localStorage.setItem(CURRENT, row.user_id);
-    if (was && was !== row.user_id) { clearScoped(); return true; }
+    // Clearing here can discard writes the previous account had queued, so both
+    // ways in — switchTo() and addAccount() — refuse to start while any are
+    // pending. What is left reaching this line is a session that changed
+    // outside the app (restored on launch), where the old account is already
+    // gone: there is nothing to flush to, and keeping its rows would hand them
+    // to the new account instead. Clearing is the lesser loss.
+    if (was && was !== row.user_id) { await clearScoped(); return true; }
   } catch { /* private mode */ }
   return false;
 }
 
 /** Install once, at app start. Returns a cleanup function. */
 export function watchAccounts(): () => void {
-  const { data } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT') { clearScoped(); clearCurrent(); return; }
-    if (remember(session)) window.location.assign('/home/');
+  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT') { await clearScoped(); clearCurrent(); return; }
+    if (await remember(session)) window.location.assign('/home/');
   });
   // The session that is already live when the app opens — no event fires for it.
-  void supabase.auth.getSession().then(({ data: d }) => {
-    if (remember(d.session)) window.location.assign('/home/');
+  void supabase.auth.getSession().then(async ({ data: d }) => {
+    if (await remember(d.session)) window.location.assign('/home/');
   });
   return () => data.subscription.unsubscribe();
 }
 
-function clearScoped() {
+async function clearScoped() {
   for (const k of SCOPED) {
     try { localStorage.removeItem(k); } catch { /* nothing to clear */ }
   }
+  await resetPersistedCache();
 }
 
 /** Forget who the caches belonged to — used when signing out entirely. */
@@ -162,21 +170,41 @@ export async function switchTo(userId: string): Promise<void> {
   const target = read().find((a) => a.user_id === userId);
   if (!target) { toast('That account is not signed in on this device'); return; }
 
+  // Switching tears down the query cache (clearScoped -> resetPersistedCache),
+  // and that cache is where paused, offline-queued mutations live. Losing them
+  // is data loss; replaying them after the switch mis-attributes them to the
+  // new account. Neither is acceptable, so refuse the switch instead.
+  if (pendingWriteCount() > 0) {
+    toast('Unsynced changes — reconnect before switching accounts');
+    return;
+  }
+
   const { data, error } = await supabase.auth.setSession({
     access_token: target.access_token,
     refresh_token: target.refresh_token,
   });
 
   if (error || !data.session) {
-    // A refresh token can be revoked from Google, expire, or be spent by
-    // another device. Nothing to salvage: drop it and ask for a fresh sign-in.
+    // Offline, a local fetch failure (status 0), or a 5xx infrastructure
+    // outage: all retryable, not a rejection. The stored token may still be
+    // good — leave it alone and let the user try again.
+    const retryable = !navigator.onLine
+      || error?.name === 'AuthRetryableFetchError'
+      || !error?.status
+      || error.status >= 500;
+    if (retryable) {
+      toast('Could not switch — check your connection');
+      return;
+    }
+    // A real rejection (Google revoked it, it expired, another device spent
+    // it): nothing to salvage. Drop it and ask for a fresh sign-in.
     forget(userId);
     toast(`${target.name} needs signing in again`);
     return;
   }
 
-  remember(data.session);   // rotation again: store the token it just issued
-  clearScoped();
+  await remember(data.session);   // rotation again: store the token it just issued
+  await clearScoped();   // must finish before the reload below or the delete races the navigation
   window.location.assign('/home/');
 }
 
@@ -186,6 +214,14 @@ export async function switchTo(userId: string): Promise<void> {
  * to do nothing, which is the single most common way this feature ships broken.
  */
 export async function addAccount(): Promise<void> {
+  // Same reason `switchTo` refuses: coming back from Google lands in
+  // `remember()`, which clears the cache the queued writes live in. The guard
+  // has to be here, before the round trip — by the time `remember()` runs the
+  // session has already changed and there is no account left to flush them to.
+  if (pendingWriteCount() > 0) {
+    toast('Unsynced changes — reconnect before adding an account');
+    return;
+  }
   // Nothing is cleared here on purpose. Cancelling at Google's chooser is a
   // normal thing to do, and it should cost nothing; `remember()` wipes the
   // scoped caches on the way back in, once there is actually a new account.
@@ -200,7 +236,7 @@ export function forget(userId: string) {
 /** Sign out everywhere on this device. */
 export async function signOutAll() {
   write([]);
-  clearScoped();
+  await clearScoped();
   clearCurrent();
   await supabase.auth.signOut();
 }

@@ -212,9 +212,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const isInput =
         /input|textarea|select/i.test((e.target as HTMLElement)?.tagName ?? '') ||
         (e.target as HTMLElement)?.isContentEditable;
+      // An overlay already open swallows Ctrl+K and the single-letter
+      // shortcuts below, so pressing "T" or "?" behind the Search palette
+      // (or any other overlay) can no longer pop a second one on top of it.
+      const overlayOpen = search || !!sheet || shortcutsOpen || account || settings || !!menu;
 
       // 1. Search / Command Palette: ⌘K or Ctrl-K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        if (overlayOpen) return;
         e.preventDefault();
         setSearch(true);
         return;
@@ -235,7 +240,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (isInput) return;
+      if (isInput || overlayOpen) return;
 
       // 4. Quick Search: /
       if (e.key === '/') {
@@ -300,7 +305,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [router, dark, update, toggleRail]);
+    // search/sheet/shortcutsOpen/account/settings/menu feed overlayOpen above —
+    // without them here the handler would keep checking a stale (permanently
+    // closed) snapshot of every overlay flag.
+  }, [router, dark, update, toggleRail, search, sheet, shortcutsOpen, account, settings, menu]);
 
   // The sidebar badge reads the tasks already in cache. It used to fire a
   // count query against Supabase on every single navigation — a network round

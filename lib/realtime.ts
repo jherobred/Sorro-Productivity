@@ -142,15 +142,22 @@ export function useLiveSync() {
      * is on it. `visibilitychange` fires where `focus` does not: a phone
      * returning from the background never focuses anything.
      */
+    let wakeTimer: ReturnType<typeof setTimeout> | null = null;
     const wake = () => {
       if (document.visibilityState !== 'visible') return;
-      if (qc.isMutating() > 0) return;
+      // Still writing: mirror batcher()'s own retry rather than dropping the
+      // catch-up — this is the one moment it exists to cover. A paused
+      // mutation (offline, queued) is parked, not executing, so it must not
+      // count here or this retries forever while offline.
+      const busy = qc.getMutationCache().findAll({ status: 'pending' }).some((m) => !m.state.isPaused);
+      if (busy) { wakeTimer = setTimeout(wake, 400); return; }
       void qc.invalidateQueries({ type: 'active' });
     };
     document.addEventListener('visibilitychange', wake);
 
     return () => {
       document.removeEventListener('visibilitychange', wake);
+      if (wakeTimer) clearTimeout(wakeTimer);
       void supabase.removeChannel(channel);
     };
   }, [qc]);

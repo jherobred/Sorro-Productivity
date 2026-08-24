@@ -65,4 +65,19 @@ assert.equal(words('  one   two  '), 2);
   assert.equal(streaks([back(1), back(0), back(2)]).current, 3);
 }
 
+/* day stepping is calendar-safe across DST, regardless of the machine's zone */
+{
+  // Spring-forward and fall-back dates for the zones the bug was found in,
+  // plus a plain date as a control.
+  for (const start of ['2025-03-09', '2025-03-30', '2025-11-02', '2025-06-15']) {
+    const d = fromYmd(start);
+    d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() - 1);
+    assert.equal(ymd(d), start, `+1/-1 day must round-trip through ${start}`);
+  }
+
+  const run = ['2025-03-08', '2025-03-09', '2025-03-10', '2025-03-11'];
+  assert.equal(streaks(run).best, 4, 'a 4-day run spanning a DST transition is still 4');
+}
+
 console.log('days.ts ok');

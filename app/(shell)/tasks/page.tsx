@@ -449,13 +449,25 @@ function TaskRow({
       setTsw({ id: row.task.id, dx: d, live: true });
     };
     const up = (m: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      teardown();
       const d = m.clientX - startX.current;
       setTsw(d < -TSW / 3 ? { id: row.task.id, dx: -TSW, live: false } : null);
     };
+    // Browser can claim the gesture as a scroll (touchAction: 'pan-y') and fire
+    // this instead of `up` — without it the listeners leak and this row's tray
+    // stays wired to every later drag. Cancel always snaps closed.
+    const cancel = () => {
+      teardown();
+      setTsw(null);
+    };
+    const teardown = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   };
 
   const locked = row.task.stars || 0;

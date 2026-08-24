@@ -145,7 +145,8 @@ const EDIT_NB = defineMutation('nb2.editNotebook', async (v: { id: string; patch
  */
 const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
   const now = new Date().toISOString();
-  await supabase.from('bd_notes').update({ deleted_at: now }).eq('notebook_id', v.id).is('deleted_at', null);
+  const { error: trashError } = await supabase.from('bd_notes').update({ deleted_at: now }).eq('notebook_id', v.id).is('deleted_at', null);
+  if (trashError) throw trashError;   // must not hard-delete via cascade below if trashing failed
   const { error } = await supabase.from('bd_notebooks').delete().eq('id', v.id);
   if (error) throw error;
 });
@@ -188,7 +189,8 @@ const PURGE = defineMutation('nb2.purge', async (v: { ids: string[] }) => {
 
 const SET_TAGS = defineMutation('nb2.setTags', async (v: { note_id: string; tags: string[] }) => {
   const user_id = await currentUserId();
-  await supabase.from('bd_note_tags').delete().eq('note_id', v.note_id);
+  const { error: delError } = await supabase.from('bd_note_tags').delete().eq('note_id', v.note_id);
+  if (delError) throw delError;   // else a failed clear plus a successful insert unions old and new tags
   if (!v.tags.length) return;
   const { error } = await supabase.from('bd_note_tags')
     .insert(v.tags.map((tag) => ({ user_id, note_id: v.note_id, tag })));

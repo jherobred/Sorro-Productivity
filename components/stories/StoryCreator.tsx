@@ -70,11 +70,14 @@ export function StoryCreator({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) return toast('Pick an image file');
+    if (file.size > 5_000_000) return toast('That image is over 5 MB');
 
     const reader = new FileReader();
     reader.onload = (event) => {
       setMediaUrl(event.target?.result as string);
     };
+    reader.onerror = () => toast('Could not read that image');
     reader.readAsDataURL(file);
   };
 

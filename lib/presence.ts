@@ -41,6 +41,7 @@ export function usePresence(room: string | null): Peer[] {
       if (cancelled) return;
 
       const { data } = await supabase.from('bd_profiles').select('name').eq('user_id', me).maybeSingle();
+      if (cancelled) return;   // left before the profile came back: don't create an orphaned channel
       const name = data?.name ?? 'Someone';
 
       channel = supabase.channel(`presence:${room}`, { config: { presence: { key: me } } });

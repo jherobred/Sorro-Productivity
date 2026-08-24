@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +28,9 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const { prefs, update } = usePrefs();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Group[]>([]);
+  // Bumped on every debounced fetch; a response only lands if it's still the
+  // latest, so a slow earlier keystroke can't overwrite newer results.
+  const reqIdRef = useRef(0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -40,6 +43,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const term = q.trim();
     if (!term) { setHits([]); return; }
     const t = setTimeout(async () => {
+      const id = ++reqIdRef.current;
       const like = `%${term}%`;
       const needle = term.replace(/^@/, '').toLowerCase();
       const [tasks, notes, events, people, profilesRes] = await Promise.all([
@@ -50,6 +54,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         supabase.from('bd_people').select('id,name,category').ilike('name', like).limit(5),
         supabase.from('bd_profiles').select('user_id,name,handle,animal').or(`name.ilike.${like},handle.ilike.${like}`).limit(5),
       ]);
+      if (id !== reqIdRef.current) return; // a newer keystroke already superseded this
       const g: Group[] = [];
       const jump = (path: string) => () => { router.push(path); onClose(); };
 

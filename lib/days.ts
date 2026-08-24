@@ -18,6 +18,13 @@ export const fromYmd = (s: string) => {
   return new Date(y, m - 1, d);
 };
 
+/** Step by calendar days, not milliseconds — a local day is 23h/25h across DST. */
+const addDays = (s: string, n: number) => {
+  const d = fromYmd(s);
+  d.setDate(d.getDate() + n);
+  return ymd(d);
+};
+
 export const monthOf = (s: string) => s.slice(0, 7);
 
 /** Every day drawn in a month grid, Monday-first, including the blank leaders. */
@@ -56,24 +63,24 @@ export function streaks(dates: string[]): { current: number; best: number } {
   const set = new Set(dates);
   let best = 0;
   for (const d of set) {
-    const prev = ymd(new Date(fromYmd(d).getTime() - 86400000));
+    const prev = addDays(d, -1);
     if (set.has(prev)) continue;          // not the start of a run
     let n = 0;
     let cur = d;
     while (set.has(cur)) {
       n++;
-      cur = ymd(new Date(fromYmd(cur).getTime() + 86400000));
+      cur = addDays(cur, 1);
     }
     best = Math.max(best, n);
   }
 
   const today = ymd(new Date());
-  const yesterday = ymd(new Date(Date.now() - 86400000));
+  const yesterday = addDays(today, -1);
   let anchor = set.has(today) ? today : set.has(yesterday) ? yesterday : null;
   let current = 0;
   while (anchor && set.has(anchor)) {
     current++;
-    anchor = ymd(new Date(fromYmd(anchor).getTime() - 86400000));
+    anchor = addDays(anchor, -1);
   }
 
   return { current, best };

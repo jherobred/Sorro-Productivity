@@ -97,7 +97,8 @@ const CREATE = defineMutation('ws.create', async (v: { id: string; name: string;
   const { error } = await supabase.from('bd_workspaces').insert({ ...v, owner_id });
   if (error) throw error;
   // The owner is a member too, or every membership check would exclude them.
-  await supabase.from('bd_workspace_members').insert({ workspace_id: v.id, user_id: owner_id, role: 'owner' });
+  const { error: memberError } = await supabase.from('bd_workspace_members').insert({ workspace_id: v.id, user_id: owner_id, role: 'owner' });
+  if (memberError) throw memberError;
 });
 
 const EDIT = defineMutation('ws.edit', async (v: { id: string; patch: { name?: string; color?: string } }) => {

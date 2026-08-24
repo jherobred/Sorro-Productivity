@@ -26,6 +26,10 @@ export function HabitTimerModal({
   const [running, setRunning] = useState(true);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Guards the celebration side effects below. Once secondsLeft hits 0 every
+  // later tick still satisfies `s <= 1`, so without this the sound and toast
+  // replayed every second for as long as the finished modal stayed open.
+  const celebratedRef = useRef(false);
 
   useEffect(() => {
     if (running) {
@@ -33,8 +37,12 @@ export function HabitTimerModal({
         setSecondsElapsed((s) => s + 1);
         setSecondsLeft((s) => {
           if (s <= 1) {
-            playCelebration();
-            toast(`Target time reached for ${habit.name}! 🎉`);
+            if (!celebratedRef.current) {
+              celebratedRef.current = true;
+              playCelebration();
+              toast(`Target time reached for ${habit.name}! 🎉`);
+              setRunning(false);
+            }
             return 0;
           }
           return s - 1;
@@ -56,6 +64,7 @@ export function HabitTimerModal({
   const addTime = (mins: number) => {
     playTick();
     setSecondsLeft((s) => s + mins * 60);
+    celebratedRef.current = false;
     toast(`+${mins} minutes added`);
   };
 
@@ -64,6 +73,7 @@ export function HabitTimerModal({
     setRunning(false);
     setSecondsLeft(targetSeconds);
     setSecondsElapsed(0);
+    celebratedRef.current = false;
   };
 
   const handleFinish = () => {

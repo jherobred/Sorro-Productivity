@@ -218,15 +218,19 @@ const SAVE_NODE = defineMutation('cv2.saveNode', async (v: { id: string; patch: 
   if (v.patch.text !== undefined && pending.get(v.id) === v.patch.text) pending.delete(v.id);
 });
 
-/** One round trip for a whole drag, however many cards moved. */
+/**
+ * One round trip's latency for a whole drag, however many cards moved — the
+ * updates go out concurrently. Partial updates (not upsert): an upsert here
+ * would write the missing columns as defaults, wiping each card's text and kind.
+ */
 const MOVE_NODES = defineMutation('cv2.moveNodes', async (v: { moves: { id: string; x: number; y: number; w?: number; h?: number }[] }) => {
-  for (const m of v.moves) {
+  await Promise.all(v.moves.map(async (m) => {
     const patch: Record<string, number> = { x: m.x, y: m.y };
     if (m.w !== undefined) patch.w = m.w;
     if (m.h !== undefined) patch.h = m.h;
     const { error } = await supabase.from('bd_canvas_nodes').update(patch).eq('id', m.id);
     if (error) throw error;
-  }
+  }));
 });
 
 const DEL_NODES = defineMutation('cv2.delNodes', async (v: { ids: string[] }) => {

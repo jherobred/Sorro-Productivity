@@ -76,9 +76,11 @@ export function deriveDailyQuests({
   // 2. Tasks completed today
   const tasksDoneToday = tasks.filter((t) => {
     if (!t.done) return false;
-    const ts = t.completed_at || (t.due_on === todayStr ? todayStr : null);
-    if (!ts) return false;
-    return ts.slice(0, 10) === todayStr;
+    // completed_at is a UTC ISO string, so slicing it compares the wrong day
+    // either side of local midnight — convert it. due_on is already a local
+    // yyyy-mm-dd and must not go through the same conversion.
+    if (t.completed_at) return ymd(new Date(t.completed_at)) === todayStr;
+    return t.due_on === todayStr;
   }).length;
 
   const quests: Quest[] = [

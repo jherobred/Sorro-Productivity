@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
+import { fromYmd } from './days';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
@@ -280,17 +281,15 @@ export function maxStreak(ticks: Tick[], habitId: string): number {
 
   let best = 0;
   let cur = 0;
-  let prevTime = 0;
+  let prevDate = '';
 
   for (const dateStr of dates) {
-    const time = Date.parse(`${dateStr}T00:00:00`);
-    if (prevTime === 0 || time - prevTime === 86_400_000) {
-      cur++;
-    } else {
-      cur = 1;
-    }
+    // Calendar-day adjacency, not a 24h delta — DST makes some local days 23h/25h.
+    const next = fromYmd(prevDate || dateStr);
+    next.setDate(next.getDate() + 1);
+    cur = !prevDate || ymd(next) === dateStr ? cur + 1 : 1;
     if (cur > best) best = cur;
-    prevTime = time;
+    prevDate = dateStr;
   }
   return best;
 }

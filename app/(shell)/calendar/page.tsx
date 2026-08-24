@@ -86,7 +86,10 @@ export default function CalendarPage() {
       if (/input|textarea/i.test((e.target as HTMLElement)?.tagName ?? '')) return;
       if (e.key === 'ArrowLeft') shift(-1);
       if (e.key === 'ArrowRight') shift(1);
-      if (e.key.toLowerCase() === 't') goToday();
+      // "T" is owned by Shell's global Quick Create Task shortcut. This
+      // listener (child) mounts before Shell's (parent), so it always runs
+      // first — checking e.defaultPrevented here would never see Shell's
+      // preventDefault in time, and a bare binding fired both actions at once.
       if (e.key === 'Backspace' || e.key === 'Delete') {
         if (pop && pop.kind === 'event') {
           e.preventDefault();
