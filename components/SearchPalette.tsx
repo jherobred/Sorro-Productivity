@@ -6,6 +6,7 @@ import { Icon, type IconName } from './Icon';
 import { supabase } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
 import { toast } from '@/lib/toast';
+import { COMMUNITY_PROFILES } from '@/lib/people';
 
 /**
  * Search + command palette. Ported from Basedly.dc.html markup 2572–2590 —
@@ -40,15 +41,75 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (!term) { setHits([]); return; }
     const t = setTimeout(async () => {
       const like = `%${term}%`;
-      const [tasks, notes, events, people] = await Promise.all([
+      const needle = term.replace(/^@/, '').toLowerCase();
+      const [tasks, notes, events, people, profilesRes] = await Promise.all([
         supabase.from('bd_tasks').select('id,title').is('deleted_at', null).ilike('title', like).limit(5),
         supabase.from('bd_notes').select('id,title,body').is('deleted_at', null)
           .or(`title.ilike.${like},body.ilike.${like}`).limit(5),
         supabase.from('bd_events').select('id,title,starts_at').is('deleted_at', null).ilike('title', like).limit(5),
         supabase.from('bd_people').select('id,name,category').ilike('name', like).limit(5),
+        supabase.from('bd_profiles').select('user_id,name,handle,animal').or(`name.ilike.${like},handle.ilike.${like}`).limit(5),
       ]);
       const g: Group[] = [];
       const jump = (path: string) => () => { router.push(path); onClose(); };
+
+      const foundPeople: Row[] = [];
+      const seenHandles = new Set<string>();
+
+      // From db profiles
+      if (profilesRes.data?.length) {
+        for (const p of profilesRes.data) {
+          const h = (p.handle || p.name || p.user_id).replace(/^@/, '');
+          seenHandles.add(h.toLowerCase());
+          foundPeople.push({
+            id: p.user_id,
+            n: p.name || `@${h}`,
+            m: `@${h} · View profile`,
+            ic: 'focus',
+            go: jump(`/profile/?u=${encodeURIComponent(h)}`),
+          });
+        }
+      }
+
+      // From community presets
+      for (const [key, p] of Object.entries(COMMUNITY_PROFILES)) {
+        const h = (p.handle || key).toLowerCase();
+        if (
+          (h.includes(needle) || p.name.toLowerCase().includes(needle)) &&
+          !seenHandles.has(h)
+        ) {
+          seenHandles.add(h);
+          foundPeople.push({
+            id: p.user_id,
+            n: p.name,
+            m: `@${p.handle} · Basedly Community`,
+            ic: 'focus',
+            go: jump(`/profile/?u=${encodeURIComponent(p.handle || h)}`),
+          });
+        }
+      }
+
+      // From contacts (bd_people)
+      if (people.data?.length) {
+        for (const p of people.data) {
+          const h = p.name.toLowerCase().replace(/\s+/g, '');
+          if (!seenHandles.has(h)) {
+            seenHandles.add(h);
+            foundPeople.push({
+              id: p.id,
+              n: p.name,
+              m: `${p.category} · View profile`,
+              ic: 'people',
+              go: jump(`/profile/?u=${encodeURIComponent(h)}`),
+            });
+          }
+        }
+      }
+
+      if (foundPeople.length) {
+        g.push({ g: 'People & Profiles', items: foundPeople });
+      }
+
       if (tasks.data?.length) g.push({ g: 'Tasks', items: tasks.data.map((r) => ({ id: r.id, n: r.title, m: 'Task', ic: 'task', go: jump('/tasks/') })) });
       if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({
         id: r.id, n: r.title || 'Untitled',
@@ -56,7 +117,6 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         ic: 'book', go: jump('/notebooks/'),
       })) });
       if (events.data?.length) g.push({ g: 'Events', items: events.data.map((r) => ({ id: r.id, n: r.title, m: new Date(r.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), ic: 'cal', go: jump('/calendar/') })) });
-      if (people.data?.length) g.push({ g: 'People', items: people.data.map((r) => ({ id: r.id, n: r.name, m: r.category, ic: 'people', go: jump('/people/') })) });
       setHits(g);
     }, 180);
     return () => clearTimeout(t);

@@ -51,21 +51,43 @@ export function ProfileTimeline({
   const me = currentUserId || userId;
   const isMe = me === userId;
 
+  const isUuid = (s: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((s || '').trim());
+
   const { data: posts = [], isLoading: loadingPosts } = useQuery({
     queryKey: ['profile_posts', userId],
     enabled: !!userId,
     queryFn: async (): Promise<PostActivity[]> => {
+      let targetId = userId;
+      if (!isUuid(targetId)) {
+        try {
+          const clean = targetId.replace(/^(user-|@)/, '');
+          const { data: profile } = await supabase
+            .from('bd_profiles')
+            .select('user_id')
+            .or(`handle.eq.${clean},user_id.eq.${clean}`)
+            .maybeSingle();
+          if (profile?.user_id && isUuid(profile.user_id)) {
+            targetId = profile.user_id;
+          } else {
+            return [];
+          }
+        } catch {
+          return [];
+        }
+      }
+
       const [pRes, tRes] = await Promise.all([
         supabase
           .from('bd_posts')
           .select('id,title,caption,tag,image_path,created_at')
-          .eq('author_id', userId)
+          .eq('author_id', targetId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
         supabase
           .from('bd_threads')
           .select('id,title,body,tag,created_at')
-          .eq('author_id', userId)
+          .eq('author_id', targetId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
       ]);

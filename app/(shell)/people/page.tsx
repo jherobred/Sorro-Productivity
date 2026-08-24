@@ -12,6 +12,8 @@ import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
 import { settler } from '@/lib/settle';
 
+import { useFollows } from '@/lib/follows';
+
 /** Ported from Basedly.dc.html markup 2351–2420. */
 
 type Person = { id: string; name: string; category: string; color: string; email: string; note: string };
@@ -42,8 +44,10 @@ export default function PeoplePage() {
   const { phone } = useLayout();
   const qc = useQueryClient();
   const settle = settler(qc, KEY);
+  const { isFollowing, toggleFollow } = useFollows();
 
   const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
   const [dName, setDName] = useState('');
   const [dEmail, setDEmail] = useState('');
@@ -103,23 +107,48 @@ export default function PeoplePage() {
     setDName(''); setDEmail(''); setAdding(false);
   };
 
+  const filteredPeople = people.filter((p) => {
+    if (!q.trim()) return true;
+    const term = q.trim().toLowerCase();
+    return p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term) || p.email.toLowerCase().includes(term);
+  });
+
+  const isFollowed = person ? (isFollowing(person.name.toLowerCase().replace(/\s+/g, '')) || isFollowing(person.id)) : false;
+
   const list = isPending ? (
     <RowsSkeleton rows={6} label="Loading your people" lead="circle" />
   ) : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <div style={KICKER}>All people</div>
+        <div style={KICKER}>All people ({people.length})</div>
         <button onClick={() => setAdding((v) => !v)} className="hov" aria-label="Add someone" aria-expanded={adding} title="Add someone"
           style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
           <Icon name="plus" size={13} color="var(--tx3)" />
         </button>
       </div>
 
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+        borderRadius: 10, background: 'var(--card)', border: '1px solid var(--line2)',
+        marginBottom: 8,
+      }}>
+        <Icon name="search" size={13} color="var(--tx3)" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search contacts…"
+          style={{ flex: 1, minWidth: 0, fontSize: 12, border: 'none', background: 'transparent', color: 'var(--tx)', outline: 'none' }}
+        />
+        {q && (
+          <button onClick={() => setQ('')} style={{ border: 'none', background: 'transparent', color: 'var(--tx3)', cursor: 'pointer', fontSize: 11 }}>✕</button>
+        )}
+      </div>
+
       {adding && (
         <div className="rise" style={{ padding: '13px 14px', borderRadius: 14, background: 'var(--card)', boxShadow: 'var(--sh)', marginBottom: 8 }}>
           <input value={dName} onChange={(e) => setDName(e.target.value)} placeholder="Full name"
             style={{ width: '100%', padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', marginBottom: 8 }} />
-          <input value={dEmail} onChange={(e) => setDEmail(e.target.value)} placeholder="Email"
+          <input value={dEmail} onChange={(e) => setDEmail(e.target.value)} placeholder="Email or @handle"
             style={{ width: '100%', padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 500, color: 'var(--tx)', marginBottom: 10 }} />
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 12 }}>
             {CATS.map((c) => (
@@ -139,7 +168,7 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {people.map((p) => (
+      {filteredPeople.map((p) => (
         <button key={p.id} onClick={() => setSel(p.id)} className="row" style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', borderRadius: 11, textAlign: 'left',
           background: p.id === sel ? 'var(--hov)' : 'transparent',
@@ -157,7 +186,11 @@ export default function PeoplePage() {
         </button>
       ))}
 
-      {people.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 2px' }}>Nobody yet.</div>}
+      {filteredPeople.length === 0 && (
+        <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 2px' }}>
+          {q ? `No contacts match “${q}”.` : 'Nobody yet.'}
+        </div>
+      )}
     </div>
   );
 
@@ -182,7 +215,7 @@ export default function PeoplePage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <button
           onClick={() => router.push(`/profile/?u=${encodeURIComponent(person.name.toLowerCase().replace(/\s+/g, ''))}`)}
           className="hov k-squish"
@@ -193,6 +226,19 @@ export default function PeoplePage() {
         >
           <Icon name="people" size={13} color="var(--accTx)" />
           View Profile
+        </button>
+        <button
+          onClick={() => toggleFollow({ userId: person.id, handle: person.name.toLowerCase().replace(/\s+/g, ''), name: person.name })}
+          className="acc k-squish"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 9,
+            background: isFollowed ? 'var(--card2)' : 'var(--acc)',
+            color: isFollowed ? 'var(--tx)' : 'var(--ink)',
+            border: isFollowed ? '1px solid var(--line2)' : 'none',
+            fontSize: 12, fontWeight: 800, cursor: 'pointer',
+          }}
+        >
+          {isFollowed ? 'Following ✓' : 'Follow +'}
         </button>
         <button
           onClick={() => router.push('/community/?tab=messages')}

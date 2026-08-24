@@ -166,19 +166,33 @@ export default function CommunityPage() {
     }> = [];
 
     const dbUsers = Object.values(profiles).filter((p) => p.user_id !== me);
+    const seen = new Set<string>();
+
     for (const p of dbUsers) {
-      list.push({
-        userId: p.user_id,
-        name: p.name || 'Basedly Pioneer',
-        handle: p.handle || p.user_id.slice(0, 8),
-        photo: p.photo_url || null,
-        animal: p.animal || null,
-        desc: 'Basedly Member',
-      });
+      const h = (p.handle || p.user_id.slice(0, 8)).replace(/^@/, '');
+      if (!seen.has(h.toLowerCase())) {
+        seen.add(h.toLowerCase());
+        list.push({
+          userId: p.user_id,
+          name: p.name || `@${h}`,
+          handle: h,
+          photo: p.photo_url || null,
+          animal: p.animal || null,
+          desc: 'Basedly Member',
+        });
+      }
     }
 
     return list;
   }, [profiles, me]);
+
+  const matchingMembers = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
+    return storeBasedlyUsers.filter(
+      (u) => u.handle.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)
+    );
+  }, [searchQuery, storeBasedlyUsers]);
 
   const realBasedlyTrends = useMemo(() => {
     const tagCounts: Record<string, number> = {};
@@ -477,6 +491,71 @@ export default function CommunityPage() {
                 >
                   Clear filter
                 </button>
+              </div>
+            )}
+
+            {searchQuery && matchingMembers.length > 0 && (
+              <div style={{
+                padding: '10px 16px',
+                borderBottom: '1px solid var(--line)',
+                background: 'var(--card)',
+              }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--tx3)', marginBottom: 8 }}>
+                  People matching &ldquo;{searchQuery}&rdquo;
+                </div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                  {matchingMembers.map((m) => {
+                    const isFollowed = isFollowing(m.handle) || (m.userId ? isFollowing(m.userId) : false);
+                    return (
+                      <div
+                        key={m.handle}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '6px 10px',
+                          borderRadius: 12,
+                          background: 'var(--card2)',
+                          border: '1px solid var(--line2)',
+                          flex: 'none',
+                        }}
+                      >
+                        <div
+                          onClick={() => router.push(`/profile/?u=${encodeURIComponent(m.handle)}`)}
+                          className="hov k-squish"
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                        >
+                          <span style={{
+                            width: 32, height: 32, borderRadius: '50%', background: 'var(--card)',
+                            border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', fontSize: 14,
+                          }}>
+                            {m.animal || '🦝'}
+                          </span>
+                          <div>
+                            <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)', whiteSpace: 'nowrap' }}>{m.name}</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>@{m.handle}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleFollow({ userId: m.userId, handle: m.handle, name: m.name })}
+                          className="acc k-squish"
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            background: isFollowed ? 'var(--card)' : 'var(--acc)',
+                            color: isFollowed ? 'var(--tx)' : 'var(--ink)',
+                            border: isFollowed ? '1px solid var(--line2)' : 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isFollowed ? 'Following' : 'Follow'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

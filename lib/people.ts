@@ -32,6 +32,105 @@ export type Person = {
   photo_fit: unknown;
 };
 
+export const COMMUNITY_PROFILES: Record<string, Person> = {
+  'basedly-bot': {
+    user_id: 'basedly-bot',
+    name: 'Basedly Official',
+    handle: 'basedly',
+    photo_url: null,
+    animal: 'wolf',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  kaia: {
+    user_id: 'kaia-id',
+    name: 'Kaia Vance',
+    handle: 'kaia',
+    photo_url: null,
+    animal: 'fox',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  milo: {
+    user_id: 'milo-id',
+    name: 'Milo Chen',
+    handle: 'milo',
+    photo_url: null,
+    animal: 'capybara',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  elena: {
+    user_id: 'elena-id',
+    name: 'Elena Rostova',
+    handle: 'elena',
+    photo_url: null,
+    animal: 'otter',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  zane: {
+    user_id: 'zane-id',
+    name: 'Zane Thorne',
+    handle: 'zane',
+    photo_url: null,
+    animal: 'dragon',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  tara: {
+    user_id: 'tara-id',
+    name: 'Tara Lin',
+    handle: 'tara',
+    photo_url: null,
+    animal: 'panda',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  leo: {
+    user_id: 'leo-id',
+    name: 'Leo Sterling',
+    handle: 'leo',
+    photo_url: null,
+    animal: 'raccoon',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  sam: {
+    user_id: 'sam-id',
+    name: 'Samira Khan',
+    handle: 'sam',
+    photo_url: null,
+    animal: 'shiba',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  maya: {
+    user_id: 'maya-id',
+    name: 'Maya Patel',
+    handle: 'maya',
+    photo_url: null,
+    animal: 'penguin',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  alex: {
+    user_id: 'alex-id',
+    name: 'Alex Chen',
+    handle: 'alex_codes',
+    photo_url: null,
+    animal: 'bear',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  sarah: {
+    user_id: 'sarah-id',
+    name: 'Sarah Miller',
+    handle: 'sarah_lifts',
+    photo_url: null,
+    animal: 'wolf',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+  jules: {
+    user_id: 'jules-id',
+    name: 'Jules Rivera',
+    handle: 'jules',
+    photo_url: null,
+    animal: 'cat',
+    photo_fit: { x: 50, y: 50, zoom: 1 },
+  },
+};
+
 export const PROFILES = ['profiles'] as const;
 
 export function useProfiles() {
@@ -39,10 +138,20 @@ export function useProfiles() {
     queryKey: PROFILES,
     staleTime: 300_000,
     queryFn: async (): Promise<Record<string, Person>> => {
-      const { data, error } = await supabase.from('bd_profiles').select('user_id,name,handle,photo_url,animal,photo_fit').limit(500);
-      if (error) throw error;
-      const out: Record<string, Person> = {};
-      for (const p of (data ?? []) as Person[]) out[p.user_id] = p;
+      const out: Record<string, Person> = { ...COMMUNITY_PROFILES };
+      try {
+        const { data } = await supabase.from('bd_profiles').select('user_id,name,handle,photo_url,animal,photo_fit').limit(500);
+        if (data) {
+          for (const p of data as Person[]) {
+            if (p && p.user_id) {
+              out[p.user_id] = p;
+              if (p.handle) {
+                out[p.handle.toLowerCase().replace(/^@/, '')] = p;
+              }
+            }
+          }
+        }
+      } catch {}
       return out;
     },
   });

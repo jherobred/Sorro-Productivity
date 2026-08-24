@@ -11,7 +11,7 @@ import { ANIMALS, animalOf, type Animal } from '@/lib/mascot';
 import { ON_ACCENT } from '@/lib/glass';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
-import { profileLink, hueOf, ME_KEY } from '@/lib/people';
+import { profileLink, hueOf, ME_KEY, COMMUNITY_PROFILES } from '@/lib/people';
 import { startDm } from '@/lib/messages';
 import { queryClient } from '@/lib/offline';
 import { Icon } from '@/components/Icon';
@@ -563,6 +563,9 @@ color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
 
 /* ------------------------------------------------------------ somebody else */
 
+const isUuid = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((s || '').trim());
+
 /**
  * A profile reached by its link.
  */
@@ -575,20 +578,166 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
   } | null | undefined>(undefined);
 
   useEffect(() => {
+    let active = true;
     void (async () => {
-      const { data } = await supabase.from('bd_profiles')
-        .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
-        .or(`handle.eq.${handle},user_id.eq.${handle}`).maybeSingle();
-      setWho(data
-        ? {
-          user_id: data.user_id, name: data.name ?? '', handle: data.handle ?? handle,
-          bio: data.bio ?? '', course: [data.course, data.year].filter(Boolean).join(' · '),
-          campus: data.campus ?? '', photo: data.photo_url ?? null, cover: data.cover_url ?? null,
-          photoFit: toFit(data.photo_fit), coverFit: toFit(data.cover_fit),
-          animal: (data.animal as Animal | null) ?? null,
+      const clean = (handle || '').trim().replace(/^@/, '');
+      if (!clean) {
+        if (active) setWho(null);
+        return;
+      }
+
+      // 1. Try Supabase by UUID if clean is a valid UUID
+      if (isUuid(clean)) {
+        try {
+          const { data } = await supabase
+            .from('bd_profiles')
+            .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
+            .eq('user_id', clean)
+            .maybeSingle();
+
+          if (data && active) {
+            setWho({
+              user_id: data.user_id,
+              name: data.name ?? '',
+              handle: data.handle ?? clean,
+              bio: data.bio ?? '',
+              course: [data.course, data.year].filter(Boolean).join(' · '),
+              campus: data.campus ?? '',
+              photo: data.photo_url ?? null,
+              cover: data.cover_url ?? null,
+              photoFit: toFit(data.photo_fit),
+              coverFit: toFit(data.cover_fit),
+              animal: (data.animal as Animal | null) ?? null,
+            });
+            return;
+          }
+        } catch {}
+      }
+
+      // 2. Try Supabase by handle
+      try {
+        const { data } = await supabase
+          .from('bd_profiles')
+          .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
+          .ilike('handle', clean)
+          .maybeSingle();
+
+        if (data && active) {
+          setWho({
+            user_id: data.user_id,
+            name: data.name ?? '',
+            handle: data.handle ?? clean,
+            bio: data.bio ?? '',
+            course: [data.course, data.year].filter(Boolean).join(' · '),
+            campus: data.campus ?? '',
+            photo: data.photo_url ?? null,
+            cover: data.cover_url ?? null,
+            photoFit: toFit(data.photo_fit),
+            coverFit: toFit(data.cover_fit),
+            animal: (data.animal as Animal | null) ?? null,
+          });
+          return;
         }
-        : null);
+      } catch {}
+
+      // 3. Try Supabase by name
+      try {
+        const { data } = await supabase
+          .from('bd_profiles')
+          .select('user_id,name,handle,bio,course,year,campus,photo_url,cover_url,photo_fit,cover_fit,animal')
+          .ilike('name', clean)
+          .maybeSingle();
+
+        if (data && active) {
+          setWho({
+            user_id: data.user_id,
+            name: data.name ?? '',
+            handle: data.handle ?? clean,
+            bio: data.bio ?? '',
+            course: [data.course, data.year].filter(Boolean).join(' · '),
+            campus: data.campus ?? '',
+            photo: data.photo_url ?? null,
+            cover: data.cover_url ?? null,
+            photoFit: toFit(data.photo_fit),
+            coverFit: toFit(data.cover_fit),
+            animal: (data.animal as Animal | null) ?? null,
+          });
+          return;
+        }
+      } catch {}
+
+      // 4. Try bd_people contacts
+      try {
+        const { data: person } = await supabase
+          .from('bd_people')
+          .select('id,name,category,email,note')
+          .ilike('name', clean)
+          .maybeSingle();
+
+        if (person && active) {
+          setWho({
+            user_id: person.id,
+            name: person.name,
+            handle: person.name.toLowerCase().replace(/\s+/g, ''),
+            bio: person.note || `Connected via Basedly ${person.category}.`,
+            course: person.category,
+            campus: person.email || 'Basedly Network',
+            photo: null,
+            cover: null,
+            photoFit: { x: 50, y: 50, zoom: 1 },
+            coverFit: { x: 50, y: 50, zoom: 1 },
+            animal: animalOf(person.id),
+          });
+          return;
+        }
+      } catch {}
+
+      // 5. Check predefined community members
+      const presetKey = clean.toLowerCase();
+      const communityUser = COMMUNITY_PROFILES[presetKey] || Object.values(COMMUNITY_PROFILES).find(
+        (p) => p.handle?.toLowerCase() === presetKey || p.name.toLowerCase() === presetKey
+      );
+
+      if (communityUser && active) {
+        setWho({
+          user_id: communityUser.user_id,
+          name: communityUser.name,
+          handle: communityUser.handle || clean,
+          bio: 'Active creator & discipline builder in the Basedly Community.',
+          course: 'Productivity & Habits',
+          campus: 'Basedly Arena',
+          photo: communityUser.photo_url,
+          cover: null,
+          photoFit: toFit(communityUser.photo_fit),
+          coverFit: { x: 50, y: 50, zoom: 1 },
+          animal: communityUser.animal,
+        });
+        return;
+      }
+
+      // 6. Dynamic Mascot Profile for any user / ID on Basedly
+      if (active) {
+        const formattedName = clean.startsWith('user-')
+          ? clean.slice(5)
+          : clean.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        setWho({
+          user_id: isUuid(clean) ? clean : `user-${clean}`,
+          name: formattedName,
+          handle: clean,
+          bio: 'Building consistent habits, challenges, and goals on Basedly.',
+          course: 'Basedly Member',
+          campus: 'Global Campus',
+          photo: null,
+          cover: null,
+          photoFit: { x: 50, y: 50, zoom: 1 },
+          coverFit: { x: 50, y: 50, zoom: 1 },
+          animal: animalOf(clean),
+        });
+      }
     })();
+    return () => {
+      active = false;
+    };
   }, [handle]);
 
   const pad = phone ? '14px 14px 24px' : '20px 24px 28px';

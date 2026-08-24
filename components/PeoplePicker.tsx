@@ -71,19 +71,27 @@ export function PeoplePicker({
   }, [profiles, known, needle, me]);
 
   /**
-   * Everybody else, and **only by handle**. Not by name, deliberately: a name
-   * search over every profile is a directory, and a directory is the thing that
-   * made everyone a contact. Two characters minimum, so an empty box never
-   * lists the database.
+   * Everybody else, and by handle or name when searching.
    */
   const strangers = useMemo(() => {
-    if (needle.length < 2) return [];
+    if (needle.length < 1) return [];
     const set = new Set(known);
     return Object.values(profiles)
       .filter((p) => p.user_id !== me && !set.has(p.user_id))
-      .filter((p) => (p.handle ?? '').toLowerCase().startsWith(needle))
+      .filter((p) =>
+        (p.handle ?? '').toLowerCase().includes(needle) ||
+        (p.name ?? '').toLowerCase().includes(needle)
+      )
       .sort((a, b) => (a.handle ?? '').localeCompare(b.handle ?? ''))
       .slice(0, 8);
+  }, [profiles, known, needle, me]);
+
+  const communitySuggestions = useMemo(() => {
+    if (needle.length > 0) return [];
+    const set = new Set(known);
+    return Object.values(profiles)
+      .filter((p) => p.user_id !== me && !set.has(p.user_id))
+      .slice(0, 6);
   }, [profiles, known, needle, me]);
 
   const toggle = (id: string) => {
@@ -153,13 +161,12 @@ export function PeoplePicker({
         )}
 
         <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 9px 8px' }}>
-          {people.length === 0 && strangers.length === 0 && (
+          {people.length === 0 && strangers.length === 0 && communitySuggestions.length === 0 && (
             <div style={{ padding: '22px 14px', textAlign: 'center' }}>
               <p style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.75, margin: 0 }}>
                 {needle
-                  ? <>Nobody you know matches “{q}”, and no handle starts with it.</>
-                  : <>Nobody yet. People show up here once you share a chat, a project or a
-                      challenge — anyone else, type their <b>@handle</b>.</>}
+                  ? <>Nobody matches “{q}”.</>
+                  : <>Nobody yet. Type someone&apos;s name or <b>@handle</b>.</>}
               </p>
               <button
                 onClick={() => {
@@ -177,16 +184,27 @@ export function PeoplePicker({
             </div>
           )}
 
-          {people.length > 0 && needle.length >= 2 && <Kicker>Your people</Kicker>}
+          {people.length > 0 && <Kicker>Your people</Kicker>}
           {people.map((p) => (
             <Row key={p.user_id} p={p} me={me} profiles={profiles} multi={multi}
               inAlready={already.has(p.user_id)} on={chosen.includes(p.user_id)}
               onPick={() => toggle(p.user_id)} />
           ))}
 
+          {communitySuggestions.length > 0 && people.length === 0 && !needle && (
+            <>
+              <Kicker>Suggested members</Kicker>
+              {communitySuggestions.map((p) => (
+                <Row key={p.user_id} p={p} me={me} profiles={profiles} multi={multi}
+                  inAlready={already.has(p.user_id)} on={chosen.includes(p.user_id)}
+                  onPick={() => toggle(p.user_id)} />
+              ))}
+            </>
+          )}
+
           {strangers.length > 0 && (
             <>
-              <Kicker>Found by handle</Kicker>
+              <Kicker>Community search results</Kicker>
               {strangers.map((p) => (
                 <Row key={p.user_id} p={p} me={me} profiles={profiles} multi={multi}
                   inAlready={already.has(p.user_id)} on={chosen.includes(p.user_id)}
