@@ -223,7 +223,7 @@ export default function HabitsPage() {
       {/* View Mode & Global Actions Bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         {/* View mode switcher */}
-        <div style={{ display: 'flex', gap: 4, background: 'var(--card)', padding: 3, borderRadius: 12, border: '1px solid var(--line)' }}>
+        <div data-tour="habits-view-modes" style={{ display: 'flex', gap: 4, background: 'var(--card)', padding: 3, borderRadius: 12, border: '1px solid var(--line)' }}>
           {(
             [
               { id: 'week', label: 'Week Grid', icon: 'week' },
@@ -466,6 +466,7 @@ export default function HabitsPage() {
               </div>
 
               <div
+                data-tour="habits-grid-cells"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: phone || viewMode === 'week' ? '1fr' : 'repeat(auto-fill, minmax(360px, 1fr))',

@@ -497,7 +497,7 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
   const games = (ranked?.wins ?? 0) + (ranked?.losses ?? 0);
 
   return (
-    <div style={{ ...CARD, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
+    <div data-tour="challenges-ladder" style={{ ...CARD, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
       {/* tier wash */}
       <span aria-hidden className="aur" style={{
         position: 'absolute', right: '-8%', top: '-40%', width: '44%', height: '180%', borderRadius: '50%',
@@ -755,7 +755,9 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
       </div>
 
       {onTrail ? (
-        <Trail walkers={walkers} unit={c.unit || metric.unit} target={c.rule === 'first_to' ? c.target : null} />
+        <div data-tour="challenges-trail">
+          <Trail walkers={walkers} unit={c.unit || metric.unit} target={c.rule === 'first_to' ? c.target : null} />
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {rows.slice(0, 6).map((m) => {

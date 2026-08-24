@@ -294,9 +294,10 @@ export default function FilesPage() {
         ))}
       </div>
 
-      {folders.length > 0 && (
-        <>
-          <div style={{ ...KICKER, marginBottom: 10 }}>Folders</div>
+      <div data-tour="files-grid">
+        {folders.length > 0 && (
+          <>
+            <div style={{ ...KICKER, marginBottom: 10 }}>Folders</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 20 }}>
             {folder && (
               <button onClick={() => setFolder(null)} className="tt" style={folderTile}>
@@ -379,6 +380,7 @@ export default function FilesPage() {
       )}
 
       {shown.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '10px 2px' }}>No files here yet.</div>}
+      </div>
     </div>
   );
 }

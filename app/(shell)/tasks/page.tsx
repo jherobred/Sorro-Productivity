@@ -150,56 +150,59 @@ export default function TasksPage() {
           data on the first frame and this never renders. */}
       {isPending && <TasksSkeleton tints={[PAL.coral, PAL.amber, PAL.mint]} />}
 
-      {!isPending && groups.map((g) => (
-        <div key={g.n}
-          style={{
-            background: 'var(--card)', borderRadius: 16, padding: '14px 14px 6px', marginTop: 12,
-            boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 34%, transparent)`,
-          }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 3, flex: 'none', background: g.tint }} />
-            <span style={{
-              fontSize: 11, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase',
-              color: prefs.theme === 'dark'
-                ? `color-mix(in srgb, ${g.tint} 100%, transparent)`
-                : `color-mix(in srgb, ${g.tint} 66%, #201E1D)`,
+      <div data-tour="tasks-columns">
+        {!isPending && groups.map((g) => (
+          <div key={g.n}
+            style={{
+              background: 'var(--card)', borderRadius: 16, padding: '14px 14px 6px', marginTop: 12,
+              boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 34%, transparent)`,
             }}>
-              {g.n}
-            </span>
-            <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
-              {g.items.length}
-            </span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.items.length ? g.note : ''}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 3, flex: 'none', background: g.tint }} />
+              <span style={{
+                fontSize: 11, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase',
+                color: prefs.theme === 'dark'
+                  ? `color-mix(in srgb, ${g.tint} 100%, transparent)`
+                  : `color-mix(in srgb, ${g.tint} 66%, #201E1D)`,
+              }}>
+                {g.n}
+              </span>
+              <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
+                {g.items.length}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.items.length ? g.note : ''}</span>
+            </div>
+
+            {g.items.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '2px 2px 12px' }}>{g.empty}</div>
+            )}
+
+            {g.items.map((r) => (
+              <TaskRow
+                key={r.task.id}
+                row={r}
+                phone={phone}
+                accent={prefs.accent}
+                leaving={leaving.has(r.task.id)}
+                tsw={tsw?.id === r.task.id ? tsw : null}
+                setTsw={setTsw}
+                starHover={starHover?.id === r.task.id ? starHover.v : 0}
+                setStarHover={setStarHover}
+                onCheck={() => complete(r)}
+                onOpen={() => { setDetail(r.task.id); setTsw(null); }}
+                onDelete={() => A.removeWithUndo(r.task)}
+                onStar={(v) => A.update.mutate({ id: r.task.id, patch: { stars: r.task.stars === v ? 0 : v } })}
+                lp={lp}
+              />
+            ))}
           </div>
-
-          {g.items.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '2px 2px 12px' }}>{g.empty}</div>
-          )}
-
-          {g.items.map((r) => (
-            <TaskRow
-              key={r.task.id}
-              row={r}
-              phone={phone}
-              accent={prefs.accent}
-              leaving={leaving.has(r.task.id)}
-              tsw={tsw?.id === r.task.id ? tsw : null}
-              setTsw={setTsw}
-              starHover={starHover?.id === r.task.id ? starHover.v : 0}
-              setStarHover={setStarHover}
-              onCheck={() => complete(r)}
-              onOpen={() => { setDetail(r.task.id); setTsw(null); }}
-              onDelete={() => A.removeWithUndo(r.task)}
-              onStar={(v) => A.update.mutate({ id: r.task.id, patch: { stars: r.task.stars === v ? 0 : v } })}
-              lp={lp}
-            />
-          ))}
-        </div>
-      ))}
+        ))}
+      </div>
 
       {/* Completed Collapsable Shelf */}
       {!isPending && completedTasks.length > 0 && (
         <div
+          data-tour="tasks-completed-shelf"
           style={{
             background: 'var(--card)',
             borderRadius: 16,

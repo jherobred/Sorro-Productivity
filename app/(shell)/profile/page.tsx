@@ -312,7 +312,7 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: phone || !building ? '1fr' : '1fr 1fr', gap: 12, alignItems: 'start' }}>
-        <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
+        <div data-tour="profile-header" style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
           {/* The cover.
               A profile that is one square picture on a flat card is an ID
               badge. A banner is the strip every social profile has had for

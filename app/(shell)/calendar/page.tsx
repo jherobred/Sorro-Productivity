@@ -281,7 +281,7 @@ export default function CalendarPage() {
             <Icon name="trash" size={15} color="var(--pal-coral)" />
           </button>
 
-          <div className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', marginLeft: 'auto' }}>
+          <div data-tour="calendar-view-toggle" className="k-pillrail" style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 11, background: 'var(--card)', marginLeft: 'auto' }}>
             {(['month', 'week', 'day', 'agenda', 'countdown'] as View[]).map((v) => (
               <button key={v} onClick={() => setCalView(v)} className="k-chip"
                 aria-pressed={view === v} aria-label={v[0].toUpperCase() + v.slice(1)} title={v[0].toUpperCase() + v.slice(1)}
@@ -298,7 +298,7 @@ export default function CalendarPage() {
 
       {importing && <ScheduleImport onClose={() => setImporting(false)} />}
 
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div data-tour="calendar-grid" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {/* The chrome above is not data-dependent and paints immediately;
               only the grid waits, so only the grid is outlined. */}

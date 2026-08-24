@@ -216,46 +216,52 @@ export default function NotebooksPage() {
                   <Icon name="trash" size={13} color="var(--tx3)" />Trash{trash.length ? ` ${trash.length}` : ''}
                 </button>
               )}
-              <NotebookTable
-                notebooks={notebooks} notes={notes} boards={boards} me={me}
-                onOpen={(id) => openNotebook(id)}
-                onOpenNote={(bid, nid) => openNotebook(bid, nid)}
-                onNew={newNotebook}
-                onRename={(b, name) => { A.editNotebook.mutate({ id: b.id, patch: { name } }); toast('Renamed'); }}
-                onRecolour={(b, color) => A.editNotebook.mutate({ id: b.id, patch: { color } })}
-                onDelete={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }}
-                onNewBoard={newBoard}
-                onOpenBoard={openBoard}
-                onRenameBoard={(b) => void ask(`Rename ${b.kind === 'graph' ? 'graph' : 'canvas'}`, { initial: b.name, placeholder: 'Name' })
-                  .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
-                onDeleteBoard={(b) => {
-                  B.delBoard.mutate({ id: b.id });
-                  toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
-                }} />
+              <div data-tour="notebooks-sidebar" style={{ width: '100%' }}>
+                <NotebookTable
+                  notebooks={notebooks} notes={notes} boards={boards} me={me}
+                  onOpen={(id) => openNotebook(id)}
+                  onOpenNote={(bid, nid) => openNotebook(bid, nid)}
+                  onNew={newNotebook}
+                  onRename={(b, name) => { A.editNotebook.mutate({ id: b.id, patch: { name } }); toast('Renamed'); }}
+                  onRecolour={(b, color) => A.editNotebook.mutate({ id: b.id, patch: { color } })}
+                  onDelete={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }}
+                  onNewBoard={newBoard}
+                  onOpenBoard={openBoard}
+                  onRenameBoard={(b) => void ask(`Rename ${b.kind === 'graph' ? 'graph' : 'canvas'}`, { initial: b.name, placeholder: 'Name' })
+                    .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
+                  onDeleteBoard={(b) => {
+                    B.delBoard.mutate({ id: b.id });
+                    toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+                  }} />
+              </div>
             </>
           ) : (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14 }}>
               {(!phone || !note) && (
-                <NoteList
-                  notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
-                  selected={noteId} phone={phone}
-                  onPick={setNoteId}
-                  onNew={() => newNote()}
-                  onDelete={removeNote}
-                  onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
-                  onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />
+                <div data-tour="notebooks-sidebar" style={{ height: '100%', display: 'flex' }}>
+                  <NoteList
+                    notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
+                    selected={noteId} phone={phone}
+                    onPick={setNoteId}
+                    onNew={() => newNote()}
+                    onDelete={removeNote}
+                    onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
+                    onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />
+                </div>
               )}
 
               {note ? (
-                <NoteEditor
-                  key={note.id}
-                  note={note} notes={notes} tags={tags[note.id] ?? []} phone={phone}
-                  onSave={(v) => A.saveNote.mutate({ id: note.id, notebook_id: note.notebook_id, ...v })}
-                  onDelete={() => removeNote(note)}
-                  onPickNote={goToNote}
-                  onNewNote={(title) => newNote(title)}
-                  onSetTags={(t) => A.setTags.mutate({ note_id: note.id, tags: t })}
-                  onBack={() => setNoteId(null)} />
+                <div data-tour="notebooks-editor" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                  <NoteEditor
+                    key={note.id}
+                    note={note} notes={notes} tags={tags[note.id] ?? []} phone={phone}
+                    onSave={(v) => A.saveNote.mutate({ id: note.id, notebook_id: note.notebook_id, ...v })}
+                    onDelete={() => removeNote(note)}
+                    onPickNote={goToNote}
+                    onNewNote={(title) => newNote(title)}
+                    onSetTags={(t) => A.setTags.mutate({ note_id: note.id, tags: t })}
+                    onBack={() => setNoteId(null)} />
+                </div>
               ) : !phone && (
                 <div style={{
                   flex: 1, display: 'grid', placeItems: 'center', background: 'var(--card)',

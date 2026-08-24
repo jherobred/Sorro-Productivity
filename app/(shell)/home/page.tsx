@@ -380,7 +380,7 @@ export default function HomePage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
           {/* Interactive Study Buddy Companion */}
-          <div style={{ gridColumn: phone ? 'span 1' : 'span 2' }}>
+          <div data-tour="home-buddy" style={{ gridColumn: phone ? 'span 1' : 'span 2' }}>
             <BuddyCompanion
               daysSince={daysSinceDone}
               streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
@@ -390,15 +390,17 @@ export default function HomePage() {
           </div>
 
           {/* Daily RPG Quests */}
-          <DailyQuests
-            tasks={tasks}
-            habits={habits}
-            ticks={ticks}
-            notesCount={recent.length}
-          />
+          <div data-tour="home-quests" style={{ gridColumn: 'span 1' }}>
+            <DailyQuests
+              tasks={tasks}
+              habits={habits}
+              ticks={ticks}
+              notesCount={recent.length}
+            />
+          </div>
 
           {/* Today */}
-          <div style={CARD}>
+          <div data-tour="home-timeline" style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
               <div style={KICKER}>Today</div>
               <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>

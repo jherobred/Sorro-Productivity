@@ -228,16 +228,19 @@ export default function CommunityPage() {
       padding: phone ? '12px 10px 24px' : '16px 20px 32px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-        <TabRail
-          tabs={[
-            { id: 'feed', label: 'Feed', icon: 'chat' },
-            { id: 'messages', label: 'Messages', icon: 'send' },
-            { id: 'challenges', label: 'Challenges', icon: 'trophy' },
-          ]}
-          value={tab} onChange={setTab} phone={phone} label="Community sections" />
+        <div data-tour="community-nav-tabs">
+          <TabRail
+            tabs={[
+              { id: 'feed', label: 'Feed', icon: 'chat' },
+              { id: 'messages', label: 'Messages', icon: 'send' },
+              { id: 'challenges', label: 'Challenges', icon: 'trophy' },
+            ]}
+            value={tab} onChange={setTab} phone={phone} label="Community sections" />
+        </div>
 
         {tab === 'feed' && (
           <button
+            data-tour="community-composer"
             onClick={() => setComposing(true)}
             className="acc k-squish"
             style={{

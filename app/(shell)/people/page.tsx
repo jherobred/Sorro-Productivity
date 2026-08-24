@@ -118,7 +118,7 @@ export default function PeoplePage() {
   const list = isPending ? (
     <RowsSkeleton rows={6} label="Loading your people" lead="circle" />
   ) : (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+    <div data-tour="people-roster" style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <div style={KICKER}>All people ({people.length})</div>
         <button onClick={() => setAdding((v) => !v)} className="hov" aria-label="Add someone" aria-expanded={adding} title="Add someone"

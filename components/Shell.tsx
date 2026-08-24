@@ -34,7 +34,7 @@ import { useMyIdentity } from '@/lib/people';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 import { useTabOnboarding } from '@/lib/useTabOnboarding';
-import { TabOnboardingModal } from './TabOnboardingModal';
+import { SpotlightOverlay } from './SpotlightOverlay';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -787,7 +787,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {settings && <SettingsModal initialTab={settingsTab} onClose={() => setSettings(false)} />}
       {activeTour && (
-        <TabOnboardingModal
+        <SpotlightOverlay
           config={activeTour}
           onClose={() => closeTour(activeTour.tabId)}
           onFinish={() => finishTour(activeTour.tabId)}

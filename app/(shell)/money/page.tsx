@@ -144,7 +144,7 @@ function Money() {
           {/* The one number the screen is for. Balance divided by your own
               rate of spending, which is a question a bank statement never
               answers however many rows it has. */}
-          <div style={{ ...CARD, display: 'grid', gap: 6 }}>
+          <div data-tour="money-budget-ring" style={{ ...CARD, display: 'grid', gap: 6 }}>
             <div style={KICKER}>How long you can keep going</div>
             <RunwayGauge days={days} fill={runwayFill(days)} burn={burn} />
             <div style={{

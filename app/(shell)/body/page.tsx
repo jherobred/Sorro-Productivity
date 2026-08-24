@@ -127,7 +127,7 @@ export default function BodyPage() {
             <Vessel cups={water} goal={GOALS.water} onSet={(n) => set({ water: n })} />
           </div>
 
-          <div className="og-card" style={{ display: 'grid', gap: 10 }}>
+          <div data-tour="body-sleep-arc" className="og-card" style={{ display: 'grid', gap: 10 }}>
             <div className={KICKER} style={{ margin: 0 }}>Sleep — drag the ends</div>
             <SleepArc from={from} to={to}
               onChange={(f, t) => set({ sleep_from: f, sleep_to: t, sleep_h: sleepHours(f, t) })} />
@@ -139,7 +139,9 @@ export default function BodyPage() {
 
         {/* --------------------------------------------------------- train */}
         <div className={KICKER} style={{ marginTop: 22 }}>Training</div>
-        <TrainCard T={T} />
+        <div data-tour="body-muscle-map">
+          <TrainCard T={T} />
+        </div>
 
         {/* ---------------------------------------------------------- fuel */}
         <div className={KICKER} style={{ marginTop: 22 }}>Fuel</div>
