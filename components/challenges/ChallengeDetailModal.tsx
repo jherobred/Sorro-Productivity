@@ -28,6 +28,7 @@ export function ChallengeDetailModal({
   me,
   isOwner,
   onClose,
+  onJoin,
   onEdit,
   onDelete,
   onLeave,
@@ -42,6 +43,7 @@ export function ChallengeDetailModal({
   me: string;
   isOwner: boolean;
   onClose: () => void;
+  onJoin?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onLeave: () => void;
@@ -349,24 +351,50 @@ export function ChallengeDetailModal({
         <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 14, flexWrap: 'wrap' }}>
           <button
             onClick={onShareToFeed}
-            className="acc k-squish"
+            className="hov k-squish"
             style={{
               padding: '9px 16px',
               borderRadius: 12,
-              background: 'var(--acc)',
-              color: 'var(--ink)',
+              background: 'var(--card2)',
+              border: '1px solid var(--line2)',
+              color: 'var(--tx)',
               fontSize: 12.5,
               fontWeight: 800,
-              border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: 6,
             }}
           >
-            <Icon name="upload" size={14} color="var(--ink)" />
+            <Icon name="upload" size={14} color="var(--accTx)" />
             Share to Feed
           </button>
+
+          {!myMember && onJoin && phase !== 'over' && (
+            <button
+              onClick={() => {
+                onJoin();
+                onClose();
+              }}
+              className="acc k-squish"
+              style={{
+                padding: '9px 18px',
+                borderRadius: 12,
+                background: 'var(--acc)',
+                color: 'var(--ink)',
+                fontSize: 12.5,
+                fontWeight: 800,
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Icon name="plus" size={14} color="var(--ink)" />
+              Join Challenge
+            </button>
+          )}
 
           {isOwner && (
             <>

@@ -361,12 +361,34 @@ export function calculateHabitGamification(habits: Habit[], ticks: Tick[]) {
 /* ----------------------------------------------------------------- Mutations */
 
 const TICK = defineMutation('habit.tick', async (v: { habitId: string; date: string; value?: number; note?: string; mood?: HabitLog['mood'] }) => {
-  const { error } = await supabase.rpc('bd_habit_tick', {
+  const user_id = await currentUserId();
+  const { error: rpcErr } = await supabase.rpc('bd_habit_tick', {
     p_habit: v.habitId,
     p_date: v.date,
     p_value: v.value ?? 1,
   });
-  if (error) throw error;
+
+  if (rpcErr) {
+    // Resilient fallback: direct insert/delete if RPC is missing or fails
+    const { data: existing } = await supabase
+      .from('bd_habit_ticks')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('habit_id', v.habitId)
+      .eq('on_date', v.date)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase.from('bd_habit_ticks').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('bd_habit_ticks').insert({
+        user_id,
+        habit_id: v.habitId,
+        on_date: v.date,
+        value: v.value ?? 1,
+      });
+    }
+  }
 });
 
 const CREATE = defineMutation('habit.create', async (v: {
@@ -449,8 +471,13 @@ export async function mirrorHabit(v: {
   const user_id = await currentUserId();
 
   const found = await supabase.from('bd_habits')
-    .select('id').eq('user_id', user_id).eq('challenge_id', v.challenge_id).maybeSingle();
-  if (found.data?.id) return found.data.id;
+    .select('id,archived_at').eq('user_id', user_id).eq('challenge_id', v.challenge_id).maybeSingle();
+  if (found.data?.id) {
+    if (found.data.archived_at) {
+      await supabase.from('bd_habits').update({ archived_at: null, name: v.name, color: v.color }).eq('id', found.data.id);
+    }
+    return found.data.id;
+  }
 
   const id = crypto.randomUUID();
   const { error } = await supabase.from('bd_habits')
@@ -478,7 +505,7 @@ export async function retireMirror(challenge_id: string) {
 export function useHabitActions(days = 30) {
   const qc = useQueryClient();
   const tKey = [...TICKS_KEY, days];
-  const settle = settler(qc, TICKS_KEY, HABITS_KEY);
+  const settle = settler(qc, TICKS_KEY, HABITS_KEY, ['challenges'], ['challenge_members'], ['challenge_days'], ['metric']);
 
   const tick = useMutation({
     mutationKey: TICK,

@@ -32,7 +32,7 @@ export function DailyQuests({
   });
 
   const handleClaim = (q: Quest) => {
-    claimQuestReward(todayStr, q.id);
+    claimQuestReward(todayStr, q.id, q.reward);
     setClaimState((prev) => ({ ...prev, [q.id]: true }));
     playCelebration();
     toast(`+${q.reward} RP claimed! Quest completed 🎉`);

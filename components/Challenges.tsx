@@ -272,6 +272,13 @@ export function Challenges() {
           me={me}
           isOwner={inspecting.owner_id === me}
           onClose={() => setInspecting(null)}
+          onJoin={() => {
+            const c = inspecting;
+            A.join.mutate(
+              { challenge_id: c.id, name: c.name, color: c.color, metric: c.metric },
+              { onSuccess: () => toast(`Joined ${c.name} — it is on your Habits page too`) }
+            );
+          }}
           onEdit={() => {
             const c = inspecting;
             setInspecting(null);

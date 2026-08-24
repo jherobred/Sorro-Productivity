@@ -2,6 +2,8 @@
 
 import { ymd, type Habit, type Tick } from './habits';
 import type { Task } from './tasks';
+import { supabase, currentUserId } from './supabase';
+import { queryClient } from './offline';
 
 export type Quest = {
   id: string;
@@ -27,12 +29,30 @@ export function getClaimedQuests(todayStr: string): Set<string> {
   }
 }
 
-export function claimQuestReward(todayStr: string, questId: string): void {
+export function claimQuestReward(todayStr: string, questId: string, reward = 20): void {
   if (typeof window === 'undefined') return;
   try {
     const claimed = getClaimedQuests(todayStr);
     claimed.add(questId);
     localStorage.setItem(`${LS_QUESTS_KEY}.${todayStr}`, JSON.stringify(Array.from(claimed)));
+
+    // Also sync to Supabase bd_ranked table
+    void (async () => {
+      try {
+        const me = await currentUserId();
+        const { data: cur } = await supabase.from('bd_ranked').select('rp,peak_rp,wins,losses').maybeSingle();
+        const rp = (cur?.rp ?? 0) + reward;
+        await supabase.from('bd_ranked').upsert({
+          user_id: me,
+          rp,
+          peak_rp: Math.max(cur?.peak_rp ?? 0, rp),
+          wins: cur?.wins ?? 0,
+          losses: cur?.losses ?? 0,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+        queryClient.invalidateQueries({ queryKey: ['ranked'] });
+      } catch {}
+    })();
   } catch {}
 }
 
@@ -55,8 +75,10 @@ export function deriveDailyQuests({
 
   // 2. Tasks completed today
   const tasksDoneToday = tasks.filter((t) => {
-    if (!t.done || !t.completed_at) return false;
-    return t.completed_at.slice(0, 10) === todayStr;
+    if (!t.done) return false;
+    const ts = t.completed_at || (t.due_on === todayStr ? todayStr : null);
+    if (!ts) return false;
+    return ts.slice(0, 10) === todayStr;
   }).length;
 
   const quests: Quest[] = [

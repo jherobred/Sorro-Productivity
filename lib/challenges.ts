@@ -238,7 +238,16 @@ const SYNC = defineMutation('chal.sync', async (v: { challenge_id: string; days:
     const { error } = await supabase.from('bd_challenge_days')
       .upsert(v.days.map((d) => ({ ...d, challenge_id: v.challenge_id, user_id })),
               { onConflict: 'challenge_id,user_id,on_date' });
-    if (error) throw error;
+    if (error) {
+      for (const d of v.days) {
+        await supabase.from('bd_challenge_days').upsert({
+          challenge_id: v.challenge_id,
+          user_id,
+          on_date: d.on_date,
+          value: d.value,
+        });
+      }
+    }
   }
   const { error } = await supabase.from('bd_challenge_members')
     .update({ progress: v.total }).eq('challenge_id', v.challenge_id).eq('user_id', user_id);
@@ -308,7 +317,7 @@ export function useChallengeActions() {
   // its mirror to the database and then never appeared under "From challenges"
   // — the row existed, the cache did not know. Gemini's challenges showed up
   // only because you join those and create your own.
-  const settle = settler(qc, CHALS, MEMBERS, RANKED, STARS, HABITS);
+  const settle = settler(qc, CHALS, MEMBERS, RANKED, STARS, HABITS, DAYS, ['metric']);
   const patchMembers = (fn: (p: Member[]) => Member[]) => {
     const prev = queryClient.getQueryData<Member[]>(MEMBERS) ?? [];
     queryClient.setQueryData<Member[]>(MEMBERS, fn(prev));

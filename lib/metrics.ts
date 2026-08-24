@@ -88,9 +88,14 @@ export function useMyMetric(
       switch (metric) {
         case 'task': {
           const { data } = await supabase.from('bd_tasks')
-            .select('completed_at').eq('done', true).is('deleted_at', null)
-            .gte('completed_at', startISO).lte('completed_at', endISO);
-          return countByDay((data ?? []).map((r) => localDay(r.completed_at as string)), from, to);
+            .select('completed_at,updated_at').eq('done', true).is('deleted_at', null);
+          const valid = (data ?? []).filter((r) => {
+            const ts = r.completed_at || r.updated_at;
+            if (!ts) return false;
+            const d = localDay(ts);
+            return d >= from && d <= to;
+          });
+          return countByDay(valid.map((r) => localDay((r.completed_at || r.updated_at) as string)), from, to);
         }
         case 'habit': {
           let q = supabase.from('bd_habit_ticks').select('on_date,habit_id')
