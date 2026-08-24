@@ -18,6 +18,7 @@ import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
 import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 import { SearchPalette } from './SearchPalette';
+import { ShortcutsModal } from './ShortcutsModal';
 import { NotificationBell } from './NotificationBell';
 import { SettingsModal, type SettingsTab } from './SettingsModal';
 import { ContextMenu, type CtxItem } from './ContextMenu';
@@ -90,6 +91,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
   const [sheet, setSheet] = useState<CaptureKind | null>(null);
   const [search, setSearch] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
   /** The combined you/accounts/space sheet, opened from your face. */
   const [account, setAccount] = useState(false);
@@ -177,21 +179,104 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [router]);
 
-  // ⌘K / Ctrl-K opens the palette; the search field opens the same surface.
+  // Global keyboard shortcuts
   useEffect(() => {
+    let lastKey = '';
+    let lastKeyTime = 0;
+
     const onKey = (e: KeyboardEvent) => {
+      const isInput =
+        /input|textarea|select/i.test((e.target as HTMLElement)?.tagName ?? '') ||
+        (e.target as HTMLElement)?.isContentEditable;
+
+      // 1. Search / Command Palette: ⌘K or Ctrl-K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSearch(true);
+        return;
       }
-      if (e.key === '/' && !/input|textarea/i.test((e.target as HTMLElement)?.tagName ?? '')) {
+
+      // 2. Toggle Theme: ⌘+Shift+L or Ctrl+Shift+L
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        void update({ theme: dark ? 'light' : 'dark' });
+        toast(dark ? 'Switched to Light mode' : 'Switched to Dark mode');
+        return;
+      }
+
+      // 3. Toggle Sidebar: ⌘+B or Ctrl+B
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleRail();
+        return;
+      }
+
+      if (isInput) return;
+
+      // 4. Quick Search: /
+      if (e.key === '/') {
         e.preventDefault();
         setSearch(true);
+        return;
+      }
+
+      // 5. Help / Shortcuts Cheat Sheet: ?
+      if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+        return;
+      }
+
+      // 6. Quick Creation: T for Task, N for Note, E for Expense
+      if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setSheet('task');
+        return;
+      }
+      if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setSheet('note');
+        return;
+      }
+      if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setSheet('money');
+        return;
+      }
+
+      // 7. Fast Go navigation: 'G' followed by target letter within 1s
+      const now = Date.now();
+      if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey) {
+        lastKey = 'g';
+        lastKeyTime = now;
+        return;
+      }
+
+      if (lastKey === 'g' && now - lastKeyTime < 1000 && !e.ctrlKey && !e.metaKey) {
+        lastKey = '';
+        const target = e.key.toLowerCase();
+        const routes: Record<string, string> = {
+          h: '/home/',
+          c: '/calendar/',
+          t: '/tasks/',
+          n: '/notebooks/',
+          b: '/habits/',
+          f: '/community/',
+          p: '/profile/',
+          m: '/money/',
+          o: '/body/',
+          j: '/projects/',
+        };
+        if (routes[target]) {
+          e.preventDefault();
+          router.push(routes[target]);
+        }
       }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [router, dark, update, toggleRail]);
 
   // The sidebar badge reads the tasks already in cache. It used to fire a
   // count query against Supabase on every single navigation — a network round
@@ -623,6 +708,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {sheet && <CaptureSheet kind={sheet} onClose={() => setSheet(null)} />}
       {search && <SearchPalette onClose={() => setSearch(false)} />}
+      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {settings && <SettingsModal initialTab={settingsTab} onClose={() => setSettings(false)} />}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}

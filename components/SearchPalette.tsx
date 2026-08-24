@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { supabase } from '@/lib/supabase';
+import { usePrefs } from '@/lib/prefs';
+import { toast } from '@/lib/toast';
 
 /**
  * Search + command palette. Ported from Basedly.dc.html markup 2572–2590 —
@@ -22,6 +24,7 @@ const SECTIONS: [string, string, IconName][] = [
 
 export function SearchPalette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { prefs, update } = usePrefs();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Group[]>([]);
 
@@ -39,8 +42,6 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       const like = `%${term}%`;
       const [tasks, notes, events, people] = await Promise.all([
         supabase.from('bd_tasks').select('id,title').is('deleted_at', null).ilike('title', like).limit(5),
-        // Notes match on their text as well as their title: the body is where
-        // the thing you half-remember actually is.
         supabase.from('bd_notes').select('id,title,body').is('deleted_at', null)
           .or(`title.ilike.${like},body.ilike.${like}`).limit(5),
         supabase.from('bd_events').select('id,title,starts_at').is('deleted_at', null).ilike('title', like).limit(5),
@@ -61,6 +62,48 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [q, router, onClose]);
 
+  const quickCommands = useMemo<Group[]>(() => {
+    const term = q.trim().toLowerCase();
+    const dark = prefs.theme === 'dark';
+    const allCommands: Row[] = [
+      {
+        id: 'cmd-task', n: 'Create new task', m: 'Quick action (T)', ic: 'taskPlus',
+        go: () => {
+          onClose();
+          router.push('/tasks/');
+        },
+      },
+      {
+        id: 'cmd-note', n: 'Create new note', m: 'Quick action (N)', ic: 'bookPlus',
+        go: () => {
+          onClose();
+          router.push('/notebooks/');
+        },
+      },
+      {
+        id: 'cmd-expense', n: 'Log new expense', m: 'Quick action (E)', ic: 'money',
+        go: () => {
+          onClose();
+          router.push('/money/');
+        },
+      },
+      {
+        id: 'cmd-theme', n: dark ? 'Switch to Light Theme' : 'Switch to Dark Theme', m: 'Preferences (⌘+Shift+L)', ic: 'moon',
+        go: () => {
+          void update({ theme: dark ? 'light' : 'dark' });
+          toast(dark ? 'Switched to Light theme' : 'Switched to Dark theme');
+          onClose();
+        },
+      },
+    ];
+
+    const filtered = allCommands.filter(
+      (c) => !term || c.n.toLowerCase().includes(term) || c.m.toLowerCase().includes(term)
+    );
+
+    return filtered.length ? [{ g: 'Commands', items: filtered }] : [];
+  }, [q, prefs.theme, update, router, onClose]);
+
   const jumps = useMemo<Group[]>(() => {
     const term = q.trim().toLowerCase();
     const items = SECTIONS
@@ -69,10 +112,10 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         id, n: name, m: 'Jump to section', ic,
         go: () => { router.push(`/${id}/`); onClose(); },
       }));
-    return items.length ? [{ g: 'Go to', items }] : [];
+    return items.length ? [{ g: 'Navigation', items }] : [];
   }, [q, router, onClose]);
 
-  const groups = q.trim() ? [...hits, ...jumps] : jumps;
+  const groups = q.trim() ? [...quickCommands, ...hits, ...jumps] : [...quickCommands, ...jumps];
 
   return (
     <>
@@ -86,8 +129,16 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 10px' }}>
           <Icon name="search" size={16} color="var(--tx2)" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search everything — tasks, notes, events, people…"
+            placeholder="Search everything or type a command…"
             style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--tx)' }} />
+          <kbd
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5,
+              background: 'var(--card2)', color: 'var(--tx3)', border: '1px solid var(--line2)',
+            }}
+          >
+            ESC
+          </kbd>
           <button onClick={onClose} className="hov" style={{ width: 24, height: 24, borderRadius: 7, color: 'var(--tx3)', fontSize: 14 }}>×</button>
         </div>
 
