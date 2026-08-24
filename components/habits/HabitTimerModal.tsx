@@ -156,8 +156,33 @@ export function HabitTimerModal({
           </div>
         )}
 
-        {/* Circular Animated Timer Progress */}
-        <div style={{ position: 'relative', width: 220, height: 220, margin: '10px auto 20px' }}>
+        {/* Circular Animated Timer Progress with Direct Touch Dragging */}
+        <div
+          onPointerDown={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const updateAngle = (clientX: number, clientY: number) => {
+              const dx = clientX - cx;
+              const dy = clientY - cy;
+              let theta = Math.atan2(dy, dx) + Math.PI / 2;
+              if (theta < 0) theta += 2 * Math.PI;
+              const fraction = theta / (2 * Math.PI);
+              const newMins = Math.max(1, Math.round(fraction * 60));
+              setSecondsLeft(newMins * 60);
+              playTick();
+            };
+            updateAngle(e.clientX, e.clientY);
+            const move = (m: PointerEvent) => updateAngle(m.clientX, m.clientY);
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+          }}
+          style={{ position: 'relative', width: 220, height: 220, margin: '10px auto 20px', cursor: 'pointer', touchAction: 'none' }}
+        >
           <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
             <circle
               cx="50"
@@ -177,7 +202,7 @@ export function HabitTimerModal({
               strokeDasharray="276.46"
               strokeDashoffset={276.46 * (1 - progressPct / 100)}
               strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+              style={{ transition: 'stroke-dashoffset 0.2s ease' }}
             />
           </svg>
 

@@ -591,41 +591,72 @@ export function Shell({ children }: { children: React.ReactNode }) {
           for the desktop's row direction; both are needed. */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
-          <div style={{ height: 54, flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '0 18px', borderBottom: '1px solid var(--line)' }}>
-            <button onClick={() => setSearch(true)} className="hov" title="Quick actions" style={{
-              flex: 'none', height: 30, padding: '0 11px', borderRadius: 9, border: '1px solid var(--line2)',
-              fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', color: 'var(--tx2)', display: 'flex', alignItems: 'center',
-            }}>⌘K</button>
-
-            <div className="pill" style={{
-              display: 'flex', alignItems: 'center', height: 38, width: 38, borderRadius: 19,
-              border: '1px solid var(--line2)', background: 'transparent',
-            }}>
-              <button onClick={() => setSearch(true)} aria-label="Search"
-                style={{ width: 38, height: 38, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="search" size={16} color="var(--tx2)" />
-              </button>
-            </div>
-
-            <button onClick={() => toast('The AI panel is switched off in this build')} className="hov k-squish" title="AI helper" aria-label="AI helper" style={{
-              width: 38, height: 38, flex: 'none', borderRadius: 19, border: '1px solid var(--line2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon name="spark" size={15} color="var(--tx2)" />
+          <div style={{ height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', borderBottom: '1px solid var(--line)' }}>
+            {/* Consolidated Minimalist Command Hub Search Bar */}
+            <button
+              onClick={() => setSearch(true)}
+              className="hov k-squish"
+              title="Search or jump to (⌘K)"
+              aria-label="Search or jump to"
+              style={{
+                height: 34,
+                width: 320,
+                padding: '0 12px',
+                borderRadius: 8,
+                border: '1px solid var(--line2)',
+                background: 'var(--card2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: 'var(--tx3)',
+                fontSize: 12.5,
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="search" size={14} color="var(--tx3)" />
+                <span style={{ color: 'var(--tx3)' }}>Quick search or jump to...</span>
+              </div>
+              <kbd
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  fontFamily: 'monospace',
+                  padding: '2px 5px',
+                  borderRadius: 4,
+                  border: '1px solid var(--line)',
+                  background: 'var(--card)',
+                  color: 'var(--tx2)',
+                }}
+              >
+                ⌘K
+              </kbd>
             </button>
 
-            {/* Capture lives here now. It used to be a draggable circle floating
-                over the content, which covered whatever was underneath it and
-                had to be moved out of the way to read the page. */}
-            <button onClick={openCapture} className="k-squish" title="Capture"
-              aria-label="Capture" aria-expanded={!!capture}
+            {/* Quick Capture (+) action */}
+            <button
+              onClick={openCapture}
+              className="hov k-squish"
+              title="Quick Capture"
+              aria-label="Quick Capture"
+              aria-expanded={!!capture}
               style={{
-                width: 38, height: 38, flex: 'none', borderRadius: 19, background: acc,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transform: capture ? 'rotate(45deg)' : 'rotate(0)',
-                transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1)',
-              }}>
-              <Icon name="plus" size={16} color={ON_ACCENT} />
+                height: 34,
+                padding: '0 11px',
+                borderRadius: 8,
+                border: '1px solid var(--line2)',
+                background: 'var(--card2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 700,
+                color: 'var(--tx)',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="plus" size={14} color="var(--accTx)" />
+              <span>Capture</span>
             </button>
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -640,9 +671,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   title="Feature Tour & Guide (+15 RP)"
                   aria-label="Feature Tour & Guide"
                   style={{
-                    height: 30,
+                    height: 32,
                     padding: '0 10px',
-                    borderRadius: 9,
+                    borderRadius: 8,
                     border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
                     background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
                     display: 'flex',
@@ -668,20 +699,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Sparks Emporium (Reward Shop)"
                 aria-label="Sparks Emporium"
                 style={{
-                  height: 30,
-                  padding: '0 10px',
-                  borderRadius: 9,
+                  height: 32,
+                  padding: '0 11px',
+                  borderRadius: 8,
                   border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
-                  background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
+                  background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
                   cursor: 'pointer',
-                  boxShadow: '0 2px 8px color-mix(in srgb, var(--pal-amber) 15%, transparent)',
                 }}
               >
                 <Icon name="spark" size={13} color="var(--pal-amber)" />
-                <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
                   {ranked?.rp ?? 0} RP
                 </span>
               </button>
@@ -696,22 +726,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Profile & Settings"
                 aria-label="Profile & Settings"
                 aria-haspopup="dialog"
-                style={{ width: 30, height: 30, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}
+                style={{ width: 32, height: 32, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}
               >
-                <Face name={me.name} photo={me.photo} size={30} />
+                <Face name={me.name} photo={me.photo} size={32} />
               </button>
             </div>
           </div>
         )}
 
         {phone && (
-          // No fake clock or signal bars: the phone already draws its own status
-          // bar directly above this, and duplicating it wasted 44px of a small
-          // screen to say the same thing twice.
-          <div style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 16px' }}>
+          <div style={{ height: 46, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
             <button
               onClick={() => router.push('/home/')}
-              style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left' }}
+              style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0 }}
               title="Go to Home"
             >
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
@@ -726,46 +753,58 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Feature Tour (+15 RP)"
                 aria-label="Feature Tour"
                 style={{
-                  width: 34,
-                  height: 34,
-                  flex: 'none',
-                  borderRadius: 17,
+                  height: 32,
+                  padding: '0 8px',
+                  borderRadius: 8,
                   border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
                   background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
-                  display: 'grid',
-                  placeItems: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--pal-amber)',
                 }}
               >
-                <Icon name="spark" size={15} color="var(--pal-amber)" />
+                <Icon name="spark" size={13} color="var(--pal-amber)" />
+                <span>+15 RP</span>
               </button>
             )}
-            {/* Messages, with the count on it */}
-            <button onClick={() => setMsgs(true)} className="hov k-squish"
+
+            {/* Messages with unread badge */}
+            <button
+              onClick={() => setMsgs(true)}
+              className="hov k-squish"
               aria-label={unread ? `Messages, ${unread} unread` : 'Messages'}
-              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center', position: 'relative' }}>
-              <Icon name="send" size={15} color={unread ? 'var(--accTx)' : 'var(--tx2)'} />
+              style={{ width: 32, height: 32, flex: 'none', borderRadius: 8, border: '1px solid var(--line2)', background: 'var(--card2)', display: 'grid', placeItems: 'center', position: 'relative' }}
+            >
+              <Icon name="send" size={14} color={unread ? 'var(--accTx)' : 'var(--tx2)'} />
               {unread > 0 && (
-                <span style={{
-                  position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, padding: '0 3px',
-                  borderRadius: 8, background: 'var(--pal-coral)', color: '#fff',
-                  fontSize: 9, fontWeight: 800, lineHeight: '15px', textAlign: 'center',
-                  border: '2px solid var(--bg)', fontVariantNumeric: 'tabular-nums',
-                }}>{unread > 9 ? '9+' : unread}</span>
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: -3,
+                    right: -3,
+                    minWidth: 14,
+                    height: 14,
+                    padding: '0 3px',
+                    borderRadius: 7,
+                    background: 'var(--pal-coral)',
+                    color: '#fff',
+                    fontSize: 9,
+                    fontWeight: 800,
+                    lineHeight: '14px',
+                    textAlign: 'center',
+                    border: '1px solid var(--bg)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {unread > 9 ? '9+' : unread}
+                </span>
               )}
             </button>
 
             <NotificationBell compact />
-
-            {/* Capture */}
-            <button onClick={openCapture} className="k-squish" aria-label="Capture" aria-expanded={!!capture}
-              style={{
-                width: 34, height: 34, flex: 'none', borderRadius: 17, background: acc,
-                display: 'grid', placeItems: 'center',
-                transform: capture ? 'rotate(45deg)' : 'rotate(0)',
-                transition: 'transform .3s cubic-bezier(0.34,1.56,0.64,1)',
-              }}>
-              <Icon name="plus" size={16} color={ON_ACCENT} />
-            </button>
 
             {/* Mobile Currency / Shop Button */}
             <button
@@ -774,20 +813,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
               title="Sparks Emporium"
               aria-label="Sparks Emporium"
               style={{
-                height: 34,
+                height: 32,
                 padding: '0 9px',
                 flex: 'none',
-                borderRadius: 17,
+                borderRadius: 8,
                 border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
-                background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
+                background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
                 cursor: 'pointer',
               }}
             >
-              <Icon name="spark" size={13} color="var(--pal-amber)" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
+              <Icon name="spark" size={12} color="var(--pal-amber)" />
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
                 {ranked?.rp ?? 0}
               </span>
             </button>
@@ -801,9 +840,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
               className="k-squish"
               aria-label="Profile & Settings"
               aria-haspopup="dialog"
-              style={{ width: 34, height: 34, flex: 'none', borderRadius: 17, display: 'grid', placeItems: 'center' }}
+              style={{ width: 32, height: 32, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}
             >
-              <Face name={me.name} photo={me.photo} size={34} />
+              <Face name={me.name} photo={me.photo} size={32} />
             </button>
           </div>
         )}

@@ -18,6 +18,7 @@ import { BuddyCompanion } from './BuddyCompanion';
 import { DailyQuests } from './DailyQuests';
 import { FocusHub } from './FocusHub';
 import { playTick } from '@/lib/audio';
+import { SwipeableRow } from './SwipeableRow';
 
 /**
  * Phone Home — its own composition, not the desktop grid reflowed.
@@ -227,27 +228,53 @@ export function PhoneHome({ name }: { name: string }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {open.slice(0, 6).map((t) => (
-              <div key={t.id} className={leaving.has(t.id) ? 'leaving' : 'lensrow'} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '12px 13px', borderRadius: 14,
-                background: 'var(--card)', boxShadow: 'var(--sh)',
-              }}>
-                <button onClick={() => router.push('/tasks/')} style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
-                    {[1, 2, 3, 4, 5].map((v) => (
-                      <span key={v} style={{
-                        width: 5, height: 5, borderRadius: 3,
-                        background: v <= (t.stars || 0) ? 'var(--accTx)' : 'var(--line2)',
-                      }} />
-                    ))}
+              <div key={t.id} className={leaving.has(t.id) ? 'leaving' : ''} style={{ borderRadius: 14, overflow: 'hidden' }}>
+                <SwipeableRow
+                  onSwipeRight={() => complete(t)}
+                  onSwipeLeft={() => TA.removeWithUndo(t)}
+                  rightActionIcon="check"
+                  rightActionColor="var(--pal-mint)"
+                  leftActionIcon="trash"
+                  leftActionColor="var(--pal-coral)"
+                >
+                  <div
+                    className="lensrow"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '12px 13px',
+                      background: 'var(--card)',
+                      boxShadow: 'var(--sh)',
+                      border: '1px solid var(--line)',
+                      borderRadius: 14,
+                    }}
+                  >
+                    <button onClick={() => router.push('/tasks/')} style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--tx)' }}>{t.title}</div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
+                        {[1, 2, 3, 4, 5].map((v) => (
+                          <span key={v} style={{
+                            width: 5, height: 5, borderRadius: 3,
+                            background: v <= (t.stars || 0) ? 'var(--accTx)' : 'var(--line2)',
+                          }} />
+                        ))}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => complete(t)}
+                      title="Complete"
+                      className="k-squish"
+                      style={{
+                        width: 24, height: 24, flex: 'none', borderRadius: '50%',
+                        border: '1.6px solid var(--line2)', display: 'grid', placeItems: 'center',
+                        cursor: 'pointer', background: 'transparent',
+                      }}
+                    >
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'transparent' }} />
+                    </button>
                   </div>
-                </button>
-                <button onClick={() => complete(t)} title="Complete" style={{
-                  width: 22, height: 22, flex: 'none', borderRadius: '50%',
-                  border: '1.6px solid var(--line2)', display: 'grid', placeItems: 'center',
-                }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'transparent' }} />
-                </button>
+                </SwipeableRow>
               </div>
             ))}
             {open.length === 0 && <Empty>Nothing on your plate.</Empty>}

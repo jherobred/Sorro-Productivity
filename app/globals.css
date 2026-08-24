@@ -21,60 +21,75 @@
    nothing below is affected; see the header of gym.css for why. */
 @import './gym.css';
 
-/* ---- Theme tokens (THEMES in the prototype) ---------------------------- */
+/* ---- Theme tokens (Warm Minimalist & Editorial UI) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
-  --bg: #0A0912;
-  --panel: #0E0D18;
-  --card: #17161F;
-  --card2: #211F2C;
-  --line: rgba(170, 166, 210, .11);
-  --line2: rgba(170, 166, 210, .19);
-  --tx: #EFEDF5;
-  --tx2: #A6A2BE;
-  /* 5.27:1 on --card, 4.65:1 on --card2. The old #716D8A measured
-     3.2-4.0:1 and this token carries real reading content — row
-     timestamps, hints, breadcrumbs - not just decoration. */
-  --tx3: #8A86A6;
-  --hov: rgba(170, 166, 210, .075);
-  --sh: 0 6px 22px rgba(0, 0, 0, .46);
-  --shl: 0 18px 48px rgba(0, 0, 0, .6);
-  --ink: #0A0912;
-  --sk1: rgba(170, 166, 210, .06);
-  --sk2: rgba(170, 166, 210, .13);
+  --bg: #111216;
+  --panel: #16181F;
+  --card: #1A1C25;
+  --card2: #232532;
+  --line: rgba(255, 255, 255, .08);
+  --line2: rgba(255, 255, 255, .15);
+  --tx: #EAEBED;
+  --tx2: #9CA3AF;
+  --tx3: #6B7280;
+  --hov: rgba(255, 255, 255, .06);
+  --sh: 0 4px 16px rgba(0, 0, 0, .32);
+  --shl: 0 12px 36px rgba(0, 0, 0, .5);
+  --ink: #111216;
+  --sk1: rgba(255, 255, 255, .04);
+  --sk2: rgba(255, 255, 255, .09);
+  
+  /* Spot Pastels Dark Variants */
+  --pastel-red: rgba(253, 235, 236, .14);
+  --pastel-red-tx: #FFA3A3;
+  --pastel-blue: rgba(225, 243, 254, .14);
+  --pastel-blue-tx: #93D5FE;
+  --pastel-green: rgba(237, 243, 236, .14);
+  --pastel-green-tx: #8FE39B;
+  --pastel-yellow: rgba(251, 243, 219, .14);
+  --pastel-yellow-tx: #FDE08B;
 }
 
 :root[data-theme='light'] {
-  --bg: #F6F5F9;
-  --panel: #F0EEF5;
+  --bg: #F7F6F3;
+  --panel: #F1EFEA;
   --card: #FFFFFF;
-  --card2: #F7F5FA;
-  --line: rgba(38, 32, 54, .11);
-  --line2: rgba(38, 32, 54, .19);
-  --tx: #1C1A26;
-  --tx2: #5D5875;
-  /* 5.17:1 on white; the old #827D96 measured 3.95:1. */
-  --tx3: #6F6A82;
-  --hov: rgba(38, 32, 54, .05);
-  --sh: 0 3px 12px rgba(40, 34, 60, .13);
-  --shl: 0 14px 38px rgba(40, 34, 60, .2);
+  --card2: #FBFBFA;
+  --line: rgba(0, 0, 0, .07);
+  --line2: rgba(0, 0, 0, .12);
+  --tx: #2F3437;
+  --tx2: #5A5D61;
+  --tx3: #787774;
+  --hov: rgba(0, 0, 0, .04);
+  --sh: 0 2px 8px rgba(0, 0, 0, .04);
+  --shl: 0 8px 24px rgba(0, 0, 0, .07);
   --ink: #FFFFFF;
-  --sk1: rgba(38, 32, 54, .05);
-  --sk2: rgba(38, 32, 54, .1);
+  --sk1: rgba(0, 0, 0, .04);
+  --sk2: rgba(0, 0, 0, .08);
+
+  /* Spot Pastels Light Variants */
+  --pastel-red: #FDEBEC;
+  --pastel-red-tx: #9F2F2D;
+  --pastel-blue: #E1F3FE;
+  --pastel-blue-tx: #1F6C9F;
+  --pastel-green: #EDF3EC;
+  --pastel-green-tx: #346538;
+  --pastel-yellow: #FBF3DB;
+  --pastel-yellow-tx: #956400;
 }
 
-/* Accent is user-settable; --accTx is the accent tuned for text on panels.
-   Both are recomputed in useThemeVars() when the user changes accent/theme. */
+/* Accent is user-settable; --accTx is the accent tuned for text on panels. */
 :root {
   --acc: #7C6CFF;
   --acc2: #38D6F2;
   --accTx: color-mix(in srgb, #7C6CFF 82%, #FFFFFF);
-  --gl2: color-mix(in srgb, #7C6CFF 55%, transparent);
+  --gl2: color-mix(in srgb, #7C6CFF 35%, transparent);
   --anim: running;
   --cols: repeat(3, 1fr);
 }
 
-/* Category palette (PAL) */
+/* Category palette (PAL) - Desaturated Warm Spot Tints */
 :root {
   --pal-coral: #FF6B6B;
   --pal-indigo: #7C8CFF;

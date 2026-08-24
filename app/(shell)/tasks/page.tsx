@@ -12,6 +12,7 @@ import { useLists, useTasks, useTaskActions, type Task, type List } from '@/lib/
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
+import { SwipeableRow } from '@/components/SwipeableRow';
 
 /**
  * Ported from Basedly.dc.html — markup at lines 1081–1189, computed styles at
@@ -191,6 +192,7 @@ export default function TasksPage() {
                 onCheck={() => complete(r)}
                 onOpen={() => { setDetail(r.task.id); setTsw(null); }}
                 onDelete={() => A.removeWithUndo(r.task)}
+                onPatch={(patch) => A.update.mutate({ id: r.task.id, patch })}
                 onStar={(v) => A.update.mutate({ id: r.task.id, patch: { stars: r.task.stars === v ? 0 : v } })}
                 lp={lp}
               />
@@ -417,7 +419,7 @@ export default function TasksPage() {
 
 function TaskRow({
   row, phone, accent, leaving, tsw, setTsw, starHover, setStarHover,
-  onCheck, onOpen, onDelete, onStar, lp,
+  onCheck, onOpen, onDelete, onPatch, onStar, lp,
 }: {
   row: Row;
   phone: boolean;
@@ -430,135 +432,214 @@ function TaskRow({
   onCheck: () => void;
   onOpen: () => void;
   onDelete: () => void;
+  onPatch: (patch: Partial<Task>) => void;
   onStar: (v: number) => void;
   lp: ReturnType<typeof useLongPress>;
 }) {
-  const dx = tsw ? tsw.dx : 0;
-  const startX = useRef(0);
-
-  const actBtn = (bg: string, tone: string): React.CSSProperties => ({
-    width: ACT, height: '100%', display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', gap: 4,
-    fontSize: 9.5, fontWeight: 800, letterSpacing: '.02em', color: tone, background: bg,
-  });
-
-  /** Swipe left to reveal; snaps open past a third of the tray. */
-  const onPointerDown = (e: React.PointerEvent) => {
-    // Hold and swipe share this pointerdown; 7px of movement cancels the hold.
-    lp.start(e, 'task', row.task.id, row.task.title);
-    startX.current = e.clientX;
-    const move = (m: PointerEvent) => {
-      const d = Math.max(-TSW, Math.min(0, m.clientX - startX.current));
-      setTsw({ id: row.task.id, dx: d, live: true });
-    };
-    const up = (m: PointerEvent) => {
-      teardown();
-      const d = m.clientX - startX.current;
-      setTsw(d < -TSW / 3 ? { id: row.task.id, dx: -TSW, live: false } : null);
-    };
-    // Browser can claim the gesture as a scroll (touchAction: 'pan-y') and fire
-    // this instead of `up` — without it the listeners leak and this row's tray
-    // stays wired to every later drag. Cancel always snaps closed.
-    const cancel = () => {
-      teardown();
-      setTsw(null);
-    };
-    const teardown = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', cancel);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', cancel);
-  };
-
+  const [editing, setEditing] = useState(false);
+  const [titleVal, setTitleVal] = useState(row.task.title);
   const locked = row.task.stars || 0;
   const shown = starHover || locked;
   const [popped, setPopped] = useState(0);
 
+  const handleCommitEdit = () => {
+    setEditing(false);
+    const trimmed = titleVal.trim();
+    if (trimmed && trimmed !== row.task.title) {
+      onPatch({ title: trimmed });
+      toast(`Renamed to “${trimmed}”`);
+    } else {
+      setTitleVal(row.task.title);
+    }
+  };
+
   return (
-    <div className={leaving ? 'leaving' : ''} style={{ position: 'relative', overflow: 'hidden', borderRadius: 0 }}>
-      <span style={{
-        position: 'absolute', top: 0, right: 0, bottom: 0, width: TSW,
-        display: 'flex', alignItems: 'stretch',
-        pointerEvents: dx < -8 ? 'auto' : 'none',
-      }}>
-        <button title="Archive" onClick={onDelete} style={actBtn('var(--card2)', 'var(--tx2)')}>
-          <Icon name="archive" size={15} color="var(--tx2)" />Archive
-        </button>
-        <button title="Edit" onClick={onOpen} style={actBtn(`color-mix(in srgb, ${accent} 26%, var(--card2))`, 'var(--tx)')}>
-          <Icon name="edit" size={15} color="var(--tx)" />Edit
-        </button>
-        <button title="Delete" onClick={onDelete} style={actBtn(PAL.coral, '#0C0F16')}>
-          <Icon name="trash" size={15} color="#0C0F16" />Delete
-        </button>
-      </span>
-
-      <div
-        onPointerDown={onPointerDown}
-        onContextMenu={(e) => lp.onContextMenu(e, 'task', row.task.id, row.task.title)}
-        style={{
-          position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 8px',
-          background: 'var(--card)', borderBottom: '1px solid var(--line)',
-          touchAction: 'pan-y', cursor: 'grab', userSelect: 'none',
-          transform: `translateX(${dx}px)`,
-          transition: tsw?.live ? 'none' : 'transform .42s cubic-bezier(0.34,1.56,0.64,1)',
-        }}
+    <div className={leaving ? 'leaving' : ''} style={{ position: 'relative', overflow: 'hidden' }}>
+      <SwipeableRow
+        onSwipeRight={onCheck}
+        onSwipeLeft={onDelete}
+        rightActionIcon="check"
+        rightActionColor="var(--pal-mint)"
+        leftActionIcon="trash"
+        leftActionColor="var(--pal-coral)"
       >
-        <button
-          onClick={onCheck}
-          title="Complete"
-          className="tap"
+        <div
+          onContextMenu={(e) => lp.onContextMenu(e, 'task', row.task.id, row.task.title)}
           style={{
-            width: 19, height: 19, borderRadius: '50%', flex: 'none', marginTop: 1,
-            border: `1.6px solid ${PRI_COL[row.pri]}`,
-            background: row.pri === 'High' ? `color-mix(in srgb, ${PAL.coral} 18%, transparent)` : 'transparent',
-            transition: 'all .2s',
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 11,
+            padding: '11px 10px',
+            background: 'var(--card)',
+            borderBottom: '1px solid var(--line)',
+            userSelect: 'none',
           }}
-        />
+        >
+          {/* Direct Check Circle */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCheck();
+            }}
+            title="Complete task"
+            className="tap k-squish"
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              flex: 'none',
+              border: `1.6px solid ${PRI_COL[row.pri]}`,
+              background: row.pri === 'High' ? `color-mix(in srgb, ${PAL.coral} 18%, transparent)` : 'transparent',
+              transition: 'all .2s',
+              cursor: 'pointer',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          />
 
-        <button onClick={onOpen} style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-          <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
-            {row.task.title}
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 2, flex: 'none', background: row.listColor }} />
-            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{row.listName}</span>
-          </span>
-        </button>
-
-        <span style={phone
-          ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flex: 'none' }
-          : { display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
-          <span
-            onMouseLeave={() => setStarHover(null)}
-            title={locked ? `${locked} of 5` : 'Not rated'}
-            style={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}
-          >
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button
-                key={v}
-                onClick={() => { onStar(v); setPopped(v); }}
-                onMouseEnter={() => setStarHover({ id: row.task.id, v })}
-                title={`${v} ${v === 1 ? 'star' : 'stars'}`}
-                // starpop fires on the star that just locked in.
-                className={`tap ${!starHover && popped === v && locked === v ? 'starpop' : ''}`}
+          {/* Title Area with In-Place Direct Editing */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editing ? (
+              <input
+                autoFocus
+                type="text"
+                value={titleVal}
+                onChange={(e) => setTitleVal(e.target.value)}
+                onBlur={handleCommitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitEdit();
+                  if (e.key === 'Escape') {
+                    setTitleVal(row.task.title);
+                    setEditing(false);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                  fontSize: 16, lineHeight: 1, padding: '0 1px',
-                  color: v <= shown ? (starHover ? accent : 'var(--accTx)') : 'var(--line2)',
-                  transition: 'color .16s', transformOrigin: '50% 55%',
+                  width: '100%',
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: 'var(--tx)',
+                  background: 'var(--card2)',
+                  border: '1px solid var(--acc)',
+                  borderRadius: 6,
+                  padding: '3px 7px',
+                  outline: 'none',
+                }}
+              />
+            ) : (
+              <div
+                onClick={onOpen}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(true);
+                }}
+                style={{ cursor: 'pointer', textAlign: 'left' }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                    color: 'var(--tx)',
+                    textWrap: 'pretty',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {row.task.title}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 2, flex: 'none', background: row.listColor }} />
+                  <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{row.listName}</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Right Meta Controls */}
+          <span
+            style={
+              phone
+                ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flex: 'none' }
+                : { display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }
+            }
+          >
+            {/* Direct Edit Button */}
+            {!editing && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(true);
+                }}
+                title="Edit inline"
+                className="hov k-squish"
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--tx3)',
                 }}
               >
-                ★
+                <Icon name="pen" size={12} color="var(--tx3)" />
               </button>
-            ))}
+            )}
+
+            {/* Stars */}
+            <span
+              onMouseLeave={() => setStarHover(null)}
+              title={locked ? `${locked} of 5` : 'Not rated'}
+              style={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}
+            >
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={v}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStar(v);
+                    setPopped(v);
+                  }}
+                  onMouseEnter={() => setStarHover({ id: row.task.id, v })}
+                  title={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                  className={`tap ${!starHover && popped === v && locked === v ? 'starpop' : ''}`}
+                  style={{
+                    fontSize: 15,
+                    lineHeight: 1,
+                    padding: '0 1px',
+                    color: v <= shown ? (starHover ? accent : 'var(--accTx)') : 'var(--line2)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'color .16s',
+                    transformOrigin: '50% 55%',
+                  }}
+                >
+                  ★
+                </button>
+              ))}
+            </span>
+
+            {/* Due Label */}
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: row.late ? PAL.coral : 'var(--tx3)',
+                fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
+                textAlign: phone ? 'right' : 'center',
+              }}
+            >
+              {row.dueLabel}
+            </span>
           </span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: row.late ? PAL.coral : 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: phone ? 'right' : 'center' }}>
-            {row.dueLabel}
-          </span>
-        </span>
-      </div>
+        </div>
+      </SwipeableRow>
     </div>
   );
 }
