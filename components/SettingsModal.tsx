@@ -705,6 +705,35 @@ export function SettingsModal({
                   on={prefs.motion}
                   onChange={(v) => setPref('motion', v)}
                 />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line2)' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Feature Onboarding Tours</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)' }}>Re-enable interactive spotlight walkthroughs across all tabs</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        localStorage.removeItem('basedly-seen-onboardings-v1');
+                      }
+                      toast('Feature tours reset! Visit any tab to play its interactive walkthrough.');
+                      onClose();
+                    }}
+                    className="hov k-squish"
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--line2)',
+                      background: 'var(--card2)',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      color: 'var(--tx)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Reset & Replay Tours
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -116,7 +116,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { data: ranked } = useRanked();
   const unread = useUnreadCount();
 
-  const { activeTour, startTour, finishTour, closeTour, checkAutoTrigger } = useTabOnboarding();
+  const { activeTour, startTour, finishTour, closeTour, checkAutoTrigger, seen } = useTabOnboarding();
 
   const getActiveTabKey = useCallback(() => {
     const sec = pathname.split('/').filter(Boolean)[0] ?? 'home';
@@ -632,30 +632,32 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
 
-              {/* Tab Onboarding Guide Tour */}
-              <button
-                onClick={() => startTour(getActiveTabKey())}
-                className="hov k-squish"
-                title="Feature Tour & Guide"
-                aria-label="Feature Tour & Guide"
-                style={{
-                  height: 30,
-                  padding: '0 10px',
-                  borderRadius: 9,
-                  border: '1px solid var(--line2)',
-                  background: 'var(--card2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: 'var(--tx)',
-                  cursor: 'pointer',
-                }}
-              >
-                <Icon name="spark" size={13} color="var(--accTx)" />
-                <span>Tour</span>
-              </button>
+              {/* Tab Onboarding Guide Tour - only shown if user has NOT completed onboarding yet */}
+              {!seen.has(getActiveTabKey()) && (
+                <button
+                  onClick={() => startTour(getActiveTabKey())}
+                  className="hov k-squish"
+                  title="Feature Tour & Guide (+15 RP)"
+                  aria-label="Feature Tour & Guide"
+                  style={{
+                    height: 30,
+                    padding: '0 10px',
+                    borderRadius: 9,
+                    border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
+                    background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: 'var(--pal-amber)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="spark" size={13} color="var(--pal-amber)" />
+                  <span>Tour (+15 RP)</span>
+                </button>
+              )}
 
               <NotificationBell />
 
@@ -716,24 +718,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </button>
             <span style={{ marginLeft: 'auto' }} />
 
-            {/* Mobile Tour Button */}
-            <button
-              onClick={() => startTour(getActiveTabKey())}
-              className="hov k-squish"
-              title="Feature Tour"
-              aria-label="Feature Tour"
-              style={{
-                width: 34,
-                height: 34,
-                flex: 'none',
-                borderRadius: 17,
-                border: '1px solid var(--line2)',
-                display: 'grid',
-                placeItems: 'center',
-              }}
-            >
-              <Icon name="spark" size={15} color="var(--accTx)" />
-            </button>
+            {/* Mobile Tour Button - only shown if user has NOT completed onboarding yet */}
+            {!seen.has(getActiveTabKey()) && (
+              <button
+                onClick={() => startTour(getActiveTabKey())}
+                className="hov k-squish"
+                title="Feature Tour (+15 RP)"
+                aria-label="Feature Tour"
+                style={{
+                  width: 34,
+                  height: 34,
+                  flex: 'none',
+                  borderRadius: 17,
+                  border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
+                  background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <Icon name="spark" size={15} color="var(--pal-amber)" />
+              </button>
+            )}
             {/* Messages, with the count on it */}
             <button onClick={() => setMsgs(true)} className="hov k-squish"
               aria-label={unread ? `Messages, ${unread} unread` : 'Messages'}
