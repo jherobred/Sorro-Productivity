@@ -33,6 +33,8 @@ import { useLiveSync } from '@/lib/realtime';
 import { useMyIdentity } from '@/lib/people';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
+import { useTabOnboarding } from '@/lib/useTabOnboarding';
+import { TabOnboardingModal } from './TabOnboardingModal';
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -109,6 +111,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
   const { data: tasks = [] } = useTasks();
   const unread = useUnreadCount();
+
+  const { activeTour, startTour, finishTour, closeTour, checkAutoTrigger } = useTabOnboarding();
+
+  const getActiveTabKey = useCallback(() => {
+    const sec = pathname.split('/').filter(Boolean)[0] ?? 'home';
+    if (sec === 'community' && typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam === 'challenges') return 'community_challenges';
+      if (tabParam === 'messages') return 'community_messages';
+      return 'community_feed';
+    }
+    return sec;
+  }, [pathname]);
+
+  // Auto-trigger tab onboarding for first-time viewers of that tab
+  useEffect(() => {
+    const tabKey = getActiveTabKey();
+    const cleanup = checkAutoTrigger(tabKey);
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [getActiveTabKey, checkAutoTrigger]);
 
   const section = pathname.split('/').filter(Boolean)[0] ?? 'home';
   // Only collaborative surfaces get a presence room; everywhere else this is
@@ -596,6 +620,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
 
+              {/* Tab Onboarding Guide Tour */}
+              <button
+                onClick={() => startTour(getActiveTabKey())}
+                className="hov k-squish"
+                title="Feature Tour & Guide"
+                aria-label="Feature Tour & Guide"
+                style={{
+                  height: 30,
+                  padding: '0 10px',
+                  borderRadius: 9,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: 'var(--tx)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="spark" size={13} color="var(--accTx)" />
+                <span>Tour</span>
+              </button>
+
               <NotificationBell />
 
               {/* Centralized profile & settings entry point on top right */}
@@ -629,6 +678,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
+
+            {/* Mobile Tour Button */}
+            <button
+              onClick={() => startTour(getActiveTabKey())}
+              className="hov k-squish"
+              title="Feature Tour"
+              aria-label="Feature Tour"
+              style={{
+                width: 34,
+                height: 34,
+                flex: 'none',
+                borderRadius: 17,
+                border: '1px solid var(--line2)',
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              <Icon name="spark" size={15} color="var(--accTx)" />
+            </button>
             {/* Messages, with the count on it */}
             <button onClick={() => setMsgs(true)} className="hov k-squish"
               aria-label={unread ? `Messages, ${unread} unread` : 'Messages'}
@@ -710,6 +778,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {search && <SearchPalette onClose={() => setSearch(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {settings && <SettingsModal initialTab={settingsTab} onClose={() => setSettings(false)} />}
+      {activeTour && (
+        <TabOnboardingModal
+          config={activeTour}
+          onClose={() => closeTour(activeTour.tabId)}
+          onFinish={() => finishTour(activeTour.tabId)}
+        />
+      )}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind={menu.kind} label={menu.label} items={menu.items}
           onClose={() => setMenu(null)} accent={acc} dark={dark} />
