@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation';
 import { ProfileTimeline } from '@/components/ProfileTimeline';
 import { HighlightsTray } from '@/components/stories/HighlightsTray';
 import { StoryArchiveModal } from '@/components/stories/StoryArchiveModal';
+import { useFollows } from '@/lib/follows';
+import { FollowListModal } from '@/components/FollowListModal';
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered
@@ -155,6 +157,8 @@ export default function ProfilePage() {
   const [animal, setAnimal] = useState<Animal | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyCover, setBusyCover] = useState(false);
+  const { following, followers } = useFollows();
+  const [followListTab, setFollowListTab] = useState<'followers' | 'following' | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -435,20 +439,6 @@ export default function ProfilePage() {
               </>
             )}
             </div>
-
-            <div style={{ flex: 1, minWidth: 190 }}>
-              <input value={name} onChange={(e) => { setName(e.target.value); setDirty(true); }} placeholder="Your name"
-                style={{ width: '100%', fontSize: 19, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '4px 0 10px' }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx3)' }}>@</span>
-                <input value={handle} onChange={(e) => { setHandle(e.target.value); setDirty(true); }} placeholder="handle"
-                  style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)' }} />
-              </div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accTx)', marginBottom: 3 }}>{course || '—'}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 12 }}>{campus || 'No campus set'}</div>
-              <textarea value={bio} onChange={(e) => { setBio(e.target.value); setDirty(true); }} rows={3} placeholder="A line about you"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 11, border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical', fontFamily: 'inherit' }} />
-            </div>
           </div>
 
           {adjusting === 'photo' && photo && (
@@ -562,6 +552,10 @@ color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
         {showArchive && uid && (
           <StoryArchiveModal me={uid} onClose={() => setShowArchive(false)} />
         )}
+
+        {followListTab && (
+          <FollowListModal initialTab={followListTab} onClose={() => setFollowListTab(null)} />
+        )}
       </div>
     </div>
   );
@@ -571,18 +565,14 @@ color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
 
 /**
  * A profile reached by its link.
- *
- * Deliberately thin: a face, a name, what they study, and Message. No stats and
- * no mutual-anything - the job is to let a person check they have the right
- * Jules before they say hello, and then to say hello.
  */
 function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
   const router = useRouter();
+  const { isFollowing, toggleFollow, getFollowerCount, getFollowingCount } = useFollows();
   const [who, setWho] = useState<{
     user_id: string; name: string; handle: string; bio: string; course: string; campus: string;
     photo: string | null; cover: string | null; photoFit: Fit; coverFit: Fit; animal: Animal | null;
   } | null | undefined>(undefined);
-  const [allied, setAllied] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -624,6 +614,9 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
     );
   }
 
+  const isFollowed = isFollowing(who.handle) || (who.user_id ? isFollowing(who.user_id) : false);
+  const followerCount = getFollowerCount(who.handle);
+  const followingCount = getFollowingCount(who.handle);
   const initials = (who.name || who.handle).split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
@@ -688,19 +681,29 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
                 </span>
               </div>
 
+              {/* Follower / Following Stats */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--tx2)' }}>
+                  <strong style={{ color: 'var(--tx)', fontWeight: 800 }}>{followerCount}</strong> followers
+                </span>
+                <span style={{ fontSize: 12.5, color: 'var(--tx2)' }}>
+                  <strong style={{ color: 'var(--tx)', fontWeight: 800 }}>{followingCount}</strong> following
+                </span>
+              </div>
+
               {/* Action Buttons */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => { setAllied((v) => !v); toast(allied ? 'Removed ally' : 'Connected as Ally!'); }}
+                  onClick={() => toggleFollow({ userId: who.user_id, handle: who.handle, name: who.name })}
                   className="acc k-squish"
                   style={{
                     padding: '8px 18px', borderRadius: 10,
-                    background: allied ? 'var(--card2)' : 'var(--acc)',
-                    color: allied ? 'var(--tx)' : 'var(--ink)',
-                    fontSize: 12.5, fontWeight: 800, border: allied ? '1px solid var(--line2)' : 'none',
+                    background: isFollowed ? 'var(--card2)' : 'var(--acc)',
+                    color: isFollowed ? 'var(--tx)' : 'var(--ink)',
+                    fontSize: 12.5, fontWeight: 800, border: isFollowed ? '1px solid var(--line2)' : 'none',
                   }}
                 >
-                  {allied ? 'Allied ✓' : 'Add Ally +'}
+                  {isFollowed ? 'Following ✓' : 'Follow +'}
                 </button>
                 <button
                   onClick={() => void startDm(who.user_id).then((id) => { if (id) router.push('/community/'); })}

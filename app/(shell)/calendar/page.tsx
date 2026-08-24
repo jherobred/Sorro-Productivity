@@ -87,6 +87,21 @@ export default function CalendarPage() {
       if (e.key === 'ArrowLeft') shift(-1);
       if (e.key === 'ArrowRight') shift(1);
       if (e.key.toLowerCase() === 't') goToday();
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (pop && pop.kind === 'event') {
+          e.preventDefault();
+          A.removeWithUndo(pop.ev);
+          setPop(null);
+          setSel(null);
+        } else if (sel) {
+          const targetEv = events.find((ev) => ev.id === sel);
+          if (targetEv) {
+            e.preventDefault();
+            A.removeWithUndo(targetEv);
+            setSel(null);
+          }
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

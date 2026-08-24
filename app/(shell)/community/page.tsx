@@ -32,6 +32,7 @@ import {
 } from '@/lib/community';
 import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
+import { useFollows } from '@/lib/follows';
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'new', label: 'Latest' },
@@ -55,7 +56,7 @@ export default function CommunityPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [followed, setFollowed] = useState<Set<string>>(() => new Set());
+  const { isFollowing, toggleFollow } = useFollows();
   const [showMoreTrends, setShowMoreTrends] = useState(false);
   const [activeStoryUser, setActiveStoryUser] = useState<string | null>(null);
   const [isCreatingStory, setIsCreatingStory] = useState(false);
@@ -153,22 +154,6 @@ export default function CommunityPage() {
 
   const photos = items.filter((i) => i.image_path);
   const open_ = viewing ? items.find((i) => key(i) === viewing) ?? null : null;
-
-  const toggleFollow = (handle: string, name: string) => {
-    setFollowed((prev) => {
-      const next = new Set(prev);
-      if (next.has(handle)) {
-        next.delete(handle);
-        playClick();
-        toast(`Unfollowed @${handle}`);
-      } else {
-        next.add(handle);
-        playCelebration();
-        toast(`Following @${handle}`);
-      }
-      return next;
-    });
-  };
 
   const storeBasedlyUsers = useMemo(() => {
     const list: Array<{
@@ -597,7 +582,7 @@ export default function CommunityPage() {
                   )}
 
                   {storeBasedlyUsers.slice(0, 5).map((s) => {
-                    const isFollowed = followed.has(s.handle);
+                    const isFollowed = isFollowing(s.handle) || (s.userId ? isFollowing(s.userId) : false);
                     return (
                       <div key={s.handle} style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
                         <div
@@ -627,7 +612,7 @@ export default function CommunityPage() {
                         </div>
 
                         <button
-                          onClick={() => toggleFollow(s.handle, s.name)}
+                          onClick={() => toggleFollow({ userId: s.userId, handle: s.handle, name: s.name })}
                           className="hov k-squish"
                           style={{
                             padding: '6px 14px',

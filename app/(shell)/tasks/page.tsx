@@ -65,8 +65,10 @@ export default function TasksPage() {
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
   const [order, setOrder] = useState<'Due' | 'Priority' | 'Stars' | 'Title'>('Due');
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const byList = new Map(lists.map((l) => [l.id, l]));
+  const completedTasks = tasks.filter((t) => t.done);
 
   const rows: Row[] = tasks
     .filter((t) => !t.done)
@@ -194,6 +196,187 @@ export default function TasksPage() {
           ))}
         </div>
       ))}
+
+      {/* Completed Collapsable Shelf */}
+      {!isPending && completedTasks.length > 0 && (
+        <div
+          style={{
+            background: 'var(--card)',
+            borderRadius: 16,
+            padding: '12px 14px',
+            marginTop: 14,
+            boxShadow: 'var(--sh)',
+            border: '1px solid var(--line2)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowCompleted((v) => !v)}
+            className="hov k-squish"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px 0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 3, flex: 'none', background: PAL.mint }} />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '.11em',
+                  textTransform: 'uppercase',
+                  color: 'var(--tx2)',
+                }}
+              >
+                Completed
+              </span>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 7,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: 'var(--tx3)',
+                  border: '1px solid var(--line2)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {completedTasks.length}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                {showCompleted ? 'Hide' : 'Show & Undo'}
+              </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  transform: showCompleted ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              >
+                <Icon name="back" size={13} color="var(--tx3)" style={{ transform: 'rotate(-90deg)' }} />
+              </span>
+            </div>
+          </button>
+
+          {showCompleted && (
+            <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 10, borderTop: '1px solid var(--line2)', paddingTop: 8 }}>
+              {completedTasks.map((t) => {
+                const l = t.list_id ? byList.get(t.list_id) : undefined;
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 11,
+                      padding: '8px 6px',
+                      borderRadius: 10,
+                      borderBottom: '1px solid var(--line)',
+                    }}
+                  >
+                    {/* Uncheck button to Undo completion */}
+                    <button
+                      onClick={() => {
+                        A.complete.mutate({ id: t.id, done: false });
+                        toast(`Restored “${t.title}”`);
+                      }}
+                      title="Undo completed task (restore to list)"
+                      className="tap k-squish"
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        flex: 'none',
+                        border: '1.6px solid var(--acc)',
+                        background: 'var(--acc)',
+                        color: 'var(--ink)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Icon name="check" size={12} color="var(--ink)" />
+                    </button>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          lineHeight: 1.35,
+                          color: 'var(--tx3)',
+                          textDecoration: 'line-through',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t.title}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 2, background: l?.color ?? PAL.indigo }} />
+                        <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{l?.name ?? 'Inbox'}</span>
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+                      <button
+                        onClick={() => {
+                          A.complete.mutate({ id: t.id, done: false });
+                          toast(`Restored “${t.title}”`);
+                        }}
+                        className="hov k-squish"
+                        title="Undo completion"
+                        style={{
+                          padding: '4px 9px',
+                          borderRadius: 7,
+                          border: '1px solid var(--line2)',
+                          background: 'var(--card2)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: 'var(--tx2)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Undo
+                      </button>
+                      <button
+                        onClick={() => A.removeWithUndo(t)}
+                        className="hov k-squish"
+                        title="Delete task"
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 7,
+                          display: 'grid',
+                          placeItems: 'center',
+                          cursor: 'pointer',
+                          background: 'transparent',
+                          border: 'none',
+                        }}
+                      >
+                        <Icon name="trash" size={13} color="var(--tx3)" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ fontSize: 10.5, color: 'var(--tx3)', padding: '4px 4px 0' }}>
         Swipe a row left to reveal archive, edit and delete.
