@@ -7,6 +7,7 @@ import { hueOf } from '@/lib/people';
 import { moodOf, type Mood, type Animal, BUDDY_QUOTES } from '@/lib/mascot';
 import { playClick, playTick, playCelebration } from '@/lib/audio';
 import { Icon } from './Icon';
+import { useShop } from '@/lib/shop';
 
 /**
  * Interactive Study Pet Companion.
@@ -25,6 +26,7 @@ export function BuddyCompanion({
   xp?: number;
   onStartFocus?: () => void;
 }) {
+  const { equipped } = useShop();
   const [me, setMe] = useState('');
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [bouncing, setBouncing] = useState(false);
@@ -116,16 +118,16 @@ export function BuddyCompanion({
         }}
       />
 
-      {/* Top Header Row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
+      {/* Top row with level & title */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 10.5,
               fontWeight: 800,
-              letterSpacing: '.1em',
-              textTransform: 'uppercase',
               color: hue,
+              textTransform: 'uppercase',
+              letterSpacing: '.06em',
               padding: '2px 7px',
               borderRadius: 6,
               background: `color-mix(in srgb, ${hue} 14%, transparent)`,
@@ -133,6 +135,11 @@ export function BuddyCompanion({
           >
             Lvl {petLevel} Buddy
           </span>
+          {equipped.titleText && (
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--pal-amber)' }}>
+              {equipped.titleText}
+            </span>
+          )}
           {streak > 0 && (
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
               🔥 {streak}d streak
@@ -181,24 +188,24 @@ export function BuddyCompanion({
         </div>
       </div>
 
-      {/* Center Mascot and Speech Bubble */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, zIndex: 1 }}>
+      {/* Main Avatar + Speech Bubble Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         {/* Animated Mascot */}
         <div
           style={{
             position: 'relative',
-            transform: bouncing ? 'scale(1.15) translateY(-4px)' : 'none',
-            transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            flex: 'none',
+            transform: bouncing ? 'scale(1.18) translateY(-4px)' : 'scale(1)',
+            transition: 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         >
           <Mascot
             id={me}
             mood={currentMood}
             hue={hue}
-            size={56}
+            size={54}
             variant="full"
-            accessory="sweatband"
+            accessory={equipped.mascotAccessory}
+            crown={equipped.mascotAccessory === 'crown'}
           />
 
           {/* Floating hearts on click */}

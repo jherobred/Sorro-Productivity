@@ -35,16 +35,58 @@ function isSoundAllowed(): boolean {
   }
 }
 
-/** Crisp, satisfying checkmark / tick sound */
+function getEquippedSoundPack(): string {
+  if (typeof window === 'undefined') return 'classic';
+  try {
+    const raw = localStorage.getItem('basedly-user-equipped-v1');
+    if (!raw) return 'classic';
+    const parsed = JSON.parse(raw) as { soundPack?: string };
+    return parsed.soundPack || 'classic';
+  } catch {
+    return 'classic';
+  }
+}
+
+/** Crisp, satisfying checkmark / tick sound with custom sound pack support */
 export function playTick() {
   if (!isSoundAllowed()) return;
   const ac = getAudioContext();
   if (!ac) return;
 
+  const pack = getEquippedSoundPack();
   const now = ac.currentTime;
   const osc = ac.createOscillator();
   const gain = ac.createGain();
 
+  if (pack === 'arcade') {
+    // 8-bit chiptune coin ding
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(987.77, now); // B5
+    osc.frequency.setValueAtTime(1318.51, now + 0.05); // E6
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(now);
+    osc.stop(now + 0.19);
+    return;
+  }
+
+  if (pack === 'zen') {
+    // Bamboo woodblock clack
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now + 0.06);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(now);
+    osc.stop(now + 0.1);
+    return;
+  }
+
+  // Classic sine ping
   osc.type = 'sine';
   osc.frequency.setValueAtTime(580, now);
   osc.frequency.exponentialRampToValueAtTime(880, now + 0.04);

@@ -5,7 +5,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Mascot } from '@/components/challenges/Mascot';
 import { useOverlayBack } from '@/lib/nav';
 import { playTick, playCelebration } from '@/lib/audio';
-import type { TabOnboardingConfig, OnboardingStep } from '@/lib/onboardingData';
+import type { TabOnboardingConfig } from '@/lib/onboardingData';
 
 export function SpotlightOverlay({
   config,
@@ -19,6 +19,7 @@ export function SpotlightOverlay({
   useOverlayBack(true, onClose);
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [taskFeedback, setTaskFeedback] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const totalSteps = config.steps.length;
@@ -54,10 +55,9 @@ export function SpotlightOverlay({
         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       }
     }
-    // Update immediately and again after scroll settles
     updateRect();
     const timer1 = setTimeout(updateRect, 100);
-    const timer2 = setTimeout(updateRect, 400);
+    const timer2 = setTimeout(updateRect, 350);
 
     window.addEventListener('resize', updateRect);
     window.addEventListener('scroll', updateRect, true);
@@ -73,13 +73,8 @@ export function SpotlightOverlay({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') {
-        if (!isLast) {
-          playTick();
-          setStepIndex((i) => Math.min(totalSteps - 1, i + 1));
-        } else {
-          onFinish();
-        }
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        executeTaskAndAdvance();
       } else if (e.key === 'ArrowLeft') {
         if (!isFirst) {
           playTick();
@@ -89,15 +84,33 @@ export function SpotlightOverlay({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLast, isFirst, totalSteps, onFinish]);
+  });
 
-  const handleNext = () => {
-    playTick();
-    if (isLast) {
-      onFinish();
-    } else {
-      setStepIndex((i) => i + 1);
+  // Actually perform the action on the target DOM element
+  const executeTaskAndAdvance = () => {
+    if (currentStep.targetSelector) {
+      const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
+      if (el) {
+        // Trigger click or focus on the real target element
+        try {
+          el.focus();
+          el.click();
+        } catch { /* ignore */ }
+      }
     }
+
+    setTaskFeedback('+5 RP Earned!');
+    playTick();
+
+    setTimeout(() => {
+      setTaskFeedback(null);
+      if (isLast) {
+        playCelebration();
+        onFinish();
+      } else {
+        setStepIndex((i) => i + 1);
+      }
+    }, 380);
   };
 
   const handlePrev = () => {
@@ -107,10 +120,9 @@ export function SpotlightOverlay({
 
   // Compute popover positioning relative to target rect
   const computePopoverStyle = (): React.CSSProperties => {
-    const popoverWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.min(window.innerWidth - 32, 420) : 460;
+    const popoverWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.min(window.innerWidth - 32, 380) : 400;
 
     if (!rect) {
-      // Centered dialog fallback
       return {
         position: 'fixed',
         top: '50%',
@@ -126,7 +138,7 @@ export function SpotlightOverlay({
     const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
 
-    const placement = currentStep.placement || (rect.top > 350 ? 'top' : 'bottom');
+    const placement = currentStep.placement || (rect.top > 320 ? 'top' : 'bottom');
 
     let top = 0;
     let left = 0;
@@ -134,27 +146,24 @@ export function SpotlightOverlay({
     if (placement === 'bottom') {
       top = rect.top + rect.height + margin;
       left = Math.max(16, Math.min(windowWidth - popoverWidth - 16, rect.left + rect.width / 2 - popoverWidth / 2));
-      // Adjust if overflows bottom
-      if (top + 280 > windowHeight) {
-        top = Math.max(16, rect.top - 280 - margin);
+      if (top + 220 > windowHeight) {
+        top = Math.max(16, rect.top - 220 - margin);
       }
     } else if (placement === 'top') {
-      top = Math.max(16, rect.top - 320 - margin);
+      top = Math.max(16, rect.top - 240 - margin);
       left = Math.max(16, Math.min(windowWidth - popoverWidth - 16, rect.left + rect.width / 2 - popoverWidth / 2));
-      // Adjust if overflows top
       if (top < 16) {
         top = rect.top + rect.height + margin;
       }
     } else if (placement === 'right') {
       left = rect.left + rect.width + margin;
-      top = Math.max(16, Math.min(windowHeight - 320, rect.top));
+      top = Math.max(16, Math.min(windowHeight - 240, rect.top));
       if (left + popoverWidth > windowWidth) {
         left = Math.max(16, rect.left - popoverWidth - margin);
       }
     } else {
-      // left
       left = Math.max(16, rect.left - popoverWidth - margin);
-      top = Math.max(16, Math.min(windowHeight - 320, rect.top));
+      top = Math.max(16, Math.min(windowHeight - 240, rect.top));
       if (left < 16) {
         left = rect.left + rect.width + margin;
       }
@@ -162,12 +171,12 @@ export function SpotlightOverlay({
 
     return {
       position: 'fixed',
-      top: Math.max(12, Math.min(windowHeight - 340, top)),
+      top: Math.max(12, Math.min(windowHeight - 260, top)),
       left: Math.max(12, Math.min(windowWidth - popoverWidth - 12, left)),
       width: popoverWidth,
       maxWidth: 'calc(100vw - 24px)',
       zIndex: 9999,
-      transition: 'top .28s cubic-bezier(.2,.8,.2,1), left .28s cubic-bezier(.2,.8,.2,1)',
+      transition: 'top .25s cubic-bezier(.2,.8,.2,1), left .25s cubic-bezier(.2,.8,.2,1)',
     };
   };
 
@@ -183,18 +192,14 @@ export function SpotlightOverlay({
       <style>{`
         @keyframes beacon-pulse {
           0% {
-            box-shadow: 0 0 0 0 color-mix(in srgb, ${config.accentColor} 80%, transparent), 0 0 24px color-mix(in srgb, ${config.accentColor} 50%, transparent);
+            box-shadow: 0 0 0 0 color-mix(in srgb, ${config.accentColor} 80%, transparent), 0 0 20px color-mix(in srgb, ${config.accentColor} 45%, transparent);
           }
           70% {
-            box-shadow: 0 0 0 16px transparent, 0 0 36px color-mix(in srgb, ${config.accentColor} 20%, transparent);
+            box-shadow: 0 0 0 14px transparent, 0 0 32px color-mix(in srgb, ${config.accentColor} 20%, transparent);
           }
           100% {
-            box-shadow: 0 0 0 0 transparent, 0 0 24px color-mix(in srgb, ${config.accentColor} 50%, transparent);
+            box-shadow: 0 0 0 0 transparent, 0 0 20px color-mix(in srgb, ${config.accentColor} 45%, transparent);
           }
-        }
-        @keyframes pointer-bob {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
         }
       `}</style>
 
@@ -213,9 +218,7 @@ export function SpotlightOverlay({
       >
         <defs>
           <mask id="bd-spotlight-mask">
-            {/* White background reveals the dark backdrop */}
             <rect x="0" y="0" width="100%" height="100%" fill="#fff" />
-            {/* Black rectangle cuts out the target element */}
             {rect && (
               <rect
                 x={rect.left - 6}
@@ -240,11 +243,11 @@ export function SpotlightOverlay({
         />
       </svg>
 
-      {/* Pulsing Glowing Beacon Border over Target Element */}
+      {/* Pulsing Beacon Ring over Target Element */}
       {rect && (
         <div
-          onClick={handleNext}
-          title="Click to advance tour"
+          onClick={executeTaskAndAdvance}
+          title="Click to interact"
           style={{
             position: 'fixed',
             top: rect.top - 6,
@@ -262,7 +265,7 @@ export function SpotlightOverlay({
         />
       )}
 
-      {/* Floating Anchored Character Companion Popover */}
+      {/* Compact Interactive Character Popover */}
       <div
         ref={popoverRef}
         onClick={(e) => e.stopPropagation()}
@@ -272,54 +275,49 @@ export function SpotlightOverlay({
         style={{
           ...computePopoverStyle(),
           background: 'var(--card)',
-          border: `1.5px solid color-mix(in srgb, ${config.accentColor} 35%, var(--line2))`,
-          borderRadius: 22,
-          padding: '18px 20px',
-          boxShadow: `0 20px 50px -10px rgba(0,0,0,.65), 0 0 28px color-mix(in srgb, ${config.accentColor} 22%, transparent)`,
+          border: `1.5px solid color-mix(in srgb, ${config.accentColor} 40%, var(--line2))`,
+          borderRadius: 20,
+          padding: '14px 16px',
+          boxShadow: `0 16px 40px -8px rgba(0,0,0,.65), 0 0 24px color-mix(in srgb, ${config.accentColor} 20%, transparent)`,
           color: 'var(--tx)',
         }}
       >
-        {/* Header with Mascot & Tour Info */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Header with Mascot & Step Counter */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
+                width: 36,
+                height: 36,
+                borderRadius: 10,
                 background: `color-mix(in srgb, ${config.accentColor} 20%, var(--card2))`,
-                border: `1.5px solid color-mix(in srgb, ${config.accentColor} 45%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${config.accentColor} 40%, transparent)`,
                 display: 'grid',
                 placeItems: 'center',
                 flex: 'none',
-                boxShadow: `0 4px 12px color-mix(in srgb, ${config.accentColor} 20%, transparent)`,
               }}
             >
-              <Mascot id={config.tabId} animal={config.animal} size={32} mood={isLast ? 'celebrating' : 'keen'} />
+              <Mascot id={config.tabId} animal={config.animal} size={28} mood={isLast ? 'celebrating' : 'keen'} />
             </div>
 
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)' }}>
+                  {currentStep.title}
+                </span>
                 <span
                   style={{
                     fontSize: 10,
                     fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.06em',
-                    padding: '2px 7px',
+                    padding: '1px 6px',
                     borderRadius: 999,
                     background: `color-mix(in srgb, ${config.accentColor} 18%, transparent)`,
                     color: config.accentColor,
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {config.tabTitle} Tour
-                </span>
-                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
                   {stepIndex + 1}/{totalSteps}
                 </span>
-              </div>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)', marginTop: 1 }}>
-                {config.characterName}
               </div>
             </div>
           </div>
@@ -329,120 +327,65 @@ export function SpotlightOverlay({
             className="hov k-squish"
             aria-label="Close tour"
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
+              width: 26,
+              height: 26,
+              borderRadius: 7,
               display: 'grid',
               placeItems: 'center',
               background: 'var(--card2)',
               border: '1px solid var(--line2)',
             }}
           >
-            <Icon name="close" size={13} color="var(--tx2)" />
+            <Icon name="close" size={12} color="var(--tx2)" />
           </button>
         </div>
 
-        {/* Step Highlight Card */}
-        <div
-          style={{
-            background: 'var(--card2)',
-            border: '1px solid var(--line)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            marginBottom: 14,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 8,
-                background: `color-mix(in srgb, ${currentStep.color} 20%, transparent)`,
-                display: 'grid',
-                placeItems: 'center',
-                flex: 'none',
-              }}
-            >
-              <Icon name={currentStep.icon as IconName} size={15} color={currentStep.color} />
+        {/* Short, Punchy Description */}
+        <p style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.45, margin: '4px 0 10px' }}>
+          {currentStep.description}
+        </p>
+
+        {/* Action Prompt Pill */}
+        {currentStep.actionPrompt && (
+          <div
+            style={{
+              background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
+              border: '1px solid color-mix(in srgb, var(--pal-amber) 30%, transparent)',
+              borderRadius: 9,
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 12,
+            }}
+          >
+            <Icon name="spark" size={13} color="var(--pal-amber)" />
+            <span style={{ fontSize: 11, color: 'var(--tx)', fontWeight: 700 }}>
+              {currentStep.actionPrompt}
             </span>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)', letterSpacing: '-.01em' }}>
-                  {currentStep.title}
-                </div>
-                {currentStep.badge && (
-                  <span
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: 800,
-                      padding: '1px 5px',
-                      borderRadius: 5,
-                      background: `color-mix(in srgb, ${currentStep.color} 18%, transparent)`,
-                      color: currentStep.color,
-                    }}
-                  >
-                    {currentStep.badge}
-                  </span>
-                )}
-              </div>
-            </div>
           </div>
+        )}
 
-          <p style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55, margin: '6px 0 10px' }}>
-            {currentStep.description}
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {currentStep.bulletPoints.map((pt, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                <span
-                  style={{
-                    width: 15,
-                    height: 15,
-                    borderRadius: 5,
-                    background: `color-mix(in srgb, ${currentStep.color} 20%, transparent)`,
-                    display: 'grid',
-                    placeItems: 'center',
-                    flex: 'none',
-                    marginTop: 1,
-                  }}
-                >
-                  <Icon name="check" size={9} color={currentStep.color} />
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.4 }}>
-                  {pt}
-                </span>
-              </div>
-            ))}
+        {/* Instant Task Completion Feedback */}
+        {taskFeedback && (
+          <div
+            className="fade"
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--pal-amber)',
+              textAlign: 'center',
+              marginBottom: 8,
+            }}
+          >
+            ✨ {taskFeedback}
           </div>
+        )}
 
-          {currentStep.proTip && (
-            <div
-              style={{
-                background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card))',
-                border: '1px solid color-mix(in srgb, var(--pal-amber) 20%, transparent)',
-                borderRadius: 9,
-                padding: '7px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 8,
-              }}
-            >
-              <Icon name="spark" size={13} color="var(--pal-amber)" />
-              <span style={{ fontSize: 10.5, color: 'var(--tx)', fontWeight: 600 }}>
-                {currentStep.proTip}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        {/* Controls Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           {/* Step Dots */}
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             {config.steps.map((_, i) => (
               <button
                 key={i}
@@ -452,31 +395,30 @@ export function SpotlightOverlay({
                 }}
                 aria-label={`Step ${i + 1}`}
                 style={{
-                  width: i === stepIndex ? 18 : 6,
-                  height: 6,
+                  width: i === stepIndex ? 14 : 5,
+                  height: 5,
                   borderRadius: 3,
                   background: i === stepIndex ? config.accentColor : 'var(--line2)',
                   border: 'none',
                   cursor: 'pointer',
-                  transition: 'all .25s ease',
                   padding: 0,
+                  transition: 'all .2s ease',
                 }}
               />
             ))}
           </div>
 
-          {/* Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {!isFirst && (
               <button
                 onClick={handlePrev}
                 className="hov k-squish"
                 style={{
-                  padding: '7px 12px',
-                  borderRadius: 10,
+                  padding: '6px 10px',
+                  borderRadius: 8,
                   background: 'var(--card2)',
                   border: '1px solid var(--line2)',
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: 700,
                   color: 'var(--tx)',
                   cursor: 'pointer',
@@ -486,34 +428,15 @@ export function SpotlightOverlay({
               </button>
             )}
 
+            {/* Interactive "Do Task & Advance" Button */}
             <button
-              onClick={() => {
-                onFinish();
-              }}
-              className="hov k-squish"
-              title="Skip to finish and claim RP"
-              style={{
-                padding: '7px 10px',
-                borderRadius: 10,
-                background: 'transparent',
-                border: 'none',
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--tx3)',
-                cursor: 'pointer',
-              }}
-            >
-              Skip to Finish
-            </button>
-
-            <button
-              onClick={handleNext}
+              onClick={executeTaskAndAdvance}
               className="acc k-squish"
               style={{
-                padding: '7px 14px',
-                borderRadius: 10,
+                padding: '6px 14px',
+                borderRadius: 8,
                 background: isLast ? 'var(--pal-amber)' : 'var(--acc)',
-                color: 'var(--ink)',
+                color: '#0A0912',
                 fontSize: 11.5,
                 fontWeight: 800,
                 border: 'none',
@@ -521,18 +444,18 @@ export function SpotlightOverlay({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                boxShadow: isLast ? '0 4px 14px rgba(255,194,75,.35)' : 'var(--sh)',
+                boxShadow: isLast ? '0 4px 12px rgba(255,194,75,.35)' : 'var(--sh)',
               }}
             >
               {isLast ? (
                 <>
-                  <Icon name="trophy" size={13} color="var(--ink)" />
+                  <Icon name="trophy" size={13} color="#0A0912" />
                   Finish & Claim +15 RP
                 </>
               ) : (
                 <>
-                  Next
-                  <Icon name="plus" size={11} color="var(--ink)" />
+                  {currentStep.actionLabel || 'Try It & Next'}
+                  <Icon name="plus" size={11} color="#0A0912" />
                 </>
               )}
             </button>

@@ -58,7 +58,7 @@ const BLANK: Challenge = {
 const CHALS = ['challenges'] as const;
 const MEMBERS = ['challenge_members'] as const;
 const DAYS = ['challenge_days'] as const;
-const RANKED = ['ranked'] as const;
+export const RANKED = ['ranked'] as const;
 const STARS = ['challenge_stars'] as const;
 /** lib/habits.ts owns this key; challenge actions write rows under it. */
 const HABITS = ['habits'] as const;

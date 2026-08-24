@@ -361,6 +361,17 @@ export function Mascot({
           </>
         )}
 
+        {/* Glasses / Shades accessory */}
+        {accessory === 'glasses' && (
+          <g>
+            <rect x="10" y="24" width="13" height="7" rx="2" fill="#111319" stroke={hue} strokeWidth="1.2" />
+            <rect x="25" y="24" width="13" height="7" rx="2" fill="#111319" stroke={hue} strokeWidth="1.2" />
+            <line x1="23" y1="27" x2="25" y2="27" stroke={hue} strokeWidth="1.5" />
+            <line x1="7" y1="26" x2="10" y2="26" stroke={hue} strokeWidth="1.2" />
+            <line x1="38" y1="26" x2="41" y2="26" stroke={hue} strokeWidth="1.2" />
+          </g>
+        )}
+
         {skin.goggles && (
           <>
             <circle cx="17.5" cy="27" r="6.4" fill={skin.muzzle} opacity=".9" />
@@ -429,7 +440,7 @@ export function Mascot({
           <text x="37" y="14">z</text>
         </g>
       )}
-      {crown && (
+      {(crown || accessory === 'crown') && (
         <g className="mc-crown">
           <path d="M15 6 l3.6 4.4 L24 3.4 l5.4 7 L33 6 l-1.4 7.4 h-16.2 z"
             fill="#FFC24B" stroke="#B8862B" strokeWidth=".8" strokeLinejoin="round" />
