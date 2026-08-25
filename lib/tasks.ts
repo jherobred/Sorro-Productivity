@@ -73,7 +73,8 @@ export function useTasks() {
 export type NewTask = {
   id: string;
   title: string;
-  listId: string | null;
+  listId?: string | null;
+  list_id?: string | null;
   notes?: string;
   due_on?: string | null;
   due_at?: string | null;
@@ -83,12 +84,16 @@ export type NewTask = {
 
 const CREATE = defineMutation('task.create', async (v: NewTask) => {
   const user_id = await currentUserId();
+  const targetListId = v.listId || v.list_id || null;
   const { error } = await supabase.from('bd_tasks').insert({
-    id: v.id, user_id, title: v.title, list_id: v.listId,
+    id: v.id,
+    user_id,
+    title: v.title.trim(),
+    list_id: targetListId,
     notes: v.notes ?? '',
-    due_on: v.due_on ?? null,
-    due_at: v.due_at ?? null,
-    priority: v.priority ?? null,
+    due_on: v.due_on || null,
+    due_at: v.due_at || null,
+    priority: v.priority || null,
     stars: v.stars ?? 0,
     position: Date.now() % 2_000_000_000,
   });
@@ -139,13 +144,14 @@ export function useTaskActions() {
 
   const create = useMutation({
     mutationKey: CREATE,
-    onMutate: (v: NewTask) =>
-      optimistic((prev) => [
+    onMutate: (v: NewTask) => {
+      const targetListId = v.listId || v.list_id || null;
+      return optimistic((prev) => [
         ...prev,
         {
           id: v.id,
-          list_id: v.listId,
-          title: v.title,
+          list_id: targetListId,
+          title: v.title.trim(),
           notes: v.notes ?? '',
           done: false,
           due_on: v.due_on ?? null,
@@ -155,8 +161,12 @@ export function useTaskActions() {
           position: Number.MAX_SAFE_INTEGER,
           deleted_at: null,
         },
-      ]),
-    onError: rollback,
+      ]);
+    },
+    onError: (err, _v, ctx) => {
+      rollback(err, _v, ctx);
+      toast(err instanceof Error ? err.message : 'Could not create task');
+    },
     onSettled: settle,
   });
 

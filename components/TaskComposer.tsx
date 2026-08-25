@@ -83,17 +83,22 @@ export function TaskComposer({
   const submit = () => {
     const t = title.trim();
     if (!t) return;
+    let due_at: string | null = null;
+    if (due && time) {
+      const d = new Date(`${due}T${time}`);
+      if (!isNaN(d.getTime())) {
+        due_at = d.toISOString();
+      }
+    }
     onCreate({
       id: crypto.randomUUID(),
       title: t,
-      listId,
+      listId: listId || null,
       notes: notes.trim(),
-      due_on: due,
-      // A time only means anything alongside a date, and it is what puts the
-      // task in a calendar slot rather than the all-day tray.
-      due_at: due && time ? new Date(`${due}T${time}`).toISOString() : null,
-      priority,
-      stars,
+      due_on: due || null,
+      due_at,
+      priority: priority || null,
+      stars: stars || 0,
     });
     reset();
   };
@@ -118,12 +123,18 @@ export function TaskComposer({
           onFocus={() => setOpen(true)}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') submit();
-            if (e.key === 'Escape') { setOpen(false); (e.target as HTMLElement).blur(); }
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            }
+            if (e.key === 'Escape') {
+              setOpen(false);
+              (e.target as HTMLElement).blur();
+            }
           }}
-          placeholder="Add a task"
+          placeholder="Add a task (press Enter)"
           aria-label="Task title"
-          style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: open ? 600 : 500, color: 'var(--tx)' }} />
+          style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: open ? 600 : 500, color: 'var(--tx)', background: 'transparent', border: 'none', outline: 'none' }} />
         {!open && (
           <button onClick={() => setOpen(true)} className="hov k-squish"
             aria-label="More options" title="More options"
@@ -138,13 +149,19 @@ export function TaskComposer({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }}
-            placeholder="Notes (optional)"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Notes (optional, ⌘+Enter to add)"
             aria-label="Notes"
             rows={2}
             style={{
               width: '100%', fontSize: 12.5, lineHeight: 1.55, color: 'var(--tx2)',
               resize: 'vertical', background: 'transparent', marginBottom: 11,
+              border: 'none', outline: 'none',
             }} />
 
           <Row label="Due">
