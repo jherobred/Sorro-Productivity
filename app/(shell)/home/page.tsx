@@ -6,8 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
-import { useTasks } from '@/lib/tasks';
-import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
+import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
+import { useEvents, weekStart, hoursOf, hhmm, at, dayIndex, useEventActions } from '@/lib/events';
+import { CalendarGrid } from '@/components/calendar/DayGrid';
 import { usePrefs } from '@/lib/prefs';
 import { Buddy } from '@/components/Buddy';
 import { BuddyCompanion } from '@/components/BuddyCompanion';
@@ -26,7 +27,7 @@ import { PhoneHome } from '@/components/PhoneHome';
 
 const AMBER = '#F5B33C';
 const CARD: React.CSSProperties = {
-  background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)',
+  background: 'var(--card)', borderRadius: 'var(--r-card)', padding: 'var(--pad-card)', boxShadow: 'var(--sh)',
 };
 
 /**
@@ -56,9 +57,10 @@ const QUOTES = [
   'Future you is watching.',
 ];
 
+/** --tx3 on --card is 3.59:1, under the 4.5 floor. Labels sit on --tx2. */
 const KICKER: React.CSSProperties = {
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em',
-  textTransform: 'uppercase', color: 'var(--tx3)',
+  fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: '.11em',
+  textTransform: 'uppercase', color: 'var(--tx2)',
 };
 
 export default function HomePage() {
@@ -79,6 +81,7 @@ export default function HomePage() {
 
   const ws = weekStart(new Date());
   const { data: tasks = [] } = useTasks();
+  const TA = useTaskActions();
   const { data: events = [] } = useEvents(ws);
   const A = useEventActions(ws);
 
@@ -153,10 +156,28 @@ export default function HomePage() {
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
 
   const minsUntil = upNext ? Math.round((new Date(upNext.starts_at).getTime() - Date.now()) / 60_000) : 0;
-  const untilPct = Math.max(4, Math.min(100, Math.round(((120 - minsUntil) / 120) * 100)));
-  const untilLabel = !upNext ? '' : minsUntil >= 60
-    ? `in ${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`
-    : `in ${Math.max(0, minsUntil)} min`;
+  /** "2h 15m" / "48m" — the countdown reads as a phrase, so it carries no "in". */
+  const untilShort = !upNext ? '' : minsUntil >= 60
+    ? `${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`
+    : `${Math.max(0, minsUntil)}m`;
+
+  // The embedded day grid. It is the calendar's own component, so it wants the
+  // same props the calendar hands it; Home differs only in where taps go
+  // (straight to /calendar/ rather than into a popover) and where it parks.
+  const todayCol = dayIndex(new Date().toISOString(), ws);
+  /** An hour of lead-in, so the block you are in is not flush against the top. */
+  const parkHour = Math.max(0, new Date().getHours() - 1);
+  const [sel, setSel] = useState<string | null>(null);
+
+  /** Dropping a task on the grid dates it. Same rule as the calendar page:
+   *  due_on always follows due_at, or the Tasks page groups it under the
+   *  wrong day. */
+  const schedule = (t: Task, day: number, hour: number | null) => {
+    const date = new Date(at(ws, day, hour ?? 9));
+    const due_on = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    TA.update.mutate({ id: t.id, patch: { due_at: hour === null ? null : date.toISOString(), due_on } });
+    toast(hour === null ? `${t.title} — no set time` : `${t.title} at ${hhmm(hour)}`);
+  };
 
   // Money tile: spend this calendar month against the summed monthly budgets.
   const month = new Date().toISOString().slice(0, 7);
@@ -192,187 +213,174 @@ export default function HomePage() {
 
   return (
     <div>
-      {/* Hero — the day/night sky band with its drifting gradient and sun blob. */}
-      <div style={{
-        padding: phone ? '14px 14px 4px' : '20px 24px 6px', position: 'relative', overflow: 'hidden',
-        background: 'var(--panel)', borderBottom: '2px solid var(--line2)',
-      }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{
-            position: 'relative', overflow: 'hidden', borderRadius: 16, border: '1px solid var(--line)',
-            padding: phone ? '15px 16px 17px' : '17px 20px 19px', marginBottom: phone ? 14 : 16,
-          }}>
-            <div className="dnl" style={{ position: 'absolute', inset: 0, background: (dark ? SKIES : SKIES_LIGHT)[tod], backgroundSize: '240% 240%' }} />
-            <div className="sunl" style={{
-              position: 'absolute', top: -58, left: 0, width: 190, height: 190, borderRadius: '50%',
-              background: `radial-gradient(circle, color-mix(in srgb, ${prefs.accent} 34%, transparent), transparent 68%)`,
-              pointerEvents: 'none',
-            }} />
+      {/* The page is one continuous --bg now.
+          What went is the `--panel` slab behind this card and the 2px rule
+          under it: two near-identical darks (#16181F on #111216) meeting at a
+          hard line 338px down, which read as a cut-off band rather than a
+          section boundary. The sky card keeps its gradient, its sun and the
+          time-of-day switch — it just floats on the page like every other
+          block instead of being welded into a slab. */}
+      <div style={{ padding: 'var(--sp-5) var(--sp-6) 0' }}>
+        <div style={{
+          position: 'relative', overflow: 'hidden', borderRadius: 'var(--r-card)',
+          border: '1px solid var(--line)', padding: 'var(--pad-card)', marginBottom: 'var(--sp-3)',
+        }}>
+          <div className="dnl" style={{ position: 'absolute', inset: 0, background: (dark ? SKIES : SKIES_LIGHT)[tod], backgroundSize: '240% 240%' }} />
+          <div className="sunl" style={{
+            position: 'absolute', top: -58, left: 0, width: 190, height: 190, borderRadius: '50%',
+            background: `radial-gradient(circle, color-mix(in srgb, ${prefs.accent} 34%, transparent), transparent 68%)`,
+            pointerEvents: 'none',
+          }} />
 
-            <div style={{ position: 'relative' }}>
-              <div style={phone
-                ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10, marginBottom: 6 }
-                : { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 5 }}>
-                <div key={greetSeq} aria-label={greeting}
-                  style={{ fontSize: phone ? 23 : 27, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.05 }}>
-                  {greeting.split('').map((c, i) => (
-                    <span key={i} aria-hidden className="fade" style={{ animationDelay: `${i * 0.025}s`, whiteSpace: 'pre' }}>{c}</span>
-                  ))}
-                </div>
+          {/* One row, one baseline. The greeting, the switch and Focus each sat
+              on a different vertical rhythm, with the Buddy dropped onto a
+              fourth line underneath them. */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+            <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
 
-                <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 9, background: 'rgba(120,140,180,.16)' }}>
-                  {(['morning', 'afternoon', 'evening'] as Tod[]).map((t) => (
-                    <button key={t} onClick={() => { setTod(t); setGreetSeq((n) => n + 1); }}
-                      style={{
-                        padding: '4px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 700, textTransform: 'capitalize',
-                        background: tod === t ? `color-mix(in srgb, ${prefs.accent} 20%, transparent)` : 'transparent',
-                        color: tod === t ? 'var(--accTx)' : 'var(--tx3)',
-                      }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => setFocusOpen(true)}
-                  className="k-squish"
-                  style={{
-                    marginLeft: 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    borderRadius: 9,
-                    background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--acc) 35%, transparent)',
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    color: 'var(--accTx)',
-                  }}
-                >
-                  <Icon name="clock" size={13} color="var(--accTx)" />
-                  <span>Focus Station</span>
-                </button>
+            <div style={{ minWidth: 0 }}>
+              <div key={greetSeq} aria-label={greeting}
+                style={{ fontSize: 'var(--fs-xl)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.1 }}>
+                {greeting.split('').map((c, i) => (
+                  <span key={i} aria-hidden className="fade" style={{ animationDelay: `${i * 0.025}s`, whiteSpace: 'pre' }}>{c}</span>
+                ))}
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 6 }}>
-                {/* The same creature that runs your lane on the challenge
-                    board, on the page you open first. It is derived from your
-                    id, so it costs nothing and it is already yours. Its face
-                    reads off whether anything got ticked today — never off how
-                    much is left, which would make a bad morning worse. */}
-                <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
-                <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)' }}>
-                  {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-                  {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
-                </div>
+              <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)', marginTop: 3 }}>
+                {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+                {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
               </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' }}>
-            {/* Up next */}
-            <div style={{
-              flex: 'none', width: 353, borderRadius: 15, padding: '14px 16px',
-              background: `color-mix(in srgb, ${INDIGO} 14%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${INDIGO} 38%, transparent)`,
-              minHeight: 170, display: 'flex', flexDirection: 'column',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-                <div style={{ ...KICKER, color: INDIGO }}>Up next</div>
-                {upNext && (
-                  // Live indicator: a dot under an expanding halo ring.
-                  <span style={{ position: 'relative', width: 6, height: 6, flex: 'none' }}>
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: INDIGO }} />
-                    <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${INDIGO}` }} />
-                  </span>
-                )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+              <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 9, background: 'rgba(120,140,180,.16)' }}>
+                {(['morning', 'afternoon', 'evening'] as Tod[]).map((t) => (
+                  <button key={t} onClick={() => { setTod(t); setGreetSeq((n) => n + 1); }}
+                    style={{
+                      padding: '5px 11px', borderRadius: 7, fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'capitalize',
+                      background: tod === t ? `color-mix(in srgb, ${prefs.accent} 20%, transparent)` : 'transparent',
+                      color: tod === t ? 'var(--accTx)' : 'var(--tx2)',
+                    }}>
+                    {t}
+                  </button>
+                ))}
               </div>
 
+              <button onClick={() => setFocusOpen(true)} className="hov k-squish"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 9,
+                  border: '1px solid var(--line2)', fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--tx2)',
+                }}>
+                <Icon name="clock" size={14} color="var(--tx2)" />
+                <span>Focus Station</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Time until the next thing, and how late the late things are.
+            The old progress bar filled `(120 - minutes) / 120`, so anything
+            more than two hours out pinned at 4% and measured nothing. The
+            countdown is the measure. */}
+        <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'stretch', marginBottom: 'var(--sp-3)', flexWrap: 'wrap' }}>
+          <div style={{ ...CARD, flex: 1, minWidth: 360, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {upNext ? (
                 <>
-                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 5 }}>{upNext.title}</div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums', marginBottom: 11 }}>
-                    {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}{upNext.location ? ` · ${upNext.location}` : ''}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 11, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--fs-2xl)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                      {untilShort}
+                    </span>
+                    <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 500, color: 'var(--tx2)' }}>until</span>
+                    <span style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, letterSpacing: '-.025em' }}>{upNext.title}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                    <div style={{ flex: 1, height: 5, borderRadius: 3, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden' }}>
-                      <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 3, background: PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
-                    </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: INDIGO, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{untilLabel}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 'var(--sp-2)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: upNext.color, flex: 'none' }} />
+                    <span style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+                      {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}{upNext.location ? ` · ${upNext.location}` : ''}
+                    </span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 5 }}>Nothing else today</div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', marginBottom: 11 }}>Tomorrow is clear too</div>
+                  <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, letterSpacing: '-.025em' }}>Nothing else today</div>
+                  <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)', marginTop: 'var(--sp-2)' }}>Tomorrow is clear too</div>
                 </>
               )}
-
-              <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
-                <button onClick={() => router.push('/notebooks/')} className="acc k-squish"
-                  style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                  Open notes
-                </button>
-                <button
-                  onClick={() => {
-                    // Silence was the bug: with nothing scheduled this did
-                    // nothing at all and looked broken.
-                    if (!upNext) { toast('Nothing to snooze'); return; }
-                    A.snooze.mutate({ id: upNext.id });
-                    toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
-                  }}
-                  className="hov k-squish"
-                  style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  Snooze
-                </button>
-              </div>
             </div>
 
-            {/* The rest of today */}
-            <div style={{
-              flex: 1, minWidth: 260, borderRadius: 15, padding: '14px 16px',
-              background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 14 }}>
-                <div style={KICKER}>The rest of today</div>
-                <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>to 10 PM</div>
-              </div>
-              <div style={{ position: 'relative', height: 34, marginBottom: 9 }}>
-                <div style={{ position: 'absolute', top: 15, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
-                {todays.map((e) => {
-                  const s = hoursOf(e.starts_at);
-                  const len = hoursOf(e.ends_at) - s;
-                  const left = ((s - 9) / 13) * 100;
-                  if (left < -5 || left > 100) return null;
-                  return (
-                    <div key={e.id} style={{
-                      position: 'absolute', top: 8, left: `${Math.max(0, left)}%`,
-                      width: `${Math.max(4, (len / 13) * 100)}%`, height: 16, borderRadius: 5, background: e.color,
-                    }} />
-                  );
-                })}
-                <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)' }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
-                <span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
-              </div>
-            </div>
+            <button
+              onClick={() => {
+                if (!upNext) { toast('Nothing to snooze'); return; }
+                A.snooze.mutate({ id: upNext.id });
+                toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
+              }}
+              className="hov k-squish"
+              style={{
+                flex: 'none', padding: '8px 14px', borderRadius: 9, border: '1px solid var(--line2)',
+                color: 'var(--tx2)', fontSize: 'var(--fs-meta)', fontWeight: 600, whiteSpace: 'nowrap',
+              }}>
+              Snooze 10 minutes
+            </button>
+          </div>
 
-            {/* Overdue */}
-            <div style={{
-              flex: 'none', width: 353, borderRadius: 15, padding: '14px 16px',
-              background: `color-mix(in srgb,${CORAL_T} 12%,transparent)`,
-              border: `1px solid color-mix(in srgb,${CORAL_T} 34%,transparent)`,
-            }}>
-              <div style={{ ...KICKER, color: `color-mix(in srgb,${CORAL_T} 78%,var(--tx))`, marginBottom: 8 }}>Overdue</div>
-              <div style={{ fontSize: 26, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>{overdue.length}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: 'var(--tx2)' }}>
-                {overdue.length ? `Oldest is ${oldest} day${oldest === 1 ? '' : 's'} old` : 'Nothing is late'}
-              </div>
+          <div style={{
+            flex: 'none', width: 260, borderRadius: 'var(--r-card)', padding: 'var(--pad-card)',
+            background: `color-mix(in srgb,${CORAL_T} 12%,transparent)`,
+            border: `1px solid color-mix(in srgb,${CORAL_T} 34%,transparent)`,
+            display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          }}>
+            <div style={{ ...KICKER, color: `color-mix(in srgb,${CORAL_T} 78%,var(--tx))` }}>Overdue</div>
+            <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginTop: 'var(--sp-2)', letterSpacing: '-.03em' }}>{overdue.length}</div>
+            <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, lineHeight: 1.4, color: 'var(--tx2)', marginTop: 3 }}>
+              {overdue.length ? `Oldest is ${oldest} day${oldest === 1 ? '' : 's'} old` : 'Nothing is late'}
             </div>
           </div>
         </div>
+
+        {/* The day itself — the calendar's own grid, drag and all, parked on
+            the hour you are in rather than on 7 a.m. This replaces the "Today"
+            list card and the mini hour-strip that used to sit up here; both
+            drew the same day at lower fidelity. */}
+        <div data-tour="home-timeline" style={{
+          ...CARD, padding: 0, height: 430, marginBottom: 'var(--sp-3)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-2)',
+            padding: 'var(--sp-3) var(--pad-card) var(--sp-2)', flex: 'none',
+          }}>
+            <div style={KICKER}>Today</div>
+            <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)' }}>
+              {todays.length} event{todays.length === 1 ? '' : 's'}
+            </div>
+            <button onClick={() => router.push('/calendar/')} className="hov"
+              style={{
+                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px',
+                borderRadius: 7, fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--tx2)',
+              }}>
+              <span>Open calendar</span>
+              <Icon name="chev" size={12} color="var(--tx2)" />
+            </button>
+          </div>
+
+          <CalendarGrid
+            days={1}
+            dayOffset={todayCol}
+            parkHour={parkHour}
+            ws={ws}
+            events={events}
+            tasks={tasks}
+            A={A}
+            TA={TA}
+            sel={sel}
+            setSel={setSel}
+            openEvent={() => router.push('/calendar/')}
+            openSlot={() => router.push('/calendar/')}
+            onSchedule={schedule}
+          />
+        </div>
+
+        <TaskBoard tasks={open} todayISO={todayISO} TA={TA} onAll={() => router.push('/tasks/')} />
       </div>
 
       <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
@@ -397,34 +405,6 @@ export default function HomePage() {
               ticks={ticks}
               notesCount={recent.length}
             />
-          </div>
-
-          {/* Today */}
-          <div data-tour="home-timeline" style={CARD}>
-            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
-              <div style={KICKER}>Today</div>
-              <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
-                {todays.length} event{todays.length === 1 ? '' : 's'}
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {todays.length === 0 && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Nothing scheduled.</div>}
-              {todays.map((e) => {
-                const started = new Date(e.starts_at).getTime() <= Date.now();
-                const ended = new Date(e.ends_at).getTime() <= Date.now();
-                return (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 2, height: 26, background: e.color, borderRadius: 1 }} />
-                    <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)', width: 38, fontVariantNumeric: 'tabular-nums' }}>
-                      {String(new Date(e.starts_at).getHours()).padStart(2, '0')}:{String(new Date(e.starts_at).getMinutes()).padStart(2, '0')}
-                    </div>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{e.title}</div>
-                    {ended && <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--tx3)' }}>done</div>}
-                    {started && !ended && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accTx)' }}>now</div>}
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
           <Scratchpad phone={phone} />
@@ -593,23 +573,176 @@ export default function HomePage() {
 }
 
 /** Scratchpad — spans two grid columns on desktop (scratchCardStyle). */
+/**
+ * One task list, ordered the way the day actually presses on you: late first
+ * and oldest-late first, then today, then dated, then undated.
+ *
+ * Home used to carry three partial views of the same table — an Overdue count,
+ * a Deadlines card of the next three due, and nothing you could actually tick.
+ * The count and the deadlines still stand; this is the part that was missing.
+ */
+function TaskBoard({ tasks, todayISO, TA, onAll }: {
+  tasks: Task[];
+  todayISO: string;
+  TA: ReturnType<typeof useTaskActions>;
+  onAll: () => void;
+}) {
+  const [all, setAll] = useState(false);
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+
+  /** Late < today < dated < undated, and inside each bucket by date. */
+  const rank = (t: Task) => {
+    if (!t.due_on) return 3;
+    if (t.due_on < todayISO) return 0;
+    if (t.due_on === todayISO) return 1;
+    return 2;
+  };
+  const sorted = [...tasks].sort((a, b) =>
+    rank(a) - rank(b) || (a.due_on ?? '').localeCompare(b.due_on ?? ''));
+  const shown = all ? sorted : sorted.slice(0, 8);
+
+  const complete = (t: Task) => {
+    playTick();
+    setLeaving((s) => new Set(s).add(t.id));
+    setTimeout(() => {
+      TA.complete.mutate({ id: t.id, done: true });
+      setLeaving((s) => { const n = new Set(s); n.delete(t.id); return n; });
+    }, 220);
+  };
+
+  /** Days late, "Today", a weekday inside the week, else a short date. */
+  const due = (t: Task): { label: string; tone: string } => {
+    if (!t.due_on) return { label: '', tone: 'var(--tx2)' };
+    const days = Math.round(
+      (new Date(t.due_on + 'T00:00:00').getTime() - new Date(todayISO + 'T00:00:00').getTime()) / 86_400_000);
+    if (days < 0) return { label: `${-days} day${days === -1 ? '' : 's'} late`, tone: 'var(--pal-coral)' };
+    if (days === 0) return { label: 'Today', tone: 'var(--pal-amber)' };
+    if (days === 1) return { label: 'Tomorrow', tone: 'var(--tx2)' };
+    if (days < 7) return {
+      label: new Date(t.due_on + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }),
+      tone: 'var(--tx2)',
+    };
+    return {
+      label: new Date(t.due_on + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      tone: 'var(--tx2)',
+    };
+  };
+
+  return (
+    <div style={{ ...CARD, marginBottom: 'var(--sp-3)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
+        <div style={KICKER}>Tasks</div>
+        <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)' }}>{tasks.length} open</div>
+        <button onClick={onAll} className="hov"
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px',
+            borderRadius: 7, fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--tx2)',
+          }}>
+          <span>Open tasks</span>
+          <Icon name="chev" size={12} color="var(--tx2)" />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {shown.length === 0 && (
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx2)', padding: '4px 8px' }}>Nothing on your plate.</div>
+        )}
+
+        {shown.map((t) => {
+          const d = due(t);
+          const late = !!t.due_on && t.due_on < todayISO;
+          return (
+            <div key={t.id} className={`blk${leaving.has(t.id) ? ' leaving' : ''}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
+                padding: '10px var(--sp-2)', borderRadius: 'var(--r-row)',
+              }}>
+              <button
+                onClick={() => complete(t)}
+                aria-label={`Complete ${t.title}`}
+                title="Complete"
+                className="k-squish"
+                style={{
+                  width: 20, height: 20, flex: 'none', borderRadius: '50%', cursor: 'pointer',
+                  border: `1.6px solid ${late ? 'color-mix(in srgb, var(--pal-coral) 60%, transparent)' : 'var(--line2)'}`,
+                }}
+              />
+              <div style={{
+                flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', fontWeight: 600,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {t.title}
+              </div>
+              {/* Fixed-width right column so every due value lands on one
+                  right edge instead of ragging with the title length. */}
+              <div style={{
+                flex: 'none', width: 96, textAlign: 'right', fontSize: 'var(--fs-meta)',
+                fontWeight: late ? 600 : 500, color: d.tone, fontVariantNumeric: 'tabular-nums',
+              }}>
+                {d.label}
+              </div>
+              <button onClick={() => TA.removeWithUndo(t)} className="bh hov"
+                aria-label={`Delete ${t.title}`} title="Delete"
+                style={{ flex: 'none', width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+                <Icon name="trash" size={13} color="var(--tx2)" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {sorted.length > 8 && (
+        <button onClick={() => setAll((v) => !v)} className="hov"
+          style={{
+            marginTop: 'var(--sp-2)', width: '100%', padding: '9px 0', borderRadius: 'var(--r-row)',
+            borderTop: '1px solid var(--line)', fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--tx2)',
+          }}>
+          {all ? 'Show less' : `Show ${sorted.length - 8} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Scratchpad — quick capture, and the one card on Home you edit rather than read.
+ *
+ * Four changes over the original:
+ *  - the row carries text, tag and time; ⇢Task, pin and delete come up on
+ *    hover (`.bh`, which globals.css already gives a visible resting state on
+ *    touch). Four always-on controls per row made this the noisiest block on
+ *    the page.
+ *  - click the text to edit it. Fixing a typo used to mean delete and retype.
+ *  - a text filter beside the tag chips, because tags alone stop helping at
+ *    about a screenful.
+ *  - pinned notes sort to the top here rather than only in the query. The
+ *    server orders by `pinned` then `position`, but `position` is
+ *    `Date.now() % 2e9` at insert and sorts *ascending*, so new notes sank to
+ *    the bottom and a pinned one could still be under three newer notes in a
+ *    cached or fixture-backed list.
+ */
 function Scratchpad({ phone }: { phone: boolean }) {
   const { data: notes = [] } = useScratch();
   const A = useScratchActions();
   const [draft, setDraft] = useState('');
   const [filter, setFilter] = useState<string>('All');
+  const [q, setQ] = useState('');
 
   const keep = () => {
     const t = draft.trim();
-    // Pressing Keep on an empty field used to do nothing and say nothing.
     if (!t) { toast('Type something first'); return; }
     A.add.mutate({ id: crypto.randomUUID(), text: t, tag: 'Note', color: TAG_COLOR.Note });
     setDraft('');
   };
 
-  const shown = filter === 'All' ? notes : notes.filter((n) => n.tag === filter);
+  const needle = q.trim().toLowerCase();
+  const shown = notes
+    .filter((n) => (filter === 'All' || n.tag === filter))
+    .filter((n) => !needle || n.text.toLowerCase().includes(needle))
+    .sort((a, b) =>
+      Number(b.pinned) - Number(a.pinned) || b.created_at.localeCompare(a.created_at));
 
-  /** "→ Task" promotes a scratch note into the first task list and clears it. */
+  /** "⇢ Task" promotes a scratch note into the first task list and clears it. */
   const toTask = async (n: Scratch) => {
     try {
       const user_id = await currentUserId();
@@ -626,47 +759,73 @@ function Scratchpad({ phone }: { phone: boolean }) {
 
   return (
     <div style={{ ...CARD, gridColumn: phone ? 'auto' : 'span 2' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
         <div style={KICKER}>Scratchpad</div>
-        <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>{notes.length} kept</div>
+        <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)' }}>
+          {notes.length} kept{shown.length !== notes.length ? ` · ${shown.length} shown` : ''}
+        </div>
       </div>
 
       <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 12,
-        background: 'var(--card2)', border: '1px solid var(--line)', marginBottom: 12,
+        display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-2)', padding: '10px 12px',
+        borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--line)', marginBottom: 'var(--sp-3)',
       }}>
-        <Icon name="plus" size={15} color="var(--accTx)" />
+        <Icon name="plus" size={15} color="var(--accTx)" style={{ marginTop: 3 }} />
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); keep(); } }}
           rows={1}
           placeholder="Jot something — Enter to keep it"
-          style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--tx)', resize: 'none', fontFamily: 'inherit', background: 'transparent' }}
+          style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-sm)', lineHeight: 1.5, color: 'var(--tx)', resize: 'none', fontFamily: 'inherit', background: 'transparent' }}
         />
-        <button onClick={keep} className="acc"
-          style={{ flex: 'none', padding: '5px 11px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11, fontWeight: 800 }}>
+        <button onClick={keep} className="acc k-squish"
+          style={{ flex: 'none', padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 'var(--fs-meta)', fontWeight: 700 }}>
           Keep
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['All', ...SCRATCH_TAGS].map((f) => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{
-              padding: '4px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 700,
-              background: filter === f ? 'color-mix(in srgb, var(--acc) 20%, transparent)' : 'transparent',
-              color: filter === f ? 'var(--accTx)' : 'var(--tx3)',
-            }}>
-            {f}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-3)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {['All', ...SCRATCH_TAGS].map((f) => (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{
+                padding: '5px 11px', borderRadius: 9999, fontSize: 'var(--fs-meta)',
+                fontWeight: filter === f ? 700 : 500,
+                background: filter === f ? 'color-mix(in srgb, var(--acc) 20%, transparent)' : 'transparent',
+                color: filter === f ? 'var(--accTx)' : 'var(--tx2)',
+              }}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        <div style={{
+          marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
+          borderRadius: 9999, border: '1px solid var(--line)', minWidth: 150,
+        }}>
+          <Icon name="search" size={13} color="var(--tx2)" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Find a note"
+            aria-label="Search kept notes"
+            style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-meta)', color: 'var(--tx)', background: 'transparent' }}
+          />
+          {q && (
+            <button onClick={() => setQ('')} aria-label="Clear search" style={{ flex: 'none', display: 'flex' }}>
+              <Icon name="close" size={12} color="var(--tx2)" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
         {shown.map((n) => <ScratchRow key={n.id} n={n} A={A} onToTask={toTask} />)}
         {shown.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '4px 2px' }}>Nothing kept under this tag yet.</div>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx2)', padding: '4px 2px' }}>
+            {needle ? `Nothing matches “${q.trim()}”.` : 'Nothing kept under this tag yet.'}
+          </div>
         )}
       </div>
     </div>
@@ -674,50 +833,92 @@ function Scratchpad({ phone }: { phone: boolean }) {
 }
 
 function ScratchRow({ n, A, onToTask }: { n: Scratch; A: ReturnType<typeof useScratchActions>; onToTask: (n: Scratch) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(n.text);
+
   const cycleTag = () => {
     const i = SCRATCH_TAGS.indexOf(n.tag as (typeof SCRATCH_TAGS)[number]);
     const next = SCRATCH_TAGS[(i + 1) % SCRATCH_TAGS.length];
     A.save.mutate({ id: n.id, patch: { tag: next, color: TAG_COLOR[next] } });
   };
 
-  return (
-    <div className="pop" style={{
-      padding: '10px 11px', borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--line)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-        <span style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, background: n.color, flex: 'none' }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, fontWeight: 500, textWrap: 'pretty' }}>{n.text}</div>
-          {/* Tag + stamp sit left; the actions are pushed to the right edge,
-              matching the prototype's row (markup 571–577). */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <button onClick={cycleTag} title="Change tag"
-              style={{
-                padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 800, flex: 'none',
-                color: n.color, background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
-              }}>
-              {n.tag}
-            </button>
-            <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{ago(n.created_at)}</span>
+  /** Empty is a delete-by-accident, so it reverts instead. */
+  const commit = () => {
+    const t = text.trim();
+    setEditing(false);
+    if (!t) { setText(n.text); return; }
+    if (t === n.text) return;
+    A.save.mutate({ id: n.id, patch: { text: t } });
+  };
 
-            <button onClick={() => onToTask(n)} className="hov" title="Turn into a task"
-              style={{
-                marginLeft: 'auto', flex: 'none', padding: '4px 9px', borderRadius: 7,
-                border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)',
-              }}>
-              → Task
-            </button>
-            <button onClick={() => A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } })}
-              className="hov" title={n.pinned ? 'Unpin' : 'Pin to top'}
-              style={{ flex: 'none', padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
-              {n.pinned ? '★' : '☆'}
-            </button>
-            <button onClick={() => A.removeWithUndo(n)} className="hov"
-              aria-label={`Delete note: ${n.text.slice(0, 30)}`} title="Delete note"
-              style={{ flex: 'none', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
-              <Icon name="trash" size={13} color="var(--tx3)" />
-            </button>
-          </div>
+  return (
+    <div className="blk" style={{
+      padding: '11px 12px', borderRadius: 12, background: 'var(--card2)',
+      border: `1px solid ${n.pinned ? 'color-mix(in srgb, var(--acc) 40%, transparent)' : 'var(--line)'}`,
+    }}>
+      {editing ? (
+        <textarea
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { setText(n.text); setEditing(false); }
+          }}
+          rows={Math.min(6, Math.max(1, text.split('\n').length))}
+          style={{
+            width: '100%', fontSize: 'var(--fs-sm)', lineHeight: 1.55, fontWeight: 500,
+            color: 'var(--tx)', background: 'transparent', resize: 'none', fontFamily: 'inherit',
+          }}
+        />
+      ) : (
+        <div
+          onClick={() => setEditing(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter') setEditing(true); }}
+          title="Click to edit"
+          style={{ fontSize: 'var(--fs-sm)', lineHeight: 1.55, fontWeight: 500, textWrap: 'pretty', cursor: 'text' }}
+        >
+          {n.text}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' }}>
+        <button onClick={cycleTag} title="Change tag"
+          style={{
+            padding: '3px 10px', borderRadius: 9999, fontSize: 'var(--fs-micro)', fontWeight: 700, flex: 'none',
+            color: n.color, background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
+          }}>
+          {n.tag}
+        </button>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{ago(n.created_at)}</span>
+        {n.pinned && (
+          <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--accTx)' }}>Pinned</span>
+        )}
+
+        {/* `.bh` hides these until hover where hover exists, and leaves them
+            visible at .6 on touch — see globals.css. */}
+        <div className="bh" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={() => onToTask(n)} className="hov" title="Turn into a task"
+            style={{
+              flex: 'none', padding: '4px 10px', borderRadius: 7,
+              border: '1px solid var(--line2)', fontSize: 'var(--fs-micro)', fontWeight: 600, color: 'var(--tx2)',
+            }}>
+            Make task
+          </button>
+          <button onClick={() => A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } })}
+            className="hov" title={n.pinned ? 'Unpin' : 'Pin to top'}
+            aria-label={n.pinned ? 'Unpin note' : 'Pin note to top'}
+            style={{ flex: 'none', width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+            <Icon name="pin" size={13} color={n.pinned ? 'var(--accTx)' : 'var(--tx2)'} />
+          </button>
+          <button onClick={() => A.removeWithUndo(n)} className="hov"
+            aria-label={`Delete note: ${n.text.slice(0, 30)}`} title="Delete note"
+            style={{ flex: 'none', width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+            <Icon name="trash" size={13} color="var(--tx2)" />
+          </button>
         </div>
       </div>
     </div>

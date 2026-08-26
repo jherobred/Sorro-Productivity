@@ -6,13 +6,15 @@ import { useQuery } from '@tanstack/react-query';
 import { TabRail } from './TabRail';
 import { Icon, type IconName } from './Icon';
 import { PAL, K } from '@/lib/pal';
+import { toast } from '@/lib/toast';
 import { supabase } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
-import { useEvents, type Ev } from '@/lib/events';
+import { useEvents, useEventActions, at, hhmm, type Ev } from '@/lib/events';
+import { CalendarGrid } from './calendar/DayGrid';
 import { PhoneHomeSkeleton } from './Skeleton';
 import { BuddyCompanion } from './BuddyCompanion';
 import { DailyQuests } from './DailyQuests';
@@ -40,7 +42,7 @@ import { SwipeableRow } from './SwipeableRow';
 const TABS = ['Dashboard', 'Projects', 'Agenda'] as const;
 type Tab = (typeof TABS)[number];
 
-const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
+const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 'var(--r-card)', padding: 'var(--pad-card)', boxShadow: 'var(--sh)' };
 
 export function PhoneHome({ name }: { name: string }) {
   const router = useRouter();
@@ -84,6 +86,25 @@ export function PhoneHome({ name }: { name: string }) {
   const overdue = open.filter((t) => t.due_on && t.due_on < today);
   const todaysEvents = events.filter((e) => sameDay(e.starts_at, today));
   const next = events.find((e) => new Date(e.ends_at).getTime() > Date.now()) ?? null;
+
+  // Countdown to the next block. `next` is the current-or-next event, so a
+  // block already running counts down to nothing — it says "Now" instead.
+  const nextMins = next ? Math.round((new Date(next.starts_at).getTime() - Date.now()) / 60_000) : 0;
+  const running = !!next && nextMins <= 0;
+  const untilShort = !next ? '' : running ? 'Now'
+    : nextMins >= 60 ? `${Math.floor(nextMins / 60)}h ${nextMins % 60}m` : `${nextMins}m`;
+
+  // The calendar's own day grid, embedded. `from` is this morning, so today is
+  // column 0; it parks an hour behind the current one.
+  const EA = useEventActions(from);
+  const [sel, setSel] = useState<string | null>(null);
+  const parkHour = Math.max(0, new Date().getHours() - 1);
+  const schedule = (t: Task, day: number, hour: number | null) => {
+    const date = new Date(at(from, day, hour ?? 9));
+    const due_on = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    TA.update.mutate({ id: t.id, patch: { due_at: hour === null ? null : date.toISOString(), due_on } });
+    toast(hour === null ? `${t.title} — no set time` : `${t.title} at ${hhmm(hour)}`);
+  };
 
   // Eight rings: habits first, then the standing money/tasks dials.
   type Ring = { n: string; c: string; pct: number; ic: IconName; go: () => void };
@@ -136,8 +157,8 @@ export function PhoneHome({ name }: { name: string }) {
         </button>
 
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.04em' }}>basedly</div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
+          <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 800, letterSpacing: '-.04em' }}>basedly</div>
+          <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
             {greeting()}{name ? `, ${name.split(' ')[0]}` : ''}
           </div>
         </div>
@@ -166,29 +187,81 @@ export function PhoneHome({ name }: { name: string }) {
 
       {tab === 'Dashboard' && !isPending && (
         <>
-          {/* What is next */}
-          <button onClick={() => router.push('/calendar/')} className="hov k-squish" style={{
-            ...CARD, width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 11,
-            padding: '13px 14px',
+          {/* Time until the next thing, then the day it sits in — the
+              calendar's own grid, not a summary of it. */}
+          <div style={{ ...CARD, padding: 'var(--pad-card)' }}>
+            {next ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                  <span style={{
+                    fontSize: 'var(--fs-2xl)', fontWeight: 700, letterSpacing: '-.03em',
+                    lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {untilShort}
+                  </span>
+                  {!running && <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 500, color: 'var(--tx2)' }}>until</span>}
+                </div>
+                <div style={{
+                  fontSize: 'var(--fs-lg)', fontWeight: 700, letterSpacing: '-.025em', marginTop: 'var(--sp-2)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {next.title}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 4, background: next.color || PAL.sky, flex: 'none' }} />
+                  <span style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+                    {whenLabel(next)}{next.location ? ` · ${next.location}` : ''}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, letterSpacing: '-.025em' }}>Nothing scheduled</div>
+                <div style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)', marginTop: 5 }}>
+                  {todaysEvents.length} today · {dueToday.length} due
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{
+            ...CARD, padding: 0, height: 340, marginTop: 10,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
-            <span style={{
-              width: 3, alignSelf: 'stretch', minHeight: 34, borderRadius: 2,
-              background: next?.color || PAL.sky, flex: 'none',
-            }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={KICKER}>{next ? 'Up next' : 'Today'}</span>
-              <span style={{
-                display: 'block', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', marginTop: 3,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {next ? next.title : 'Nothing scheduled'}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flex: 'none',
+              padding: 'var(--sp-3) var(--pad-card) var(--sp-2)',
+            }}>
+              <span style={KICKER}>Today</span>
+              <span style={{ fontSize: 'var(--fs-meta)', fontWeight: 500, color: 'var(--tx2)' }}>
+                {todaysEvents.length} event{todaysEvents.length === 1 ? '' : 's'}
               </span>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-                {next ? whenLabel(next) : `${todaysEvents.length} today · ${dueToday.length} due`}
-              </span>
-            </span>
-            <Icon name="chev" size={14} color="var(--tx3)" />
-          </button>
+              <button onClick={() => router.push('/calendar/')} className="hov"
+                style={{
+                  marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px',
+                  borderRadius: 7, fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--tx2)',
+                }}>
+                <span>Calendar</span>
+                <Icon name="chev" size={12} color="var(--tx2)" />
+              </button>
+            </div>
+
+            <CalendarGrid
+              days={1}
+              dayOffset={0}
+              parkHour={parkHour}
+              ws={from}
+              events={events}
+              tasks={tasks}
+              A={EA}
+              TA={TA}
+              sel={sel}
+              setSel={setSel}
+              openEvent={() => router.push('/calendar/')}
+              openSlot={() => router.push('/calendar/')}
+              onSchedule={schedule}
+            />
+          </div>
 
           {/* Overdue */}
           {overdue.length > 0 && (
@@ -199,7 +272,7 @@ export function PhoneHome({ name }: { name: string }) {
               border: `1px solid color-mix(in srgb, ${PAL.coral} 38%, transparent)`,
             }}>
               <Icon name="flag" size={15} color={PAL.coral} />
-              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700 }}>
+              <span style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 700 }}>
                 {overdue.length} overdue
               </span>
               <Icon name="chev" size={13} color={PAL.coral} />
@@ -251,7 +324,7 @@ export function PhoneHome({ name }: { name: string }) {
                     }}
                   >
                     <button onClick={() => router.push('/tasks/')} style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--tx)' }}>{t.title}</div>
+                      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--tx)' }}>{t.title}</div>
                       <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
                         {[1, 2, 3, 4, 5].map((v) => (
                           <span key={v} style={{
@@ -299,7 +372,7 @@ export function PhoneHome({ name }: { name: string }) {
                       <Icon name={r.ic} size={16} color={r.c} />
                     </span>
                     <span style={{
-                      fontSize: 8.5, fontWeight: 700, letterSpacing: '.02em', color: 'var(--tx3)',
+                      fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: '.02em', color: 'var(--tx3)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
                     }}>{r.n}</span>
                   </button>
@@ -317,17 +390,17 @@ export function PhoneHome({ name }: { name: string }) {
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={KICKER}>Scratchpad</span>
-                <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--tx3)' }}>{scratch.length}</span>
+                <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 600, color: 'var(--tx3)' }}>{scratch.length}</span>
               </span>
               <span style={{
-                display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--tx2)', marginTop: 3,
+                display: 'block', fontSize: 'var(--fs-sm)', fontWeight: 500, color: 'var(--tx2)', marginTop: 3,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {scratch[0]?.text ?? 'Nothing kept yet'}
               </span>
             </span>
             <button onClick={() => router.push('/home/')} className="acc"
-              style={{ flex: 'none', padding: '7px 12px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 10.5, fontWeight: 800 }}>
+              style={{ flex: 'none', padding: '7px 12px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 'var(--fs-meta)', fontWeight: 800 }}>
               Open
             </button>
           </div>
@@ -350,7 +423,7 @@ export function PhoneHome({ name }: { name: string }) {
               </span>
 
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ display: 'block', fontSize: 'var(--fs-body)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {p.name}
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7 }}>
@@ -360,14 +433,14 @@ export function PhoneHome({ name }: { name: string }) {
                       background: p.color, borderRadius: 2, transition: 'width .5s',
                     }} />
                   </span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                  <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
                     {p.progress}%
                   </span>
                 </span>
               </span>
 
               {p.deadline && (
-                <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: 'var(--tx3)' }}>
+                <span style={{ flex: 'none', fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--tx3)' }}>
                   {new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               )}
@@ -379,7 +452,7 @@ export function PhoneHome({ name }: { name: string }) {
           <button onClick={() => router.push('/projects/')} className="hov"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44,
-              borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx3)',
+              borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--tx3)',
             }}>
             <Icon name="proj" size={14} color="var(--tx3)" />
             Open the boards
@@ -392,8 +465,8 @@ export function PhoneHome({ name }: { name: string }) {
           {groupByDay(events).map(([day, list]) => (
             <div key={day}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '-.02em' }}>{dayLabel(day)}</span>
-                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{list.length}</span>
+                <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 800, letterSpacing: '-.02em' }}>{dayLabel(day)}</span>
+                <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--tx3)' }}>{list.length}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 {list.map((e) => (
@@ -404,16 +477,16 @@ export function PhoneHome({ name }: { name: string }) {
                     }}>
                     <span style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, background: e.color || PAL.sky, flex: 'none' }} />
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{ display: 'block', fontSize: 'var(--fs-sm)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {e.title}
                       </span>
                       {e.location && (
-                        <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ display: 'block', fontSize: 'var(--fs-meta)', color: 'var(--tx3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {e.location}
                         </span>
                       )}
                     </span>
-                    <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ flex: 'none', fontSize: 'var(--fs-meta)', fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
                       {e.all_day ? 'All day' : timeOf(e.starts_at)}
                     </span>
                   </button>
@@ -427,7 +500,7 @@ export function PhoneHome({ name }: { name: string }) {
           <button onClick={() => router.push('/calendar/')} className="hov"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44,
-              borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx3)',
+              borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--tx3)',
             }}>
             <Icon name="cal" size={14} color="var(--tx3)" />
             Open the calendar
@@ -464,24 +537,24 @@ export function PhoneHome({ name }: { name: string }) {
 /* ----------------------------------------------------------------- pieces */
 
 const KICKER: React.CSSProperties = {
-  fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
+  fontSize: 'var(--fs-micro)', fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx2)',
 };
 
 function SectionHead({ label, note, onAll }: { label: string; note: string; onAll: () => void }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '18px 0 2px' }}>
-        <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-.02em' }}>{label}</div>
+        <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800, letterSpacing: '-.02em' }}>{label}</div>
         <button onClick={onAll}
-          style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: 'var(--accTx)' }}>view all ›</button>
+          style={{ marginLeft: 'auto', fontSize: 'var(--fs-meta)', fontWeight: 700, color: 'var(--accTx)' }}>view all ›</button>
       </div>
-      <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 11 }}>{note}</div>
+      <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--tx3)', marginBottom: 11 }}>{note}</div>
     </>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '4px 2px' }}>{children}</div>;
+  return <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--tx3)', padding: '4px 2px' }}>{children}</div>;
 }
 
 /* ------------------------------------------------------------------ dates */

@@ -89,6 +89,39 @@
   --cols: repeat(3, 1fr);
 }
 
+/* ---- Fluid type + spacing ramp ------------------------------------------
+   Sizes track the window continuously rather than snapping at breakpoints:
+   each step interpolates from its floor at a 380px viewport to its ceiling at
+   1600px, and clamp() holds the ends. The intercept is in `rem`, not `px`, so
+   a reader who raises their browser font size still moves the whole ramp — a
+   pure-vw scale would ignore them.
+
+   The ramp replaced ad-hoc 9.5/10.5/11.5/12.5/13.5 sizes scattered through the
+   pages. Reach for a step, not a number. */
+:root {
+  --fs-micro: clamp(9.5px, 0.164vw + 0.555rem, 11.5px);  /* kickers, chips */
+  --fs-meta: clamp(10.5px, 0.205vw + 0.608rem, 13px);    /* stamps, counts */
+  --fs-sm: clamp(12px, 0.205vw + 0.701rem, 14.5px);      /* secondary body */
+  --fs-body: clamp(13px, 0.246vw + 0.754rem, 16px);      /* row titles */
+  --fs-lg: clamp(15px, 0.328vw + 0.859rem, 19px);        /* card headings */
+  --fs-xl: clamp(18px, 0.656vw + 0.969rem, 26px);        /* section titles */
+  --fs-2xl: clamp(26px, 1.475vw + 1.274rem, 44px);       /* the countdown */
+
+  /* Spacing stays on fixed steps. Fluid gaps make alignment drift between
+     neighbouring cards, which is the thing the indents are meant to fix. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  /* Card padding is the one spacing value worth scaling — it is what makes a
+     dashboard feel cramped on a small window and empty on a large one. */
+  --pad-card: clamp(14px, 0.656vw + 0.719rem, 22px);
+  --r-card: 16px;
+  --r-row: 10px;
+}
+
 /* Category palette (PAL) - Desaturated Warm Spot Tints */
 :root {
   --pal-coral: #FF6B6B;
