@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { TasksSkeleton } from '@/components/Skeleton';
 import { Page } from '@/components/Page';
@@ -442,6 +442,10 @@ function TaskRow({
   const shown = starHover || locked;
   const [popped, setPopped] = useState(0);
 
+  useEffect(() => {
+    setTitleVal(row.task.title);
+  }, [row.task.title]);
+
   const handleCommitEdit = () => {
     setEditing(false);
     const trimmed = titleVal.trim();
@@ -456,6 +460,7 @@ function TaskRow({
   return (
     <div className={leaving ? 'leaving' : ''} style={{ position: 'relative', overflow: 'hidden' }}>
       <SwipeableRow
+        disabled={editing}
         onSwipeRight={onCheck}
         onSwipeLeft={onDelete}
         rightActionIcon="check"
@@ -508,13 +513,18 @@ function TaskRow({
                 onChange={(e) => setTitleVal(e.target.value)}
                 onBlur={handleCommitEdit}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCommitEdit();
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCommitEdit();
+                  }
                   if (e.key === 'Escape') {
+                    e.preventDefault();
                     setTitleVal(row.task.title);
                     setEditing(false);
                   }
                 }}
                 onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
                   fontSize: 13.5,
@@ -523,7 +533,7 @@ function TaskRow({
                   background: 'var(--card2)',
                   border: '1px solid var(--acc)',
                   borderRadius: 6,
-                  padding: '3px 7px',
+                  padding: '4px 8px',
                   outline: 'none',
                 }}
               />
@@ -582,11 +592,11 @@ function TaskRow({
                   placeItems: 'center',
                   background: 'transparent',
                   border: 'none',
-                  cursor: 'pointer',
                   color: 'var(--tx3)',
+                  cursor: 'pointer',
                 }}
               >
-                <Icon name="pen" size={12} color="var(--tx3)" />
+                <Icon name="edit" size={13} color="var(--tx3)" />
               </button>
             )}
 
@@ -667,38 +677,102 @@ function TaskDetail({
   onDelete: () => void;
 }) {
   const [title, setTitle] = useState(task.title);
-  const [notes, setNotes] = useState(task.notes);
+  const [notes, setNotes] = useState(task.notes ?? '');
   const stars = task.stars || 0;
+
+  useEffect(() => {
+    setTitle(task.title);
+    setNotes(task.notes ?? '');
+  }, [task.id, task.title, task.notes]);
+
+  const handleCommitTitle = () => {
+    const trimmed = title.trim();
+    if (trimmed && trimmed !== task.title) {
+      onPatch({ title: trimmed });
+    }
+  };
+
+  const handleCommitNotes = () => {
+    if (notes !== (task.notes ?? '')) {
+      onPatch({ notes });
+    }
+  };
+
+  const handleDone = () => {
+    handleCommitTitle();
+    handleCommitNotes();
+    onClose();
+  };
 
   const dues: { n: string; v: string | null }[] = [
     { n: 'Today', v: new Date().toISOString().slice(0, 10) },
     { n: 'Tomorrow', v: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
     { n: 'Next week', v: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10) },
-    { n: 'None', v: null },
+    { n: 'Clear', v: null },
+  ];
+
+  const priorities: { v: 'high' | 'med' | 'low' | null; n: string; c: string }[] = [
+    { v: 'high', n: 'High', c: PAL.coral },
+    { v: 'med', n: 'Medium', c: PAL.amber },
+    { v: 'low', n: 'Low', c: PAL.mint },
+    { v: null, n: 'None', c: 'var(--tx3)' },
   ];
 
   return (
     <>
-      <div onClick={onClose} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.44)', zIndex: 30 }} />
+      <div onClick={handleDone} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.44)', zIndex: 30 }} />
       <div className="sheet" style={{
         position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 31,
         maxHeight: 'calc(100% - 56px)', overflowY: 'auto',
         background: 'var(--card)', borderRadius: '22px 22px 0 0', padding: '20px 22px 24px',
+        boxShadow: 'var(--shl)', border: '1px solid var(--line2)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em' }}>{title}</div>
-          <button onClick={onDelete} className="hov" title="Delete task"
-            style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)' }}>{title || 'Task Detail'}</div>
+          <button onClick={onDelete} className="hov k-squish" title="Delete task"
+            style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer' }}>
             <Icon name="trash" size={14} color="var(--tx2)" />
           </button>
-          <button onClick={onClose} className="hov" style={{ width: 26, height: 26, borderRadius: 8, color: 'var(--tx3)', fontSize: 15 }}>×</button>
+          <button onClick={handleDone} className="hov k-squish" style={{ width: 26, height: 26, borderRadius: 8, color: 'var(--tx3)', fontSize: 15, background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '14px 22px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px 22px' }}>
           <div>
             <div style={KICKER}>Title</div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title !== task.title && onPatch({ title })}
-              style={{ width: '100%', marginTop: 6, padding: '8px 11px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 13, fontWeight: 600, color: 'var(--tx)' }} />
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleCommitTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleCommitTitle();
+                  (e.target as HTMLElement).blur();
+                }
+              }}
+              placeholder="Task title"
+              style={{
+                width: '100%', marginTop: 6, padding: '8px 11px', borderRadius: 10,
+                border: '1px solid var(--line2)', fontSize: 13, fontWeight: 600,
+                color: 'var(--tx)', background: 'var(--card2)', outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <div style={KICKER}>Priority</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {priorities.map((p) => (
+                <button
+                  key={p.n}
+                  onClick={() => onPatch({ priority: p.v })}
+                  style={CHIP(task.priority === p.v || (!task.priority && p.v === null))}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: p.c }} />
+                  {p.n}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -714,11 +788,25 @@ function TaskDetail({
           </div>
 
           <div>
-            <div style={KICKER}>Due</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+            <div style={KICKER}>Due Date</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
               {dues.map((d) => (
                 <button key={d.n} onClick={() => onPatch({ due_on: d.v })} style={CHIP(task.due_on === d.v)}>{d.n}</button>
               ))}
+              <input
+                type="date"
+                value={task.due_on ?? ''}
+                onChange={(e) => onPatch({ due_on: e.target.value || null })}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: 8,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx)',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                }}
+              />
             </div>
           </div>
 
@@ -727,7 +815,7 @@ function TaskDetail({
             <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6 }}>
               {[1, 2, 3, 4, 5].map((v) => (
                 <button key={v} onClick={() => onPatch({ stars: stars === v ? 0 : v })} title={`${v} ${v === 1 ? 'star' : 'stars'}`}
-                  style={{ fontSize: 16, lineHeight: 1, padding: '0 1px', color: v <= stars ? 'var(--accTx)' : 'var(--line2)', transition: 'color .16s' }}>
+                  style={{ fontSize: 16, lineHeight: 1, padding: '0 1px', color: v <= stars ? 'var(--accTx)' : 'var(--line2)', transition: 'color .16s', background: 'none', border: 'none', cursor: 'pointer' }}>
                   ★
                 </button>
               ))}
@@ -740,14 +828,24 @@ function TaskDetail({
 
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
           <div style={KICKER}>Notes</div>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== task.notes && onPatch({ notes })}
-            rows={3} placeholder="Add a note…"
-            style={{ width: '100%', marginTop: 6, padding: '10px 12px', borderRadius: 11, border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical', fontFamily: 'inherit' }} />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={handleCommitNotes}
+            rows={3}
+            placeholder="Add a note…"
+            style={{
+              width: '100%', marginTop: 6, padding: '10px 12px', borderRadius: 11,
+              border: '1px solid var(--line2)', background: 'var(--card2)',
+              fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical',
+              fontFamily: 'inherit', outline: 'none',
+            }}
+          />
         </div>
 
         <div style={{ display: 'flex', gap: 9, marginTop: 18 }}>
-          <button onClick={onClose} className="acc"
-            style={{ padding: '11px 20px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 13, fontWeight: 800 }}>
+          <button onClick={handleDone} className="acc k-squish"
+            style={{ padding: '11px 24px', borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
             Done
           </button>
         </div>

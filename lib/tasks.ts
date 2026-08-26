@@ -101,7 +101,17 @@ const CREATE = defineMutation('task.create', async (v: NewTask) => {
 });
 
 const UPDATE = defineMutation('task.update', async (v: { id: string; patch: Partial<Task> }) => {
-  const { error } = await supabase.from('bd_tasks').update(v.patch).eq('id', v.id);
+  const sanitizedPatch: Record<string, unknown> = { ...v.patch };
+  if ('listId' in sanitizedPatch && !('list_id' in sanitizedPatch)) {
+    sanitizedPatch.list_id = (sanitizedPatch as Record<string, unknown>).listId;
+    delete (sanitizedPatch as Record<string, unknown>).listId;
+  }
+  if (sanitizedPatch.list_id === '') sanitizedPatch.list_id = null;
+  if (sanitizedPatch.due_on === '') sanitizedPatch.due_on = null;
+  if (sanitizedPatch.due_at === '') sanitizedPatch.due_at = null;
+  if (sanitizedPatch.priority === '') sanitizedPatch.priority = null;
+
+  const { error } = await supabase.from('bd_tasks').update(sanitizedPatch).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -174,7 +184,10 @@ export function useTaskActions() {
     mutationKey: UPDATE,
     onMutate: (v: { id: string; patch: Partial<Task> }) =>
       optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, ...v.patch } : t))),
-    onError: rollback,
+    onError: (err, _v, ctx) => {
+      rollback(err, _v, ctx);
+      toast(err instanceof Error ? err.message : 'Could not update task');
+    },
     onSettled: settle,
   });
 
