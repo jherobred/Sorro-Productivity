@@ -197,14 +197,14 @@ export function Journal() {
         * sit still while the text slid over them.
         */}
       <textarea
-        className="navsb"
+        className="navsb writing"
         value={text}
         onChange={(e) => write(e.target.value)}
         placeholder="How was today?"
         aria-label={`Journal entry for ${dateLong}`}
         style={{
           width: '100%', flex: 1, minHeight: LINE_H * 8, resize: 'none', overflowY: 'auto',
-          fontFamily: SERIF, fontSize: 13.5, lineHeight: `${LINE_H}px`, color: 'var(--tx)',
+          fontFamily: SERIF, fontSize: 'var(--fs-note)', lineHeight: `${LINE_H}px`, color: 'var(--tx)',
           padding: 0, background: 'transparent',
           backgroundImage: `repeating-linear-gradient(180deg, transparent 0 ${LINE_H - 1}px, var(--line) ${LINE_H - 1}px ${LINE_H}px)`,
           backgroundAttachment: 'local',

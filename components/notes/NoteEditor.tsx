@@ -189,7 +189,7 @@ export function NoteEditor({
         flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--card)',
         borderRadius: 14, boxShadow: 'var(--sh)', padding: phone ? '14px 14px 40px' : '20px 26px 60px',
       }}>
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+        <div style={{ width: 'var(--note-measure)', margin: '0 auto' }}>
           <textarea
             ref={(el) => { if (el) autosize(el); }}
             value={title}
@@ -199,10 +199,11 @@ export function NoteEditor({
             }}
             placeholder="Title"
             aria-label="Note title"
+            className="writing"
             rows={1}
             style={{
               width: '100%', resize: 'none', overflow: 'hidden', fontFamily: 'inherit',
-              fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.028em', lineHeight: 1.25,
+              fontSize: phone ? 22 : 27, fontWeight: 700, letterSpacing: '-.028em', lineHeight: 1.25,
               color: 'var(--tx)',
             }} />
 
@@ -221,10 +222,11 @@ export function NoteEditor({
               onKeyDown={onKeyDown}
               placeholder="Start writing. # for a heading, - for a list, [[ ]] to link another note."
               aria-label="Note body"
+              className="writing"
               rows={6}
               style={{
                 width: '100%', minHeight: 320, resize: 'none', overflow: 'hidden',
-                fontSize: 13.5, lineHeight: 1.75, color: 'var(--tx)', fontFamily: 'inherit',
+                fontSize: 'var(--fs-note)', lineHeight: 1.75, color: 'var(--tx)', fontFamily: 'inherit',
               }} />
           )}
 
@@ -431,7 +433,7 @@ function ReadView({
                 {l.done && <Icon name="check" size={11} color="var(--ink)" />}
               </button>
               <span style={{
-                fontSize: 13.5, lineHeight: 1.7,
+                fontSize: 'var(--fs-note)', lineHeight: 1.7,
                 ...(l.done ? { textDecoration: 'line-through', color: 'var(--tx3)' } : { color: 'var(--tx)' }),
               }}>{inline(l.text)}</span>
             </div>
@@ -443,7 +445,7 @@ function ReadView({
               {l.kind === 'bullet'
                 ? <span aria-hidden style={{ width: 6, height: 6, flex: 'none', borderRadius: 3, background: 'var(--tx3)', marginTop: 9 }} />
                 : <span aria-hidden style={{ flex: 'none', fontSize: 13, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{l.n}.</span>}
-              <span style={{ fontSize: 13.5, lineHeight: 1.7, color: 'var(--tx)' }}>{inline(l.text)}</span>
+              <span style={{ fontSize: 'var(--fs-note)', lineHeight: 1.7, color: 'var(--tx)' }}>{inline(l.text)}</span>
             </div>
           );
         }
@@ -466,7 +468,7 @@ function ReadView({
         }
         const h = HEADING[l.kind];
         if (h) return <div key={i} style={{ ...h, color: 'var(--tx)' }}>{inline(l.text)}</div>;
-        return <p key={i} style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--tx)', margin: '2px 0' }}>{inline(l.text)}</p>;
+        return <p key={i} style={{ fontSize: 'var(--fs-note)', lineHeight: 1.75, color: 'var(--tx)', margin: '2px 0' }}>{inline(l.text)}</p>;
       })}
     </div>
   );

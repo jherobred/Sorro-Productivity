@@ -352,6 +352,40 @@ body {
   border-radius: inherit;
 }
 
+/* Writing surfaces opt out of the ring.
+   Three rules above put a 2px accent rectangle around whatever has focus, and
+   on a note that meant the title and the whole body drew a box the moment you
+   typed in them — a page of prose wearing a form field. `.writing` is only for
+   full-width text surfaces where the caret is already an unambiguous position
+   indicator, so 2.4.7 is still met: the caret is painted in the accent and
+   thickened so it is impossible to miss, and every other control on the screen
+   keeps its ring. Do not put this on a short input sitting in a row of
+   controls — there the caret is not enough to say which field you are in.
+
+   Specificity: (0,2,0) here against (0,1,1) for the `:is(...)` rule, so this
+   wins wherever it lands in the cascade. */
+.writing:focus,
+.writing:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.writing {
+  caret-color: var(--acc);
+  caret-shape: bar;
+}
+@supports not (caret-shape: bar) {
+  /* Safari and older Chrome: the caret is the default 1px. Nothing to widen it
+     in CSS, so leave the colour doing the work rather than faking a caret. */
+  .writing { caret-color: var(--acc); }
+}
+
+/* The note reading measure. 760px of 13.5px type ran to about 103 characters a
+   line — roughly a third past where the eye reliably finds the next line. */
+:root {
+  --fs-note: clamp(14px, 0.164vw + 0.826rem, 16px);
+  --note-measure: min(70ch, 100%);
+}
+
 /* Skip link — first tab stop, hidden until focused (WCAG 2.4.1). */
 .skip {
   position: fixed; left: 10px; top: 10px; z-index: 200;

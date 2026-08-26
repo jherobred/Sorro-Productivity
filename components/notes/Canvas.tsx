@@ -1036,6 +1036,7 @@ function CardEditor({ text, onChange, onDone }: { text: string; onChange: (t: st
       onBlur={onDone}
       onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.blur(); }}
       placeholder="Type…"
+      className="writing"
       style={{
         width: '100%', height: '100%', padding: '9px 11px', resize: 'none',
         fontSize: 12, lineHeight: 1.45, fontFamily: 'inherit', color: 'var(--tx)', background: 'transparent',
