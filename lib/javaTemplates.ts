@@ -139,6 +139,73 @@ export const JAVA_TEMPLATES: JavaTemplate[] = [
 }`,
   },
   {
+    id: 'binary-tree',
+    name: 'BinaryTree3D.java',
+    category: 'Data Structures',
+    description: '3D hierarchical tree structure with dynamic node traversal and depth levels',
+    src: `public class BinaryTree3D {
+    static class Node {
+        int val;
+        Node left, right;
+        Node(int v) { this.val = v; }
+    }
+
+    public static void main(String[] args) {
+        Node root = new Node(50);
+        root.left = new Node(30);
+        root.right = new Node(70);
+        root.left.left = new Node(20);
+        root.left.right = new Node(40);
+        root.right.left = new Node(60);
+        root.right.right = new Node(80);
+
+        System.out.println("Inorder traversal of 3D Binary Tree:");
+        inorder(root);
+        System.out.println("Tree traversal completed!");
+    }
+
+    static void inorder(Node root) {
+        if (root != null) {
+            inorder(root.left);
+            System.out.println("Visited Node: " + root.val);
+            inorder(root.right);
+        }
+    }
+}`,
+  },
+  {
+    id: 'graph-bfs',
+    name: 'GraphBFS3D.java',
+    category: 'Algorithms',
+    description: '3D graph network node search and queue exploration',
+    src: `public class GraphBFS3D {
+    public static void main(String[] args) {
+        int nodes = 6;
+        int[][] adj = {
+            {0, 1, 1, 0, 0, 0},
+            {1, 0, 0, 1, 1, 0},
+            {1, 0, 0, 0, 1, 1},
+            {0, 1, 0, 0, 0, 1},
+            {0, 1, 1, 0, 0, 1},
+            {0, 0, 1, 1, 1, 0}
+        };
+
+        System.out.println("3D Graph Exploration starting from Node 0:");
+        boolean[] visited = new boolean[nodes];
+        visited[0] = true;
+        System.out.println("Active Root Node: 0");
+
+        for (int i = 0; i < nodes; i++) {
+            if (adj[0][i] == 1 && !visited[i]) {
+                visited[i] = true;
+                System.out.println("Discovered neighbor node: " + i);
+            }
+        }
+        System.out.println("BFS Wave completed in 3D space!");
+    }
+}`,
+  },
+  {
     id: 'fibonacci-memo',
     name: 'FibonacciSeries.java',
     category: 'Data Structures',

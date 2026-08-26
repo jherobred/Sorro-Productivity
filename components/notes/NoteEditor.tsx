@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import katex from 'katex';
 import { Icon, type IconName } from '../Icon';
+import { MathEquationEditor } from './MathEquationEditor';
+import { MathSketchpad } from './MathSketchpad';
 import { PAL } from '@/lib/pal';
 import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
@@ -10,22 +13,6 @@ import {
   type Line, type LineKind,
 } from '@/lib/md';
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
-
-/**
- * One note, one document, one write.
- *
- * The editor before this one kept every paragraph in its own database row, and
- * everything hard about it came from that: a first block written before its
- * note existed failed a foreign key and took the text with it, positions had to
- * be renumbered on every Enter, and an overlay of unsaved per-block text
- * existed purely to survive the refetches the writes themselves triggered.
- *
- * A note is markdown in one column now. Typing edits a string, a quiet moment
- * writes the string, and there is no ordering left to get wrong. Write mode is
- * the source, the way Obsidian's is; Read renders it. The toolbar is Evernote's
- * — the same buttons, applied as markers, so a phone keyboard never has to type
- * `- [ ]` by hand.
- */
 
 const SAVE_DEBOUNCE_MS = 600;
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
@@ -48,11 +35,16 @@ export function NoteEditor({
   const [body, setBody] = useState(note.body);
   const [read, setRead] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [mathEditorOpen, setMathEditorOpen] = useState(false);
+  const [sketchpadOpen, setSketchpadOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
 
-  // Switching notes loads the new one. Anything unsaved from the old one is
-  // flushed by the effect below, which is keyed on the same id.
-  useEffect(() => { setTitle(note.title); setBody(note.body); setDirty(false); }, [note.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching notes loads the new one.
+  useEffect(() => {
+    setTitle(note.title);
+    setBody(note.body);
+    setDirty(false);
+  }, [note.id]);
 
   /* --------------------------------------------------------------- saving */
 
@@ -73,15 +65,6 @@ export function NoteEditor({
     }, SAVE_DEBOUNCE_MS);
   }, [note.id]);
 
-  /**
-   * Leaving the note must not strand the last few characters in a timer that
-   * never fires.
-   *
-   * Keyed on the note id and reading the save through a ref, because the
-   * callback prop is a new function every render: depending on it ran this
-   * cleanup on every keystroke, flushing the debounce instantly and turning a
-   * sentence back into one write per character.
-   */
   useEffect(() => {
     const id = note.id;
     return () => {
@@ -137,6 +120,24 @@ export function NoteEditor({
   const kind = (k: LineKind) => edit((b, f, t) => applyKind(b, f, t, k));
   const mark = (m: string) => edit((b, f, t) => wrap(b, f, t, m));
 
+  const insertLatexBlock = (latex: string) => {
+    edit((b, f, t) => {
+      const block = `\n$$\n${latex}\n$$\n`;
+      return { body: `${b.slice(0, f)}${block}${b.slice(t)}`, from: f + block.length, to: f + block.length };
+    });
+    setMathEditorOpen(false);
+    toast('Equation inserted');
+  };
+
+  const insertSketch = (dataUrl: string) => {
+    edit((b, f, t) => {
+      const sketchMarkdown = `\n![math-sketch](${dataUrl})\n`;
+      return { body: `${b.slice(0, f)}${sketchMarkdown}${b.slice(t)}`, from: f + sketchMarkdown.length, to: f + sketchMarkdown.length };
+    });
+    setSketchpadOpen(false);
+    toast('Math sketch inserted');
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
 
@@ -152,10 +153,10 @@ export function NoteEditor({
       const key = e.key.toLowerCase();
       if (key === 'b') { e.preventDefault(); mark('**'); }
       if (key === 'i') { e.preventDefault(); mark('*'); }
+      if (key === 'm') { e.preventDefault(); mark('$'); }
       if (key === 'e') { e.preventDefault(); setRead((v) => !v); }
     }
 
-    // Tab indents inside the note instead of leaving it.
     if (e.key === 'Tab') {
       e.preventDefault();
       const at = el.selectionStart;
@@ -178,6 +179,8 @@ export function NoteEditor({
         onToggleRead={() => setRead((v) => !v)}
         onKind={kind}
         onMark={mark}
+        onOpenMath={() => setMathEditorOpen(true)}
+        onOpenSketch={() => setSketchpadOpen(true)}
         onDivider={() => edit((b, f) => ({ body: `${b.slice(0, f)}\n---\n${b.slice(f)}`, from: f + 5, to: f + 5 }))}
         onLink={() => edit((b, f, t) => {
           const inner = b.slice(f, t) || 'note title';
@@ -219,7 +222,7 @@ export function NoteEditor({
               value={body}
               onChange={(e) => { setBodyAndQueue(e.target.value); autosize(e.target); }}
               onKeyDown={onKeyDown}
-              placeholder="Start writing. # for a heading, - for a list, [[ ]] to link another note."
+              placeholder="Start writing. # for heading, $$ for math block, $..$ for inline equation, [[ ]] to link notes."
               aria-label="Note body"
               rows={6}
               style={{
@@ -257,6 +260,20 @@ export function NoteEditor({
           )}
         </div>
       </div>
+
+      {/* Math LaTeX Formula Composer Modal */}
+      {mathEditorOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
+          <MathEquationEditor onInsert={insertLatexBlock} onClose={() => setMathEditorOpen(false)} />
+        </div>
+      )}
+
+      {/* Interactive Math Sketchpad Modal */}
+      {sketchpadOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
+          <MathSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -264,13 +281,15 @@ export function NoteEditor({
 /* ------------------------------------------------------------------ toolbar */
 
 function Toolbar({
-  phone, read, onBack, onToggleRead, onKind, onMark, onDivider, onLink, onDelete,
+  phone, read, onBack, onToggleRead, onKind, onMark, onOpenMath, onOpenSketch, onDivider, onLink, onDelete,
 }: {
   phone: boolean; read: boolean;
   onBack?: () => void;
   onToggleRead: () => void;
   onKind: (k: LineKind) => void;
   onMark: (m: string) => void;
+  onOpenMath: () => void;
+  onOpenSketch: () => void;
   onDivider: () => void;
   onLink: () => void;
   onDelete: () => void;
@@ -307,6 +326,11 @@ function Toolbar({
       {btn('Bold', 'text', () => onMark('**'), 'B')}
       {btn('Italic', 'text', () => onMark('*'), 'I')}
       {btn('Code', 'code', () => onMark('`'))}
+      {rule}
+      {/* Math Features */}
+      {btn('Insert LaTeX Math ($$)', 'spark', onOpenMath, '∑')}
+      {btn('Inline Math ($)', 'spark', () => onMark('$'), '$')}
+      {btn('Draw Math Sketch', 'pen', onOpenSketch)}
       {rule}
       {btn('Bulleted list', 'list', () => onKind('bullet'))}
       {btn('Numbered list', 'sort', () => onKind('number'), '1.')}
@@ -401,6 +425,21 @@ function ReadView({
         {s.text}
       </code>
     );
+    if (s.s === 'math') {
+      try {
+        const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
+        return <span key={i} dangerouslySetInnerHTML={{ __html: mathHtml }} style={{ padding: '0 2px' }} />;
+      } catch {
+        return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
+      }
+    }
+    if (s.s === 'image') {
+      return (
+        <span key={i} style={{ display: 'block', margin: '8px 0', textAlign: 'center' }}>
+          <img src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--line2)', background: '#141620' }} />
+        </span>
+      );
+    }
     return <span key={i}>{s.text}</span>;
   });
 
@@ -409,6 +448,32 @@ function ReadView({
       {lines.map((l, i) => {
         if (l.kind === 'blank') return <div key={i} style={{ height: 10 }} />;
         if (l.kind === 'divider') return <hr key={i} style={{ border: 0, borderTop: '1px solid var(--line2)', margin: '14px 0' }} />;
+        if (l.kind === 'math') {
+          try {
+            const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
+            return (
+              <div
+                key={i}
+                className="k-math-block"
+                style={{
+                  margin: '12px 0', padding: '14px 18px', borderRadius: 12,
+                  background: 'var(--card2)', border: '1px solid var(--line2)',
+                  overflowX: 'auto', textAlign: 'center', fontSize: 16, color: 'var(--tx)',
+                }}
+                dangerouslySetInnerHTML={{ __html: blockHtml }}
+              />
+            );
+          } catch {
+            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)' }}>$$\n{l.text}\n$$</pre>;
+          }
+        }
+        if (l.kind === 'sketch') {
+          return (
+            <div key={i} style={{ margin: '12px 0', textAlign: 'center' }}>
+              <img src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line2)', background: '#141620' }} />
+            </div>
+          );
+        }
         if (l.kind === 'code') {
           return (
             <pre key={i} className="navsb" style={{

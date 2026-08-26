@@ -20,7 +20,7 @@
 export type LineKind =
   | 'p' | 'h1' | 'h2' | 'h3'
   | 'bullet' | 'number' | 'todo'
-  | 'quote' | 'callout' | 'code' | 'divider' | 'blank';
+  | 'quote' | 'callout' | 'code' | 'math' | 'sketch' | 'divider' | 'blank';
 
 export type Line = {
   /** Index into the source array — what an edit writes back to. */
@@ -49,8 +49,7 @@ const RULES: [RegExp, LineKind][] = [
 
 /**
  * Split a document into rendered lines. Fenced code collapses into a single
- * `code` line holding the run, so a fence renders as one box rather than three
- * odd-looking paragraphs.
+ * `code` line holding the run, and block math ($$...$$) collapses into a `math` line.
  */
 export function parse(body: string): Line[] {
   const src = body.split('\n');
@@ -68,6 +67,33 @@ export function parse(body: string): Line[] {
       out.push({ i: start, kind: 'code', text: buf.join('\n'), done: false, n: 0 });
       counter = 0;
       continue;
+    }
+
+    if (raw.startsWith('$$')) {
+      const start = i;
+      // If single line $$...$$
+      if (raw.endsWith('$$') && raw.length > 2 && raw.slice(2, -2).trim()) {
+        out.push({ i: start, kind: 'math', text: raw.slice(2, -2).trim(), done: false, n: 0 });
+        counter = 0;
+        continue;
+      }
+      const buf: string[] = [];
+      const firstLineContent = raw.slice(2).trim();
+      if (firstLineContent) buf.push(firstLineContent);
+      i++;
+      while (i < src.length && !src[i].startsWith('$$')) buf.push(src[i++]);
+      out.push({ i: start, kind: 'math', text: buf.join('\n'), done: false, n: 0 });
+      counter = 0;
+      continue;
+    }
+
+    if (raw.startsWith('![math-sketch](') || raw.startsWith('![sketch](')) {
+      const match = raw.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (match) {
+        out.push({ i, kind: 'sketch', text: match[2], done: false, n: 0 });
+        counter = 0;
+        continue;
+      }
     }
 
     const hit = RULES.find(([re]) => re.test(raw));
@@ -99,19 +125,30 @@ export type Span =
   | { s: 'bold'; text: string }
   | { s: 'italic'; text: string }
   | { s: 'code'; text: string }
+  | { s: 'math'; text: string }
+  | { s: 'image'; text: string; alt: string; url: string }
   | { s: 'link'; text: string };
 
-/** Inline marks inside one line. Obsidian's set, minus the ones nobody types. */
+/** Inline marks inside one line including inline LaTeX math ($...$). */
 export function spans(text: string): Span[] {
   const out: Span[] = [];
-  const re = /\[\[([^\]]+)\]\]|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`/g;
+  const re = /!\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\]|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`|\$([^\$]+)\$/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push({ s: 'text', text: text.slice(last, m.index) });
-    if (m[1] !== undefined) out.push({ s: 'link', text: m[1].trim() });
-    else if (m[2] !== undefined) out.push({ s: 'bold', text: m[2] });
-    else if (m[3] !== undefined) out.push({ s: 'italic', text: m[3] });
-    else out.push({ s: 'code', text: m[4] });
+    if (m[1] !== undefined && m[2] !== undefined) {
+      out.push({ s: 'image', text: m[1], alt: m[1], url: m[2] });
+    } else if (m[3] !== undefined) {
+      out.push({ s: 'link', text: m[3].trim() });
+    } else if (m[4] !== undefined) {
+      out.push({ s: 'bold', text: m[4] });
+    } else if (m[5] !== undefined) {
+      out.push({ s: 'italic', text: m[5] });
+    } else if (m[6] !== undefined) {
+      out.push({ s: 'code', text: m[6] });
+    } else if (m[7] !== undefined) {
+      out.push({ s: 'math', text: m[7] });
+    }
     last = m.index! + m[0].length;
   }
   if (last < text.length) out.push({ s: 'text', text: text.slice(last) });
@@ -140,7 +177,7 @@ export function toggleTask(body: string, lineIndex: number): string {
 export const PREFIX: Partial<Record<LineKind, string>> = {
   h1: '# ', h2: '## ', h3: '### ',
   bullet: '- ', number: '1. ', todo: '- [ ] ',
-  quote: '> ', callout: '|| ',
+  quote: '> ', callout: '|| ', math: '$$ ',
 };
 
 const ANY_MARKER = /^(#{1,3} |- \[[ xX]\] |[-*+] |\d+\. |> |\|\| )/;

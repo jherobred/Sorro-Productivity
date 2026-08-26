@@ -22,7 +22,7 @@ export type Sort = 'updated' | 'created' | 'title';
 const SORT_LABEL: Record<Sort, string> = { updated: 'Date updated', created: 'Date created', title: 'Title' };
 
 export function NoteList({
-  notebook, notes, tags, selected, phone, onPick, onNew, onDelete, onMove, onRename, notebooks,
+  notebook, notes, tags, selected, phone, onPick, onNew, onNewMathNote, onDelete, onMove, onRename, notebooks,
 }: {
   notebook: Notebook;
   notes: Note[];
@@ -31,6 +31,7 @@ export function NoteList({
   phone: boolean;
   onPick: (id: string) => void;
   onNew: () => void;
+  onNewMathNote?: () => void;
   onDelete: (n: Note) => void;
   onMove: (n: Note, notebookId: string) => void;
   onRename: (n: Note, title: string) => void;
@@ -116,6 +117,12 @@ export function NoteList({
           style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
           <Icon name="bookPlus" size={16} color="var(--acc)" />
         </button>
+        {onNewMathNote && (
+          <button onClick={onNewMathNote} className="hov tap" title="New Math Equation Note" aria-label="New Math Equation Note"
+            style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 800, color: 'var(--accTx)' }}>
+            ∑
+          </button>
+        )}
         <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY, label: 'Sort', items: sortMenu() })}
           className="hov tap" title="Sort" aria-label="Sort notes"
           style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center' }}>

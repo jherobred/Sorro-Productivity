@@ -121,16 +121,44 @@ export default function NotebooksPage() {
 
   const newNotebook = () => {
     const id = crypto.randomUUID();
-    A.newNotebook.mutate({ id, name: 'New notebook', color: PAL.violet, position: notebooks.length });
+    const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const name = `Notebook · ${formattedDate}`;
+    A.newNotebook.mutate({ id, name, color: PAL.violet, position: notebooks.length });
     setNbId(id);
     setNoteId(null);
   };
 
-  const newNote = (title = 'Untitled') => {
+  const newNote = (title?: string) => {
     if (!nbId) return;
     const id = crypto.randomUUID();
-    A.newNote.mutate({ id, notebook_id: nbId, title, body: '' });
+    const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const noteTitle = title || `Note · ${formattedDate}`;
+    A.newNote.mutate({ id, notebook_id: nbId, title: noteTitle, body: '' });
     setNoteId(id);
+  };
+
+  const newMathNote = () => {
+    if (!nbId) return;
+    const id = crypto.randomUUID();
+    const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const title = `Math Equation · ${formattedDate}`;
+    const body = `# ${title}
+
+$$
+f(x) = \\int_{0}^{\\infty} e^{-x^2} \\, dx = \\frac{\\sqrt{\\pi}}{2}
+$$
+
+### Proof & Derivation
+1. Let $I = \\int_{0}^{\\infty} e^{-x^2} dx$
+2. In polar coordinates:
+$$
+I^2 = \\int_{0}^{\\pi/2} \\int_{0}^{\\infty} e^{-r^2} r \\, dr \\, d\\theta = \\frac{\\pi}{4}
+$$
+3. Therefore $I = \\frac{\\sqrt{\\pi}}{2}$.
+`;
+    A.newNote.mutate({ id, notebook_id: nbId, title, body });
+    setNoteId(id);
+    toast('Created Math Equation Note');
   };
 
   /** Open a note wherever it lives — a `[[link]]` can point into another notebook. */
@@ -244,6 +272,7 @@ export default function NotebooksPage() {
                     selected={noteId} phone={phone}
                     onPick={setNoteId}
                     onNew={() => newNote()}
+                    onNewMathNote={newMathNote}
                     onDelete={removeNote}
                     onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
                     onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />

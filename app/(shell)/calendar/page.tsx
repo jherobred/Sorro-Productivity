@@ -659,7 +659,7 @@ function Grid({
 
                 <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true)} className="hov"
                   title="Add an all-day item" aria-label="Add an all-day item"
-                  style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px' }}>
+                  style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
                 </button>
               </div>
@@ -719,6 +719,7 @@ function Grid({
                     style={{
                       position: 'absolute', left: 0, right: 0,
                       top: `${(hi / SPAN) * 100}%`, height: `${(1 / SPAN) * 100}%`,
+                      background: 'transparent', border: 'none', cursor: 'pointer', zIndex: 1,
                     }}
                   />
                 ))}

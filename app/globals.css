@@ -3,6 +3,7 @@
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
+@import 'katex/dist/katex.min.css';
 
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
    its own inline styles. README calls that link inert, but the browser applies

@@ -38,18 +38,25 @@ export function CalPopover({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Measure first, then place — a bubble that renders off-screen and corrects
-  // itself on the next frame reads as a flicker.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const M = 10;
-    const w = el.offsetWidth || width;
-    const h = el.offsetHeight;
-    const left = Math.min(Math.max(M, x + 12), window.innerWidth - w - M);
+    const isMobile = window.innerWidth <= 640;
+    const w = Math.min(el.offsetWidth || width, window.innerWidth - M * 2);
+    const h = el.offsetHeight || 160;
+
+    let left: number;
+    if (isMobile) {
+      left = Math.max(M, (window.innerWidth - w) / 2);
+    } else {
+      left = Math.min(Math.max(M, x + 12), window.innerWidth - w - M);
+      if (left + w > window.innerWidth - M) {
+        left = Math.max(M, x - w - 12);
+      }
+    }
+
     const below = y + 8;
-    // Flip above when there is no room below, then clamp both edges — guarding
-    // only the bottom let a bubble near the top of the screen render off it.
     const wanted = below + h + M > window.innerHeight ? y - h - 8 : below;
     const top = Math.min(Math.max(M, wanted), Math.max(M, window.innerHeight - h - M));
     setPos({ left, top });
