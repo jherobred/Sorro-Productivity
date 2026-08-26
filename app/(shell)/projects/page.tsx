@@ -138,6 +138,9 @@ export default function ProjectsPage() {
 
   const settle = settler(qc, PROJ, CARDS, CMTS);
 
+  const PROJ_TRASH = ['projects_trash'] as const;
+  const [showTrash, setShowTrash] = useState(false);
+
   const { data: projects = [], isPending: projectsPending } = useQuery({
     queryKey: PROJ,
     queryFn: async (): Promise<Project[]> => {
@@ -148,6 +151,45 @@ export default function ProjectsPage() {
       return data ?? [];
     },
   });
+
+  const { data: trashProjects = [] } = useQuery({
+    queryKey: PROJ_TRASH,
+    queryFn: async (): Promise<Project[]> => {
+      const { data, error } = await supabase.from('bd_projects')
+        .select('id,name,tag,color,progress,deadline,position,icon,cover,user_id')
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const restoreOne = async (id: string, name: string) => {
+    try {
+      await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: id });
+    } catch {}
+    try {
+      await supabase.from('bd_projects').update({ deleted_at: null }).eq('id', id);
+    } catch {}
+    await qc.invalidateQueries({ queryKey: PROJ });
+    await qc.invalidateQueries({ queryKey: PROJ_TRASH });
+    toast(`Restored “${name}”`);
+  };
+
+  const restoreAll = async () => {
+    if (trashProjects.length === 0) return;
+    for (const p of trashProjects) {
+      try {
+        await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: p.id });
+      } catch {}
+      try {
+        await supabase.from('bd_projects').update({ deleted_at: null }).eq('id', p.id);
+      } catch {}
+    }
+    await qc.invalidateQueries({ queryKey: PROJ });
+    await qc.invalidateQueries({ queryKey: PROJ_TRASH });
+    toast(`Restored ${trashProjects.length} folder${trashProjects.length === 1 ? '' : 's'}`);
+  };
   const { data: cards = [] } = useQuery({
     queryKey: CARDS,
     queryFn: async (): Promise<Card[]> => {
@@ -348,6 +390,13 @@ export default function ProjectsPage() {
             <Icon name="sort" size={14} color="var(--tx2)" />{sort}
           </button>
 
+          {trashProjects.length > 0 && (
+            <button onClick={() => setShowTrash(true)} className="hov k-squish" title="View archived folders in trash"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', background: 'var(--card2)' }}>
+              <Icon name="archive" size={14} color="var(--tx3)" />Trash ({trashProjects.length})
+            </button>
+          )}
+
           <button onClick={() => {
             const id = crypto.randomUUID();
             newProj.mutate({ id, name: 'Untitled project', color: PAL.amber });
@@ -357,6 +406,38 @@ export default function ProjectsPage() {
             <Icon name="plus" size={15} color="#0C0F16" />New project
           </button>
         </div>
+
+        {trashProjects.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '12px 16px', borderRadius: 14, marginBottom: 16, flexWrap: 'wrap',
+            background: 'color-mix(in srgb, var(--acc) 12%, var(--card))',
+            border: '1px solid color-mix(in srgb, var(--acc) 32%, var(--line2))',
+            boxShadow: 'var(--sh)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)', display: 'grid', placeItems: 'center' }}>
+                <Icon name="archive" size={15} color="var(--ink)" />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>
+                  {trashProjects.length} folder{trashProjects.length === 1 ? '' : 's'} in Trash
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                  Recover folders that were archived or dragged
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              <button onClick={() => setShowTrash(true)} className="hov k-squish" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', background: 'var(--card2)' }}>
+                View Trash
+              </button>
+              <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 11.5, fontWeight: 800, color: 'var(--ink)', background: 'var(--acc)', cursor: 'pointer' }}>
+                Restore All ({trashProjects.length})
+              </button>
+            </div>
+          </div>
+        )}
 
         {projectsPending && <FolderGridSkeleton phone={phone} count={8} label="Loading your projects" />}
 
@@ -440,8 +521,93 @@ export default function ProjectsPage() {
         </div>
 
         {!projectsPending && shown.length === 0 && (
-          <div style={{ padding: '44px 2px', fontSize: 12.5, color: 'var(--tx3)' }}>
-            {projects.length === 0 ? 'No projects yet. Press New project.' : 'Nothing matches that search.'}
+          <div style={{ padding: '44px 16px', textAlign: 'center', background: 'var(--card)', borderRadius: 16, border: '1px dashed var(--line2)', marginTop: 8 }}>
+            {trashProjects.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                <Icon name="archive" size={28} color="var(--tx3)" />
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx)' }}>
+                  All folders are currently in Trash
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--tx3)', maxWidth: 360 }}>
+                  You have {trashProjects.length} archived folder{trashProjects.length === 1 ? '' : 's'}. Restore them with one click below:
+                </div>
+                <button onClick={restoreAll} className="acc k-squish" style={{ marginTop: 6, padding: '8px 18px', borderRadius: 10, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', border: 'none' }}>
+                  Restore All {trashProjects.length} Folders
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>
+                {projects.length === 0 ? 'No projects yet. Press New project to create one.' : 'Nothing matches that search.'}
+              </div>
+            )}
+          </div>
+        )}
+
+        {showTrash && (
+          <div onClick={() => setShowTrash(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center', padding: phone ? 0 : 16,
+          }}>
+            <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Archived Projects"
+              className="k-bloom"
+              style={{
+                width: 480, maxWidth: '100%', maxHeight: '80dvh', display: 'flex', flexDirection: 'column',
+                background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: phone ? '20px 20px 0 0' : 20,
+                boxShadow: 'var(--shl)', overflow: 'hidden',
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <Icon name="archive" size={17} color="var(--tx2)" />
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--tx)' }}>Archived Folders ({trashProjects.length})</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {trashProjects.length > 0 && (
+                    <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
+                      Restore All
+                    </button>
+                  )}
+                  <button onClick={() => setShowTrash(false)} className="hov k-squish" style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    <Icon name="close" size={15} color="var(--tx2)" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px' }}>
+                {trashProjects.length === 0 ? (
+                  <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
+                    Trash is empty.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {trashProjects.map((tp) => (
+                      <div key={tp.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '10px 12px', borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--line2)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <FolderIcon color={tp.color} count={0} size={36} icon={tp.icon} />
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{tp.name}</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Archived</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => restoreOne(tp.id, tp.name)}
+                          className="acc k-squish"
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                            borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)',
+                            fontSize: 11.5, fontWeight: 800, border: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          <Icon name="undo" size={13} color="var(--ink)" />Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
