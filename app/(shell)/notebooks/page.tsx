@@ -12,7 +12,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import {
-  useNotebooks, useNotes, useTrash, useTags, useMe, useNoteActions, whenLabel, type Note,
+  useNotebooks, useNotes, useTrash, useTags, useNoteActions, whenLabel, type Note,
 } from '@/lib/notes';
 import { NotebookTable } from '@/components/notes/NotebookTable';
 import { NoteList } from '@/components/notes/NoteList';
@@ -53,7 +53,6 @@ export default function NotebooksPage() {
   const { data: notes = [] } = useNotes();
   const { data: trash = [] } = useTrash();
   const { data: tags = {} } = useTags();
-  const { data: me = 'you' } = useMe();
   const A = useNoteActions();
 
   // Canvases and graph views are notebooks too, so the shelf lists them and the
@@ -246,7 +245,7 @@ $$
               )}
               <div data-tour="notebooks-sidebar" style={{ width: '100%' }}>
                 <NotebookTable
-                  notebooks={notebooks} notes={notes} boards={boards} me={me}
+                  notebooks={notebooks} notes={notes} boards={boards}
                   onOpen={(id) => openNotebook(id)}
                   onOpenNote={(bid, nid) => openNotebook(bid, nid)}
                   onNew={newNotebook}

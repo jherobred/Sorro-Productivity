@@ -38,14 +38,13 @@ const HEAD: React.CSSProperties = {
 };
 
 export function NotebookTable({
-  notebooks, notes, boards, me, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
+  notebooks, notes, boards, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
   onNewBoard, onOpenBoard, onRenameBoard, onDeleteBoard,
 }: {
   notebooks: Notebook[];
   notes: Note[];
   /** Canvases and graph views — the other two kinds of notebook. */
   boards: Board[];
-  me: string;
   onOpen: (id: string) => void;
   onNew: () => void;
   onRename: (b: Notebook, name: string) => void;
@@ -162,7 +161,6 @@ export function NotebookTable({
               <th style={{ ...HEAD, width: 34 }} aria-label="Expand" />
               <th style={HEAD}>Title</th>
               {!phone && <th style={{ ...HEAD, width: 90 }}>Notes</th>}
-              {!phone && <th style={{ ...HEAD, width: 140 }}>Created by</th>}
               <th style={{ ...HEAD, width: phone ? 74 : 120 }}>Updated</th>
               <th style={{ ...HEAD, width: 44 }} aria-label="Actions" />
             </tr>
@@ -173,7 +171,7 @@ export function NotebookTable({
               const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
               const isOpen = !!open[b.id];
               return (
-                <BookRow key={b.id} book={b} kids={kids} last={last} me={me} phone={phone} isOpen={isOpen}
+                <BookRow key={b.id} book={b} kids={kids} last={last} phone={phone} isOpen={isOpen}
                   onToggle={() => setOpen((o) => ({ ...o, [b.id]: !o[b.id] }))}
                   onOpen={() => onOpen(b.id)}
                   onOpenNote={(nid) => onOpenNote(b.id, nid)}
@@ -199,7 +197,7 @@ export function NotebookTable({
 
             {rows.length + boardRows.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
+                <td colSpan={5} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
                   {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook, a canvas or a graph.'}
                 </td>
               </tr>
@@ -246,7 +244,6 @@ function BoardRow({
         </button>
       </td>
       {!phone && <td style={cell}>—</td>}
-      {!phone && <td style={{ ...cell, fontWeight: 600 }}>—</td>}
       <td style={{ ...cell, color: 'var(--tx3)' }}>{b.updated_at ? whenLabel(b.updated_at) : '—'}</td>
       <td style={{ ...cell, paddingLeft: 0 }}>
         <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
@@ -265,9 +262,9 @@ const NEW_BTN: React.CSSProperties = {
 };
 
 function BookRow({
-  book: b, kids, last, me, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,
+  book: b, kids, last, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,
 }: {
-  book: Notebook; kids: Note[]; last: string | null; me: string; phone: boolean; isOpen: boolean;
+  book: Notebook; kids: Note[]; last: string | null; phone: boolean; isOpen: boolean;
   onToggle: () => void; onOpen: () => void; onOpenNote: (id: string) => void;
   onMenu: (x: number, y: number) => void;
 }) {
@@ -297,7 +294,6 @@ function BookRow({
         </td>
 
         {!phone && <td style={cell}>{kids.length}</td>}
-        {!phone && <td style={{ ...cell, fontWeight: 600, color: 'var(--tx2)' }}>{(!me || me.toLowerCase() === 'gemini') ? 'you' : me}</td>}
         <td style={{ ...cell, color: 'var(--tx3)' }}>{last ? whenLabel(last) : '—'}</td>
         <td style={{ ...cell, paddingLeft: 0 }}>
           <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
@@ -311,7 +307,7 @@ function BookRow({
       {isOpen && kids.map((n) => (
         <tr key={n.id} className="row" style={{ borderBottom: '1px solid var(--line)' }}>
           <td />
-          <td colSpan={phone ? 2 : 4} style={{ padding: '8px 12px' }}>
+          <td colSpan={phone ? 2 : 3} style={{ padding: '8px 12px' }}>
             <button onClick={() => onOpenNote(n.id)} style={{ display: 'block', width: '100%', textAlign: 'left', minHeight: 30 }}>
               <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{n.title || 'Untitled'}</span>
               <span style={{
@@ -330,7 +326,7 @@ function BookRow({
       {isOpen && kids.length === 0 && (
         <tr style={{ borderBottom: '1px solid var(--line)' }}>
           <td />
-          <td colSpan={5} style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--tx3)' }}>Empty notebook.</td>
+          <td colSpan={4} style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--tx3)' }}>Empty notebook.</td>
         </tr>
       )}
     </>
