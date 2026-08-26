@@ -269,12 +269,17 @@ export function useShop() {
       const uid = await currentUserId();
       const newRp = Math.max(0, currentRp - item.price);
 
-      // Optimistically update bd_ranked in Supabase
+      // The charge has to land before the item is granted. This ignored
+      // `error`, so an offline or RLS-refused update still resolved: onSuccess
+      // added the item to the inventory and the RP came straight back on the
+      // next refetch. Throwing routes it into onError, which rolls the RP back
+      // and says the purchase failed.
       if (uid) {
-        await supabase
+        const { error } = await supabase
           .from('bd_ranked')
           .update({ rp: newRp })
           .eq('user_id', uid);
+        if (error) throw error;
       }
 
       return { item, newRp };

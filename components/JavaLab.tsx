@@ -106,19 +106,24 @@ export function JavaLab() {
     if (file && file.id !== selId) setSelId(file.id);
   }, [file, selId]);
 
+  // Keyed on the file, not on its text. Depending on `file.src` meant the
+  // refetch that autosave's own onSettled kicks off replaced the buffer with
+  // the server copy, dropping every character typed since the save fired.
   useEffect(() => {
     setSrc(file?.src ?? '');
     setResult(null);
     setAt(null);
     setPlaying(false);
-  }, [file?.id, file?.src]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file?.id]);
 
-  // Autosave
+  // Autosave. `save.mutate` is stable; `save` itself is a fresh object every
+  // render, which tore down and rebuilt this debounce on every render.
   useEffect(() => {
     if (!file || src === file.src) return;
     const t = setTimeout(() => save.mutate({ id: file.id, src }), 800);
     return () => clearTimeout(t);
-  }, [src, file?.id, file?.src, save]);
+  }, [src, file?.id, file?.src, save.mutate]);
 
   const doRun = useCallback(() => {
     const r = run(src);

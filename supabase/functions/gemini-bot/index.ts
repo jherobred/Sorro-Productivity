@@ -93,14 +93,19 @@ const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 /** Ask the model, and insist on JSON coming back. */
 async function generate(key: string, prompt: string): Promise<Record<string, unknown>> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // The key goes in a header, not `?key=`. A query string is the one part of
+      // a request that proxies, error reports and platform logs write down.
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json', temperature: 1.1, maxOutputTokens: 500 },
       }),
+      // Without this a model that never answers holds the function open until
+      // the platform kills it, and the cron simply retries into the same wall.
+      signal: AbortSignal.timeout(60_000),
     },
   );
   if (!res.ok) throw new Error(`Gemini said ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -151,8 +156,10 @@ Deno.serve(async (req) => {
 
   let mode: Mode = 'tips';
   try { mode = (await req.json()).mode ?? 'tips'; } catch { /* empty body */ }
+  // hasOwn, not `JOBS[mode]` truthiness: 'constructor' and '__proto__' are
+  // truthy lookups on any object and would reach `generate` with no prompt.
+  if (!Object.hasOwn(JOBS, mode)) return json({ ok: false, message: `Unknown mode ${mode}` }, 400);
   const job = JOBS[mode];
-  if (!job) return json({ ok: false, message: `Unknown mode ${mode}` }, 400);
 
   // A retrying cron, or two overlapping schedules, must not double-post. The
   // window is the job's own interval, less a couple of minutes of slack.

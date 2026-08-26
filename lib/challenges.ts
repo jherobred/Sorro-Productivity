@@ -240,13 +240,19 @@ const SYNC = defineMutation('chal.sync', async (v: { challenge_id: string; days:
       .upsert(v.days.map((d) => ({ ...d, challenge_id: v.challenge_id, user_id })),
               { onConflict: 'challenge_id,user_id,on_date' });
     if (error) {
+      // Salvage the good rows one at a time — one bad row takes the whole batch
+      // down with it (HANDOFF fact 7). The conflict target has to match the
+      // batch above: without it the upsert resolves against the primary key, so
+      // every day that already had a row hit the
+      // (challenge_id, user_id, on_date) unique index and the fallback failed
+      // for exactly the rows it exists to rescue.
       for (const d of v.days) {
         await supabase.from('bd_challenge_days').upsert({
           challenge_id: v.challenge_id,
           user_id,
           on_date: d.on_date,
           value: d.value,
-        });
+        }, { onConflict: 'challenge_id,user_id,on_date' });
       }
     }
   }

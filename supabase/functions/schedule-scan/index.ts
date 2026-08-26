@@ -171,10 +171,15 @@ type Gen = { entries?: unknown[]; term_starts_on?: string; term_ends_on?: string
 
 async function generate(key: string, model: string, parts: unknown[]): Promise<Gen> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // The key goes in a header, not `?key=`. A query string is the one part of
+      // a request that proxies, error reports and platform logs write down.
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      // Two passes run back to back, so each gets half of what the platform
+      // allows. A model that never answers must not eat the whole invocation.
+      signal: AbortSignal.timeout(60_000),
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: {

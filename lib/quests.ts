@@ -4,6 +4,7 @@ import { ymd, type Habit, type Tick } from './habits';
 import type { Task } from './tasks';
 import { supabase, currentUserId } from './supabase';
 import { queryClient } from './offline';
+import { toast } from './toast';
 
 export type Quest = {
   id: string;
@@ -29,6 +30,22 @@ export function getClaimedQuests(todayStr: string): Set<string> {
   }
 }
 
+/**
+ * A claim used to be recorded locally and then banked in an async block whose
+ * every failure mode was swallowed by `catch {}` — and an upsert that RLS or a
+ * constraint refuses reports that in `error` rather than throwing, so even a
+ * rejected write looked like a success. The quest was marked claimed forever
+ * and the RP never arrived. The local mark is now undone when the write does
+ * not land, so the quest can be claimed again.
+ */
+function unclaim(todayStr: string, questId: string) {
+  try {
+    const claimed = getClaimedQuests(todayStr);
+    claimed.delete(questId);
+    localStorage.setItem(`${LS_QUESTS_KEY}.${todayStr}`, JSON.stringify(Array.from(claimed)));
+  } catch {}
+}
+
 export function claimQuestReward(todayStr: string, questId: string, reward = 20): void {
   if (typeof window === 'undefined') return;
   try {
@@ -40,9 +57,10 @@ export function claimQuestReward(todayStr: string, questId: string, reward = 20)
     void (async () => {
       try {
         const me = await currentUserId();
-        const { data: cur } = await supabase.from('bd_ranked').select('rp,peak_rp,wins,losses').maybeSingle();
+        const { data: cur } = await supabase.from('bd_ranked')
+          .select('rp,peak_rp,wins,losses').eq('user_id', me).maybeSingle();
         const rp = (cur?.rp ?? 0) + reward;
-        await supabase.from('bd_ranked').upsert({
+        const { error } = await supabase.from('bd_ranked').upsert({
           user_id: me,
           rp,
           peak_rp: Math.max(cur?.peak_rp ?? 0, rp),
@@ -50,8 +68,13 @@ export function claimQuestReward(todayStr: string, questId: string, reward = 20)
           losses: cur?.losses ?? 0,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
+        if (error) throw error;
         queryClient.invalidateQueries({ queryKey: ['ranked'] });
-      } catch {}
+      } catch (e) {
+        unclaim(todayStr, questId);
+        toast('Could not bank that reward — try again');
+        console.warn('Quest reward not banked:', e);
+      }
     })();
   } catch {}
 }

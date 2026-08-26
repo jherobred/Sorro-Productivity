@@ -532,7 +532,7 @@ function ReadView({
               />
             );
           } catch {
-            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)', borderRadius: 8 }}>$$\n${l.text}\n$$</pre>;
+            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)', borderRadius: 8 }}>{`$$\n${l.text}\n$$`}</pre>;
           }
         }
         if (l.kind === 'sketch') {

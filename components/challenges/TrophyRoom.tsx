@@ -153,10 +153,8 @@ function TrophyViewer({ won, onClose }: { won: Won; onClose: () => void }) {
         right.rotation.z = Math.PI + 0.4;
         right.rotation.y = Math.PI;
 
-        const plinth = new THREE.Mesh(
-          new THREE.CylinderGeometry(1.15, 1.3, 0.3, 64),
-          new THREE.MeshStandardMaterial({ color: 0x15182a, metalness: 0.3, roughness: 0.6 }),
-        );
+        const stone = new THREE.MeshStandardMaterial({ color: 0x15182a, metalness: 0.3, roughness: 0.6 });
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.3, 0.3, 64), stone);
         plinth.position.y = -1.72;
 
         const rig = new THREE.Group();
@@ -207,6 +205,7 @@ function TrophyViewer({ won, onClose }: { won: Won; onClose: () => void }) {
           cup.geometry.dispose();
           plinth.geometry.dispose();
           gold.dispose();
+          stone.dispose();
           el.removeChild(renderer.domElement);
         };
       } catch {

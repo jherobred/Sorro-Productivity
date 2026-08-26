@@ -121,7 +121,11 @@ export function useMe() {
     queryFn: async (): Promise<string> => {
       const uid = await currentUserId();
       if (uid) {
-        const { data } = await supabase.from('bd_profiles').select('handle,name').eq('id', uid).maybeSingle();
+        // `user_id`, not `id` — bd_profiles is keyed on the auth uid under that
+        // name everywhere else in the app. Filtering on `id` matched nothing,
+        // the error went into the discarded half of the result, and the
+        // notebook table's "Created by" column said "you" for every account.
+        const { data } = await supabase.from('bd_profiles').select('handle,name').eq('user_id', uid).maybeSingle();
         if (data?.handle && data.handle.toLowerCase() !== 'gemini') return data.handle;
         if (data?.name && data.name.toLowerCase() !== 'gemini') return data.name;
       }

@@ -127,6 +127,7 @@ export function HabitTimerModal({
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close timer"
           className="hov k-squish"
           style={{
             position: 'absolute',
@@ -174,12 +175,17 @@ export function HabitTimerModal({
             };
             updateAngle(e.clientX, e.clientY);
             const move = (m: PointerEvent) => updateAngle(m.clientX, m.clientY);
+            // pointercancel too: a touch the browser takes over for a scroll
+            // never fires pointerup, and the listeners would stay on window,
+            // still dragging the dial on every later pointer move.
             const up = () => {
               window.removeEventListener('pointermove', move);
               window.removeEventListener('pointerup', up);
+              window.removeEventListener('pointercancel', up);
             };
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
           }}
           style={{ position: 'relative', width: 220, height: 220, margin: '10px auto 20px', cursor: 'pointer', touchAction: 'none' }}
         >

@@ -159,10 +159,20 @@ const DEFAULT_HIGHLIGHTS: Highlight[] = [
 ];
 
 const listeners = new Set<() => void>();
-let cachedStoriesRaw: string | null = null;
+
+/**
+ * `undefined` means "not read yet", which `localStorage.getItem` can never
+ * return — so the first read always misses the cache. The miss used to be
+ * detected with `cachedSnapshot.length > 0` instead, and that made an *empty*
+ * list permanently uncacheable: delete your last story or highlight and every
+ * `getSnapshot` call re-parsed `"[]"` into a fresh array. useSyncExternalStore
+ * compares snapshots by identity, so a new array each call is an infinite
+ * render loop.
+ */
+let cachedStoriesRaw: string | null | undefined;
 let cachedStoriesSnapshot: StorySlide[] = [];
 
-let cachedHighlightsRaw: string | null = null;
+let cachedHighlightsRaw: string | null | undefined;
 let cachedHighlightsSnapshot: Highlight[] = [];
 
 function emit() {
@@ -173,7 +183,7 @@ function readStoriesStorage(): StorySlide[] {
   if (typeof window === 'undefined') return DEFAULT_STORIES;
   try {
     const raw = localStorage.getItem(STORIES_LS_KEY);
-    if (raw === cachedStoriesRaw && cachedStoriesSnapshot.length > 0) return cachedStoriesSnapshot;
+    if (raw === cachedStoriesRaw) return cachedStoriesSnapshot;
     cachedStoriesRaw = raw;
     if (!raw) {
       cachedStoriesSnapshot = DEFAULT_STORIES;
@@ -204,7 +214,7 @@ function readHighlightsStorage(): Highlight[] {
   if (typeof window === 'undefined') return DEFAULT_HIGHLIGHTS;
   try {
     const raw = localStorage.getItem(HIGHLIGHTS_LS_KEY);
-    if (raw === cachedHighlightsRaw && cachedHighlightsSnapshot.length > 0) return cachedHighlightsSnapshot;
+    if (raw === cachedHighlightsRaw) return cachedHighlightsSnapshot;
     cachedHighlightsRaw = raw;
     if (!raw) {
       cachedHighlightsSnapshot = DEFAULT_HIGHLIGHTS;
@@ -241,7 +251,7 @@ export function useAllStories(): StorySlide[] {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key === STORIES_LS_KEY) {
-          cachedStoriesRaw = null;
+          cachedStoriesRaw = undefined;   // null is a real getItem() value; undefined is the only true "unknown"
           onStoreChange();
         }
       };
@@ -276,7 +286,7 @@ export function useHighlights(userId?: string): Highlight[] {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key === HIGHLIGHTS_LS_KEY) {
-          cachedHighlightsRaw = null;
+          cachedHighlightsRaw = undefined;
           onStoreChange();
         }
       };

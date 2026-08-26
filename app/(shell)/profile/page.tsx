@@ -867,6 +867,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
                 <button
                   onClick={() => { void navigator.clipboard?.writeText(window.location.href); toast('Profile link copied'); }}
                   className="hov k-squish"
+                  aria-label={`Copy the link to @${who.handle}`} title="Copy profile link"
                   style={{
                     width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)',
                     display: 'grid', placeItems: 'center', background: 'var(--card2)',

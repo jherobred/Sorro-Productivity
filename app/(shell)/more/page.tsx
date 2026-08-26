@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from '@/components/Icon';
 import { lg } from '@/lib/glass';
@@ -195,7 +196,12 @@ function NavPicker({ onClose }: { onClose: () => void }) {
     void update({ navPicks: [...next, 'more'] });
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  // Portalled: `main` carries the zoom pref and the page-entry transform, so a
+  // fixed sheet rendered inside it is positioned against `main`, not the
+  // viewport (HANDOFF fact 2) — SettingsModal beside it already portals.
+  return createPortal((
     <div onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Customise nav" className="sheet"
@@ -246,5 +252,5 @@ function NavPicker({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </div>
-  );
+  ), document.body);
 }

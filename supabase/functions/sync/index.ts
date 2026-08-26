@@ -86,7 +86,13 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
   if (!token) throw new Error('Missing access token');
 
   const get = async <T>(path: string): Promise<T> => {
-    const res = await fetch(`${base}/api/v1${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${base}/api/v1${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      // A Canvas that accepts the connection and never answers would otherwise
+      // hold this function open until the platform kills it — and the fifty
+      // per-course calls below run concurrently, so one slow host stalls them all.
+      signal: AbortSignal.timeout(20_000),
+    });
     if (res.status === 401) throw new Error('Canvas rejected the token — generate a new one');
     if (!res.ok) throw new Error(`Canvas returned ${res.status} for ${path.split('?')[0]}`);
     return res.json() as Promise<T>;
@@ -160,8 +166,16 @@ async function syncIcs(db: SupabaseClient, user_id: string, config: Record<strin
   const url = (config.ics_url ?? '').trim();
   if (!/^https:\/\//.test(url)) throw new Error('The iCal address must start with https://');
 
-  const res = await fetch(url, { headers: { Accept: 'text/calendar' } });
+  const res = await fetch(url, {
+    headers: { Accept: 'text/calendar' },
+    signal: AbortSignal.timeout(20_000),
+  });
   if (!res.ok) throw new Error(`Calendar returned ${res.status} — check the secret address`);
+  // The address is whatever the user typed, so the body is an untrusted size.
+  // 20MB is a decade of a busy calendar; anything larger is not one.
+  if (Number(res.headers.get('content-length')) > 20_000_000) {
+    throw new Error('That calendar is too large to import');
+  }
   const text = await res.text();
   if (!text.includes('BEGIN:VCALENDAR')) throw new Error('That address did not return a calendar');
 
@@ -185,7 +199,11 @@ async function syncIcs(db: SupabaseClient, user_id: string, config: Record<strin
       color: '#38BDF8',
       source: 'gcal_ics',
       external_id: e.uid,
-    }));
+    }))
+    // One upsert, one statement: a calendar with tens of thousands of events
+    // inside the window would make a single request Postgres refuses whole, and
+    // nothing would import at all. Six months of a full calendar is far under this.
+    .slice(0, 2000);
 
   if (!rows.length) return { imported: 0, message: 'No events in the next six months' };
 

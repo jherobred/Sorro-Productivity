@@ -86,8 +86,10 @@ export function BuddyCompanion({
   return (
     <div
       onClick={handlePet}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlePet(); } }}
       role="button"
       tabIndex={0}
+      aria-label="Pet your buddy"
       className="k-squish"
       style={{
         position: 'relative',

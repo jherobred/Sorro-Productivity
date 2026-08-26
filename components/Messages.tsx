@@ -296,6 +296,9 @@ export function Thread({
               if (target) router.push(`/profile/?u=${encodeURIComponent(target)}`);
             }
           }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } }}
           className="hov"
           title="View profile"
           style={{ flex: 1, minWidth: 0, cursor: 'pointer', padding: '2px 4px', borderRadius: 8 }}
@@ -539,10 +542,15 @@ function Bubble({
             onPointerDown={(e) => {
               // Long press is the only way in on a touch screen, where there is
               // no right mouse button.
+              // pointercancel too: a scroll started on a bubble cancels the
+              // pointer and no pointerup ever arrives, so without it the
+              // listeners stayed on window and the menu opened mid-scroll.
               const t = window.setTimeout(() => open(e.clientX, e.clientY), 460);
-              const stop = () => { clearTimeout(t); window.removeEventListener('pointerup', stop); window.removeEventListener('pointermove', stop); };
-              window.addEventListener('pointerup', stop);
-              window.addEventListener('pointermove', stop);
+              const stop = () => {
+                clearTimeout(t);
+                for (const ev of ['pointerup', 'pointermove', 'pointercancel']) window.removeEventListener(ev, stop);
+              };
+              for (const ev of ['pointerup', 'pointermove', 'pointercancel']) window.addEventListener(ev, stop);
             }}
             title={mine ? 'Double-click to remove, right-click or hold for more' : 'Right-click or hold to report'}
             style={{

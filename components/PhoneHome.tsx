@@ -8,6 +8,7 @@ import { Icon, type IconName } from './Icon';
 import { PAL, K } from '@/lib/pal';
 import { supabase } from '@/lib/supabase';
 import { usePrefs } from '@/lib/prefs';
+import { useOverlayBack } from '@/lib/nav';
 import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch } from '@/lib/scratch';
@@ -47,6 +48,8 @@ export function PhoneHome({ name }: { name: string }) {
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('Dashboard');
   const [focusOpen, setFocusOpen] = useState(false);
+  // Without this, Android back left the focus dialog up and changed section.
+  useOverlayBack(focusOpen, () => setFocusOpen(false));
 
   const today = ymd(new Date());
   const { data: tasks = [], isPending } = useTasks();
@@ -481,6 +484,7 @@ export function PhoneHome({ name }: { name: string }) {
           onClick={() => setFocusOpen(false)}
           role="dialog"
           aria-modal="true"
+          aria-label="Focus timer"
           style={{
             position: 'fixed',
             inset: 0,

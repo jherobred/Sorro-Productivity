@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { supabase, currentUserId } from '@/lib/supabase';
@@ -649,8 +650,10 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Focus Station Dialog Modal */}
-      {focusOpen && (
+      {/* Focus Station Dialog Modal. Portalled: `main` carries the zoom pref
+          and the page-entry transform, so a fixed overlay rendered inside it is
+          positioned against `main` rather than the viewport (HANDOFF fact 2). */}
+      {focusOpen && typeof document !== 'undefined' && createPortal((
         <div
           onClick={() => setFocusOpen(false)}
           role="dialog"
@@ -670,7 +673,7 @@ export default function HomePage() {
             <FocusHub onClose={() => setFocusOpen(false)} />
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

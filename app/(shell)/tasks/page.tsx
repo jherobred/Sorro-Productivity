@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { TasksSkeleton } from '@/components/Skeleton';
 import { Page } from '@/components/Page';
@@ -544,6 +545,11 @@ function TaskRow({
                   e.stopPropagation();
                   setEditing(true);
                 }}
+                // Opening the detail sheet was pointer-only: click or long
+                // press, both of which a keyboard cannot produce.
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
                 style={{ cursor: 'pointer', textAlign: 'left' }}
               >
                 <span
@@ -718,7 +724,12 @@ function TaskDetail({
     { v: null, n: 'None', c: 'var(--tx3)' },
   ];
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  // Portalled: `main` carries the zoom pref and the page-entry transform, so a
+  // fixed sheet rendered inside it is positioned against `main`, not the
+  // viewport (HANDOFF fact 2).
+  return createPortal((
     <>
       <div onClick={handleDone} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.44)', zIndex: 30 }} />
       <div className="sheet" style={{
@@ -851,5 +862,5 @@ function TaskDetail({
         </div>
       </div>
     </>
-  );
+  ), document.body);
 }

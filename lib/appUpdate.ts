@@ -53,7 +53,10 @@ export function useAppUpdate() {
     try {
       // cache: 'no-store' or a CDN will happily answer with the build you
       // already have, which is the one failure mode that makes this useless.
-      const res = await fetch(UPDATE_URL, { cache: 'no-store' });
+      // With no timeout, a captive portal or a dead host leaves this stuck on
+      // "checking" for as long as the tab lives — the button gives no way out
+      // and no way to try again. Ten seconds, then say so.
+      const res = await fetch(UPDATE_URL, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`Update server said ${res.status}`);
       const release = (await res.json()) as Release;
       if (!release?.version || !release?.url) throw new Error('Update manifest is missing a version or a link');

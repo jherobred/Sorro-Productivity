@@ -377,16 +377,19 @@ const TICK = defineMutation('habit.tick', async (v: { habitId: string; date: str
       .eq('on_date', v.date)
       .maybeSingle();
 
-    if (existing?.id) {
-      await supabase.from('bd_habit_ticks').delete().eq('id', existing.id);
-    } else {
-      await supabase.from('bd_habit_ticks').insert({
+    // The fallback's own failure has to reach the caller. Ignoring it resolved
+    // the mutation as a success on a write that never happened: no rollback, no
+    // retry, and the tick sat in the cache until some later refetch quietly
+    // removed it. Throwing lets `tick`'s onError put the square back.
+    const { error } = existing?.id
+      ? await supabase.from('bd_habit_ticks').delete().eq('id', existing.id)
+      : await supabase.from('bd_habit_ticks').insert({
         user_id,
         habit_id: v.habitId,
         on_date: v.date,
         value: v.value ?? 1,
       });
-    }
+    if (error) throw error;
   }
 });
 

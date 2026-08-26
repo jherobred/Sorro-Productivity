@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from '@/components/Icon';
 import { FolderGridSkeleton } from '@/components/Skeleton';
@@ -164,31 +165,30 @@ export default function ProjectsPage() {
     },
   });
 
+  // supabase-js reports failures in `error`, it does not throw — the old
+  // try/catch caught nothing and the toast claimed success either way.
   const restoreOne = async (id: string, name: string) => {
-    try {
-      await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: id });
-    } catch {}
-    try {
-      await supabase.from('bd_projects').update({ deleted_at: null }).eq('id', id);
-    } catch {}
+    const rpc = await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: id });
+    if (rpc.error) {
+      const fallback = await supabase.from('bd_projects').update({ deleted_at: null }).eq('id', id);
+      if (fallback.error) { toast(`Could not restore “${name}” — ${fallback.error.message}`); return; }
+    }
     await qc.invalidateQueries({ queryKey: PROJ });
     await qc.invalidateQueries({ queryKey: PROJ_TRASH });
     toast(`Restored “${name}”`);
   };
 
+  // One statement, not two round trips per folder: `bd_restore` only clears
+  // `deleted_at` (SETUP.md), which is exactly what this update does.
   const restoreAll = async () => {
-    if (trashProjects.length === 0) return;
-    for (const p of trashProjects) {
-      try {
-        await supabase.rpc('bd_restore', { p_table: 'bd_projects', p_id: p.id });
-      } catch {}
-      try {
-        await supabase.from('bd_projects').update({ deleted_at: null }).eq('id', p.id);
-      } catch {}
-    }
+    const n = trashProjects.length;
+    if (n === 0) return;
+    const { error } = await supabase.from('bd_projects')
+      .update({ deleted_at: null }).in('id', trashProjects.map((p) => p.id));
+    if (error) { toast(`Could not restore — ${error.message}`); return; }
     await qc.invalidateQueries({ queryKey: PROJ });
     await qc.invalidateQueries({ queryKey: PROJ_TRASH });
-    toast(`Restored ${trashProjects.length} folder${trashProjects.length === 1 ? '' : 's'}`);
+    toast(`Restored ${n} folder${n === 1 ? '' : 's'}`);
   };
   const { data: cards = [] } = useQuery({
     queryKey: CARDS,
@@ -543,7 +543,10 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {showTrash && (
+        {/* Portalled: `main` carries the zoom pref and the page-entry transform,
+            so a fixed overlay rendered inside it is positioned against `main`
+            rather than the viewport (HANDOFF fact 2). */}
+        {showTrash && typeof document !== 'undefined' && createPortal((
           <div onClick={() => setShowTrash(false)} style={{
             position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(3px)',
             display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center', padding: phone ? 0 : 16,
@@ -566,7 +569,9 @@ export default function ProjectsPage() {
                       Restore All
                     </button>
                   )}
-                  <button onClick={() => setShowTrash(false)} className="hov k-squish" style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <button onClick={() => setShowTrash(false)} className="hov k-squish"
+                    aria-label="Close archived folders" title="Close"
+                    style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                     <Icon name="close" size={15} color="var(--tx2)" />
                   </button>
                 </div>
@@ -609,7 +614,7 @@ export default function ProjectsPage() {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
         {look && (() => {
           const p = projects.find((x) => x.id === look);

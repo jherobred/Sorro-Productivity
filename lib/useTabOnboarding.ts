@@ -61,9 +61,15 @@ export function useTabOnboarding() {
 
       try {
         const me = await currentUserId();
-        const { data: cur } = await supabase.from('bd_ranked').select('rp,peak_rp,wins,losses').maybeSingle();
+        // Filtered to the caller's own row: maybeSingle() errors outright if the
+        // select ever returns more than one, and reads back somebody else's
+        // totals if it does not.
+        const { data: cur } = await supabase.from('bd_ranked')
+          .select('rp,peak_rp,wins,losses').eq('user_id', me).maybeSingle();
         const rp = (cur?.rp ?? 0) + 15;
-        await supabase.from('bd_ranked').upsert({
+        // A refused upsert comes back in `error`, not as a throw, so `catch {}`
+        // never saw it: the toast above promised +15 RP that was never written.
+        const { error } = await supabase.from('bd_ranked').upsert({
           user_id: me,
           rp,
           peak_rp: Math.max(cur?.peak_rp ?? 0, rp),
@@ -71,8 +77,12 @@ export function useTabOnboarding() {
           losses: cur?.losses ?? 0,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
+        if (error) throw error;
         queryClient.invalidateQueries({ queryKey: ['ranked'] });
-      } catch {}
+      } catch (e) {
+        toast('Tour bonus could not be saved');
+        console.warn('Tour RP not banked:', e);
+      }
     }
   }, [markTabSeen]);
 

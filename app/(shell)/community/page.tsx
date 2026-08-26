@@ -262,7 +262,10 @@ export default function CommunityPage() {
           gap: 20,
           alignItems: 'start',
         }}>
-          <main style={{
+          {/* A div, not <main>: the Shell already renders the page inside one,
+              and two main landmarks leaves a screen reader with no single
+              "skip to content" target. */}
+          <div style={{
             background: 'var(--card)',
             border: '1px solid var(--line)',
             borderRadius: 20,
@@ -594,7 +597,7 @@ export default function CommunityPage() {
                 onTagClick={(tag) => { setSearchQuery(tag.replace(/^#/, '')); toast(`Filter: ${tag}`); }}
               />
             ))}
-          </main>
+          </div>
 
           {!phone && (
             <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -948,7 +951,12 @@ function XPostCard({
             <ItemEdit item={item} onCancel={onEditCancel} onSave={onEditSave} />
           </div>
         ) : (
-          <div style={{ cursor: 'pointer' }} onClick={onOpen}>
+          // Opening a post was click-only, and this is the only route to it for
+          // a text post — no button on the card does the same thing.
+          <div style={{ cursor: 'pointer' }} onClick={onOpen}
+            role="button" tabIndex={0}
+            aria-label={`Open post: ${(item.title || item.body || 'post').slice(0, 60)}`}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
             {item.title && (
               <h2 style={{
                 fontSize: 14.5, fontWeight: 800, letterSpacing: '-0.015em',

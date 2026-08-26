@@ -95,14 +95,16 @@ export function StoryViewer({
     const interval = 50; // ms
     const step = (interval / DURATION_PER_SLIDE) * 100;
 
+    // The advance stays outside the state updater: an updater must be pure, and
+    // React re-invokes them (StrictMode, a rebased concurrent render), which fired
+    // handleNextSlide twice and skipped a slide.
+    let p = progress;
     const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev + step >= 100) {
-          handleNextSlide();
-          return 0;
-        }
-        return prev + step;
-      });
+      p += step;
+      if (p < 100) { setProgress(p); return; }
+      clearInterval(timer);
+      setProgress(0);
+      handleNextSlide();
     }, interval);
 
     return () => clearInterval(timer);
@@ -477,6 +479,7 @@ export function StoryViewer({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
+              aria-label="More story options"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMoreMenu(!showMoreMenu);
@@ -493,6 +496,7 @@ export function StoryViewer({
             </button>
 
             <button
+              aria-label="Close story"
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();

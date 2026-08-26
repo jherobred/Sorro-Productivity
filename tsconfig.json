@@ -19,5 +19,5 @@
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "//": "supabase/functions is Deno, not Next — it has its own globals and jsr: imports, so this compiler must not read it.",
-  "exclude": ["node_modules", "android", "supabase", "archive"]
+  "exclude": ["node_modules", "android", "supabase"]
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, type IconName } from '@/components/Icon';
 import { CalendarSkeleton } from '@/components/Skeleton';
 import { ScheduleImport } from '@/components/ScheduleImport';
@@ -1234,7 +1235,12 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
     });
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  // Portalled: `main` carries the zoom pref and the page-entry transform, so a
+  // fixed sheet rendered inside it is positioned against `main`, not the
+  // viewport (HANDOFF fact 2) — the same reason CalPopover portals.
+  return createPortal((
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} className="sheet" role="dialog" aria-modal="true" aria-label="Edit event"
         style={{ width: '100%', maxWidth: 460, background: 'var(--card)', borderRadius: '14px 14px 0 0', border: '1px solid var(--line2)', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
@@ -1327,7 +1333,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 const FIELD: React.CSSProperties = {

@@ -16,41 +16,33 @@ export type FollowItem = {
 const FOLLOWS_STORAGE_KEY = 'basedly-follows-store-v2';
 const FOLLOWERS_STORAGE_KEY = 'basedly-followers-store-v2';
 
-// Seed initial default follows so the platform has active social dynamics
-const DEFAULT_FOLLOWING: FollowItem[] = [
-  { targetId: 'basedly-bot', targetHandle: 'basedly', targetName: 'Basedly Official', followedAt: new Date().toISOString() },
-  { targetId: 'jules-id', targetHandle: 'jules', targetName: 'Jules R.', followedAt: new Date().toISOString() },
-];
+/**
+ * No seeded accounts. The list used to open with "Alex Chen", "Sarah Miller"
+ * and "Jules R." pre-loaded so the app looked populated; none of them exist, so
+ * tapping one landed on "profile not found". FollowListModal already renders
+ * "No followers yet." and that is the true state of a new account.
+ *
+ * One shared empty array, because `useSyncExternalStore` compares snapshots by
+ * identity and a fresh `[]` per call is an infinite render loop.
+ */
+const NONE: FollowItem[] = [];
 
-const DEFAULT_FOLLOWERS: FollowItem[] = [
-  { targetId: 'basedly-bot', targetHandle: 'basedly', targetName: 'Basedly Official', followedAt: new Date().toISOString() },
-  { targetId: 'alex-id', targetHandle: 'alex_codes', targetName: 'Alex Chen', followedAt: new Date().toISOString() },
-  { targetId: 'sarah-id', targetHandle: 'sarah_lifts', targetName: 'Sarah Miller', followedAt: new Date().toISOString() },
-];
-
-let followingCache: FollowItem[] = [];
-let followersCache: FollowItem[] = [];
+let followingCache: FollowItem[] = NONE;
+let followersCache: FollowItem[] = NONE;
 const listeners = new Set<() => void>();
 
-function loadLocalFollowing(): FollowItem[] {
-  if (typeof window === 'undefined') return DEFAULT_FOLLOWING;
+function loadLocal(key: string): FollowItem[] {
+  if (typeof window === 'undefined') return NONE;
   try {
-    const raw = localStorage.getItem(FOLLOWS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_FOLLOWING;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : NONE;
   } catch {
-    return DEFAULT_FOLLOWING;
+    return NONE;
   }
 }
 
-function loadLocalFollowers(): FollowItem[] {
-  if (typeof window === 'undefined') return DEFAULT_FOLLOWERS;
-  try {
-    const raw = localStorage.getItem(FOLLOWERS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_FOLLOWERS;
-  } catch {
-    return DEFAULT_FOLLOWERS;
-  }
-}
+const loadLocalFollowing = () => loadLocal(FOLLOWS_STORAGE_KEY);
+const loadLocalFollowers = () => loadLocal(FOLLOWERS_STORAGE_KEY);
 
 function saveFollowing(list: FollowItem[]) {
   followingCache = list;
@@ -109,9 +101,12 @@ export async function notifyFollowedUser(params: {
   const href = followerHandle ? `/profile/?u=${followerHandle}` : '/profile/';
 
   try {
-    // 1. If target user has a UUID in Supabase, insert into bd_notifications
+    // 1. If target user has a UUID in Supabase, insert into bd_notifications.
+    //    This writes a row owned by *another* user, which RLS refuses — and
+    //    PostgREST reports that in `error`, not by throwing, so the catch below
+    //    never saw it and the failure was completely invisible.
     if (targetUserId && targetUserId.length > 10 && targetUserId.includes('-')) {
-      await supabase.from('bd_notifications').insert({
+      const { error } = await supabase.from('bd_notifications').insert({
         user_id: targetUserId,
         kind: 'social',
         title,
@@ -120,6 +115,7 @@ export async function notifyFollowedUser(params: {
         source: 'community',
         read_at: null,
       });
+      if (error) console.warn('Follow notification rejected:', error.message);
     }
 
     // 2. Also record local notification event
@@ -145,8 +141,8 @@ export async function notifyFollowedUser(params: {
  * Main hook for checking and toggling follow state across the app.
  */
 export function useFollows() {
-  const following = useSyncExternalStore(subscribe, () => followingCache, () => DEFAULT_FOLLOWING);
-  const followers = useSyncExternalStore(subscribe, () => followersCache, () => DEFAULT_FOLLOWERS);
+  const following = useSyncExternalStore(subscribe, () => followingCache, () => NONE);
+  const followers = useSyncExternalStore(subscribe, () => followersCache, () => NONE);
 
   const isFollowing = (idOrHandle: string | null | undefined): boolean => {
     if (!idOrHandle) return false;
@@ -219,19 +215,20 @@ export function useFollows() {
     }
   };
 
+  /**
+   * These used to hash the handle into `28 + hash % 45` and render it as a real
+   * follower count, so every stranger's profile showed a plausible invented
+   * number that never moved. There is no `bd_follows` table, so the only follow
+   * data that exists anywhere is this device's own list: for somebody else's
+   * profile that is exactly one fact — whether *you* follow them.
+   */
   const getFollowerCount = (idOrHandle: string | null | undefined): number => {
     if (!idOrHandle) return followers.length;
-    const clean = idOrHandle.toLowerCase().replace(/^@/, '').trim();
-    // Return relative counts
-    const base = 28 + Math.abs([...clean].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 45);
-    return isFollowing(clean) ? base + 1 : base;
+    return isFollowing(idOrHandle) ? 1 : 0;
   };
 
-  const getFollowingCount = (idOrHandle: string | null | undefined): number => {
-    if (!idOrHandle) return following.length;
-    const clean = idOrHandle.toLowerCase().replace(/^@/, '').trim();
-    return 14 + Math.abs([...clean].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 20);
-  };
+  const getFollowingCount = (idOrHandle: string | null | undefined): number =>
+    idOrHandle ? 0 : following.length;
 
   return {
     following,

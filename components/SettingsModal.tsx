@@ -168,8 +168,10 @@ export function SettingsModal({
     if (!userId) return;
     try {
       setSavingProfile(true);
-      await supabase.from('bd_profiles').update({ [field]: value }).eq('user_id', userId);
-      toast('Profile updated');
+      // Postgrest resolves with `{ error }` rather than throwing, so without
+      // this a row RLS refused still reported "Profile updated".
+      const { error } = await supabase.from('bd_profiles').update({ [field]: value }).eq('user_id', userId);
+      toast(error ? `Failed to save profile — ${error.message}` : 'Profile updated');
     } catch {
       toast('Failed to save profile');
     } finally {
@@ -1253,6 +1255,7 @@ function ToggleRow({ label, hint, on, onChange }: { label: string; hint: string;
       </div>
       <button
         role="switch"
+        aria-label={label}
         aria-checked={on}
         onClick={() => onChange(!on)}
         className="tap"
@@ -1370,6 +1373,7 @@ function PhoneToggleRow({
       <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700 }}>{label}</div>
       <button
         role="switch"
+        aria-label={label}
         aria-checked={on}
         onClick={() => onChange(!on)}
         className="tap"
