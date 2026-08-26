@@ -7,6 +7,7 @@ import { useOverlayBack } from '@/lib/nav';
 import { useLayout } from '@/lib/useLayout';
 import { uploadTo, useSignedUrl } from '@/lib/uploads';
 import { toast } from '@/lib/toast';
+import { PixelFolderIcon, isPixelIcon, PIXEL_FOLDER_ICONS } from './PixelFolderIcons';
 
 /**
  * What a project looks like: its icon, and the cover behind its board.
@@ -63,6 +64,9 @@ const PICKABLE: IconName[] = [
 export function FolderIcon({
   color, count, size, icon = '',
 }: { color: string; count: number; size: number; icon?: string }) {
+  if (isPixelIcon(icon)) {
+    return <PixelFolderIcon iconId={icon} size={size} />;
+  }
   const h = Math.round(size * 0.78);
   const name = iconName(icon);
   const path = isPath(icon) ? icon : '';
@@ -205,17 +209,41 @@ export function LookSheet({
                 <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 1 }}>Any emoji your keyboard can type.</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(46px,1fr))', gap: 6, marginBottom: 12 }}>
-                {PICKABLE.map((n) => (
-                  <button key={n} onClick={() => { onSave({ icon: `ic:${n}` }); onClose(); }} className="hov"
-                    aria-label={n} title={n}
-                    style={{
-                      height: 44, borderRadius: 11, display: 'grid', placeItems: 'center',
-                      border: `1px solid ${icon === `ic:${n}` ? 'var(--acc)' : 'var(--line2)'}`,
-                    }}>
-                    <Icon name={n} size={17} color="var(--tx2)" />
-                  </button>
-                ))}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 8 }}>
+                  8-Bit Shiny Icons
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(52px,1fr))', gap: 7 }}>
+                  {PIXEL_FOLDER_ICONS.map((px) => (
+                    <button key={px.id} onClick={() => { onSave({ icon: px.id }); onClose(); }} className="hov k-squish"
+                      aria-label={px.name} title={px.name}
+                      style={{
+                        height: 52, borderRadius: 11, display: 'grid', placeItems: 'center',
+                        background: 'var(--card2)',
+                        border: `1.5px solid ${icon === px.id ? 'var(--acc)' : 'var(--line2)'}`,
+                      }}>
+                      <PixelFolderIcon iconId={px.id} size={36} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 8 }}>
+                  Standard Icons
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(46px,1fr))', gap: 6 }}>
+                  {PICKABLE.map((n) => (
+                    <button key={n} onClick={() => { onSave({ icon: `ic:${n}` }); onClose(); }} className="hov"
+                      aria-label={n} title={n}
+                      style={{
+                        height: 44, borderRadius: 11, display: 'grid', placeItems: 'center',
+                        border: `1px solid ${icon === `ic:${n}` ? 'var(--acc)' : 'var(--line2)'}`,
+                      }}>
+                      <Icon name={n} size={17} color="var(--tx2)" />
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>

@@ -15,6 +15,8 @@ import { useLongPress } from '@/lib/useLongPress';
 import { useDragCard } from '@/lib/useDragCard';
 import { ContextMenu } from '@/components/ContextMenu';
 import { FolderIcon, LookSheet, Cover } from '@/components/projects/Look';
+import { PixelIconPickerModal } from '@/components/projects/PixelIconPickerModal';
+import { PIXEL_FOLDER_ICONS } from '@/components/projects/PixelFolderIcons';
 import { Crew } from '@/components/projects/Crew';
 import { roomFor } from '@/lib/presence';
 import { useProfiles, displayOf } from '@/lib/people';
@@ -99,6 +101,27 @@ export default function ProjectsPage() {
   const { prefs } = usePrefs();
   const qc = useQueryClient();
   const lp = useLongPress();
+
+  type FolderSize = 'small' | 'medium' | 'large';
+  const [folderSize, setFolderSizeState] = useState<FolderSize>('medium');
+  const [pixelPicker, setPixelPicker] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('basedly_proj_folder_size') as FolderSize | null;
+      if (saved && ['small', 'medium', 'large'].includes(saved)) {
+        setFolderSizeState(saved);
+      }
+    } catch {}
+  }, []);
+
+  const setFolderSize = (size: FolderSize) => {
+    setFolderSizeState(size);
+    try {
+      localStorage.setItem('basedly_proj_folder_size', size);
+    } catch {}
+    toast(`Folder size: ${size}`);
+  };
 
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<View>('board');
@@ -275,6 +298,11 @@ export default function ProjectsPage() {
   const pad = phone ? '14px 14px 24px' : '20px 24px 28px';
 
   if (!proj) {
+    const colWidth = folderSize === 'small' ? (phone ? 78 : 96) : folderSize === 'large' ? (phone ? 144 : 168) : (phone ? 104 : 124);
+    const iconSize = folderSize === 'small' ? (phone ? 38 : 44) : folderSize === 'large' ? (phone ? 72 : 84) : (phone ? 52 : 60);
+    const folderPad = folderSize === 'small' ? (phone ? '6px 2px' : '8px 4px') : folderSize === 'large' ? (phone ? '14px 6px' : '16px 8px') : (phone ? '10px 4px' : '12px 6px');
+    const titleFont = folderSize === 'small' ? 10.5 : folderSize === 'large' ? 13 : 11.5;
+
     return (
       <div style={{ padding: pad }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -283,16 +311,38 @@ export default function ProjectsPage() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search folders"
               style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: 'var(--tx)' }} />
           </div>
+
+          {/* Size Switcher (Small / Medium / Large) */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', height: 36, padding: 3, borderRadius: 11, background: 'var(--card)', border: '1px solid var(--line2)', gap: 2 }}>
+            {(['small', 'medium', 'large'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFolderSize(s)}
+                className="k-squish"
+                title={`Folder size: ${s}`}
+                style={{
+                  height: 28,
+                  padding: '0 9px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: folderSize === s ? 'var(--card2)' : 'transparent',
+                  color: folderSize === s ? 'var(--tx)' : 'var(--tx3)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: folderSize === s ? 'var(--sh)' : 'none',
+                }}
+              >
+                {s === 'small' ? 'S' : s === 'medium' ? 'M' : 'L'}
+              </button>
+            ))}
+          </div>
+
           <button onClick={() => setSort(sort === 'Custom' ? 'Name' : sort === 'Name' ? 'Cards' : 'Custom')} className="hov" title="Change sort"
             style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
             <Icon name="sort" size={14} color="var(--tx2)" />{sort}
           </button>
-          {/* Make it, then name it — the order Finder, Drive and Notion use.
-              Naming first means answering a question before you have done the
-              thing you came to do, and an empty field with a Cancel next to it
-              is a chance to abandon a folder you already decided you wanted.
-              The folder appears as "Untitled project" with its name selected,
-              so typing renames it and walking away still leaves you a folder. */}
+
           <button onClick={() => {
             const id = crypto.randomUUID();
             newProj.mutate({ id, name: 'Untitled project', color: PAL.amber });
@@ -303,15 +353,9 @@ export default function ProjectsPage() {
           </button>
         </div>
 
-        {/* A folder is a folder. The card that used to sit behind each one
-            added a border, a shadow and 15px of padding to say "this is a
-            thing you can click", which the folder already said by itself —
-            and it cost half the row's width, so six folders filled a screen
-            that now holds fifteen. Finder, Explorer and Drive all draw the
-            icon on the bare background; so do we. */}
         {projectsPending && <FolderGridSkeleton phone={phone} count={8} label="Loading your projects" />}
 
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${phone ? 104 : 124}px,1fr))`, gap: phone ? 6 : 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${colWidth}px,1fr))`, gap: phone ? 6 : 10 }}>
           {!projectsPending && shown.map((p) => {
             const dragProps = cardDrag.propsFor(p.id);
             const n = cards.filter((c) => c.project_id === p.id).length;
@@ -331,11 +375,11 @@ export default function ProjectsPage() {
               title={`${p.name} — ${n} card${n === 1 ? '' : 's'}. Drag sideways to archive, up or down to reorder.`}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
-                padding: phone ? '10px 4px' : '12px 6px', borderRadius: 12, textAlign: 'center',
+                padding: folderPad, borderRadius: 12, textAlign: 'center',
                 ...dragProps.style,
               }}>
-              <FolderIcon color={p.color} count={n} size={phone ? 52 : 60} icon={p.icon} />
-              <span style={{ width: '100%', fontSize: 11.5, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
+              <FolderIcon color={p.color} count={n} size={iconSize} icon={p.icon} />
+              <span style={{ width: '100%', fontSize: titleFont, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
                 {p.name}
               </span>
               <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
@@ -344,7 +388,6 @@ export default function ProjectsPage() {
             </button>
             );
           })}
-
         </div>
 
         {!projectsPending && shown.length === 0 && (
@@ -362,13 +405,51 @@ export default function ProjectsPage() {
           ) : null;
         })()}
 
+        {pixelPicker && (() => {
+          const p = projects.find((x) => x.id === pixelPicker);
+          return p ? (
+            <PixelIconPickerModal
+              projectName={p.name}
+              currentIcon={p.icon}
+              onSelect={(iconId) => {
+                editProj.mutate({ id: p.id, patch: { icon: iconId } });
+                toast('Folder icon updated');
+              }}
+              onClose={() => setPixelPicker(null)}
+            />
+          ) : null;
+        })()}
+
         {lp.ctx && (
           <ContextMenu x={lp.ctx.x} y={lp.ctx.y} kind="project" label={lp.ctx.label}
             accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={lp.close}
             items={[
               { label: 'Open', icon: 'proj', run: () => setOpen(lp.ctx!.id) },
               { label: 'Rename', icon: 'edit', run: () => setEditing(`proj:${lp.ctx!.id}`) },
-              { label: 'Change icon and cover', icon: 'photo', run: () => setLook(lp.ctx!.id) },
+              {
+                label: 'Change icon', icon: 'spark',
+                items: [
+                  { label: 'Choose 8-bit shiny icon...', icon: 'spark', run: () => setPixelPicker(lp.ctx!.id) },
+                  ...PIXEL_FOLDER_ICONS.slice(0, 6).map((px) => ({
+                    label: px.name,
+                    icon: 'star' as IconName,
+                    run: () => {
+                      editProj.mutate({ id: lp.ctx!.id, patch: { icon: px.id } });
+                      toast(`Icon: ${px.name}`);
+                    },
+                  })),
+                  { label: 'More icons and cover...', icon: 'photo', run: () => setLook(lp.ctx!.id) },
+                  { label: 'Reset to plain folder', icon: 'undo', run: () => { editProj.mutate({ id: lp.ctx!.id, patch: { icon: '' } }); toast('Reset to plain folder'); } },
+                ],
+              },
+              {
+                label: 'Folder size', icon: 'grid',
+                items: [
+                  { label: 'Small icons', icon: 'grid', checked: folderSize === 'small', run: () => setFolderSize('small') },
+                  { label: 'Medium icons', icon: 'grid', checked: folderSize === 'medium', run: () => setFolderSize('medium') },
+                  { label: 'Large icons', icon: 'grid', checked: folderSize === 'large', run: () => setFolderSize('large') },
+                ],
+              },
               { label: 'Delete', icon: 'trash', danger: true, run: () => { const id = lp.ctx!.id; const row = projects.find((x) => x.id === id); delProj.mutate({ id }); toast('Project deleted', () => restoreProj.mutate({ id, row })); } },
             ]} />
         )}
@@ -412,6 +493,18 @@ export default function ProjectsPage() {
         <LookSheet name={proj.name} icon={proj.icon} cover={proj.cover} color={proj.color}
           onClose={() => setLook(null)}
           onSave={(patch) => editProj.mutate({ id: proj.id, patch })} />
+      )}
+
+      {pixelPicker === proj.id && (
+        <PixelIconPickerModal
+          projectName={proj.name}
+          currentIcon={proj.icon}
+          onSelect={(iconId) => {
+            editProj.mutate({ id: proj.id, patch: { icon: iconId } });
+            toast('Folder icon updated');
+          }}
+          onClose={() => setPixelPicker(null)}
+        />
       )}
 
       {view === 'board' && (
