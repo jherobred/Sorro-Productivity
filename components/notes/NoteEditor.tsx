@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import katex from 'katex';
 import { Icon, type IconName } from '../Icon';
 import { MathEquationEditor } from './MathEquationEditor';
@@ -15,7 +15,7 @@ import {
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
 
 const SAVE_DEBOUNCE_MS = 600;
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
 export function NoteEditor({
   note, notes, tags, phone, onSave, onDelete, onPickNote, onNewNote, onSetTags, onBack,
@@ -190,9 +190,10 @@ export function NoteEditor({
 
       <div className="navsb" style={{
         flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--card)',
-        borderRadius: 14, boxShadow: 'var(--sh)', padding: phone ? '14px 14px 40px' : '20px 26px 60px',
+        borderRadius: 16, boxShadow: 'var(--sh)', padding: phone ? '16px 16px 48px' : '28px 36px 72px',
       }}>
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+        <div style={{ maxWidth: 740, margin: '0 auto' }}>
+          {/* Note Title - Seamless, zero-border input */}
           <textarea
             ref={(el) => { if (el) autosize(el); }}
             value={title}
@@ -200,17 +201,33 @@ export function NoteEditor({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); area.current?.focus(); }
             }}
-            placeholder="Title"
+            placeholder="Untitled Note"
             aria-label="Note title"
             rows={1}
+            className="note-editor-clean-input"
             style={{
-              width: '100%', resize: 'none', overflow: 'hidden', fontFamily: 'inherit',
-              fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.028em', lineHeight: 1.25,
+              width: '100%',
+              resize: 'none',
+              overflow: 'hidden',
+              fontFamily: 'inherit',
+              fontSize: phone ? 23 : 29,
+              fontWeight: 800,
+              letterSpacing: '-.03em',
+              lineHeight: 1.24,
               color: 'var(--tx)',
+              border: 'none',
+              outline: 'none',
+              boxShadow: 'none',
+              background: 'transparent',
+              padding: '4px 0 6px',
+              margin: '0 0 4px',
+              display: 'block',
             }} />
 
+          {/* Tags */}
           <TagRow tags={tags} onSet={onSetTags} />
 
+          {/* Note Body or Formatted Read View */}
           {read ? (
             <ReadView lines={lines}
               onToggle={(i) => setBodyAndQueue(toggleTask(body, i))}
@@ -222,35 +239,52 @@ export function NoteEditor({
               value={body}
               onChange={(e) => { setBodyAndQueue(e.target.value); autosize(e.target); }}
               onKeyDown={onKeyDown}
-              placeholder="Start writing. # for heading, $$ for math block, $..$ for inline equation, [[ ]] to link notes."
+              placeholder="Start writing… Use # for heading, $$ for math block, $..$ for inline math, [[ ]] to link notes."
               aria-label="Note body"
-              rows={6}
+              rows={8}
+              className="note-editor-clean-input"
               style={{
-                width: '100%', minHeight: 320, resize: 'none', overflow: 'hidden',
-                fontSize: 13.5, lineHeight: 1.75, color: 'var(--tx)', fontFamily: 'inherit',
+                width: '100%',
+                minHeight: 360,
+                resize: 'none',
+                overflow: 'hidden',
+                fontSize: phone ? 14.5 : 15.5,
+                lineHeight: 1.76,
+                letterSpacing: '-.01em',
+                color: 'var(--tx)',
+                fontFamily: 'inherit',
+                border: 'none',
+                outline: 'none',
+                boxShadow: 'none',
+                background: 'transparent',
+                padding: '8px 0',
+                display: 'block',
               }} />
           )}
 
+          {/* Footer Metadata */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 18,
-            paddingTop: 12, borderTop: '1px solid var(--line)', fontSize: 10.5, color: 'var(--tx3)',
+            display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 24,
+            paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 11, color: 'var(--tx3)',
           }}>
             <span>{words} word{words === 1 ? '' : 's'}</span>
-            {t.total > 0 && <span>{t.done}/{t.total} done</span>}
+            {t.total > 0 && <span>{t.done}/{t.total} tasks completed</span>}
             <span>Edited {whenLabel(note.updated_at)}</span>
-            <span style={{ marginLeft: 'auto', color: dirty ? 'var(--accTx)' : 'var(--tx3)' }}>
+            <span style={{ marginLeft: 'auto', fontWeight: 600, color: dirty ? 'var(--accTx)' : 'var(--tx3)' }}>
               {dirty ? 'Saving…' : 'Saved'}
             </span>
           </div>
 
+          {/* Backlinks */}
           {backlinks.length > 0 && (
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
               <div style={KICKER}>Linked from</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8 }}>
                 {backlinks.map((n) => (
                   <button key={n.id} onClick={() => onPickNote(n.id)} className="k-chip" style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
-                    minHeight: 34, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 8,
+                    background: 'color-mix(in srgb, var(--tx) 5%, transparent)',
+                    border: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
                   }}>
                     <Icon name="link" size={12} color="var(--tx3)" />{n.title || 'Untitled'}
                   </button>
@@ -263,14 +297,14 @@ export function NoteEditor({
 
       {/* Math LaTeX Formula Composer Modal */}
       {mathEditorOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <MathEquationEditor onInsert={insertLatexBlock} onClose={() => setMathEditorOpen(false)} />
         </div>
       )}
 
       {/* Interactive Math Sketchpad Modal */}
       {sketchpadOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <MathSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
         </div>
       )}
@@ -298,24 +332,24 @@ function Toolbar({
     <button key={label} onClick={run} className="hov tap" title={label} aria-label={label}
       disabled={read}
       style={{
-        width: 30, height: 30, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center',
-        opacity: read ? 0.35 : 1, fontSize: 11.5, fontWeight: 800, color: 'var(--tx2)',
+        width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center',
+        opacity: read ? 0.35 : 1, fontSize: 11, fontWeight: 800, color: 'var(--tx2)',
       }}>
-      {text ?? <Icon name={icon} size={14} color="var(--tx2)" />}
+      {text ?? <Icon name={icon} size={13.5} color="var(--tx2)" />}
     </button>
   );
 
-  const rule = <span aria-hidden style={{ width: 1, height: 18, flex: 'none', background: 'var(--line2)', margin: '0 2px' }} />;
+  const rule = <span aria-hidden style={{ width: 1, height: 16, flex: 'none', background: 'var(--line)', margin: '0 2px' }} />;
 
   return (
     <div className="hbar" style={{
       display: 'flex', alignItems: 'center', gap: 2, overflowX: 'auto', flex: 'none',
-      padding: '0 2px 8px', minHeight: 40,
+      padding: '0 2px 8px', minHeight: 38,
     }}>
       {phone && onBack && (
         <button onClick={onBack} className="hov tap" aria-label="Back to the note list"
-          style={{ width: 30, height: 30, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
-          <Icon name="back" size={15} color="var(--tx2)" />
+          style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', marginRight: 4 }}>
+          <Icon name="back" size={14} color="var(--tx2)" />
         </button>
       )}
 
@@ -343,21 +377,44 @@ function Toolbar({
 
       <span style={{ marginLeft: 'auto' }} />
 
-      <button onClick={onToggleRead} className="hov tap" aria-pressed={read}
-        title={read ? 'Back to writing (⌘E)' : 'Read it formatted (⌘E)'}
-        aria-label={read ? 'Back to writing' : 'Read it formatted'}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px', flex: 'none',
-          borderRadius: 8, border: `1px solid ${read ? 'var(--acc)' : 'var(--line2)'}`,
-          fontSize: 11.5, fontWeight: 700, color: read ? 'var(--accTx)' : 'var(--tx2)',
-        }}>
-        <Icon name={read ? 'pen' : 'eye'} size={13} color={read ? 'var(--accTx)' : 'var(--tx2)'} />
-        {read ? 'Write' : 'Read'}
-      </button>
+      {/* Segmented Mode Switch (Write / Read) */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', height: 28, padding: 2,
+        borderRadius: 8, background: 'var(--card2)', gap: 2, marginRight: 4,
+      }}>
+        <button
+          onClick={() => { if (read) onToggleRead(); }}
+          className="k-squish"
+          style={{
+            height: 24, padding: '0 8px', borderRadius: 6,
+            background: !read ? 'var(--card)' : 'transparent',
+            color: !read ? 'var(--tx)' : 'var(--tx3)',
+            fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+            boxShadow: !read ? 'var(--sh)' : 'none',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <Icon name="pen" size={11} color={!read ? 'var(--tx)' : 'var(--tx3)'} />Write
+        </button>
+        <button
+          onClick={() => { if (!read) onToggleRead(); }}
+          className="k-squish"
+          style={{
+            height: 24, padding: '0 8px', borderRadius: 6,
+            background: read ? 'var(--card)' : 'transparent',
+            color: read ? 'var(--accTx)' : 'var(--tx3)',
+            fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+            boxShadow: read ? 'var(--sh)' : 'none',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <Icon name="eye" size={11} color={read ? 'var(--accTx)' : 'var(--tx3)'} />Read
+        </button>
+      </div>
 
       <button onClick={onDelete} className="hov tap" title="Delete note" aria-label="Delete note"
-        style={{ width: 30, height: 30, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
-        <Icon name="trash" size={14} color="var(--tx3)" />
+        style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center' }}>
+        <Icon name="trash" size={13.5} color="var(--tx3)" />
       </button>
     </div>
   );
@@ -367,7 +424,7 @@ function Toolbar({
 
 function TagRow({ tags, onSet }: { tags: string[]; onSet: (t: string[]) => void }) {
   const add = () =>
-    void ask('Add a tag', { placeholder: 'e.g. cs191', confirmLabel: 'Add' }).then((t) => {
+    void ask('Add a tag', { placeholder: 'e.g. math, cs101, design', confirmLabel: 'Add' }).then((t) => {
       const tag = t?.trim().replace(/^#/, '').slice(0, 40);
       if (!tag) return;
       if (tags.includes(tag)) return toast('Already tagged');
@@ -375,24 +432,26 @@ function TagRow({ tags, onSet }: { tags: string[]; onSet: (t: string[]) => void 
     });
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', margin: '6px 0 14px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', margin: '4px 0 16px' }}>
       {tags.map((t) => (
         <span key={t} style={{
-          display: 'flex', alignItems: 'center', gap: 5, padding: '3px 6px 3px 10px', borderRadius: 999,
-          border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)',
+          display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6,
+          background: 'color-mix(in srgb, var(--tx) 6%, transparent)',
+          fontSize: 11, fontWeight: 700, color: 'var(--tx2)', border: 'none',
         }}>
           #{t}
           <button onClick={() => onSet(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`} className="hov"
-            style={{ width: 18, height: 18, borderRadius: 999, display: 'grid', placeItems: 'center' }}>
-            <Icon name="close" size={10} color="var(--tx3)" />
+            style={{ width: 16, height: 16, borderRadius: 999, display: 'grid', placeItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+            <Icon name="close" size={9} color="var(--tx3)" />
           </button>
         </span>
       ))}
-      <button onClick={add} className="hov" style={{
-        display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999,
-        border: '1px dashed var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx3)',
+      <button onClick={add} className="hov k-squish" style={{
+        display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6,
+        background: 'color-mix(in srgb, var(--tx) 3%, transparent)',
+        fontSize: 11, fontWeight: 600, color: 'var(--tx3)', border: 'none', cursor: 'pointer',
       }}>
-        <Icon name="plus" size={11} color="var(--tx3)" />Tag
+        <Icon name="plus" size={10} color="var(--tx3)" />Tag
       </button>
     </div>
   );
@@ -412,16 +471,19 @@ function ReadView({
     if (s.s === 'link') {
       return (
         <button key={i} onClick={() => onLink(s.text)} className="k-underline" style={{
-          display: 'inline', font: 'inherit', padding: '0 1px', borderRadius: 3,
+          display: 'inline', font: 'inherit', padding: '0 2px',
           color: known(s.text) ? 'var(--accTx)' : PAL.coral,
-          background: 'color-mix(in srgb, var(--acc) 10%, transparent)',
+          fontWeight: 600,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
         }}>{s.text}</button>
       );
     }
     if (s.s === 'bold') return <strong key={i} style={{ fontWeight: 800 }}>{s.text}</strong>;
     if (s.s === 'italic') return <em key={i}>{s.text}</em>;
     if (s.s === 'code') return (
-      <code key={i} style={{ fontFamily: MONO, fontSize: '.92em', padding: '1px 5px', borderRadius: 5, background: 'var(--card2)' }}>
+      <code key={i} style={{ fontFamily: MONO, fontSize: '.92em', padding: '1px 5px', borderRadius: 5, background: 'var(--card2)', color: 'var(--tx)' }}>
         {s.text}
       </code>
     );
@@ -430,13 +492,13 @@ function ReadView({
         const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
         return <span key={i} dangerouslySetInnerHTML={{ __html: mathHtml }} style={{ padding: '0 2px' }} />;
       } catch {
-        return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
+        return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>$${s.text}$</code>;
       }
     }
     if (s.s === 'image') {
       return (
-        <span key={i} style={{ display: 'block', margin: '8px 0', textAlign: 'center' }}>
-          <img src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--line2)', background: '#141620' }} />
+        <span key={i} style={{ display: 'block', margin: '14px 0', textAlign: 'center' }}>
+          <img src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
         </span>
       );
     }
@@ -444,10 +506,10 @@ function ReadView({
   });
 
   return (
-    <div style={{ minHeight: 320 }}>
+    <div style={{ minHeight: 360, paddingTop: 4 }}>
       {lines.map((l, i) => {
-        if (l.kind === 'blank') return <div key={i} style={{ height: 10 }} />;
-        if (l.kind === 'divider') return <hr key={i} style={{ border: 0, borderTop: '1px solid var(--line2)', margin: '14px 0' }} />;
+        if (l.kind === 'blank') return <div key={i} style={{ height: 12 }} />;
+        if (l.kind === 'divider') return <hr key={i} style={{ border: 0, borderTop: '1px solid var(--line)', margin: '18px 0' }} />;
         if (l.kind === 'math') {
           try {
             const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
@@ -456,47 +518,54 @@ function ReadView({
                 key={i}
                 className="k-math-block"
                 style={{
-                  margin: '12px 0', padding: '14px 18px', borderRadius: 12,
-                  background: 'var(--card2)', border: '1px solid var(--line2)',
-                  overflowX: 'auto', textAlign: 'center', fontSize: 16, color: 'var(--tx)',
+                  margin: '16px 0',
+                  padding: '16px 8px',
+                  borderRadius: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  overflowX: 'auto',
+                  textAlign: 'center',
+                  fontSize: 17,
+                  color: 'var(--tx)',
                 }}
                 dangerouslySetInnerHTML={{ __html: blockHtml }}
               />
             );
           } catch {
-            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)' }}>$$\n{l.text}\n$$</pre>;
+            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)', borderRadius: 8 }}>$$\n${l.text}\n$$</pre>;
           }
         }
         if (l.kind === 'sketch') {
           return (
-            <div key={i} style={{ margin: '12px 0', textAlign: 'center' }}>
-              <img src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line2)', background: '#141620' }} />
+            <div key={i} style={{ margin: '16px 0', textAlign: 'center' }}>
+              <img src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
             </div>
           );
         }
         if (l.kind === 'code') {
           return (
             <pre key={i} className="navsb" style={{
-              margin: '8px 0', padding: '10px 12px', borderRadius: 10, overflowX: 'auto',
-              background: 'var(--card2)', border: '1px solid var(--line)',
-              fontFamily: MONO, fontSize: 12, lineHeight: 1.6, color: 'var(--tx)',
+              margin: '10px 0', padding: '12px 14px', borderRadius: 10, overflowX: 'auto',
+              background: 'var(--card2)', border: 'none',
+              fontFamily: MONO, fontSize: 12.5, lineHeight: 1.65, color: 'var(--tx)',
             }}>{l.text}</pre>
           );
         }
         if (l.kind === 'todo') {
           return (
-            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '2px 0' }}>
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '3px 0' }}>
               <button onClick={() => onToggle(l.i)} role="checkbox" aria-checked={l.done}
                 aria-label={l.text || 'To-do'} className="k-squish"
                 style={{
-                  width: 17, height: 17, flex: 'none', marginTop: 4, borderRadius: 5,
-                  border: `1.5px solid ${l.done ? 'var(--acc)' : 'var(--line2)'}`,
+                  width: 16, height: 16, flex: 'none', marginTop: 4, borderRadius: 4,
+                  border: `1.25px solid ${l.done ? 'var(--acc)' : 'var(--line2)'}`,
                   background: l.done ? 'var(--acc)' : 'transparent', display: 'grid', placeItems: 'center',
+                  cursor: 'pointer', outline: 'none',
                 }}>
-                {l.done && <Icon name="check" size={11} color="var(--ink)" />}
+                {l.done && <Icon name="check" size={10.5} color="var(--ink)" />}
               </button>
               <span style={{
-                fontSize: 13.5, lineHeight: 1.7,
+                fontSize: 15, lineHeight: 1.74,
                 ...(l.done ? { textDecoration: 'line-through', color: 'var(--tx3)' } : { color: 'var(--tx)' }),
               }}>{inline(l.text)}</span>
             </div>
@@ -504,43 +573,43 @@ function ReadView({
         }
         if (l.kind === 'bullet' || l.kind === 'number') {
           return (
-            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '1px 0' }}>
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '2px 0' }}>
               {l.kind === 'bullet'
-                ? <span aria-hidden style={{ width: 6, height: 6, flex: 'none', borderRadius: 3, background: 'var(--tx3)', marginTop: 9 }} />
-                : <span aria-hidden style={{ flex: 'none', fontSize: 13, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{l.n}.</span>}
-              <span style={{ fontSize: 13.5, lineHeight: 1.7, color: 'var(--tx)' }}>{inline(l.text)}</span>
+                ? <span aria-hidden style={{ width: 5.5, height: 5.5, flex: 'none', borderRadius: 3, background: 'var(--tx3)', marginTop: 9 }} />
+                : <span aria-hidden style={{ flex: 'none', fontSize: 13.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{l.n}.</span>}
+              <span style={{ fontSize: 15, lineHeight: 1.74, color: 'var(--tx)' }}>{inline(l.text)}</span>
             </div>
           );
         }
         if (l.kind === 'quote') {
           return (
             <blockquote key={i} style={{
-              margin: '6px 0', paddingLeft: 12, borderLeft: '3px solid var(--line2)',
-              fontSize: 13.5, lineHeight: 1.7, fontStyle: 'italic', color: 'var(--tx2)',
+              margin: '8px 0', paddingLeft: 14, borderLeft: '3px solid var(--acc)',
+              fontSize: 14.5, lineHeight: 1.75, fontStyle: 'italic', color: 'var(--tx2)',
             }}>{inline(l.text)}</blockquote>
           );
         }
         if (l.kind === 'callout') {
           return (
             <div key={i} style={{
-              margin: '8px 0', padding: '10px 12px', borderRadius: 10, fontSize: 13, lineHeight: 1.65,
-              background: 'color-mix(in srgb, var(--acc) 10%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--acc) 26%, transparent)', color: 'var(--tx)',
+              margin: '10px 0', padding: '12px 14px', borderRadius: 10, fontSize: 14, lineHeight: 1.68,
+              background: 'color-mix(in srgb, var(--acc) 9%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--acc) 22%, transparent)', color: 'var(--tx)',
             }}>{inline(l.text)}</div>
           );
         }
         const h = HEADING[l.kind];
         if (h) return <div key={i} style={{ ...h, color: 'var(--tx)' }}>{inline(l.text)}</div>;
-        return <p key={i} style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--tx)', margin: '2px 0' }}>{inline(l.text)}</p>;
+        return <p key={i} style={{ fontSize: 15, lineHeight: 1.76, color: 'var(--tx)', margin: '4px 0' }}>{inline(l.text)}</p>;
       })}
     </div>
   );
 }
 
 const HEADING: Partial<Record<LineKind, React.CSSProperties>> = {
-  h1: { fontSize: 22, fontWeight: 800, letterSpacing: '-.024em', lineHeight: 1.35, margin: '16px 0 4px' },
-  h2: { fontSize: 17.5, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.4, margin: '13px 0 3px' },
-  h3: { fontSize: 14.5, fontWeight: 800, letterSpacing: '-.012em', lineHeight: 1.45, margin: '10px 0 2px' },
+  h1: { fontSize: 23, fontWeight: 800, letterSpacing: '-.026em', lineHeight: 1.3, margin: '26px 0 8px' },
+  h2: { fontSize: 18.5, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.35, margin: '20px 0 6px' },
+  h3: { fontSize: 15.5, fontWeight: 700, letterSpacing: '-.014em', lineHeight: 1.4, margin: '16px 0 4px' },
 };
 
 const KICKER: React.CSSProperties = {

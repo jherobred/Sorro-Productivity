@@ -123,7 +123,7 @@ export function MathEquationEditor({
       {/* Live Preview Box */}
       <div
         style={{
-          background: '#0E1017',
+          background: 'var(--card2)',
           borderRadius: 12,
           padding: '16px 20px',
           border: '1px solid var(--line2)',
@@ -135,7 +135,7 @@ export function MathEquationEditor({
         }}
       >
         {renderedHtml ? (
-          <div dangerouslySetInnerHTML={{ __html: renderedHtml }} style={{ fontSize: 18, color: '#EAEBED' }} />
+          <div dangerouslySetInnerHTML={{ __html: renderedHtml }} style={{ fontSize: 18, color: 'var(--tx)' }} />
         ) : (
           <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Live rendered math formula appears here</div>
         )}

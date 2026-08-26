@@ -167,10 +167,12 @@ export function NoteList({
             <button key={n.id} onClick={() => onPick(n.id)}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, label: n.title || 'Untitled', items: noteMenu(n) }); }}
               style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 12,
-                border: `1px solid ${on ? 'var(--acc)' : 'transparent'}`,
-                background: on ? 'var(--card2)' : 'var(--card)',
+                display: 'block', width: '100%', textAlign: 'left', padding: '11px 13px', borderRadius: 12,
+                border: '1px solid transparent',
+                borderLeft: on ? '3px solid var(--acc)' : '3px solid transparent',
+                background: on ? 'color-mix(in srgb, var(--acc) 10%, var(--card2))' : 'var(--card)',
                 boxShadow: on ? 'none' : 'var(--sh)', flex: 'none',
+                transition: 'all .16s ease',
               }}>
               <span style={{
                 display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--tx)',

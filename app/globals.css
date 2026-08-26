@@ -320,6 +320,16 @@ body {
   border-radius: inherit;
 }
 
+/* Zero-outline, zero-border seamless typing for note editor */
+.note-editor-clean-input,
+.note-editor-clean-input:focus,
+.note-editor-clean-input:focus-visible,
+.note-editor-clean-input:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
 /* Skip link — first tab stop, hidden until focused (WCAG 2.4.1). */
 .skip {
   position: fixed; left: 10px; top: 10px; z-index: 200;
