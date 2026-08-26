@@ -144,19 +144,29 @@ export default function HomePage() {
     .map((t) => Math.round((Date.now() - new Date(t.due_on! + 'T00:00:00').getTime()) / 86_400_000))
     .sort((a, b) => b - a)[0];
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const todays = events
     .filter((e) => new Date(e.starts_at).toDateString() === new Date().toDateString())
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
   const upNext = events
-    .filter((e) => new Date(e.starts_at).getTime() > Date.now())
+    .filter((e) => new Date(e.ends_at).getTime() > now)
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
 
-  const minsUntil = upNext ? Math.round((new Date(upNext.starts_at).getTime() - Date.now()) / 60_000) : 0;
-  const untilPct = Math.max(4, Math.min(100, Math.round(((120 - minsUntil) / 120) * 100)));
-  const untilLabel = !upNext ? '' : minsUntil >= 60
-    ? `in ${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`
-    : `in ${Math.max(0, minsUntil)} min`;
+  const isOngoing = upNext ? new Date(upNext.starts_at).getTime() <= now : false;
+  const targetTime = upNext ? (isOngoing ? new Date(upNext.ends_at).getTime() : new Date(upNext.starts_at).getTime()) : 0;
+  const diffMs = upNext ? Math.max(0, targetTime - now) : 0;
+  const totalSecs = Math.floor(diffMs / 1000);
+  const hrsUntil = Math.floor(totalSecs / 3600);
+  const minsUntil = Math.floor((totalSecs % 3600) / 60);
+  const secsUntil = totalSecs % 60;
+  const totalMinsLeft = Math.round(diffMs / 60_000);
+  const untilPct = Math.max(4, Math.min(100, Math.round(((120 - Math.min(120, totalMinsLeft)) / 120) * 100)));
 
   // Money tile: spend this calendar month against the summed monthly budgets.
   const month = new Date().toISOString().slice(0, 7);
@@ -273,46 +283,89 @@ export default function HomePage() {
           <div style={{ display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' }}>
             {/* Up next */}
             <div style={{
-              flex: 'none', width: 353, borderRadius: 15, padding: '14px 16px',
-              background: `color-mix(in srgb, ${INDIGO} 14%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${INDIGO} 38%, transparent)`,
-              minHeight: 170, display: 'flex', flexDirection: 'column',
+              flex: 'none', width: 353, borderRadius: 16, padding: '16px 18px',
+              background: `color-mix(in srgb, ${INDIGO} 14%, var(--card))`,
+              border: `1.5px solid color-mix(in srgb, ${INDIGO} 36%, transparent)`,
+              boxShadow: `0 4px 20px color-mix(in srgb, ${INDIGO} 12%, transparent)`,
+              minHeight: 180, display: 'flex', flexDirection: 'column',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-                <div style={{ ...KICKER, color: INDIGO }}>Up next</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ ...KICKER, color: INDIGO }}>{isOngoing ? 'Happening Now' : 'Up next'}</div>
+                  {upNext && (
+                    // Live indicator: pulsating dot
+                    <span style={{ position: 'relative', width: 7, height: 7, flex: 'none' }}>
+                      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: isOngoing ? PAL.mint : INDIGO }} />
+                      <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isOngoing ? PAL.mint : INDIGO}` }} />
+                    </span>
+                  )}
+                </div>
                 {upNext && (
-                  // Live indicator: a dot under an expanding halo ring.
-                  <span style={{ position: 'relative', width: 6, height: 6, flex: 'none' }}>
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: INDIGO }} />
-                    <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${INDIGO}` }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                    {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}
                   </span>
                 )}
               </div>
 
               {upNext ? (
                 <>
-                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 5 }}>{upNext.title}</div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums', marginBottom: 11 }}>
-                    {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}{upNext.location ? ` · ${upNext.location}` : ''}
+                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {upNext.title}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                    <div style={{ flex: 1, height: 5, borderRadius: 3, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden' }}>
-                      <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 3, background: PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                  {upNext.location && (
+                    <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="pin" size={11} color="var(--tx3)" />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{upNext.location}</span>
                     </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: INDIGO, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{untilLabel}</div>
+                  )}
+
+                  {/* Highly Visible Seconds Countdown Box */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', borderRadius: 11, margin: '8px 0 10px',
+                    background: `color-mix(in srgb, ${INDIGO} 16%, var(--card2))`,
+                    border: `1px solid color-mix(in srgb, ${INDIGO} 40%, transparent)`,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="clock" size={13} color={INDIGO} />
+                      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: INDIGO }}>
+                        {isOngoing ? 'Ends in' : 'Starts in'}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: 18, fontWeight: 800, color: 'var(--tx)',
+                      fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      display: 'flex', alignItems: 'baseline', gap: 2,
+                    }}>
+                      {hrsUntil > 0 && (
+                        <>
+                          <span>{hrsUntil}</span><span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginRight: 2 }}>h</span>
+                        </>
+                      )}
+                      <span>{String(minsUntil).padStart(2, '0')}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginRight: 2 }}>m</span>
+                      <span style={{ color: INDIGO }}>{String(secsUntil).padStart(2, '0')}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: INDIGO }}>s</span>
+                    </div>
+                  </div>
+
+                  <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
+                    <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
                   </div>
                 </>
               ) : (
-                <>
-                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 5 }}>Nothing else today</div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx2)', marginBottom: 11 }}>Tomorrow is clear too</div>
-                </>
+                <div style={{ margin: 'auto 0' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>Nothing else today</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
+                </div>
               )}
 
               <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
-                <button onClick={() => router.push('/notebooks/')} className="acc k-squish"
+                <button onClick={() => router.push('/calendar/')} className="acc k-squish"
                   style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                  Open notes
+                  Open schedule
                 </button>
                 <button
                   onClick={() => {
@@ -324,7 +377,7 @@ export default function HomePage() {
                   }}
                   className="hov k-squish"
                   style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  Snooze
+                  Snooze 10m
                 </button>
               </div>
             </div>

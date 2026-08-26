@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { TabRail } from './TabRail';
@@ -12,7 +12,7 @@ import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
-import { useEvents, type Ev } from '@/lib/events';
+import { useEvents, type Ev, hhmm, hoursOf } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
 import { BuddyCompanion } from './BuddyCompanion';
 import { DailyQuests } from './DailyQuests';
@@ -80,10 +80,26 @@ export function PhoneHome({ name }: { name: string }) {
   const spent = txns.filter((t) => t.occurred_at.startsWith(month)).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
   const budget = budgets.reduce((s, b) => s + b.amount_centavos, 0);
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const dueToday = open.filter((t) => t.due_on === today);
   const overdue = open.filter((t) => t.due_on && t.due_on < today);
   const todaysEvents = events.filter((e) => sameDay(e.starts_at, today));
-  const next = events.find((e) => new Date(e.ends_at).getTime() > Date.now()) ?? null;
+  const next = events
+    .filter((e) => new Date(e.ends_at).getTime() > now)
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0] ?? null;
+
+  const isNextOngoing = next ? new Date(next.starts_at).getTime() <= now : false;
+  const nextTargetTime = next ? (isNextOngoing ? new Date(next.ends_at).getTime() : new Date(next.starts_at).getTime()) : 0;
+  const nextDiffMs = next ? Math.max(0, nextTargetTime - now) : 0;
+  const nextTotalSecs = Math.floor(nextDiffMs / 1000);
+  const nextHrs = Math.floor(nextTotalSecs / 3600);
+  const nextMins = Math.floor((nextTotalSecs % 3600) / 60);
+  const nextSecs = nextTotalSecs % 60;
 
   // Eight rings: habits first, then the standing money/tasks dials.
   type Ring = { n: string; c: string; pct: number; ic: IconName; go: () => void };
@@ -168,26 +184,50 @@ export function PhoneHome({ name }: { name: string }) {
         <>
           {/* What is next */}
           <button onClick={() => router.push('/calendar/')} className="hov k-squish" style={{
-            ...CARD, width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 11,
-            padding: '13px 14px',
+            ...CARD, width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 9,
+            padding: '13px 15px',
+            border: `1.5px solid color-mix(in srgb, ${next?.color || PAL.sky} 35%, var(--line2))`,
           }}>
-            <span style={{
-              width: 3, alignSelf: 'stretch', minHeight: 34, borderRadius: 2,
-              background: next?.color || PAL.sky, flex: 'none',
-            }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={KICKER}>{next ? 'Up next' : 'Today'}</span>
-              <span style={{
-                display: 'block', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', marginTop: 3,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {next ? next.title : 'Nothing scheduled'}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ position: 'relative', width: 6, height: 6, flex: 'none' }}>
+                  <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: next ? (isNextOngoing ? PAL.mint : (next.color || PAL.sky)) : 'var(--tx3)' }} />
+                  {next && <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isNextOngoing ? PAL.mint : (next.color || PAL.sky)}` }} />}
+                </span>
+                <span style={{ ...KICKER, color: next ? (isNextOngoing ? PAL.mint : (next.color || PAL.sky)) : 'var(--tx3)' }}>
+                  {next ? (isNextOngoing ? 'Happening Now' : 'Up next') : 'Today'}
+                </span>
+              </div>
+              {next && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 2, padding: '3px 8px', borderRadius: 7,
+                  background: `color-mix(in srgb, ${next.color || PAL.sky} 15%, var(--card2))`,
+                  border: `1px solid color-mix(in srgb, ${next.color || PAL.sky} 30%, transparent)`,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontSize: 12, fontWeight: 800, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums',
+                }}>
+                  <Icon name="clock" size={11} color={next.color || PAL.sky} style={{ marginRight: 2 }} />
+                  {nextHrs > 0 && <span>{nextHrs}h </span>}
+                  <span>{String(nextMins).padStart(2, '0')}m </span>
+                  <span style={{ color: next.color || PAL.sky }}>{String(nextSecs).padStart(2, '0')}s</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{
+                  display: 'block', fontSize: 14.5, fontWeight: 800, letterSpacing: '-.02em',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--tx)',
+                }}>
+                  {next ? next.title : 'Nothing scheduled'}
+                </span>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                  {next ? `${hhmm(hoursOf(next.starts_at))} – ${hhmm(hoursOf(next.ends_at))}${next.location ? ' · ' + next.location : ''}` : `${todaysEvents.length} today · ${dueToday.length} due`}
+                </span>
               </span>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-                {next ? whenLabel(next) : `${todaysEvents.length} today · ${dueToday.length} due`}
-              </span>
-            </span>
-            <Icon name="chev" size={14} color="var(--tx3)" />
+              <Icon name="chev" size={14} color="var(--tx3)" />
+            </div>
           </button>
 
           {/* Overdue */}
