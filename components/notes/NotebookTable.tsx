@@ -297,7 +297,7 @@ function BookRow({
         </td>
 
         {!phone && <td style={cell}>{kids.length}</td>}
-        {!phone && <td style={{ ...cell, fontWeight: 600, color: 'var(--tx2)' }}>{me}</td>}
+        {!phone && <td style={{ ...cell, fontWeight: 600, color: 'var(--tx2)' }}>{(!me || me.toLowerCase() === 'gemini') ? 'you' : me}</td>}
         <td style={{ ...cell, color: 'var(--tx3)' }}>{last ? whenLabel(last) : '—'}</td>
         <td style={{ ...cell, paddingLeft: 0 }}>
           <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}

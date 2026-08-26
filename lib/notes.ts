@@ -119,8 +119,13 @@ export function useMe() {
     queryKey: ['me_handle'],
     staleTime: 600_000,
     queryFn: async (): Promise<string> => {
-      const { data } = await supabase.from('bd_profiles').select('handle,name').limit(1).maybeSingle();
-      return data?.handle || data?.name || 'you';
+      const uid = await currentUserId();
+      if (uid) {
+        const { data } = await supabase.from('bd_profiles').select('handle,name').eq('id', uid).maybeSingle();
+        if (data?.handle && data.handle.toLowerCase() !== 'gemini') return data.handle;
+        if (data?.name && data.name.toLowerCase() !== 'gemini') return data.name;
+      }
+      return 'you';
     },
   });
 }
