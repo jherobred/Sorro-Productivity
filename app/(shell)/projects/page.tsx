@@ -12,7 +12,6 @@ import { PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useLongPress } from '@/lib/useLongPress';
-import { useDragCard } from '@/lib/useDragCard';
 import { ContextMenu } from '@/components/ContextMenu';
 import { FolderIcon, LookSheet, Cover } from '@/components/projects/Look';
 import { PixelIconPickerModal } from '@/components/projects/PixelIconPickerModal';
@@ -207,27 +206,33 @@ export default function ProjectsPage() {
     onSettled: settle,
   });
 
-  /**
-   * Folders sort by drag: sideways past 100px flings the card away and archives
-   * it (undoable from the toast), up or down swaps it with its neighbour.
-   */
-  const cardDrag = useDragCard({
-    onDismiss: (id) => {
-      const p = projects.find((x) => x.id === id);
-      delProj.mutate({ id });
-      toast(`${p?.name ?? 'Project'} archived`, () => restoreProj.mutate({ id, row: p }));
-    },
-    onReorder: (id, dir) => {
-      const order = shown.map((x) => x.id);
-      const i = order.indexOf(id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= order.length) return;
-      [order[i], order[j]] = [order[j], order[i]];
-      order.forEach((pid, n) => reorderProj.mutate({ id: pid, position: n }));
-      setSort('Custom');
-      toast('Custom order saved');
-    },
-  });
+  const [folderDragId, setFolderDragId] = useState<string | null>(null);
+  const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
+
+  const handleFolderReorder = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const order = shown.map((x) => x.id);
+    const fromIdx = order.indexOf(fromId);
+    const toIdx = order.indexOf(toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const newOrder = [...order];
+    const [moved] = newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, moved);
+
+    // Optimistic update
+    const prev = queryClient.getQueryData<Project[]>(PROJ) ?? [];
+    const idToPos = new Map(newOrder.map((id, idx) => [id, idx]));
+    queryClient.setQueryData<Project[]>(
+      PROJ,
+      prev.map((p) => (idToPos.has(p.id) ? { ...p, position: idToPos.get(p.id)! } : p))
+    );
+
+    newOrder.forEach((pid, n) => reorderProj.mutate({ id: pid, position: n }));
+    setSort('Custom');
+    toast('Folders reordered');
+  };
+
   // Undo carries the row it removed, so the folder comes back the moment you
   // press it rather than one refetch later.
   const restoreProj = useMutation<unknown, Error, { id: string; row?: Project }>({
@@ -357,7 +362,6 @@ export default function ProjectsPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${colWidth}px,1fr))`, gap: phone ? 6 : 10 }}>
           {!projectsPending && shown.map((p) => {
-            const dragProps = cardDrag.propsFor(p.id);
             const n = cards.filter((c) => c.project_id === p.id).length;
             if (editing === `proj:${p.id}`) {
               return (
@@ -366,17 +370,62 @@ export default function ProjectsPage() {
                   onSave={(name) => { editProj.mutate({ id: p.id, patch: { name } }); setEditing(null); toast('Folder renamed'); }} />
               );
             }
+            const isDragging = folderDragId === p.id;
+            const isDropTarget = folderDropTargetId === p.id && folderDragId !== p.id;
+
             return (
-            <button key={p.id} onClick={() => { if (cardDrag.wasDrag()) return; setOpen(p.id); setView('board'); }}
+            <button key={p.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', p.id);
+                e.dataTransfer.effectAllowed = 'move';
+                setFolderDragId(p.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (folderDropTargetId !== p.id) {
+                  setFolderDropTargetId(p.id);
+                }
+              }}
+              onDragLeave={() => {
+                if (folderDropTargetId === p.id) {
+                  setFolderDropTargetId(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const fromId = e.dataTransfer.getData('text/plain') || folderDragId;
+                if (fromId) {
+                  handleFolderReorder(fromId, p.id);
+                }
+                setFolderDragId(null);
+                setFolderDropTargetId(null);
+              }}
+              onDragEnd={() => {
+                setFolderDragId(null);
+                setFolderDropTargetId(null);
+              }}
+              onClick={() => {
+                if (folderDragId) return;
+                setOpen(p.id);
+                setView('board');
+              }}
               onDoubleClick={() => setEditing(`proj:${p.id}`)}
-              onPointerDown={(e) => { dragProps.onPointerDown(e); lp.start(e, 'project', p.id, p.name); }}
+              onPointerDown={(e) => lp.start(e, 'project', p.id, p.name)}
               onContextMenu={(e) => lp.onContextMenu(e, 'project', p.id, p.name)}
-              className={`hov k-squish ${dragProps.className}`}
-              title={`${p.name} — ${n} card${n === 1 ? '' : 's'}. Drag sideways to archive, up or down to reorder.`}
+              className="hov k-squish"
+              title={`${p.name} — ${n} card${n === 1 ? '' : 's'}. Drag to reorder.`}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
                 padding: folderPad, borderRadius: 12, textAlign: 'center',
-                ...dragProps.style,
+                userSelect: 'none',
+                cursor: isDragging ? 'grabbing' : 'grab',
+                opacity: isDragging ? 0.45 : 1,
+                transform: isDropTarget ? 'scale(1.06)' : 'scale(1)',
+                border: isDropTarget ? '2px dashed var(--acc)' : '2px solid transparent',
+                background: isDropTarget ? 'color-mix(in srgb, var(--acc) 12%, var(--card2))' : 'transparent',
+                transition: 'transform .18s ease, border-color .18s ease, background .18s ease, opacity .18s ease',
               }}>
               <FolderIcon color={p.color} count={n} size={iconSize} icon={p.icon} />
               <span style={{ width: '100%', fontSize: titleFont, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
