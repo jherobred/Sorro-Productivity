@@ -357,10 +357,11 @@ body {
    on a note that meant the title and the whole body drew a box the moment you
    typed in them — a page of prose wearing a form field. `.writing` is only for
    full-width text surfaces where the caret is already an unambiguous position
-   indicator, so 2.4.7 is still met: the caret is painted in the accent and
-   thickened so it is impossible to miss, and every other control on the screen
-   keeps its ring. Do not put this on a short input sitting in a row of
-   controls — there the caret is not enough to say which field you are in.
+   indicator, so 2.4.7 is still met: the caret is painted in the accent rather
+   than the text colour, which is what marks the surface as live, and every
+   other control on the screen keeps its ring. Do not put this on a short input
+   sitting in a row of controls — there the caret is not enough to say which
+   field you are in.
 
    Specificity: (0,2,0) here against (0,1,1) for the `:is(...)` rule, so this
    wins wherever it lands in the cascade. */
@@ -371,12 +372,6 @@ body {
 }
 .writing {
   caret-color: var(--acc);
-  caret-shape: bar;
-}
-@supports not (caret-shape: bar) {
-  /* Safari and older Chrome: the caret is the default 1px. Nothing to widen it
-     in CSS, so leave the colour doing the work rather than faking a caret. */
-  .writing { caret-color: var(--acc); }
 }
 
 /* The note reading measure. 760px of 13.5px type ran to about 103 characters a
