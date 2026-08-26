@@ -9,6 +9,8 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
+import { useMyIdentity, type Identity } from '@/lib/people';
+import { Face } from '../AccountSheet';
 import type { Board } from '@/lib/canvas';
 
 /**
@@ -58,6 +60,7 @@ export function NotebookTable({
 }) {
   const { prefs } = usePrefs();
   const { phone } = useLayout();
+  const me = useMyIdentity();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [desc, setDesc] = useState(false);
@@ -161,6 +164,7 @@ export function NotebookTable({
               <th style={{ ...HEAD, width: 34 }} aria-label="Expand" />
               <th style={HEAD}>Title</th>
               {!phone && <th style={{ ...HEAD, width: 90 }}>Notes</th>}
+              {!phone && <th style={{ ...HEAD, width: 140 }}>Created by</th>}
               <th style={{ ...HEAD, width: phone ? 74 : 120 }}>Updated</th>
               <th style={{ ...HEAD, width: 44 }} aria-label="Actions" />
             </tr>
@@ -171,7 +175,7 @@ export function NotebookTable({
               const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
               const isOpen = !!open[b.id];
               return (
-                <BookRow key={b.id} book={b} kids={kids} last={last} phone={phone} isOpen={isOpen}
+                <BookRow key={b.id} book={b} kids={kids} last={last} me={me} phone={phone} isOpen={isOpen}
                   onToggle={() => setOpen((o) => ({ ...o, [b.id]: !o[b.id] }))}
                   onOpen={() => onOpen(b.id)}
                   onOpenNote={(nid) => onOpenNote(b.id, nid)}
@@ -180,7 +184,7 @@ export function NotebookTable({
             })}
 
             {boardRows.map((b) => (
-              <BoardRow key={b.id} board={b} phone={phone}
+              <BoardRow key={b.id} board={b} me={me} phone={phone}
                 onOpen={() => onOpenBoard(b)}
                 onMenu={(x, y) => setMenu({
                   x, y, label: b.name,
@@ -197,7 +201,7 @@ export function NotebookTable({
 
             {rows.length + boardRows.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
+                <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
                   {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook, a canvas or a graph.'}
                 </td>
               </tr>
@@ -215,10 +219,13 @@ export function NotebookTable({
  * at the board would not tell you faster.
  */
 function BoardRow({
-  board: b, phone, onOpen, onMenu,
-}: { board: Board; phone: boolean; onOpen: () => void; onMenu: (x: number, y: number) => void }) {
+  board: b, me, phone, onOpen, onMenu,
+}: { board: Board; me: Identity; phone: boolean; onOpen: () => void; onMenu: (x: number, y: number) => void }) {
   const cell: React.CSSProperties = { padding: '10px 12px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
   const kind = b.kind === 'graph' ? 'Graph' : 'Canvas';
+  const displayName = me.name && me.name.toLowerCase() !== 'gemini'
+    ? me.name
+    : (me.handle && me.handle.toLowerCase() !== 'gemini' ? (me.handle.startsWith('@') ? me.handle : `@${me.handle}`) : 'Owner');
 
   return (
     <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
@@ -244,6 +251,16 @@ function BoardRow({
         </button>
       </td>
       {!phone && <td style={cell}>—</td>}
+      {!phone && (
+        <td style={cell}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: 140 }}>
+            <Face name={displayName} photo={me.photo} size={20} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayName}
+            </span>
+          </div>
+        </td>
+      )}
       <td style={{ ...cell, color: 'var(--tx3)' }}>{b.updated_at ? whenLabel(b.updated_at) : '—'}</td>
       <td style={{ ...cell, paddingLeft: 0 }}>
         <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
@@ -262,13 +279,16 @@ const NEW_BTN: React.CSSProperties = {
 };
 
 function BookRow({
-  book: b, kids, last, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,
+  book: b, kids, last, me, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,
 }: {
-  book: Notebook; kids: Note[]; last: string | null; phone: boolean; isOpen: boolean;
+  book: Notebook; kids: Note[]; last: string | null; me: Identity; phone: boolean; isOpen: boolean;
   onToggle: () => void; onOpen: () => void; onOpenNote: (id: string) => void;
   onMenu: (x: number, y: number) => void;
 }) {
   const cell: React.CSSProperties = { padding: '10px 12px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
+  const displayName = me.name && me.name.toLowerCase() !== 'gemini'
+    ? me.name
+    : (me.handle && me.handle.toLowerCase() !== 'gemini' ? (me.handle.startsWith('@') ? me.handle : `@${me.handle}`) : 'Owner');
 
   return (
     <>
@@ -294,6 +314,16 @@ function BookRow({
         </td>
 
         {!phone && <td style={cell}>{kids.length}</td>}
+        {!phone && (
+          <td style={cell}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: 140 }}>
+              <Face name={displayName} photo={me.photo} size={20} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayName}
+              </span>
+            </div>
+          </td>
+        )}
         <td style={{ ...cell, color: 'var(--tx3)' }}>{last ? whenLabel(last) : '—'}</td>
         <td style={{ ...cell, paddingLeft: 0 }}>
           <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
@@ -307,7 +337,7 @@ function BookRow({
       {isOpen && kids.map((n) => (
         <tr key={n.id} className="row" style={{ borderBottom: '1px solid var(--line)' }}>
           <td />
-          <td colSpan={phone ? 2 : 3} style={{ padding: '8px 12px' }}>
+          <td colSpan={phone ? 2 : 4} style={{ padding: '8px 12px' }}>
             <button onClick={() => onOpenNote(n.id)} style={{ display: 'block', width: '100%', textAlign: 'left', minHeight: 30 }}>
               <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{n.title || 'Untitled'}</span>
               <span style={{
@@ -326,7 +356,7 @@ function BookRow({
       {isOpen && kids.length === 0 && (
         <tr style={{ borderBottom: '1px solid var(--line)' }}>
           <td />
-          <td colSpan={4} style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--tx3)' }}>Empty notebook.</td>
+          <td colSpan={6} style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--tx3)' }}>Empty notebook.</td>
         </tr>
       )}
     </>
