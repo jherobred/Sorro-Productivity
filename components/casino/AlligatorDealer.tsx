@@ -19,8 +19,8 @@ export function AlligatorDealer({ mood = 'idle', speech, className = '' }: Allig
   useEffect(() => {
     const interval = setInterval(() => {
       setBlink(true);
-      setTimeout(() => setBlink(false), 200);
-    }, 4500);
+      setTimeout(() => setBlink(false), 180);
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -28,176 +28,182 @@ export function AlligatorDealer({ mood = 'idle', speech, className = '' }: Allig
   useEffect(() => {
     if (mood === 'dealing' || mood === 'taunt' || speech) {
       setJawOpen(true);
-      const timer = setTimeout(() => setJawOpen(false), 800);
+      const timer = setTimeout(() => setJawOpen(false), 700);
       return () => clearTimeout(timer);
     }
   }, [mood, speech]);
 
   return (
-    <div className={`flex flex-col items-center select-none ${className}`} style={{ minWidth: 260 }}>
+    <div
+      className={`flex flex-col items-center justify-center select-none ${className}`}
+      style={{ width: '100%', maxWidth: 360, margin: '0 auto' }}
+    >
       {/* Dealer Speech Bubble */}
-      <AnimatePresence mode="wait">
-        {speech && (
-          <motion.div
-            key={speech}
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              marginBottom: 10,
-              padding: '8px 16px',
-              borderRadius: 14,
-              background: 'color-mix(in srgb, var(--card2) 90%, #0F281E)',
-              border: '1.5px solid color-mix(in srgb, var(--pal-emerald) 40%, transparent)',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 0 12px color-mix(in srgb, var(--pal-emerald) 20%, transparent)',
-              color: 'var(--tx)',
-              fontSize: 12.5,
-              fontWeight: 700,
-              textAlign: 'center',
-              maxWidth: 320,
-              position: 'relative',
-            }}
-          >
-            <div
+      <div style={{ minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 6 }}>
+        <AnimatePresence mode="wait">
+          {speech && (
+            <motion.div
+              key={speech}
+              initial={{ opacity: 0, y: 8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.18 }}
               style={{
-                position: 'absolute',
-                bottom: -7,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: 0,
-                height: 0,
-                borderLeft: '7px solid transparent',
-                borderRight: '7px solid transparent',
-                borderTop: '7px solid color-mix(in srgb, var(--pal-emerald) 40%, transparent)',
+                padding: '6px 14px',
+                borderRadius: 12,
+                background: 'rgba(8, 20, 14, 0.92)',
+                border: '1.5px solid #10B981',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.6), 0 0 12px rgba(16,185,129,0.25)',
+                color: '#ECFDF5',
+                fontSize: 12,
+                fontWeight: 700,
+                textAlign: 'center',
+                maxWidth: 320,
+                position: 'relative',
+                backdropFilter: 'blur(8px)',
               }}
-            />
-            {speech}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: -6,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderTop: '6px solid #10B981',
+                }}
+              />
+              {speech}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* Gator Gus Animated SVG Avatar */}
+      {/* Gator Gus Dealer Avatar */}
       <motion.div
         animate={{
-          y: mood === 'win' || mood === 'jackpot' ? [-4, 4, -4] : [0, -2, 0],
-          rotate: mood === 'blackjack' ? [-2, 2, -2] : 0,
+          y: mood === 'win' || mood === 'jackpot' ? [-3, 3, -3] : [0, -2, 0],
+          rotate: mood === 'blackjack' ? [-1.5, 1.5, -1.5] : 0,
         }}
         transition={{
           repeat: Infinity,
-          duration: mood === 'win' ? 0.6 : 3,
+          duration: mood === 'win' ? 0.6 : 3.2,
           ease: 'easeInOut',
         }}
         style={{
           position: 'relative',
-          width: 130,
-          height: 120,
+          width: 124,
+          height: 110,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
+          margin: '0 auto',
         }}
       >
         <svg
           viewBox="0 0 200 180"
           width="100%"
           height="100%"
-          style={{ overflow: 'visible', filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.5))' }}
+          style={{ overflow: 'visible', filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.6))' }}
         >
           <defs>
             <linearGradient id="gatorSkin" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#1B5E20" />
-              <stop offset="60%" stopColor="#2E7D32" />
-              <stop offset="100%" stopColor="#1B4D1E" />
+              <stop offset="0%" stopColor="#14532D" />
+              <stop offset="45%" stopColor="#166534" />
+              <stop offset="100%" stopColor="#0F3D20" />
             </linearGradient>
-            <linearGradient id="gatorBelly" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#81C784" />
-              <stop offset="100%" stopColor="#4CAF50" />
+            <linearGradient id="gatorScales" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#22C55E" />
+              <stop offset="100%" stopColor="#15803D" />
             </linearGradient>
             <linearGradient id="gatorHat" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#212121" />
-              <stop offset="100%" stopColor="#111111" />
+              <stop offset="0%" stopColor="#1E293B" />
+              <stop offset="100%" stopColor="#0F172A" />
             </linearGradient>
             <linearGradient id="gatorGold" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FFE082" />
-              <stop offset="100%" stopColor="#FFB300" />
+              <stop offset="0%" stopColor="#FDE047" />
+              <stop offset="50%" stopColor="#F59E0B" />
+              <stop offset="100%" stopColor="#B45309" />
             </linearGradient>
           </defs>
 
-          {/* Gator Neck / Collar */}
-          <path d="M 65 140 Q 100 165 135 140 L 145 175 Q 100 190 55 175 Z" fill="#1B4D1E" />
-          <path d="M 75 148 L 100 165 L 125 148 L 100 138 Z" fill="#FFFFFF" />
-          {/* Crimson Bow Tie */}
-          <polygon points="82,150 100,158 82,166" fill="#D32F2F" />
-          <polygon points="118,150 100,158 118,166" fill="#D32F2F" />
-          <circle cx="100" cy="158" r="4" fill="#B71C1C" />
+          {/* Shoulders / Dealer Tuxedo Collar */}
+          <path d="M 50 145 Q 100 170 150 145 L 160 180 Q 100 195 40 180 Z" fill="#090D14" />
+          <path d="M 72 148 L 100 166 L 128 148 L 100 138 Z" fill="#F8FAFC" />
+          
+          {/* Crimson Velvet Bow Tie */}
+          <polygon points="80,150 100,158 80,166" fill="#DC2626" />
+          <polygon points="120,150 100,158 120,166" fill="#DC2626" />
+          <circle cx="100" cy="158" r="4.5" fill="#991B1B" />
 
-          {/* Main Gator Head */}
-          <ellipse cx="100" cy="98" rx="52" ry="42" fill="url(#gatorSkin)" />
+          {/* Main Gator Head Base */}
+          <ellipse cx="100" cy="98" rx="54" ry="44" fill="url(#gatorSkin)" stroke="#052E16" strokeWidth="2.5" />
 
-          {/* Gator Snout / Jaws */}
+          {/* Gator Snout / Upper Jaw */}
           <motion.path
-            d="M 50 92 Q 100 80 150 92 Q 175 110 165 125 Q 100 145 35 125 Q 25 110 50 92 Z"
+            d="M 48 92 Q 100 78 152 92 Q 176 112 166 128 Q 100 148 34 128 Q 24 112 48 92 Z"
             fill="url(#gatorSkin)"
-            stroke="#144A18"
+            stroke="#052E16"
             strokeWidth="3"
             animate={{
               d: jawOpen
-                ? 'M 50 92 Q 100 80 150 92 Q 180 120 165 140 Q 100 160 35 140 Q 20 120 50 92 Z'
-                : 'M 50 92 Q 100 80 150 92 Q 175 110 165 125 Q 100 145 35 125 Q 25 110 50 92 Z',
+                ? 'M 48 92 Q 100 78 152 92 Q 182 122 166 142 Q 100 164 34 142 Q 18 122 48 92 Z'
+                : 'M 48 92 Q 100 78 152 92 Q 176 112 166 128 Q 100 148 34 128 Q 24 112 48 92 Z',
             }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.16 }}
           />
 
           {/* Nostrils */}
-          <circle cx="85" cy="94" r="3.5" fill="#0E2F11" />
-          <circle cx="115" cy="94" r="3.5" fill="#0E2F11" />
+          <ellipse cx="82" cy="94" rx="4" ry="3" fill="#021A0C" />
+          <ellipse cx="118" cy="94" rx="4" ry="3" fill="#021A0C" />
 
-          {/* Snout Scales / Ridges */}
-          <path d="M 68 85 Q 73 80 78 85 Q 83 80 88 85" stroke="#144A18" strokeWidth="2.5" fill="none" />
-          <path d="M 112 85 Q 117 80 122 85 Q 127 80 132 85" stroke="#144A18" strokeWidth="2.5" fill="none" />
+          {/* Snout Ridges */}
+          <path d="M 66 84 Q 72 79 78 84 Q 84 79 90 84" stroke="#052E16" strokeWidth="2.5" fill="none" />
+          <path d="M 110 84 Q 116 79 122 84 Q 128 79 134 84" stroke="#052E16" strokeWidth="2.5" fill="none" />
 
-          {/* Razor Teeth */}
-          <polygon points="58,118 64,110 70,118" fill="#FFFFFF" />
-          <polygon points="76,121 82,112 88,121" fill="#FFFFFF" />
-          {/* Gold Tooth */}
-          <polygon points="95,123 101,114 107,123" fill="url(#gatorGold)" />
-          <polygon points="113,121 119,112 125,121" fill="#FFFFFF" />
-          <polygon points="131,118 137,110 143,118" fill="#FFFFFF" />
+          {/* Teeth */}
+          <polygon points="56,120 62,111 68,120" fill="#FFFFFF" />
+          <polygon points="74,123 80,113 86,123" fill="#FFFFFF" />
+          {/* 24K Gold Tooth */}
+          <polygon points="94,125 100,114 106,125" fill="url(#gatorGold)" stroke="#78350F" strokeWidth="0.5" />
+          <polygon points="114,123 120,113 126,123" fill="#FFFFFF" />
+          <polygon points="132,120 138,111 144,120" fill="#FFFFFF" />
 
-          {/* Gator Eyes */}
-          {/* Left Eye Ridge */}
-          <ellipse cx="72" cy="68" rx="18" ry="16" fill="url(#gatorSkin)" stroke="#144A18" strokeWidth="2" />
-          {/* Right Eye Ridge */}
-          <ellipse cx="128" cy="68" rx="18" ry="16" fill="url(#gatorSkin)" stroke="#144A18" strokeWidth="2" />
+          {/* Eye Ridges */}
+          <ellipse cx="70" cy="68" rx="19" ry="17" fill="url(#gatorSkin)" stroke="#052E16" strokeWidth="2.5" />
+          <ellipse cx="130" cy="68" rx="19" ry="17" fill="url(#gatorSkin)" stroke="#052E16" strokeWidth="2.5" />
 
-          {/* Eyeballs */}
-          <circle cx="72" cy="68" r="11" fill="#FFEB3B" />
-          <circle cx="128" cy="68" r="11" fill="#FFEB3B" />
+          {/* Golden Reptile Eyeballs */}
+          <circle cx="70" cy="68" r="12" fill="#FACC15" />
+          <circle cx="130" cy="68" r="12" fill="#FACC15" />
 
-          {/* Slit Pupils / Blink Animation */}
+          {/* Slit Pupils & Animated Blink */}
           {blink ? (
             <>
-              <line x1="62" y1="68" x2="82" y2="68" stroke="#144A18" strokeWidth="4" strokeLinecap="round" />
-              <line x1="118" y1="68" x2="138" y2="68" stroke="#144A18" strokeWidth="4" strokeLinecap="round" />
+              <line x1="58" y1="68" x2="82" y2="68" stroke="#021A0C" strokeWidth="4.5" strokeLinecap="round" />
+              <line x1="118" y1="68" x2="142" y2="68" stroke="#021A0C" strokeWidth="4.5" strokeLinecap="round" />
             </>
           ) : (
             <>
-              <ellipse cx="72" cy="68" rx="3" ry="9" fill="#0A0912" />
-              <ellipse cx="128" cy="68" rx="3" ry="9" fill="#0A0912" />
-              {/* Eye Catchlights */}
-              <circle cx="70" cy="63" r="2.5" fill="#FFFFFF" />
-              <circle cx="126" cy="63" r="2.5" fill="#FFFFFF" />
+              <ellipse cx="70" cy="68" rx="3.2" ry="10" fill="#0A0912" />
+              <ellipse cx="130" cy="68" rx="3.2" ry="10" fill="#0A0912" />
+              {/* Catchlight reflections */}
+              <circle cx="68" cy="63" r="2.8" fill="#FFFFFF" />
+              <circle cx="128" cy="63" r="2.8" fill="#FFFFFF" />
             </>
           )}
 
-          {/* Fedora / Dealer Top Hat */}
-          <ellipse cx="100" cy="48" rx="48" ry="10" fill="url(#gatorHat)" />
-          <path d="M 68 46 L 73 14 Q 100 12 127 14 L 132 46 Z" fill="url(#gatorHat)" stroke="#000000" strokeWidth="1.5" />
-          {/* Golden Hat Ribbon */}
-          <path d="M 71 42 L 73 35 Q 100 33 127 35 L 129 42 Z" fill="url(#gatorGold)" />
-          {/* Ace Card in Hat Band */}
-          <rect x="116" y="20" width="12" height="18" rx="2" fill="#FFFFFF" stroke="#CCCCCC" strokeWidth="0.8" transform="rotate(15 116 20)" />
-          <text x="118" y="32" fontSize="8" fontWeight="bold" fill="#D32F2F" transform="rotate(15 116 20)">A♥</text>
+          {/* High-Roller Fedora Hat */}
+          <ellipse cx="100" cy="48" rx="52" ry="11" fill="url(#gatorHat)" stroke="#020617" strokeWidth="1.5" />
+          <path d="M 66 46 L 72 12 Q 100 10 128 12 L 134 46 Z" fill="url(#gatorHat)" stroke="#020617" strokeWidth="1.5" />
+          {/* Gold Hat Ribbon */}
+          <path d="M 69 43 L 71 34 Q 100 32 129 34 L 131 43 Z" fill="url(#gatorGold)" />
+          {/* Ace of Hearts playing card tucked in hat */}
+          <rect x="118" y="18" width="13" height="19" rx="2.5" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="0.8" transform="rotate(14 118 18)" />
+          <text x="120" y="31" fontSize="8.5" fontWeight="900" fill="#DC2626" transform="rotate(14 118 18)">A♥</text>
         </svg>
 
         {/* Dealer Nameplate Badge */}
@@ -205,20 +211,20 @@ export function AlligatorDealer({ mood = 'idle', speech, className = '' }: Allig
           style={{
             position: 'absolute',
             bottom: -10,
-            background: '#0D1117',
-            border: '1px solid #2E7D32',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+            background: 'linear-gradient(180deg, #0F172A 0%, #020617 100%)',
+            border: '1.5px solid #10B981',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.7)',
             borderRadius: 6,
-            padding: '2px 8px',
+            padding: '2px 10px',
             fontSize: 9.5,
-            fontWeight: 800,
+            fontWeight: 900,
             letterSpacing: '.08em',
             textTransform: 'uppercase',
-            color: '#81C784',
+            color: '#34D399',
             whiteSpace: 'nowrap',
           }}
         >
-          Gator Gus · Dealer
+          Gator Gus · Bayou Dealer
         </div>
       </motion.div>
     </div>

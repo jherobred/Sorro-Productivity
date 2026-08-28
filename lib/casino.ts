@@ -5,11 +5,11 @@ import { supabase, currentUserId } from './supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { RANKED } from './challenges';
 
-export const CASINO_STORAGE_CREDITS = 'basedly_casino_credits_v1';
+export const CASINO_STORAGE_CREDITS = 'basedly_casino_dos_coin_v2';
 export const CASINO_STORAGE_VERIFIED = 'basedly_casino_age_verified_v1';
-export const CASINO_STORAGE_STATS = 'basedly_casino_stats_v1';
+export const CASINO_STORAGE_STATS = 'basedly_casino_stats_v2';
 
-export const RP_EXCHANGE_RATE = 100; // 1 RP = 100 Casino Credits
+export const RP_EXCHANGE_RATE = 100; // 1 RP = 100 DOS Coins
 
 export type CasinoStats = {
   blackjackHands: number;
@@ -32,12 +32,15 @@ export const DEFAULT_STATS: CasinoStats = {
 };
 
 export function getStoredCredits(): number {
-  if (typeof window === 'undefined') return 1000;
+  if (typeof window === 'undefined') return 2500;
   try {
     const raw = localStorage.getItem(CASINO_STORAGE_CREDITS);
-    return raw !== null ? Number(raw) : 1000; // 1,000 complimentary starter credits
+    if (raw !== null) return Number(raw);
+    // Legacy fallback
+    const legacy = localStorage.getItem('basedly_casino_credits_v1');
+    return legacy !== null ? Number(legacy) : 2500;
   } catch {
-    return 1000;
+    return 2500;
   }
 }
 
@@ -83,7 +86,7 @@ export function updateStoredStats(patch: Partial<CasinoStats>) {
   } catch { /* private mode */ }
 }
 
-/** Hook for managing casino credits, RP deposits, and RP cashouts */
+/** Hook for managing DOS Coin credits, BitHit exchange, and game statistics */
 export function useCasinoCredits(currentRp: number = 0) {
   const [credits, setCredits] = useState<number>(getStoredCredits);
   const [isAgeVerified, setIsAgeVerified] = useState<boolean>(getStoredAgeVerified);
@@ -105,7 +108,7 @@ export function useCasinoCredits(currentRp: number = 0) {
     setIsAgeVerified(false);
   }, []);
 
-  /** Convert RP into Casino Credits (1 RP -> 100 Credits) */
+  /** Convert RP into DOS Coins (1 RP -> 100 DOS Coins) */
   const depositRp = useCallback(
     async (rpAmount: number): Promise<boolean> => {
       if (rpAmount <= 0 || rpAmount > currentRp) return false;
@@ -127,7 +130,7 @@ export function useCasinoCredits(currentRp: number = 0) {
         await qc.invalidateQueries({ queryKey: RANKED });
         return true;
       } catch (err) {
-        console.error('Failed to deposit RP to Casino:', err);
+        console.error('Failed to exchange RP to DOS Coin:', err);
         return false;
       } finally {
         setIsExchanging(false);
@@ -136,7 +139,7 @@ export function useCasinoCredits(currentRp: number = 0) {
     [currentRp, qc]
   );
 
-  /** Cash out Casino Credits back into RP (100 Credits -> 1 RP) */
+  /** Cash out DOS Coins back into RP (100 DOS Coins -> 1 RP) */
   const withdrawToRp = useCallback(
     async (creditAmount: number): Promise<boolean> => {
       if (creditAmount < RP_EXCHANGE_RATE || creditAmount > credits) return false;
@@ -160,7 +163,7 @@ export function useCasinoCredits(currentRp: number = 0) {
         await qc.invalidateQueries({ queryKey: RANKED });
         return true;
       } catch (err) {
-        console.error('Failed to cash out credits to RP:', err);
+        console.error('Failed to cash out DOS Coin to RP:', err);
         return false;
       } finally {
         setIsExchanging(false);
@@ -169,7 +172,7 @@ export function useCasinoCredits(currentRp: number = 0) {
     [credits, currentRp, qc]
   );
 
-  /** Claim daily free chips faucet (e.g. +500 credits) */
+  /** Claim daily BitHit faucet (e.g. +500 DOS Coin) */
   const claimFreeFaucet = useCallback(() => {
     setCredits((prev) => prev + 500);
     setStoredCredits(credits + 500);

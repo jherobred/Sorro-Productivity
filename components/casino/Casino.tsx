@@ -95,12 +95,12 @@ export function Casino({ onExit }: CasinoProps) {
           </div>
           <div>Hands Played: <strong style={{ color: 'var(--tx)' }}>{stats.blackjackHands}</strong></div>
           <div>Slot Spins: <strong style={{ color: 'var(--tx)' }}>{stats.slotSpins}</strong></div>
-          <div>Biggest Win: <strong style={{ color: '#FCD34D' }}>{stats.biggestWin.toLocaleString()} 🪙</strong></div>
+          <div>Biggest Win: <strong style={{ color: '#FCD34D' }}>{stats.biggestWin.toLocaleString()} DOS Coin</strong></div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Icon name="spark" size={12} color="var(--tx3)" />
-          <span>Gator Stake · 100% Virtual Entertainment</span>
+          <span>Gator Stake · BitHit Network · Virtual Entertainment</span>
         </div>
       </div>
     </div>

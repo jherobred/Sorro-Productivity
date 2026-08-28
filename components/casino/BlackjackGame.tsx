@@ -40,7 +40,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
 
   // Result messages & dealer mood
   const [dealerMood, setDealerMood] = useState<DealerMood>('idle');
-  const [dealerSpeech, setDealerSpeech] = useState<string>('Place your bets and let’s see what you’ve got!');
+  const [dealerSpeech, setDealerSpeech] = useState<string>('Place your bets in DOS Coin and let’s see what you’ve got!');
   const [roundResultText, setRoundResultText] = useState<string | null>(null);
 
   // Auto-refill shoe when running low (< 40 cards)
@@ -61,7 +61,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   const addChipToBet = (val: number) => {
     if (gameState !== 'betting' && gameState !== 'round_end') return;
     if (bet + val > credits) {
-      toast('Not enough credits for this bet');
+      toast('Not enough DOS Coins for this bet');
       return;
     }
     playClick();
@@ -77,7 +77,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   const doubleBetAmount = () => {
     if (gameState !== 'betting' && gameState !== 'round_end') return;
     if (bet * 2 > credits) {
-      toast('Not enough credits to double bet');
+      toast('Not enough DOS Coins to double bet');
       return;
     }
     playClick();
@@ -91,7 +91,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       return;
     }
     if (bet > credits) {
-      toast('Insufficient credits');
+      toast('Insufficient DOS Coins');
       return;
     }
 
@@ -117,7 +117,6 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
 
     setTimeout(() => {
       const playerVal = calculateHandValue([pCard1, pCard2]);
-      const dealerUpVal = dCard1.value;
 
       // Check for Insurance offer if dealer shows Ace
       if (dCard1.isAce && credits >= Math.floor(bet / 2)) {
@@ -133,7 +132,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
         setDealerMood('idle');
         setDealerSpeech('Your move! Hit, Stand, Double, or Split.');
       }
-    }, 900);
+    }, 850);
   };
 
   // Player actions: HIT
@@ -150,15 +149,12 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     if (val.isBust) {
       setDealerMood('taunt');
       setDealerSpeech(`Bust with ${val.score}! Swamp takes that one!`);
-      // If there are more split hands, move to next hand
       if (activeHandIndex < playerHands.length - 1) {
         setActiveHandIndex(activeHandIndex + 1);
       } else {
-        // Round ends for player
         handleDealerTurn(newPlayerHands[0], dealerHand, false);
       }
     } else if (val.score === 21) {
-      // Auto stand on 21
       if (activeHandIndex < playerHands.length - 1) {
         setActiveHandIndex(activeHandIndex + 1);
       } else {
@@ -176,7 +172,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       setDealerSpeech('Playing second split hand...');
     } else {
       setGameState('dealer_turn');
-      const revealedDealer = dealerHand.map((c) => ({ ...c, hidden: false }));
+      const revealedDealer: Card[] = dealerHand.map((c) => ({ ...c, hidden: false }));
       setDealerHand(revealedDealer);
       handleDealerTurn(playerHands[0], revealedDealer, false);
     }
@@ -187,7 +183,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     if (gameState !== 'player_turn') return;
     const currentHandBet = handBets[activeHandIndex];
     if (credits < currentHandBet) {
-      toast('Not enough credits to Double Down');
+      toast('Not enough DOS Coins to Double Down');
       return;
     }
     playClick();
@@ -208,7 +204,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       if (activeHandIndex < playerHands.length - 1) {
         setActiveHandIndex(activeHandIndex + 1);
       } else {
-        const revealedDealer = dealerHand.map((c) => ({ ...c, hidden: false }));
+        const revealedDealer: Card[] = dealerHand.map((c) => ({ ...c, hidden: false }));
         setDealerHand(revealedDealer);
         handleDealerTurn(currentHand, revealedDealer, false);
       }
@@ -224,7 +220,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       return;
     }
     if (credits < bet) {
-      toast('Not enough credits to split hand');
+      toast('Not enough DOS Coins to split hand');
       return;
     }
 
@@ -248,7 +244,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       if (credits >= insCost) {
         setCredits((prev) => prev - insCost);
         setInsuranceBet(insCost);
-        toast(`Insurance placed for ${insCost} Credits`);
+        toast(`Insurance placed for ${insCost} DOS Coins`);
       }
     }
     setGameState('player_turn');
@@ -270,7 +266,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     if (dealerNatural && insuranceBet > 0) {
       const insPayout = insuranceBet * 3;
       setCredits((prev) => prev + insPayout);
-      toast(`Insurance Paid 2:1! (+${insPayout} Credits)`);
+      toast(`Insurance Paid 2:1! (+${insPayout} DOS Coins)`);
     }
 
     // Dealer draws to 16, stands on 17+
@@ -306,7 +302,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       const hBet = handBets[idx] || bet;
 
       if (pVal.isBust) {
-        resultsSummary.push(`Hand ${idx + 1}: Bust (Lost ${hBet}🪙)`);
+        resultsSummary.push(`Hand ${idx + 1}: Bust (-${hBet} DOS)`);
       } else if (playerHasNaturalBJ && pHands.length === 1) {
         if (dealerVal.isBlackjack) {
           totalWinPayout += hBet; // Push
@@ -316,20 +312,20 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
           const bjPayout = Math.floor(hBet * 2.5); // 3:2 payout
           totalWinPayout += bjPayout;
           anyWin = true;
-          resultsSummary.push(`NATURAL BLACKJACK! Paid 3:2 (+${bjPayout}🪙)`);
+          resultsSummary.push(`NATURAL BLACKJACK 3:2 (+${bjPayout} DOS)`);
           setDealerMood('blackjack');
         }
       } else if (dealerVal.isBust) {
         const winAmount = hBet * 2;
         totalWinPayout += winAmount;
         anyWin = true;
-        resultsSummary.push(`Dealer Bust! Hand ${idx + 1} Wins (+${winAmount}🪙)`);
+        resultsSummary.push(`Dealer Bust! Hand ${idx + 1} Wins (+${winAmount} DOS)`);
         setDealerMood('win');
       } else if (pVal.score > dealerVal.score) {
         const winAmount = hBet * 2;
         totalWinPayout += winAmount;
         anyWin = true;
-        resultsSummary.push(`Hand ${idx + 1} Wins ${pVal.score} vs ${dealerVal.score} (+${winAmount}🪙)`);
+        resultsSummary.push(`Hand ${idx + 1} Wins (${pVal.score} vs ${dealerVal.score}) +${winAmount} DOS`);
         setDealerMood('win');
       } else if (pVal.score === dealerVal.score) {
         totalWinPayout += hBet; // Push
@@ -345,7 +341,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     }
 
     if (anyWin) {
-      setDealerSpeech('Gator pays out! Nice hand, high roller!');
+      setDealerSpeech('Gator pays out in pure DOS Coin! Nice hand!');
     } else {
       setDealerMood('taunt');
       setDealerSpeech('House takes the hand! Try another round!');
@@ -372,26 +368,18 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     credits >= (handBets[activeHandIndex] || bet);
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 16,
-        width: '100%',
-      }}
-    >
-      {/* Felt Casino Table Container */}
+    <div className="w-full flex flex-col items-center gap-4 select-none" style={{ maxWidth: 840, margin: '0 auto' }}>
+      {/* Luxury Casino Velvet Felt Table Container */}
       <div
         style={{
           position: 'relative',
           width: '100%',
-          minHeight: 520,
-          borderRadius: 24,
-          background: 'radial-gradient(ellipse at 50% 30%, #0F4229 0%, #082618 60%, #05140D 100%)',
-          border: '6px solid #2B1810',
-          boxShadow: 'inset 0 0 50px rgba(0,0,0,0.8), 0 16px 40px rgba(0,0,0,0.7)',
-          padding: '24px 20px 20px',
+          minHeight: 540,
+          borderRadius: 28,
+          background: 'radial-gradient(ellipse at 50% 25%, #0B482A 0%, #062E1A 50%, #03170D 100%)',
+          border: '8px solid #2B160C',
+          boxShadow: 'inset 0 0 60px rgba(0,0,0,0.85), 0 20px 50px rgba(0,0,0,0.85), 0 0 0 2px #5C3A21',
+          padding: '20px 20px 24px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -399,33 +387,38 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
           overflow: 'hidden',
         }}
       >
-        {/* Table Felt Markings */}
+        {/* Table Felt Markings & Arch */}
         <div
           style={{
             position: 'absolute',
-            top: '38%',
+            top: '44%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             textAlign: 'center',
             pointerEvents: 'none',
-            opacity: 0.25,
+            opacity: 0.28,
+            width: '85%',
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '.18em', color: '#FCD34D', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: '.2em', color: '#FCD34D', textTransform: 'uppercase' }}>
             BLACKJACK PAYS 3 TO 2
           </div>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', color: '#FFFFFF', marginTop: 2 }}>
-            Dealer must draw to 16 and stand on all 17s · 6-Deck Shoe
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', color: '#FFFFFF', marginTop: 3 }}>
+            Dealer Must Draw to 16 and Stand on all 17s · 6-Deck Shoe
+          </div>
+          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.14em', color: '#6EE7B7', marginTop: 4 }}>
+            INSURANCE PAYS 2 TO 1
           </div>
         </div>
 
-        {/* Dealer Area & Avatar */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
+        {/* Dealer Zone (Perfect Center Alignment) */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
+          {/* Centered Alligator Dealer Avatar */}
           <AlligatorDealer mood={dealerMood} speech={dealerSpeech} />
 
-          {/* Dealer Cards */}
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 8, minHeight: 90, alignItems: 'center' }}>
+          {/* Dealer Hand Area */}
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 8, minHeight: 96, alignItems: 'center', justifyContent: 'center' }}>
               {dealerHand.map((c, i) => (
                 <PlayingCard key={i} card={c} index={i} />
               ))}
@@ -433,13 +426,14 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
             {dealerHand.length > 0 && (
               <div
                 style={{
-                  fontSize: 12,
-                  fontWeight: 800,
+                  fontSize: 11.5,
+                  fontWeight: 900,
                   color: '#A7F3D0',
-                  background: 'rgba(0,0,0,0.5)',
-                  padding: '2px 10px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(16,185,129,0.3)',
+                  background: 'rgba(3, 23, 13, 0.85)',
+                  padding: '3px 12px',
+                  borderRadius: 20,
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
                 }}
               >
                 Dealer: {dealerValue.score} {dealerValue.isSoft && '(Soft)'}
@@ -448,7 +442,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
           </div>
         </div>
 
-        {/* Insurance Prompt Modal Overlay */}
+        {/* Insurance Modal Prompt */}
         <AnimatePresence>
           {showInsurancePrompt && (
             <motion.div
@@ -457,63 +451,61 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
               exit={{ opacity: 0, scale: 0.9 }}
               style={{
                 position: 'absolute',
-                top: '45%',
-                zIndex: 20,
-                background: 'rgba(10, 15, 25, 0.95)',
-                border: '1.5px solid var(--pal-amber)',
+                top: '46%',
+                zIndex: 25,
+                background: '#0B111D',
+                border: '2px solid #F59E0B',
                 borderRadius: 16,
-                padding: '16px 20px',
+                padding: '16px 22px',
                 textAlign: 'center',
-                boxShadow: '0 12px 30px rgba(0,0,0,0.8)',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.9)',
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 900, color: '#FFFFFF', marginBottom: 4 }}>
-                Take Insurance? (Cost: {Math.floor(bet / 2)} 🪙)
+              <div style={{ fontSize: 14, fontWeight: 900, color: '#F8FAFC', marginBottom: 4 }}>
+                Take Insurance? (Cost: {Math.floor(bet / 2)} DOS)
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 12 }}>
-                Pays 2:1 if Dealer reveals a natural Blackjack
+              <div style={{ fontSize: 11.5, color: '#94A3B8', marginBottom: 12 }}>
+                Pays 2:1 if Dealer reveals natural Blackjack
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                 <button
                   type="button"
                   onClick={() => handleInsurance(true)}
-                  className="k-squish"
                   style={{
                     padding: '6px 14px',
                     borderRadius: 8,
-                    background: 'var(--pal-emerald)',
-                    color: '#0A0912',
-                    fontWeight: 800,
+                    background: '#10B981',
+                    color: '#051E13',
+                    fontWeight: 900,
                     fontSize: 12,
                     border: 'none',
                     cursor: 'pointer',
                   }}
                 >
-                  Yes, Take Insurance
+                  Yes, Insure
                 </button>
                 <button
                   type="button"
                   onClick={() => handleInsurance(false)}
-                  className="k-squish"
                   style={{
                     padding: '6px 14px',
                     borderRadius: 8,
-                    background: 'var(--card2)',
-                    color: 'var(--tx2)',
+                    background: '#1E293B',
+                    color: '#94A3B8',
                     fontWeight: 700,
                     fontSize: 12,
-                    border: '1px solid var(--line)',
+                    border: '1px solid #334155',
                     cursor: 'pointer',
                   }}
                 >
-                  No, Pass
+                  Pass
                 </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Round Result Toast Banner */}
+        {/* Round Result Floating Ribbon */}
         <AnimatePresence>
           {roundResultText && (
             <motion.div
@@ -523,15 +515,15 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
               style={{
                 position: 'absolute',
                 top: '52%',
-                zIndex: 15,
-                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%)',
+                zIndex: 20,
+                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                 border: '1.5px solid #6EE7B7',
                 borderRadius: 14,
-                padding: '8px 18px',
-                color: '#0A0912',
+                padding: '8px 20px',
+                color: '#051E13',
                 fontSize: 13.5,
                 fontWeight: 900,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
                 textAlign: 'center',
               }}
             >
@@ -540,8 +532,8 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
           )}
         </AnimatePresence>
 
-        {/* Player Hands Area */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, width: '100%' }}>
+        {/* Player Hands Arena */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
           <div style={{ display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
             {playerHands.map((hand, idx) => {
               const hVal = calculateHandValue(hand);
@@ -554,13 +546,13 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
                     flexDirection: 'column',
                     alignItems: 'center',
                     gap: 6,
-                    padding: '8px 12px',
-                    borderRadius: 14,
-                    background: isSelected ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                    border: isSelected ? '1.5px solid #10B981' : '1px solid transparent',
+                    padding: '8px 14px',
+                    borderRadius: 16,
+                    background: isSelected ? 'rgba(16, 185, 129, 0.25)' : 'transparent',
+                    border: isSelected ? '2px solid #10B981' : '1px solid transparent',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: 8, minHeight: 90, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8, minHeight: 96, alignItems: 'center', justifyContent: 'center' }}>
                     {hand.map((c, i) => (
                       <PlayingCard key={i} card={c} index={i} />
                     ))}
@@ -569,12 +561,13 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
                     <div
                       style={{
                         fontSize: 12,
-                        fontWeight: 800,
+                        fontWeight: 900,
                         color: hVal.isBust ? '#F87171' : '#FCD34D',
-                        background: 'rgba(0,0,0,0.6)',
-                        padding: '2px 10px',
-                        borderRadius: 8,
-                        border: '1px solid rgba(255,255,255,0.15)',
+                        background: 'rgba(5, 15, 10, 0.85)',
+                        padding: '3px 12px',
+                        borderRadius: 20,
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
                       }}
                     >
                       {playerHands.length > 1 ? `Hand ${idx + 1}: ` : 'Player: '}
@@ -588,7 +581,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
         </div>
       </div>
 
-      {/* Blackjack Interactive Control Station */}
+      {/* Control Station: Realistic 3D Chips & Action Buttons */}
       <div
         style={{
           width: '100%',
@@ -597,15 +590,15 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
           gap: 12,
           padding: '16px 20px',
           borderRadius: 20,
-          background: 'linear-gradient(180deg, #101724 0%, #0C111C 100%)',
+          background: 'linear-gradient(180deg, #0F172A 0%, #0A0F1D 100%)',
           border: '1.5px solid var(--line2)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
         }}
       >
-        {/* Chip Rack for Betting */}
+        {/* Real-World Casino 3D Poker Chips Rack */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase' }}>Chips:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: 'var(--tx3)', textTransform: 'uppercase' }}>Chips:</span>
             {CHIP_VALUES.map((val) => (
               <button
                 key={val}
@@ -617,31 +610,31 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
                 disabled={gameState === 'dealing' || gameState === 'player_turn' || gameState === 'dealer_turn'}
                 className="k-squish"
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 42,
+                  height: 42,
                   borderRadius: '50%',
                   display: 'grid',
                   placeItems: 'center',
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 900,
-                  border: currentSelectedChip === val ? '2px solid #FFFFFF' : '1.5px dashed rgba(255,255,255,0.4)',
+                  border: currentSelectedChip === val ? '2.5px solid #FFFFFF' : '2px dashed rgba(255,255,255,0.45)',
                   cursor: 'pointer',
                   background:
                     val === 10
-                      ? 'radial-gradient(circle, #3B82F6, #1E40AF)'
+                      ? 'radial-gradient(circle, #3B82F6 40%, #1D4ED8 100%)'
                       : val === 25
-                      ? 'radial-gradient(circle, #10B981, #065F46)'
+                      ? 'radial-gradient(circle, #10B981 40%, #047857 100%)'
                       : val === 50
-                      ? 'radial-gradient(circle, #F59E0B, #B45309)'
+                      ? 'radial-gradient(circle, #F59E0B 40%, #B45309 100%)'
                       : val === 100
-                      ? 'radial-gradient(circle, #EF4444, #991B1B)'
+                      ? 'radial-gradient(circle, #EF4444 40%, #B91C1C 100%)'
                       : val === 250
-                      ? 'radial-gradient(circle, #8B5CF6, #5B21B6)'
+                      ? 'radial-gradient(circle, #8B5CF6 40%, #6D28D9 100%)'
                       : val === 500
-                      ? 'radial-gradient(circle, #EC4899, #9D174D)'
-                      : 'radial-gradient(circle, #EAB308, #713F12)',
+                      ? 'radial-gradient(circle, #EC4899 40%, #BE185D 100%)'
+                      : 'radial-gradient(circle, #EAB308 40%, #854D0E 100%)',
                   color: '#FFFFFF',
-                  boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.4)',
                 }}
               >
                 {val}
@@ -690,11 +683,11 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
               style={{
                 padding: '6px 14px',
                 borderRadius: 10,
-                background: 'rgba(0,0,0,0.5)',
-                border: '1.5px solid var(--pal-amber)',
+                background: 'rgba(0,0,0,0.6)',
+                border: '1.5px solid #F59E0B',
                 fontSize: 13,
                 fontWeight: 900,
-                color: 'var(--pal-amber)',
+                color: '#FCD34D',
               }}
             >
               Bet: {bet.toLocaleString()} 🪙
@@ -710,14 +703,14 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
               onClick={handleDeal}
               className="k-squish"
               style={{
-                padding: '12px 36px',
+                padding: '12px 40px',
                 borderRadius: 14,
                 background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                 border: '1.5px solid #34D399',
-                color: '#0A0912',
+                color: '#051E13',
                 fontSize: 15,
                 fontWeight: 900,
-                boxShadow: '0 6px 24px rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 6px 24px rgba(16, 185, 129, 0.45)',
                 cursor: 'pointer',
               }}
             >
@@ -783,7 +776,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
                     ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)'
                     : 'rgba(255,255,255,0.06)',
                   border: canDouble ? '1px solid #FCD34D' : '1px solid var(--line)',
-                  color: canDouble ? '#0A0912' : 'var(--tx3)',
+                  color: canDouble ? '#051E13' : 'var(--tx3)',
                   fontSize: 13.5,
                   fontWeight: 900,
                   cursor: canDouble ? 'pointer' : 'not-allowed',
@@ -822,7 +815,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   );
 }
 
-/** Individual Animated Playing Card */
+/** Luxury Real-World Playing Card Component */
 function PlayingCard({ card, index }: { card: Card; index: number }) {
   const isRed = card.suit === '♥' || card.suit === '♦';
 
@@ -832,33 +825,47 @@ function PlayingCard({ card, index }: { card: Card; index: number }) {
       animate={{ scale: 1, y: 0, opacity: 1 }}
       transition={{ delay: index * 0.1, type: 'spring', damping: 18 }}
       style={{
-        width: 58,
-        height: 84,
+        width: 60,
+        height: 88,
         borderRadius: 8,
         background: card.hidden
-          ? 'repeating-linear-gradient(45deg, #1E293B, #1E293B 6px, #0F172A 6px, #0F172A 12px)'
+          ? 'radial-gradient(circle, #1E293B 30%, #0F172A 100%)'
           : '#FFFFFF',
-        border: card.hidden ? '2px solid #334155' : '1.5px solid #CBD5E1',
-        boxShadow: '0 6px 14px rgba(0,0,0,0.5)',
+        border: card.hidden ? '2px solid #475569' : '1.5px solid #CBD5E1',
+        boxShadow: '0 8px 18px rgba(0,0,0,0.6)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        padding: '4px 6px',
+        padding: '5px 6px',
         color: isRed ? '#DC2626' : '#0F172A',
         userSelect: 'none',
         position: 'relative',
+        overflow: 'hidden',
       }}
     >
       {card.hidden ? (
-        <div style={{ margin: 'auto', fontSize: 16, opacity: 0.6 }}>🐊</div>
+        <div
+          style={{
+            margin: 'auto',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'repeating-linear-gradient(45deg, #0F172A, #0F172A 4px, #1E293B 4px, #1E293B 8px)',
+            borderRadius: 5,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>🐊</span>
+        </div>
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 900 }}>{card.rank}</span>
-            <span style={{ fontSize: 11 }}>{card.suit}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 900 }}>{card.rank}</span>
+            <span style={{ fontSize: 11.5 }}>{card.suit}</span>
           </div>
 
-          <div style={{ alignSelf: 'center', fontSize: 18, lineHeight: 1 }}>{card.suit}</div>
+          <div style={{ alignSelf: 'center', fontSize: 20, lineHeight: 1 }}>{card.suit}</div>
 
           <div
             style={{
@@ -869,8 +876,8 @@ function PlayingCard({ card, index }: { card: Card; index: number }) {
               transform: 'rotate(180deg)',
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 900 }}>{card.rank}</span>
-            <span style={{ fontSize: 11 }}>{card.suit}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 900 }}>{card.rank}</span>
+            <span style={{ fontSize: 11.5 }}>{card.suit}</span>
           </div>
         </>
       )}

@@ -76,8 +76,8 @@ export function CasinoAgeGate({ onVerify, onExit }: CasinoAgeGateProps) {
         </h2>
 
         <p style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.5, margin: '0 0 16px', maxWidth: 440 }}>
-          Basedly Casino is an interactive entertainment simulation featuring real-world Blackjack and 5x5 Tumbling Slots.
-          Games utilize virtual credits exchanged with your gamified Reward Points (RP).
+          Basedly Casino is an interactive entertainment simulation featuring real-world Bayou Blackjack and the Merramun 6x5 Deep Web Slot Machine.
+          Games utilize simulated DOS Coins exchanged from your gamified Reward Points (RP).
         </p>
 
         {/* Legal Disclaimer Box */}
