@@ -373,24 +373,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ? 'inset -1px 0 0 rgba(255,255,255,.07), inset 1px 0 0 rgba(255,255,255,.16)'
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 10px 14px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 16px 18px' }}>
             <button
               onClick={() => router.push('/home/')}
-              className="hov k-squish"
+              className="k-squish"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 11,
-                flex: 1,
                 textAlign: 'left',
                 cursor: 'pointer',
-                padding: '5px 8px',
-                borderRadius: 10,
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                outline: 'none',
               }}
               title="Go to Home"
             >
-              <BirdMascot size={32} />
-              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.03em', color: 'var(--tx)' }}>Basedly</div>
+              <span style={{
+                fontWeight: 900,
+                fontSize: 22,
+                letterSpacing: '-.04em',
+                color: 'var(--tx)',
+                lineHeight: 1,
+                display: 'block',
+              }}>
+                Basedly
+              </span>
             </button>
             <button
               onClick={() => toggleRail(false)}
@@ -736,14 +742,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
 
         {phone && (
-          <div style={{ height: 48, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ height: 48, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', borderBottom: '1px solid var(--line)' }}>
             <button
               onClick={() => router.push('/home/')}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, fontWeight: 800, letterSpacing: '-.03em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              className="k-squish"
+              style={{
+                fontSize: 19,
+                fontWeight: 900,
+                letterSpacing: '-.04em',
+                color: 'var(--tx)',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
               title="Go to Home"
             >
-              <BirdMascot size={26} />
-              <span>{SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}</span>
+              {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
 
