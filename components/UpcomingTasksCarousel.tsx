@@ -39,9 +39,13 @@ const PRIORITY_COLOR: Record<string, string> = {
 export function UpcomingTasksCarousel({
   tasks = [],
   todayISO,
+  style = {},
+  className = '',
 }: {
   tasks: Task[];
   todayISO: string;
+  style?: React.CSSProperties;
+  className?: string;
 }) {
   const router = useRouter();
   const A = useTaskActions();
@@ -103,6 +107,7 @@ export function UpcomingTasksCarousel({
 
   return (
     <div
+      className={className}
       style={{
         flex: 'none',
         width: 353,
@@ -116,6 +121,7 @@ export function UpcomingTasksCarousel({
         flexDirection: 'column',
         position: 'relative',
         overflow: 'hidden',
+        ...style,
       }}
     >
       {upcomingTasks.length > 0 ? (

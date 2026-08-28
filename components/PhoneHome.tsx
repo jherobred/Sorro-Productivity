@@ -17,6 +17,7 @@ import { useTransactions, useBudgets } from '@/lib/money';
 import { useEvents, type Ev, hhmm, hoursOf } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
 import { DailyQuests } from './DailyQuests';
+import { UpcomingTasksCarousel } from './UpcomingTasksCarousel';
 import { FocusHub } from './FocusHub';
 import { playTick } from '@/lib/audio';
 import { toast } from '@/lib/toast';
@@ -586,29 +587,12 @@ export function PhoneHome({ name }: { name: string }) {
         </div>
       )}
 
-      {/* Overdue */}
-      {overdue.length > 0 && (
-        <button
-          onClick={() => router.push('/tasks/')}
-          className="hov k-squish"
-          style={{
-            width: '100%',
-            marginTop: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '11px 13px',
-            borderRadius: 14,
-            textAlign: 'left',
-            background: `color-mix(in srgb, ${PAL.coral} 12%, var(--card))`,
-            border: `1px solid color-mix(in srgb, ${PAL.coral} 38%, transparent)`,
-          }}
-        >
-          <Icon name="flag" size={15} color={PAL.coral} />
-          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700 }}>{overdue.length} overdue</span>
-          <Icon name="chev" size={13} color={PAL.coral} />
-        </button>
-      )}
+      {/* Upcoming Tasks Sliding Carousel */}
+      <UpcomingTasksCarousel
+        tasks={tasks}
+        todayISO={today}
+        style={{ width: '100%', minHeight: 165, marginTop: 10 }}
+      />
 
       {/* Combined Companion (level & mascot) & Daily Quests on right */}
       <div style={{ marginTop: 10 }}>
