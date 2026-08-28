@@ -271,14 +271,40 @@ const ADD_THREAD = defineMutation('cm2.addThread', async (v: { id: string; title
   if (error) throw error;
 });
 
-const EDIT = defineMutation('cm2.edit', async (v: { kind: Kind; id: string; title: string; body: string }) => {
-  // Both tables carry a title now, so both take the same patch. This used to
-  // drop the title on a photo, which was correct when a photo could not have
-  // one and became a silent data loss the moment it could.
-  const { error } = v.kind === 'photo'
-    ? await supabase.from('bd_posts').update({ title: v.title, caption: v.body }).eq('id', v.id)
-    : await supabase.from('bd_threads').update({ title: v.title, body: v.body }).eq('id', v.id);
-  if (error) throw error;
+const EDIT = defineMutation('cm2.edit', async (v: {
+  kind: Kind;
+  id: string;
+  title: string;
+  body: string;
+  images?: string[];
+  tag?: string;
+}) => {
+  if (v.kind === 'photo') {
+    const updateObj: Record<string, unknown> = { title: v.title, caption: v.body };
+    if (v.tag !== undefined) updateObj.tag = v.tag;
+    if (v.images !== undefined) {
+      updateObj.image_path = v.images.length > 0 ? v.images[0] : null;
+    }
+    const { error } = await supabase.from('bd_posts').update(updateObj).eq('id', v.id);
+    if (error) throw error;
+
+    if (v.images !== undefined) {
+      await supabase.from('bd_post_images').delete().eq('post_id', v.id);
+      if (v.images.length > 1) {
+        const extraRows = v.images.slice(1).map((path, i) => ({
+          post_id: v.id,
+          path,
+          position: i + 1,
+        }));
+        await supabase.from('bd_post_images').insert(extraRows);
+      }
+    }
+  } else {
+    const updateObj: Record<string, unknown> = { title: v.title, body: v.body };
+    if (v.tag !== undefined) updateObj.tag = v.tag;
+    const { error } = await supabase.from('bd_threads').update(updateObj).eq('id', v.id);
+    if (error) throw error;
+  }
 });
 
 const DEL = defineMutation('cm2.del', async (v: { kind: Kind; id: string }) => {
@@ -354,11 +380,50 @@ export function useCommunityActions(me: string) {
     onSettled: settle,
   });
 
-  const edit = useMutation<unknown, Error, { kind: Kind; id: string; title: string; body: string }>({
+  const edit = useMutation<unknown, Error, {
+    kind: Kind;
+    id: string;
+    title: string;
+    body: string;
+    images?: string[];
+    tag?: string;
+  }>({
     mutationKey: EDIT,
     onMutate: (v) => {
-      if (v.kind === 'photo') patch<PostRow>(POSTS, (p) => p.map((r) => (r.id === v.id ? { ...r, title: v.title, caption: v.body } : r)));
-      else patch<ThreadRow>(THREADS, (p) => p.map((r) => (r.id === v.id ? { ...r, title: v.title, body: v.body } : r)));
+      if (v.kind === 'photo') {
+        patch<PostRow>(POSTS, (p) =>
+          p.map((r) =>
+            r.id === v.id
+              ? {
+                  ...r,
+                  title: v.title,
+                  caption: v.body,
+                  tag: v.tag !== undefined ? v.tag : r.tag,
+                  image_path: v.images !== undefined ? (v.images[0] ?? null) : r.image_path,
+                }
+              : r
+          )
+        );
+        if (v.images !== undefined) {
+          patch<{ post_id: string; path: string; position: number }>(POST_IMAGES, (p) => [
+            ...p.filter((x) => x.post_id !== v.id),
+            ...v.images!.slice(1).map((path, i) => ({ post_id: v.id, path, position: i + 1 })),
+          ]);
+        }
+      } else {
+        patch<ThreadRow>(THREADS, (p) =>
+          p.map((r) =>
+            r.id === v.id
+              ? {
+                  ...r,
+                  title: v.title,
+                  body: v.body,
+                  tag: v.tag !== undefined ? v.tag : r.tag,
+                }
+              : r
+          )
+        );
+      }
     },
     onSettled: settle,
   });

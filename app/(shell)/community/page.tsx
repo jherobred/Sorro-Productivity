@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
@@ -18,7 +18,7 @@ import { BOT_NAME } from '@/lib/bot';
 import { toast } from '@/lib/toast';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
-import { useSignedUrls } from '@/lib/uploads';
+import { useSignedUrls, uploadTo } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
 import { useReposts } from '@/lib/reposts';
 import { useBookmarks, toggleBookmark } from '@/lib/bookmarks';
@@ -29,7 +29,7 @@ import { StoryCreator } from '@/components/stories/StoryCreator';
 import { Casino } from '@/components/casino/Casino';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
-  key, type Filter, type Item, type Sort,
+  key, type Filter, type Item, type Sort, TAGS, MAX_IMAGES,
 } from '@/lib/community';
 import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
@@ -597,7 +597,11 @@ export default function CommunityPage() {
                 onComment={(body) => { A.comment.mutate({ kind: item.kind, id: item.id, body }); toast('Posted'); }}
                 onEdit={() => setEditing(key(item))}
                 onEditCancel={() => setEditing(null)}
-                onEditSave={(title, body) => { A.edit.mutate({ kind: item.kind, id: item.id, title, body }); setEditing(null); toast('Updated'); }}
+                onEditSave={(title, body, images, tag) => {
+                  A.edit.mutate({ kind: item.kind, id: item.id, title, body, images, tag });
+                  setEditing(null);
+                  toast('Updated');
+                }}
                 onDelete={() => A.remove(item)}
                 onOpen={() => setViewing(key(item))}
                 onShare={() => setSharing(item)}
@@ -891,7 +895,7 @@ function XPostCard({
   onComment: (body: string) => void;
   onEdit: () => void;
   onEditCancel: () => void;
-  onEditSave: (title: string, body: string) => void;
+  onEditSave: (title: string, body: string, images?: string[], tag?: string) => void;
   onDelete: () => void;
   onOpen: () => void;
   onShare: () => void;
@@ -1228,6 +1232,7 @@ function Avatar({
 function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: string; alt: string; onOpen: () => void }) {
   const urls = useSignedUrls('bd-feed', paths);
   const [at, setAt] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const wrap = { background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 22%, var(--card2)), var(--card2))` };
 
   if (paths.length === 0) return null;
@@ -1240,9 +1245,33 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
     );
   }
 
+  const scrollNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    const nextAt = Math.min(paths.length - 1, at + 1);
+    scrollRef.current.scrollTo({ left: nextAt * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(nextAt);
+  };
+
+  const scrollPrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    const prevAt = Math.max(0, at - 1);
+    scrollRef.current.scrollTo({ left: prevAt * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(prevAt);
+  };
+
+  const jumpTo = (i: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({ left: i * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(i);
+  };
+
   return (
     <div style={{ ...wrap, position: 'relative' }}>
       <div
+        ref={scrollRef}
         className="hbar"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -1260,23 +1289,94 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
         ))}
       </div>
 
-      <div aria-hidden style={{
+      {/* Floating Prev & Next Navigation Buttons */}
+      {at > 0 && (
+        <button
+          type="button"
+          onClick={scrollPrev}
+          aria-label="Previous photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            left: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.65)',
+            border: '1px solid rgba(255,255,255,0.25)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Icon name="back" size={14} color="#FFFFFF" />
+        </button>
+      )}
+
+      {at < paths.length - 1 && (
+        <button
+          type="button"
+          onClick={scrollNext}
+          aria-label="Next photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.65)',
+            border: '1px solid rgba(255,255,255,0.25)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div style={{ transform: 'rotate(180deg)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="back" size={14} color="#FFFFFF" />
+          </div>
+        </button>
+      )}
+
+      {/* Clickable Pagination Dots */}
+      <div style={{
         position: 'absolute', left: 0, right: 0, bottom: 10,
-        display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none',
+        display: 'flex', justifyContent: 'center', gap: 6, zIndex: 10,
       }}>
         {paths.map((path, i) => (
-          <span key={path} style={{
-            width: i === at ? 16 : 5, height: 5, borderRadius: 3,
-            background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
-            transition: 'width .2s',
-          }} />
+          <button
+            key={path}
+            type="button"
+            onClick={(e) => jumpTo(i, e)}
+            aria-label={`Go to photo ${i + 1}`}
+            style={{
+              padding: 0,
+              border: 'none',
+              cursor: 'pointer',
+              width: i === at ? 18 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
+              transition: 'all .2s ease',
+            }}
+          />
         ))}
       </div>
 
       <span style={{
         position: 'absolute', right: 10, top: 10, padding: '3px 9px', borderRadius: 8,
-        background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 10.5, fontWeight: 800,
-        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', zIndex: 10,
       }}>
         {at + 1}/{paths.length}
       </span>
@@ -1314,29 +1414,245 @@ function BotTag() {
   );
 }
 
-function ItemEdit({ item, onSave, onCancel }: { item: Item; onSave: (t: string, b: string) => void; onCancel: () => void }) {
-  const [t, setT] = useState(item.title);
-  const [b, setB] = useState(item.body);
-  const ok = item.kind === 'photo' ? true : !!t.trim();
+function ItemEdit({
+  item,
+  onSave,
+  onCancel,
+}: {
+  item: Item;
+  onSave: (t: string, b: string, images?: string[], tag?: string) => void;
+  onCancel: () => void;
+}) {
+  const [t, setT] = useState(item.title || '');
+  const [b, setB] = useState(item.body || '');
+  const [tag, setTag] = useState(item.tag || '');
+  const [images, setImages] = useState<{ path: string; url: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const initialUrls = useSignedUrls('bd-feed', item.images);
+
+  useEffect(() => {
+    if (item.images.length > 0) {
+      setImages(item.images.map((path, i) => ({ path, url: initialUrls[i] || '' })));
+    }
+  }, [item.images, initialUrls]);
+
+  const attach = async (files: File[]) => {
+    const pics = files.filter((f) => f.type.startsWith('image/'));
+    if (!pics.length) {
+      toast('That is not an image');
+      return;
+    }
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      toast(`${MAX_IMAGES} pictures is the limit`);
+      return;
+    }
+    const taking = pics.slice(0, room);
+    setBusy(true);
+    try {
+      for (const f of taking) {
+        const path = await uploadTo('bd-feed', f);
+        setImages((p) => [...p, { path, url: URL.createObjectURL(f) }]);
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ready = !!(t.trim() || b.trim() || images.length > 0);
 
   return (
-    <div className="k-bloom" style={{ padding: '8px 0' }}>
-      {item.kind === 'discussion' && (
-        <input autoFocus value={t} onChange={(e) => setT(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }} aria-label="Title"
-          style={{ width: '100%', minHeight: 36, padding: '6px 0', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', borderBottom: '1px solid var(--line2)', background: 'transparent' }} />
+    <div className="k-bloom" style={{
+      padding: '12px 14px',
+      borderRadius: 14,
+      background: 'var(--card2)',
+      border: '1.5px solid var(--acc)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+    }}>
+      {/* Title Input */}
+      <input
+        autoFocus
+        value={t}
+        onChange={(e) => setT(e.target.value)}
+        placeholder="Title (optional)"
+        aria-label="Title"
+        style={{
+          width: '100%',
+          minHeight: 34,
+          padding: '4px 8px',
+          fontSize: 14,
+          fontWeight: 800,
+          letterSpacing: '-.02em',
+          color: 'var(--tx)',
+          borderBottom: '1px solid var(--line2)',
+          background: 'transparent',
+        }}
+      />
+
+      {/* Body / Caption Textarea */}
+      <textarea
+        value={b}
+        onChange={(e) => setB(e.target.value)}
+        rows={3}
+        placeholder="Caption or post content…"
+        aria-label="Body"
+        style={{
+          width: '100%',
+          padding: '8px 10px',
+          borderRadius: 10,
+          border: '1px solid var(--line2)',
+          background: 'var(--card)',
+          fontSize: 12.5,
+          lineHeight: 1.6,
+          color: 'var(--tx)',
+          resize: 'vertical',
+        }}
+      />
+
+      {/* Media Management / Thumbnails */}
+      {images.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6 }}>
+          {images.map((im, i) => (
+            <div
+              key={im.path}
+              style={{
+                position: 'relative',
+                aspectRatio: '1',
+                borderRadius: 10,
+                overflow: 'hidden',
+                background: 'var(--card)',
+                border: '1px solid var(--line2)',
+              }}
+            >
+              {im.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={im.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                  <Icon name="image" size={16} color="var(--tx3)" />
+                </div>
+              )}
+              {i === 0 && (
+                <span style={{
+                  position: 'absolute', left: 4, top: 4, padding: '1px 5px', borderRadius: 4,
+                  background: 'rgba(0,0,0,.7)', color: '#fff', fontSize: 8, fontWeight: 800,
+                }}>
+                  COVER
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setImages((p) => p.filter((x) => x.path !== im.path))}
+                className="hov"
+                aria-label={`Remove photo ${i + 1}`}
+                style={{
+                  position: 'absolute', right: 4, top: 4, width: 22, height: 22, borderRadius: 6,
+                  display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.7)', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Icon name="close" size={10} color="#fff" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
-      <textarea autoFocus={item.kind === 'photo'} value={b} onChange={(e) => setB(e.target.value)} rows={3}
-        placeholder={item.kind === 'photo' ? 'Caption' : 'Detail'} aria-label="Body"
-        style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent', border: 'none' }} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => ok && onSave(t.trim(), b.trim())} className="acc k-squish"
-          style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800, opacity: ok ? 1 : 0.45 }}>
-          Save
-        </button>
-        <button onClick={onCancel} className="hov k-squish"
-          style={{ minHeight: 34, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+
+      {/* Add More Media Button */}
+      {images.length < MAX_IMAGES && (
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '8px 12px',
+            border: '1.5px dashed var(--line2)',
+            borderRadius: 10,
+            cursor: 'pointer',
+            opacity: busy ? 0.5 : 1,
+            background: 'var(--card)',
+          }}
+        >
+          <Icon name="image" size={14} color="var(--tx3)" />
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+            {busy ? 'Uploading…' : images.length ? 'Add more pictures' : 'Add pictures / media'}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void attach(Array.from(e.target.files ?? []));
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
+
+      {/* Tag Selection Chips */}
+      <div>
+        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>
+          Tag
+        </div>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {(['', ...TAGS] as const).map((t) => {
+            const on = tag === t;
+            return (
+              <button
+                key={t || 'none'}
+                type="button"
+                onClick={() => setTag(t)}
+                aria-pressed={on}
+                className="k-chip"
+                style={{
+                  padding: '3px 10px',
+                  borderRadius: 999,
+                  minHeight: 26,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: on ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
+                  color: on ? 'var(--accTx)' : t ? 'var(--tx2)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t || 'No tag'}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Save / Cancel Controls */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="hov k-squish"
+          style={{
+            minHeight: 34, padding: '0 14px', borderRadius: 9,
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
+          }}
+        >
           Cancel
+        </button>
+        <button
+          type="button"
+          disabled={!ready || busy}
+          onClick={() => ready && !busy && onSave(t.trim(), b.trim(), images.map((x) => x.path), tag)}
+          className="acc k-squish"
+          style={{
+            minHeight: 34, padding: '0 18px', borderRadius: 9,
+            background: 'var(--acc)', color: '#0A0912', fontSize: 12, fontWeight: 800,
+            opacity: ready && !busy ? 1 : 0.45, cursor: ready && !busy ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Save Changes
         </button>
       </div>
     </div>

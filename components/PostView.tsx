@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -301,6 +301,37 @@ function Panel({
 function Photos({ paths, alt }: { paths: string[]; alt: string }) {
   const urls = useSignedUrls('bd-feed', paths);
   const [at, setAt] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const scrollNext = () => {
+    if (!containerRef.current) return;
+    const nextAt = Math.min(paths.length - 1, at + 1);
+    containerRef.current.scrollTo({ left: nextAt * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(nextAt);
+  };
+
+  const scrollPrev = () => {
+    if (!containerRef.current) return;
+    const prevAt = Math.max(0, at - 1);
+    containerRef.current.scrollTo({ left: prevAt * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(prevAt);
+  };
+
+  const jumpTo = (i: number) => {
+    if (!containerRef.current) return;
+    containerRef.current.scrollTo({ left: i * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(i);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') scrollNext();
+      else if (e.key === 'ArrowLeft') scrollPrev();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at, paths.length]);
 
   if (paths.length === 1) {
     const url = urls[0];
@@ -319,6 +350,7 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
+        ref={containerRef}
         className="hbar"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -342,10 +374,94 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
         ))}
       </div>
 
+      {/* Floating Prev & Next Navigation Buttons */}
+      {at > 0 && (
+        <button
+          type="button"
+          onClick={scrollPrev}
+          aria-label="Previous photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            left: 14,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 20,
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <Icon name="back" size={16} color="#FFFFFF" />
+        </button>
+      )}
+
+      {at < paths.length - 1 && (
+        <button
+          type="button"
+          onClick={scrollNext}
+          aria-label="Next photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            right: 14,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 20,
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <div style={{ transform: 'rotate(180deg)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="back" size={16} color="#FFFFFF" />
+          </div>
+        </button>
+      )}
+
+      {/* Clickable Pagination Dots */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, bottom: 14,
+        display: 'flex', justifyContent: 'center', gap: 6, zIndex: 20,
+      }}>
+        {paths.map((path, i) => (
+          <button
+            key={path}
+            type="button"
+            onClick={() => jumpTo(i)}
+            aria-label={`Go to photo ${i + 1}`}
+            style={{
+              padding: 0,
+              border: 'none',
+              cursor: 'pointer',
+              width: i === at ? 20 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
+              transition: 'all .2s ease',
+            }}
+          />
+        ))}
+      </div>
+
       <span style={{
         position: 'absolute', right: 12, top: 12, padding: '4px 10px', borderRadius: 8,
-        background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontWeight: 800,
-        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 11, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', zIndex: 20,
       }}>
         {at + 1}/{paths.length}
       </span>
