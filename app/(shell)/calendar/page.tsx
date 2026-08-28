@@ -535,7 +535,7 @@ function Grid({
   const hours = Array.from({ length: SPAN + 1 }, (_, i) => GRID_START + i);
 
   const onSlotPointerDown = (e: React.PointerEvent, day: number, rawStartHour: number) => {
-    if (e.button !== 0) return;
+    if (phone || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -892,8 +892,8 @@ function Grid({
             const idx = colOf(i);
             return (
               <div key={i} style={{ position: 'relative', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined }}>
-                {/* Google Calendar Drag-to-Create Live Preview Block */}
-                {slotDrag && slotDrag.day === idx && (() => {
+                {/* Google Calendar Drag-to-Create Live Preview Block (Desktop only) */}
+                {!phone && slotDrag && slotDrag.day === idx && (() => {
                   const s = Math.min(slotDrag.startHour, slotDrag.currentHour);
                   const rawE = Math.max(slotDrag.startHour, slotDrag.currentHour);
                   const e = rawE === s ? s + 0.5 : Math.max(s + 0.5, rawE);
@@ -930,8 +930,9 @@ function Grid({
                 {hours.slice(0, -1).map((h, hi) => (
                   <div
                     key={h}
-                    onPointerDown={(p) => onSlotPointerDown(p, idx, h)}
-                    className="hov"
+                    onPointerDown={phone ? undefined : (p) => onSlotPointerDown(p, idx, h)}
+                    onClick={phone ? (p) => openSlot(idx, h, p.clientX, p.clientY, false, h + 1) : undefined}
+                    className={phone ? '' : 'hov'}
                     aria-label={`Add event at ${hhmm(h)}`}
                     style={{
                       position: 'absolute', left: 0, right: 0,

@@ -87,7 +87,7 @@ function navFor(picks: string[]): Section[] {
 export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { phone } = useLayout();
+  const { phone, viewMode, setViewMode } = useLayout();
   const { prefs, update } = usePrefs();
   const [guard, setGuard] = useState<'checking' | 'ok'>('checking');
   const [capture, setCapture] = useState<{ x: number; y: number } | null>(null);
@@ -156,11 +156,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useLiveSync();
   // Remember whoever signs in, so switching back needs no round trip.
   useEffect(watchAccounts, []);
-  // Phone web only. A desktop browser has no address bar worth reclaiming and
-  // a window that goes fullscreen on the first click of the session is a window
-  // that has taken your screen without asking. Only on the first tap, too — the
-  // Fullscreen API refuses anything that is not a user gesture. lib/appUpdate.ts.
-  useAlwaysFullscreen(phone && prefs.alwaysFullscreen);
+  // Phone view: fullscreen by default on the first user interaction. Desktop: normal.
+  useAlwaysFullscreen(phone);
 
   /**
    * Ctrl/Cmd+\ cycles the sidebar modes: open -> compact -> hidden -> open.
@@ -466,6 +463,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     setMenu({
                       x: r.left, y: r.bottom + 6, kind: 'global', label: 'Quick actions',
                       items: [
+                        { label: viewMode === 'phone' ? 'Switch to Web View' : 'Dedicated Phone View', icon: viewMode === 'phone' ? 'monitor' : 'phone', run: () => setViewMode(viewMode === 'phone' ? 'web' : 'phone') },
                         { label: 'New expense', icon: 'money', run: () => setSheet('money') },
                         { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
                         { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
@@ -608,6 +606,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </button>
                 {sideMore && (
                   <div className="lens" style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 2px 15px', paddingLeft: 9, borderLeft: '1px solid var(--line2)' }}>
+                    <button onClick={() => setViewMode(viewMode === 'phone' ? 'web' : 'phone')} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name={viewMode === 'phone' ? 'monitor' : 'phone'} size={13} color="var(--tx3)" />{viewMode === 'phone' ? 'Switch to Web View' : 'Dedicated Phone View'}
+                    </button>
                     <button onClick={() => update({ theme: dark ? 'light' : 'dark' })} className="hov"
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
                       <Icon name="moon" size={13} color="var(--tx3)" />{dark ? 'Light mode' : 'Dark mode'}
@@ -757,6 +759,66 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <span>Capture</span>
             </button>
 
+            {/* Dedicated View Mode Switcher */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                borderRadius: 8,
+                padding: 2,
+                gap: 2,
+              }}
+            >
+              <button
+                onClick={() => setViewMode('web')}
+                className="k-squish"
+                title="Dedicated Web View"
+                aria-label="Dedicated Web View"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: viewMode === 'web' || (viewMode === 'auto' && !phone) ? 'var(--acc)' : 'transparent',
+                  color: viewMode === 'web' || (viewMode === 'auto' && !phone) ? ON_ACCENT : 'var(--tx2)',
+                  transition: 'all .15s',
+                }}
+              >
+                <Icon name="monitor" size={13} color={viewMode === 'web' || (viewMode === 'auto' && !phone) ? ON_ACCENT : 'var(--tx2)'} />
+                <span>Web</span>
+              </button>
+              <button
+                onClick={() => setViewMode('phone')}
+                className="k-squish"
+                title="Dedicated Phone View"
+                aria-label="Dedicated Phone View"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: viewMode === 'phone' || (viewMode === 'auto' && phone) ? 'var(--acc)' : 'transparent',
+                  color: viewMode === 'phone' || (viewMode === 'auto' && phone) ? ON_ACCENT : 'var(--tx2)',
+                  transition: 'all .15s',
+                }}
+              >
+                <Icon name="phone" size={13} color={viewMode === 'phone' || (viewMode === 'auto' && phone) ? ON_ACCENT : 'var(--tx2)'} />
+                <span>Phone</span>
+              </button>
+            </div>
+
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
@@ -854,6 +916,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {SECTIONS.find((x) => x.id === section)?.name ?? 'basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
+
+            {/* Mobile View Mode Toggle */}
+            <button
+              onClick={() => setViewMode(phone ? 'web' : 'phone')}
+              className="hov k-squish"
+              title={phone ? 'Switch to Dedicated Web View' : 'Dedicated Phone View'}
+              aria-label="Switch view mode"
+              style={{
+                height: 32,
+                padding: '0 8px',
+                borderRadius: 8,
+                border: '1px solid var(--line2)',
+                background: 'var(--card2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--tx2)',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name={phone ? 'monitor' : 'phone'} size={12} color="var(--accTx)" />
+              <span>{phone ? 'Web' : 'Phone'}</span>
+            </button>
 
             {/* Mobile Tour Button - only shown if user has NOT completed onboarding yet */}
             {!seen.has(getActiveTabKey()) && (
