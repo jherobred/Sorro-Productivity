@@ -9,7 +9,7 @@ import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
-import { useLists, useTasks, useTaskActions, type Task, type List } from '@/lib/tasks';
+import { useLists, useTasks, useTaskActions, getTaskAlert, type Task, type List } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
@@ -467,6 +467,9 @@ function TaskRow({
     }
   };
 
+  const alert = getTaskAlert(row.task);
+  const alertClass = alert ? `task-alert-${alert.tier}` : '';
+
   return (
     <div className={leaving ? 'leaving' : ''} style={{ position: 'relative' }}>
       <SwipeableRow
@@ -479,7 +482,7 @@ function TaskRow({
         leftActionColor="var(--pal-coral)"
       >
         <div
-          className="google-task-row"
+          className={`google-task-row ${alertClass}`}
           onContextMenu={(e) => {
             e.preventDefault();
             onOpenMenu(e.clientX, e.clientY);
@@ -567,20 +570,35 @@ function TaskRow({
                 }}
                 style={{ textAlign: 'left' }}
               >
-                {/* Title */}
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    lineHeight: 1.4,
-                    color: 'var(--tx)',
-                    textWrap: 'pretty',
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {row.task.title}
-                </span>
+                {/* Title + Alarm Emoji */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 500,
+                      lineHeight: 1.4,
+                      color: 'var(--tx)',
+                      textWrap: 'pretty',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {row.task.title}
+                  </span>
+                  {alert && (
+                    <span
+                      className="task-alarm-emoji"
+                      title={`${alert.label} (${alert.tier} deadline alert)`}
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 1,
+                        cursor: 'help',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {alert.emoji}
+                    </span>
+                  )}
+                </div>
 
                 {/* Details / Notes snippet */}
                 {row.task.notes && (
@@ -615,16 +633,48 @@ function TaskRow({
                         gap: 5,
                         padding: '2px 8px',
                         borderRadius: 14,
-                        background: row.late ? 'color-mix(in srgb, var(--pal-coral) 16%, transparent)' : 'var(--card2, #282A2C)',
-                        border: `1px solid ${row.late ? 'var(--pal-coral)' : 'var(--line2)'}`,
-                        color: row.late ? 'var(--pal-coral)' : 'var(--tx2)',
+                        background: alert?.tier === 'red'
+                          ? 'color-mix(in srgb, var(--pal-coral) 20%, transparent)'
+                          : alert?.tier === 'orange'
+                          ? 'color-mix(in srgb, #FF9A3C 18%, transparent)'
+                          : row.late
+                          ? 'color-mix(in srgb, var(--pal-coral) 16%, transparent)'
+                          : 'var(--card2, #282A2C)',
+                        border: `1px solid ${
+                          alert?.tier === 'red' || row.late
+                            ? 'var(--pal-coral)'
+                            : alert?.tier === 'orange'
+                            ? '#FF9A3C'
+                            : alert?.tier === 'yellow'
+                            ? 'var(--pal-amber)'
+                            : 'var(--line2)'
+                        }`,
+                        color: alert?.tier === 'red' || row.late
+                          ? 'var(--pal-coral)'
+                          : alert?.tier === 'orange'
+                          ? '#FFA54C'
+                          : alert?.tier === 'yellow'
+                          ? 'var(--pal-amber)'
+                          : 'var(--tx2)',
                         fontSize: 11.5,
                         fontWeight: 600,
                         cursor: 'pointer',
                       }}
                       title="Change date/time"
                     >
-                      <Icon name="clock" size={11} color={row.late ? 'var(--pal-coral)' : 'var(--tx3)'} />
+                      <Icon
+                        name="clock"
+                        size={11}
+                        color={
+                          alert?.tier === 'red' || row.late
+                            ? 'var(--pal-coral)'
+                            : alert?.tier === 'orange'
+                            ? '#FFA54C'
+                            : alert?.tier === 'yellow'
+                            ? 'var(--pal-amber)'
+                            : 'var(--tx3)'
+                        }
+                      />
                       <span>{row.dueLabel || row.task.due_on}</span>
                       <span
                         onClick={(e) => {
@@ -650,7 +700,7 @@ function TaskRow({
             )}
           </div>
 
-          {/* Right Action Controls (Google Tasks 3-dots and Star) */}
+          {/* Right Action Controls (Google Tasks 3-dots and 5 Stars Rating) */}
           <div
             className="google-task-actions"
             style={{
@@ -660,6 +710,52 @@ function TaskRow({
               flex: 'none',
             }}
           >
+            {/* 5-Star Rating Control */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0,
+                marginRight: 2,
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((s) => {
+                const filled = (row.task.stars || 0) >= s;
+                return (
+                  <button
+                    key={s}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStar(row.task.stars === s ? 0 : s);
+                    }}
+                    title={`${s} star${s > 1 ? 's' : ''}`}
+                    className="hov k-squish"
+                    style={{
+                      width: 19,
+                      height: 24,
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13.5,
+                        color: filled ? 'var(--pal-amber, #F9AB00)' : 'var(--line2, #44474E)',
+                        transition: 'color .15s ease, transform .15s ease',
+                      }}
+                    >
+                      ★
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* 3-dots Menu Button */}
             <button
               onClick={(e) => {
@@ -681,36 +777,6 @@ function TaskRow({
               }}
             >
               <Icon name="dots" size={14} color="var(--tx3)" />
-            </button>
-
-            {/* Star Toggle Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onStar(row.task.stars ? 0 : 1);
-              }}
-              title={row.task.stars ? 'Starred' : 'Star task'}
-              className="hov k-squish"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                display: 'grid',
-                placeItems: 'center',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 16,
-                  color: row.task.stars ? 'var(--pal-amber, #F9AB00)' : 'var(--tx3)',
-                  lineHeight: 1,
-                }}
-              >
-                {row.task.stars ? '★' : '☆'}
-              </span>
             </button>
           </div>
         </div>

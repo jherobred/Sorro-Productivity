@@ -451,3 +451,86 @@ body {
   width: max(100%, 44px);
   height: max(100%, 44px);
 }
+
+/* ---- Task Deadline Alert Animations & Hierarchy ------------------------- */
+@keyframes task-flash-red {
+  0%, 100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px rgba(255, 107, 107, 0.45), 0 0 14px rgba(255, 107, 107, 0.25);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--pal-coral, #FF6B6B) 18%, transparent);
+    box-shadow: inset 0 0 0 2px var(--pal-coral, #FF6B6B), 0 0 22px rgba(255, 107, 107, 0.6);
+  }
+}
+
+@keyframes task-flash-orange {
+  0%, 100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px rgba(255, 154, 60, 0.35), 0 0 10px rgba(255, 154, 60, 0.18);
+  }
+  50% {
+    background-color: color-mix(in srgb, #FF9A3C 14%, transparent);
+    box-shadow: inset 0 0 0 1.5px #FF9A3C, 0 0 18px rgba(255, 154, 60, 0.45);
+  }
+}
+
+@keyframes task-flash-yellow {
+  0%, 100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px rgba(255, 194, 75, 0.25);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--pal-amber, #FFC24B) 10%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--pal-amber, #FFC24B), 0 0 14px rgba(255, 194, 75, 0.35);
+  }
+}
+
+@keyframes task-alarm-shake {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-16deg) scale(1.22); }
+  40% { transform: rotate(16deg) scale(1.22); }
+  60% { transform: rotate(-10deg) scale(1.14); }
+  80% { transform: rotate(10deg) scale(1.14); }
+}
+
+@keyframes task-alarm-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.22); filter: drop-shadow(0 0 6px rgba(255, 154, 60, 0.75)); }
+}
+
+@keyframes task-alarm-swing {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  30% { transform: rotate(-10deg) scale(1.08); }
+  60% { transform: rotate(10deg) scale(1.08); }
+}
+
+.task-alert-red {
+  animation: task-flash-red 0.8s infinite ease-in-out !important;
+  border-radius: 10px;
+}
+.task-alert-red .task-alarm-emoji {
+  display: inline-block;
+  animation: task-alarm-shake 0.8s infinite cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  transform-origin: center;
+}
+
+.task-alert-orange {
+  animation: task-flash-orange 1.4s infinite ease-in-out !important;
+  border-radius: 10px;
+}
+.task-alert-orange .task-alarm-emoji {
+  display: inline-block;
+  animation: task-alarm-pulse 1.4s infinite ease-in-out;
+  transform-origin: center;
+}
+
+.task-alert-yellow {
+  animation: task-flash-yellow 2.2s infinite ease-in-out !important;
+  border-radius: 10px;
+}
+.task-alert-yellow .task-alarm-emoji {
+  display: inline-block;
+  animation: task-alarm-swing 2.2s infinite ease-in-out;
+  transform-origin: center;
+}

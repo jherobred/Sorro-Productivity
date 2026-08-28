@@ -29,6 +29,71 @@ export type Task = {
 
 export type List = { id: string; name: string; color: string; position: number };
 
+export type TaskAlert = {
+  tier: 'red' | 'orange' | 'yellow';
+  emoji: string;
+  label: string;
+  speed: string;
+};
+
+/**
+ * Calculates deadline proximity and returns alert hierarchy with emoji and animation speed:
+ * - Red (Fast 0.8s flash + 🚨): Overdue or due within 2 hours.
+ * - Orange (Medium 1.4s flash + ⏰): Due within 8 hours or due today.
+ * - Yellow (Slow 2.2s flash + ⏳): Approaching within 24 hours.
+ */
+export function getTaskAlert(task: Task): TaskAlert | null {
+  if (task.done) return null;
+  if (!task.due_on && !task.due_at) return null;
+
+  const now = Date.now();
+  let dueTime: number;
+
+  if (task.due_at) {
+    dueTime = new Date(task.due_at).getTime();
+  } else {
+    const [y, m, d] = task.due_on!.split('-').map(Number);
+    dueTime = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+  }
+
+  const diffMs = dueTime - now;
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours <= 2) {
+    return {
+      tier: 'red',
+      emoji: '🚨',
+      label: diffHours < 0 ? 'Overdue' : 'Due very soon',
+      speed: '0.8s',
+    };
+  }
+
+  const todayStr = new Date().toDateString();
+  const isToday = task.due_on
+    ? new Date(`${task.due_on}T12:00:00`).toDateString() === todayStr
+    : new Date(task.due_at!).toDateString() === todayStr;
+
+  if (diffHours <= 8 || isToday) {
+    return {
+      tier: 'orange',
+      emoji: '⏰',
+      label: 'Due today',
+      speed: '1.4s',
+    };
+  }
+
+  if (diffHours <= 24) {
+    return {
+      tier: 'yellow',
+      emoji: '⏳',
+      label: 'Approaching deadline',
+      speed: '2.2s',
+    };
+  }
+
+  return null;
+}
+
 const TASKS_KEY = ['tasks'] as const;
 const LISTS_KEY = ['lists'] as const;
 

@@ -12,7 +12,7 @@ import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
-import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
+import { useTasks, useTaskActions, getTaskAlert, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, liveEventIds, GRID_START, GRID_END, type Ev, type Span,
@@ -205,8 +205,48 @@ export default function CalendarPage() {
     setPop({ kind: 'event', ev, x, y, span: span ?? null });
   const openTask = (task: Task, x: number, y: number) =>
     setPop({ kind: 'task', task, x, y });
-  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false, endHour?: number, initialTab: 'event' | 'task' = 'event') =>
-    setPop({ kind: 'slot', day, hour, endHour, allDay, initialTab, x, y });
+  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false, endHour?: number, initialTab: 'event' | 'task' = 'event') => {
+    if (initialTab === 'task') {
+      const dueDate = new Date(ws);
+      dueDate.setDate(dueDate.getDate() + day);
+      const dueOn = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+      const dueAt = allDay ? null : at(ws, day, hour);
+      const newTaskId = crypto.randomUUID();
+      const newTask: Task = {
+        id: newTaskId,
+        title: '(No title)',
+        notes: '',
+        due_on: dueOn,
+        due_at: dueAt,
+        priority: null,
+        stars: 0,
+        position: 0,
+        done: false,
+        list_id: null,
+        deleted_at: null,
+      };
+      TA.create.mutate(newTask);
+      setPop({ kind: 'task', task: newTask, x, y });
+      return;
+    }
+
+    // Immediately add the (No title) event first, then let the user edit it after
+    const newId = A.addAt(day, hour, prefs.accent, allDay, '(No title)', endHour);
+    const eH = allDay ? 23.98 : (endHour !== undefined ? endHour : hour + 1);
+    const createdEv: Ev = {
+      id: newId,
+      title: '(No title)',
+      starts_at: at(ws, day, allDay ? 0 : hour),
+      ends_at: at(ws, day, eH),
+      all_day: allDay,
+      color: prefs.accent,
+      location: '',
+      remind_minutes: 10,
+      snoozed_until: null,
+      deleted_at: null,
+    };
+    setPop({ kind: 'event', ev: createdEv, x, y });
+  };
 
   /**
    * The phone header is deliberately thin. Day view already highlights the day
@@ -351,7 +391,12 @@ export default function CalendarPage() {
             if (!run) return;
             A.wipeRun(events.filter((e) => run.ids.includes(e.id)));
             setPop(null);
-          }} />
+          }}
+          onUpdateTitle={(title) => {
+            A.update.mutate({ id: pop.ev.id, patch: { title } });
+            setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, title } } : prev);
+          }}
+        />
       )}
 
       {pop?.kind === 'task' && (
@@ -1064,18 +1109,26 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
 function TaskChip({ task, onPointerDown, style, compact }: {
   task: Task; onPointerDown: (e: React.PointerEvent) => void; style?: React.CSSProperties; compact?: boolean;
 }) {
+  const alert = getTaskAlert(task);
   const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--acc)';
+  const alertClass = alert ? `task-alert-${alert.tier}` : '';
+
   return (
     <div onPointerDown={onPointerDown} title={`${task.title} — drag to a time slot`}
+      className={alertClass}
       style={{
         display: 'flex', alignItems: 'center', gap: 6, cursor: 'grab', touchAction: 'none',
         borderRadius: 8, padding: compact ? '2px 6px' : '4px 8px', marginBottom: compact ? 2 : 0,
-        border: `1.5px dashed color-mix(in srgb, ${hue} 62%, transparent)`,
+        border: `1.5px dashed ${alert?.tier === 'red' ? 'var(--pal-coral)' : alert?.tier === 'orange' ? '#FF9A3C' : alert?.tier === 'yellow' ? 'var(--pal-amber)' : `color-mix(in srgb, ${hue} 62%, transparent)`}`,
         background: `color-mix(in srgb, ${hue} 12%, var(--card))`,
         fontSize: compact ? 10 : 10.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap',
         ...style,
       }}>
-      <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', border: `1.5px solid ${hue}` }} />
+      {alert ? (
+        <span className="task-alarm-emoji" style={{ fontSize: 11, flex: 'none', lineHeight: 1 }}>{alert.emoji}</span>
+      ) : (
+        <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', border: `1.5px solid ${hue}` }} />
+      )}
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</span>
     </div>
   );
@@ -1520,13 +1573,14 @@ const LABEL: React.CSSProperties = {
  * Edit, which opens the full sheet.
  */
 function EventPopover({
-  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun,
+  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle,
 }: {
   ev: Ev; x: number; y: number;
   /** How many days this event's run covers, or 0 when it stands alone. */
   runDays: number;
   onClose: () => void; onEdit: () => void; onDuplicate: () => void;
   onDelete: () => void; onDeleteRun: () => void;
+  onUpdateTitle?: (title: string) => void;
 }) {
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at);
@@ -1535,10 +1589,21 @@ function EventPopover({
     ? start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
     : `${start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(ev.starts_at))} – ${hhmm(hoursOf(ev.ends_at))}`;
   const dayName = start.toLocaleDateString(undefined, { weekday: 'long' });
-  const displayTitle = ev.title?.trim() || '(No title)';
+  const isNoTitle = !ev.title || ev.title.trim() === '' || ev.title === '(No title)';
+  const [editingTitle, setEditingTitle] = useState(isNoTitle);
+  const [titleInput, setTitleInput] = useState(isNoTitle ? '' : ev.title);
+
+  const saveTitle = () => {
+    const trimmed = titleInput.trim();
+    if (trimmed && trimmed !== ev.title) {
+      onUpdateTitle?.(trimmed);
+    } else if (!trimmed) {
+      onUpdateTitle?.('(No title)');
+    }
+  };
 
   return (
-    <CalPopover x={x} y={y} onClose={onClose} label={displayTitle} width={340}>
+    <CalPopover x={x} y={y} onClose={onClose} label={ev.title || '(No title)'} width={340}>
       <PopoverActions onClose={onClose}>
         {!locked && (
           <>
@@ -1559,9 +1624,49 @@ function EventPopover({
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: ev.color, flex: 'none', marginTop: 4 }} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.3, color: 'var(--tx)', overflowWrap: 'anywhere' }}>
-            {displayTitle}
-          </div>
+          {editingTitle && !locked ? (
+            <input
+              autoFocus
+              value={titleInput}
+              onChange={(e) => setTitleInput(e.target.value)}
+              onBlur={() => { saveTitle(); setEditingTitle(false); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveTitle();
+                  setEditingTitle(false);
+                }
+              }}
+              placeholder="Add title"
+              style={{
+                width: '100%',
+                fontSize: 16,
+                fontWeight: 700,
+                color: 'var(--tx)',
+                background: 'var(--card2)',
+                border: '1px solid var(--acc)',
+                borderRadius: 8,
+                padding: '5px 9px',
+                outline: 'none',
+                marginBottom: 2,
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => !locked && setEditingTitle(true)}
+              title={locked ? undefined : 'Click to edit title'}
+              style={{
+                fontSize: 17,
+                fontWeight: 700,
+                letterSpacing: '-.02em',
+                lineHeight: 1.3,
+                color: isNoTitle ? 'var(--tx3)' : 'var(--tx)',
+                overflowWrap: 'anywhere',
+                cursor: locked ? 'default' : 'pointer',
+              }}
+            >
+              {ev.title?.trim() || '(No title)'}
+            </div>
+          )}
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
           <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Weekly on {dayName}</div>
 
