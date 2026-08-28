@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { TasksSkeleton } from '@/components/Skeleton';
@@ -75,6 +75,7 @@ export default function TasksPage() {
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
   const [order, setOrder] = useState<'Due' | 'Priority' | 'Stars' | 'Title'>('Due');
@@ -203,6 +204,9 @@ export default function TasksPage() {
                 phone={phone}
                 accent={prefs.accent}
                 leaving={leaving.has(r.task.id)}
+                isEditingInline={inlineEditId === r.task.id}
+                onStartInlineEdit={() => setInlineEditId(r.task.id)}
+                onEndInlineEdit={() => setInlineEditId(null)}
                 onCheck={() => complete(r)}
                 onOpen={() => { setDetail(r.task.id); setTsw(null); }}
                 onDelete={() => A.removeWithUndo(r.task)}
@@ -280,17 +284,20 @@ export default function TasksPage() {
                   <div
                     key={t.id}
                     className="google-task-row"
+                    onClick={() => setDetail(t.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 12,
                       padding: '9px 10px',
                       borderRadius: 8,
+                      cursor: 'pointer',
                     }}
                   >
                     {/* Checked Circle to Undo */}
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         A.complete.mutate({ id: t.id, done: false });
                         toast(`Restored “${t.title}”`);
                       }}
@@ -338,7 +345,10 @@ export default function TasksPage() {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
                       <button
-                        onClick={() => A.removeWithUndo(t)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          A.removeWithUndo(t);
+                        }}
                         className="hov k-squish"
                         title="Delete task"
                         style={{
@@ -375,6 +385,16 @@ export default function TasksPage() {
           onClose={() => setCtxMenu(null)}
           items={[
             {
+              label: 'Edit details',
+              icon: 'edit',
+              run: () => setDetail(ctxMenu.task.id),
+            },
+            {
+              label: 'Rename inline',
+              icon: 'pen',
+              run: () => setInlineEditId(ctxMenu.task.id),
+            },
+            {
               label: 'Set date & time',
               icon: 'clock',
               run: () => {
@@ -383,11 +403,6 @@ export default function TasksPage() {
                   anchorRect: { top: ctxMenu.y, left: ctxMenu.x, bottom: ctxMenu.y, right: ctxMenu.x },
                 });
               },
-            },
-            {
-              label: 'Edit details',
-              icon: 'edit',
-              run: () => setDetail(ctxMenu.task.id),
             },
             {
               label: ctxMenu.task.stars ? 'Unstar' : 'Star',
@@ -447,6 +462,7 @@ export default function TasksPage() {
 function TaskRow({
   row, nowMs, phone, accent, leaving,
   onCheck, onOpen, onDelete, onPatch, onStar, onOpenMenu, onOpenDatePicker, lp,
+  isEditingInline, onStartInlineEdit, onEndInlineEdit,
 }: {
   row: Row;
   nowMs: number;
@@ -461,8 +477,12 @@ function TaskRow({
   onOpenMenu: (x: number, y: number) => void;
   onOpenDatePicker: (anchorRect: { top: number; left: number; bottom: number; right: number } | null) => void;
   lp: ReturnType<typeof useLongPress>;
+  isEditingInline?: boolean;
+  onStartInlineEdit?: () => void;
+  onEndInlineEdit?: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [localEditing, setLocalEditing] = useState(false);
+  const editing = isEditingInline || localEditing;
   const [titleVal, setTitleVal] = useState(row.task.title);
 
   useEffect(() => {
@@ -470,7 +490,8 @@ function TaskRow({
   }, [row.task.title]);
 
   const handleCommitEdit = () => {
-    setEditing(false);
+    setLocalEditing(false);
+    onEndInlineEdit?.();
     const trimmed = titleVal.trim();
     if (trimmed && trimmed !== row.task.title) {
       onPatch({ title: trimmed });
@@ -497,6 +518,7 @@ function TaskRow({
       >
         <div
           className={`google-task-row ${alertClass}`}
+          style={{ cursor: 'pointer' }}
           onContextMenu={(e) => {
             e.preventDefault();
             onOpenMenu(e.clientX, e.clientY);
@@ -559,7 +581,8 @@ function TaskRow({
                   if (e.key === 'Escape') {
                     e.preventDefault();
                     setTitleVal(row.task.title);
-                    setEditing(false);
+                    setLocalEditing(false);
+                    onEndInlineEdit?.();
                   }
                 }}
                 onClick={(e) => e.stopPropagation()}
@@ -580,7 +603,8 @@ function TaskRow({
               <div
                 onDoubleClick={(e) => {
                   e.stopPropagation();
-                  setEditing(true);
+                  setLocalEditing(true);
+                  onStartInlineEdit?.();
                 }}
                 style={{ textAlign: 'left' }}
               >
@@ -845,33 +869,73 @@ function TaskEditSidepanel({
 }) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? '');
+  const prevTaskIdRef = useRef(task.id);
+  const titleRef = useRef(title);
+  const notesRef = useRef(notes);
+  titleRef.current = title;
+  notesRef.current = notes;
+
   const stars = task.stars || 0;
   const alert = getTaskAlert(task);
   const countdown = formatTaskCountdown(task, nowMs);
 
+  // Sync only when opening a different task
   useEffect(() => {
-    setTitle(task.title);
-    setNotes(task.notes ?? '');
+    if (prevTaskIdRef.current !== task.id) {
+      prevTaskIdRef.current = task.id;
+      setTitle(task.title);
+      setNotes(task.notes ?? '');
+    }
   }, [task.id, task.title, task.notes]);
 
-  const handleCommitTitle = () => {
-    const trimmed = title.trim();
-    if (trimmed && trimmed !== task.title) {
-      onPatch({ title: trimmed });
-    }
-  };
+  const patchWithLatest = useCallback((extraPatch: Partial<Task> = {}) => {
+    const currentTitle = titleRef.current.trim();
+    const currentNotes = notesRef.current;
+    const combined: Partial<Task> = { ...extraPatch };
 
-  const handleCommitNotes = () => {
-    if (notes !== (task.notes ?? '')) {
-      onPatch({ notes });
+    if (currentTitle && currentTitle !== task.title) {
+      combined.title = currentTitle;
     }
-  };
+    if (currentNotes !== (task.notes ?? '')) {
+      combined.notes = currentNotes;
+    }
 
-  const handleClose = () => {
-    handleCommitTitle();
-    handleCommitNotes();
+    if (Object.keys(combined).length > 0) {
+      onPatch(combined);
+    }
+  }, [task.title, task.notes, onPatch]);
+
+  // Debounced auto-save for title and notes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = title.trim();
+      const needsTitleUpdate = trimmed && trimmed !== task.title;
+      const needsNotesUpdate = notes !== (task.notes ?? '');
+      if (needsTitleUpdate || needsNotesUpdate) {
+        onPatch({
+          ...(needsTitleUpdate ? { title: trimmed } : {}),
+          ...(needsNotesUpdate ? { notes } : {}),
+        });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [title, notes, task.title, task.notes, onPatch]);
+
+  const handleClose = useCallback(() => {
+    patchWithLatest();
     onClose();
-  };
+  }, [patchWithLatest, onClose]);
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleClose]);
 
   const dues: { n: string; v: string | null }[] = [
     { n: 'Today', v: new Date().toISOString().slice(0, 10) },
@@ -886,6 +950,15 @@ function TaskEditSidepanel({
     { v: 'low', n: 'Low', c: PAL.mint },
     { v: null, n: 'None', c: 'var(--tx3)' },
   ];
+
+  const getTimeVal = (due_at: string | null | undefined): string => {
+    if (!due_at) return '';
+    const d = new Date(due_at);
+    if (isNaN(d.getTime())) return '';
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
 
   if (typeof document === 'undefined') return null;
 
@@ -1040,11 +1113,11 @@ function TaskEditSidepanel({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleCommitTitle}
+            onBlur={() => patchWithLatest()}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleCommitTitle();
+                patchWithLatest();
                 (e.target as HTMLElement).blur();
               }
             }}
@@ -1071,7 +1144,7 @@ function TaskEditSidepanel({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            onBlur={handleCommitNotes}
+            onBlur={() => patchWithLatest()}
             rows={4}
             placeholder="Add details, links, or notes…"
             style={{
@@ -1098,7 +1171,22 @@ function TaskEditSidepanel({
             {dues.map((d) => (
               <button
                 key={d.n}
-                onClick={() => onPatch({ due_on: d.v, due_at: d.v ? task.due_at : null })}
+                onClick={() => {
+                  if (!d.v) {
+                    patchWithLatest({ due_on: null, due_at: null });
+                  } else {
+                    let due_at: string | null = null;
+                    if (task.due_at) {
+                      const oldD = new Date(task.due_at);
+                      if (!isNaN(oldD.getTime())) {
+                        const target = new Date(`${d.v}T00:00:00`);
+                        target.setHours(oldD.getHours(), oldD.getMinutes(), 0, 0);
+                        due_at = target.toISOString();
+                      }
+                    }
+                    patchWithLatest({ due_on: d.v, due_at });
+                  }
+                }}
                 style={CHIP(task.due_on === d.v)}
               >
                 {d.n}
@@ -1107,7 +1195,23 @@ function TaskEditSidepanel({
             <input
               type="date"
               value={task.due_on ?? ''}
-              onChange={(e) => onPatch({ due_on: e.target.value || null })}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                if (!val) {
+                  patchWithLatest({ due_on: null, due_at: null });
+                } else {
+                  let due_at: string | null = null;
+                  if (task.due_at) {
+                    const oldD = new Date(task.due_at);
+                    if (!isNaN(oldD.getTime())) {
+                      const target = new Date(`${val}T00:00:00`);
+                      target.setHours(oldD.getHours(), oldD.getMinutes(), 0, 0);
+                      due_at = target.toISOString();
+                    }
+                  }
+                  patchWithLatest({ due_on: val, due_at });
+                }
+              }}
               style={{
                 padding: '6px 10px',
                 borderRadius: 8,
@@ -1121,20 +1225,17 @@ function TaskEditSidepanel({
             {task.due_on && (
               <input
                 type="time"
-                value={
-                  task.due_at
-                    ? new Date(task.due_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-                    : ''
-                }
+                value={getTimeVal(task.due_at)}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (!val) {
-                    onPatch({ due_at: null });
+                    patchWithLatest({ due_at: null });
                   } else {
-                    const d = new Date(`${task.due_on}T${val}`);
-                    if (!isNaN(d.getTime())) {
-                      onPatch({ due_at: d.toISOString() });
-                    }
+                    const [hh, mm] = val.split(':').map(Number);
+                    const ymd = task.due_on || new Date().toISOString().slice(0, 10);
+                    const d = new Date(`${ymd}T00:00:00`);
+                    d.setHours(hh, mm, 0, 0);
+                    patchWithLatest({ due_at: d.toISOString(), due_on: ymd });
                   }
                 }}
                 style={{
@@ -1158,7 +1259,7 @@ function TaskEditSidepanel({
             {priorities.map((p) => (
               <button
                 key={p.n}
-                onClick={() => onPatch({ priority: p.v })}
+                onClick={() => patchWithLatest({ priority: p.v })}
                 style={CHIP(task.priority === p.v || (!task.priority && p.v === null))}
               >
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: p.c }} />
@@ -1174,7 +1275,7 @@ function TaskEditSidepanel({
             <div style={KICKER}>List</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {lists.map((l) => (
-                <button key={l.id} onClick={() => onPatch({ list_id: l.id })} style={CHIP(task.list_id === l.id)}>
+                <button key={l.id} onClick={() => patchWithLatest({ list_id: l.id })} style={CHIP(task.list_id === l.id)}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
                   {l.name}
                 </button>
@@ -1190,7 +1291,7 @@ function TaskEditSidepanel({
             {[1, 2, 3, 4, 5].map((v) => (
               <button
                 key={v}
-                onClick={() => onPatch({ stars: stars === v ? 0 : v })}
+                onClick={() => patchWithLatest({ stars: stars === v ? 0 : v })}
                 title={`${v} ${v === 1 ? 'star' : 'stars'}`}
                 className="hov k-squish"
                 style={{
