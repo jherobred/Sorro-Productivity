@@ -152,14 +152,15 @@ export function UpcomingTasksCarousel({
     <div
       className={className}
       style={{
-        flex: 'none',
-        width: 353,
+        flex: '1 1 300px',
+        minWidth: 260,
+        width: '100%',
         borderRadius: 16,
         padding: '16px 18px',
         background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
         border: '1.5px solid color-mix(in srgb, var(--pal-amber) 32%, transparent)',
         boxShadow: '0 4px 20px color-mix(in srgb, var(--pal-amber) 10%, transparent)',
-        minHeight: 180,
+        minHeight: 190,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
@@ -168,8 +169,9 @@ export function UpcomingTasksCarousel({
       }}
     >
       {upcomingTasks.length > 0 ? (
-        <Carousel autoPlayInterval={60000} className="flex flex-col flex-1 justify-between">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Carousel autoPlayInterval={60000} className="flex flex-col flex-1 justify-between h-full">
+          {/* Header remains left-aligned title with right-aligned arrows */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="check" size={13} color="var(--pal-amber)" />
               <span style={{ ...KICKER, color: 'var(--pal-amber)' }}>Upcoming Tasks</span>
@@ -177,121 +179,143 @@ export function UpcomingTasksCarousel({
             <CarouselNavigation alwaysShow />
           </div>
 
-          <CarouselContent>
-            {upcomingTasks.map((t) => (
-              <CarouselItem key={t.id}>
-                <div
-                  onClick={() => router.push(`/tasks?detail=${t.id}`)}
-                  style={{
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 88,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                    {t.priority && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '.05em',
-                          padding: '2px 7px',
-                          borderRadius: 6,
-                          color: PRIORITY_COLOR[t.priority] || 'var(--tx2)',
-                          background: `color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 16%, transparent)`,
-                          border: `1px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 30%, transparent)`,
-                        }}
-                      >
-                        {t.priority} Priority
-                      </span>
-                    )}
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        color: t.due_on === todayISO ? PAL.coral : 'var(--tx2)',
-                        background: 'var(--card2)',
-                        padding: '2px 7px',
-                        borderRadius: 6,
-                        border: '1px solid var(--line)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <Icon name="clock" size={10} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
-                      {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
-                    </span>
-                  </div>
-
+          {/* Centered Slide Content */}
+          <CarouselContent className="my-auto py-1">
+            {upcomingTasks.map((t) => {
+              const len = t.title.length;
+              const titleSize = len > 55 ? 13.5 : len > 32 ? 15 : 17.5;
+              return (
+                <CarouselItem key={t.id}>
                   <div
+                    onClick={() => router.push(`/tasks?detail=${t.id}`)}
                     style={{
-                      fontSize: 14.5,
-                      fontWeight: 800,
-                      letterSpacing: '-.02em',
-                      lineHeight: 1.3,
-                      marginBottom: 4,
-                      color: 'var(--tx)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      textAlign: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      padding: '2px 6px',
                     }}
                   >
-                    {t.title}
-                  </div>
+                    {/* Centered Priority & Date Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {t.priority && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '.05em',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            color: PRIORITY_COLOR[t.priority] || 'var(--tx2)',
+                            background: `color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 16%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 30%, transparent)`,
+                          }}
+                        >
+                          {t.priority} Priority
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          color: t.due_on === todayISO ? PAL.coral : 'var(--tx2)',
+                          background: 'var(--card2)',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          border: '1px solid var(--line)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Icon name="clock" size={10} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
+                        {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
+                      </span>
+                    </div>
 
-                  {t.notes && (
+                    {/* Centered Larger Auto-adjusting Title */}
                     <div
                       style={{
-                        fontSize: 11,
-                        color: 'var(--tx3)',
-                        lineHeight: 1.4,
+                        fontSize: titleSize,
+                        fontWeight: 800,
+                        letterSpacing: '-.02em',
+                        lineHeight: 1.25,
+                        marginBottom: 4,
+                        color: 'var(--tx)',
+                        textAlign: 'center',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical',
+                        maxWidth: '100%',
+                        wordBreak: 'break-word',
                       }}
                     >
-                      {t.notes}
+                      {t.title}
                     </div>
-                  )}
 
-                  <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 }}>
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleDone(e, t)}
-                      className="k-squish"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '5px 11px',
-                        borderRadius: 7,
-                        background: 'var(--pal-amber)',
-                        color: '#0A0912',
-                        fontSize: 11,
-                        fontWeight: 800,
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Icon name="check" size={12} color="#0A0912" />
-                      <span>Mark Done</span>
-                    </button>
+                    {/* Centered Notes snippet */}
+                    {t.notes && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: 'var(--tx3)',
+                          lineHeight: 1.35,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '92%',
+                          textAlign: 'center',
+                          marginBottom: 4,
+                        }}
+                      >
+                        {t.notes}
+                      </div>
+                    )}
+
+                    {/* Centered Mark Done Button */}
+                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleDone(e, t)}
+                        className="k-squish"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          padding: '5px 14px',
+                          borderRadius: 7,
+                          background: 'var(--pal-amber)',
+                          color: '#0A0912',
+                          fontSize: 11.5,
+                          fontWeight: 800,
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Icon name="check" size={12} color="#0A0912" />
+                        <span>Mark Done</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </CarouselItem>
-            ))}
+                </CarouselItem>
+              );
+            })}
           </CarouselContent>
 
-          <CarouselIndicator />
+          {/* Dots Indicator placed at bottom middle */}
+          <div style={{ marginTop: 'auto', paddingTop: 4, display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <CarouselIndicator />
+          </div>
         </Carousel>
       ) : (
         <div style={{ margin: 'auto 0', textAlign: 'center' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>
             All caught up! 🎉
           </div>
           <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 12 }}>

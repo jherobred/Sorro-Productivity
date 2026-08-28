@@ -281,7 +281,7 @@ export default function HomePage() {
             {(() => {
               const upNextColor = upNext?.color || INDIGO;
               return (
-                <div className="border-trail-wrap" style={{ flex: 'none', width: 353 }}>
+                <div className="border-trail-wrap" style={{ flex: '1 1 310px', minWidth: 260, width: '100%', display: 'flex' }}>
                   <div
                     className="border-trail-spinner"
                     style={{
@@ -296,7 +296,7 @@ export default function HomePage() {
                     background: `color-mix(in srgb, ${upNextColor} 14%, var(--card))`,
                     border: `1px solid color-mix(in srgb, ${upNextColor} 32%, transparent)`,
                     boxShadow: `0 4px 20px color-mix(in srgb, ${upNextColor} 14%, transparent)`,
-                    minHeight: 180,
+                    minHeight: 190,
                     display: 'flex',
                     flexDirection: 'column',
                     zIndex: 1,
@@ -405,7 +405,7 @@ export default function HomePage() {
 
             {/* The rest of today with event labels */}
             <div style={{
-              flex: 1, minWidth: 260, borderRadius: 15, padding: '14px 16px',
+              flex: '1.2 1 340px', minWidth: 280, borderRadius: 15, padding: '16px 18px', minHeight: 190,
               background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>

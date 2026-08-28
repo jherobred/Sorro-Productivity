@@ -198,11 +198,11 @@ export type CarouselIndicatorProps = {
 
 export function CarouselIndicator({ className = '' }: CarouselIndicatorProps) {
   const { index, setIndex, total } = useCarousel();
-  if (total <= 1) return null;
+  const count = total > 0 ? total : 1;
 
   return (
-    <div className={`flex items-center justify-center gap-1.5 py-2 ${className}`}>
-      {Array.from({ length: total }).map((_, i) => (
+    <div className={`flex items-center justify-center gap-1.5 py-1.5 ${className}`}>
+      {Array.from({ length: count }).map((_, i) => (
         <button
           key={i}
           type="button"
@@ -212,9 +212,9 @@ export function CarouselIndicator({ className = '' }: CarouselIndicatorProps) {
             setIndex(i);
           }}
           className={`h-1.5 rounded-full transition-all duration-300 ${
-            i === index
+            i === (index % count)
               ? 'w-5 bg-amber-400 dark:bg-amber-400'
-              : 'w-1.5 bg-zinc-600/50 hover:bg-zinc-500'
+              : 'w-1.5 bg-zinc-600/60 hover:bg-zinc-400'
           }`}
         />
       ))}
