@@ -482,7 +482,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             </div>
           </div>
 
-          {/* 6x5 Deep Basalt Hieroglyph Reels Grid with Continuous Top-to-Bottom Scroll */}
+          {/* 6x5 Deep Basalt Hieroglyph Reels Grid with Strict Window Pane Masking */}
           <div
             style={{
               position: 'relative',
@@ -496,8 +496,36 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
               boxShadow: 'inset 0 0 25px rgba(0,0,0,0.9), 0 0 15px rgba(133, 77, 14, 0.3)',
               width: '100%',
               overflow: 'hidden',
+              contain: 'paint',
+              clipPath: 'inset(0 round 14px)',
             }}
           >
+            {/* Top & Bottom Window Pane Shadow Curtains to completely conceal reel entry and exit */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 8,
+                background: 'linear-gradient(180deg, rgba(3,5,8,0.95) 0%, transparent 100%)',
+                pointerEvents: 'none',
+                zIndex: 12,
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 10,
+                background: 'linear-gradient(0deg, rgba(3,5,8,0.98) 0%, transparent 100%)',
+                pointerEvents: 'none',
+                zIndex: 12,
+              }}
+            />
+
             {/* Scatter Teaser Anticipation Glow on Reel 5 & 6 */}
             {teaserCol !== null && (
               <motion.div
@@ -544,6 +572,8 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                       alignItems: 'center',
                       justifyContent: 'center',
                       overflow: 'hidden',
+                      contain: 'paint',
+                      clipPath: 'inset(0 round 8px)',
                     }}
                   >
                     {/* Basalt Stone Hieroglyph Watermark Background */}
@@ -579,11 +609,11 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                       />
                     )}
 
-                    {/* Symbol Movement: Scroll inside the cell while spinning, drop in and bounce on land */}
+                    {/* Symbol Movement: Scroll strictly within cell viewport, drop in and bounce on land */}
                     {isColRolling ? (
                       <motion.div
                         key={`rolling-${c}`}
-                        animate={{ y: ['-100%', '100%'] }}
+                        animate={{ y: ['-80%', '80%'] }}
                         transition={{
                           repeat: Infinity,
                           duration: turboMode ? 0.16 : 0.24,
@@ -597,6 +627,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                           gap: 12,
                           filter: 'blur(1.2px)',
                           zIndex: 2,
+                          pointerEvents: 'none',
                         }}
                       >
                         <MerramunIcon id={MERRAMUN_SYMBOLS[(r + c) % MERRAMUN_SYMBOLS.length].id} size={28} />
@@ -605,7 +636,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                     ) : (
                       <motion.div
                         key={`landed-${r}-${c}-${sym.id}`}
-                        initial={{ y: -65, opacity: 0 }}
+                        initial={{ y: -55, opacity: 0 }}
                         animate={{
                           y: 0,
                           opacity: 1,
