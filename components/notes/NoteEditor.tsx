@@ -141,8 +141,49 @@ export function NoteEditor({
     toast('Math sketch inserted');
   };
 
+  const [wikiLinkOpen, setWikiLinkOpen] = useState(false);
+  const [wikiLinkQuery, setWikiLinkQuery] = useState('');
+  const [wikiLinkIndex, setWikiLinkIndex] = useState(0);
+
+  const checkWikiLink = useCallback((text: string, caret: number) => {
+    const before = text.slice(0, caret);
+    const match = before.match(/\[\[([^\]\n]*)$/);
+    if (match) {
+      setWikiLinkOpen(true);
+      setWikiLinkQuery(match[1]);
+    } else {
+      setWikiLinkOpen(false);
+    }
+  }, []);
+
+  const filteredWikiNotes = useMemo(() => {
+    if (!wikiLinkOpen) return [];
+    const q = wikiLinkQuery.toLowerCase();
+    return notes.filter(n => (n.title || 'Untitled').toLowerCase().includes(q)).slice(0, 10);
+  }, [notes, wikiLinkQuery, wikiLinkOpen]);
+
+  const insertWikiLink = (noteTitle?: string) => {
+    const targetTitle = noteTitle ?? (filteredWikiNotes[wikiLinkIndex]?.title || 'Untitled');
+    edit((b, f, t) => {
+      const before = b.slice(0, f);
+      const match = before.match(/\[\[([^\]\n]*)$/);
+      if (!match) return { body: b, from: f, to: t };
+      const start = f - match[0].length;
+      const insert = `[[${targetTitle}]]`;
+      return { body: b.slice(0, start) + insert + b.slice(t), from: start + insert.length, to: start + insert.length };
+    });
+    setWikiLinkOpen(false);
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
+
+    if (wikiLinkOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setWikiLinkIndex(i => (i + 1) % (filteredWikiNotes.length || 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setWikiLinkIndex(i => (i - 1 + filteredWikiNotes.length) % (filteredWikiNotes.length || 1)); return; }
+      if (e.key === 'Enter') { e.preventDefault(); insertWikiLink(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setWikiLinkOpen(false); return; }
+    }
 
     if (e.key === 'Enter' && !e.shiftKey && el.selectionStart === el.selectionEnd) {
       e.preventDefault();
@@ -177,7 +218,7 @@ export function NoteEditor({
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Toolbar
-        phone={phone} read={read}
+        phone={phone} read={read} dirty={dirty}
         onBack={onBack}
         onToggleRead={() => setRead((v) => !v)}
         onKind={kind}
@@ -186,8 +227,8 @@ export function NoteEditor({
         onOpenSketch={() => setSketchpadOpen(true)}
         onDivider={() => edit((b, f) => ({ body: `${b.slice(0, f)}\n---\n${b.slice(f)}`, from: f + 5, to: f + 5 }))}
         onLink={() => edit((b, f, t) => {
-          const inner = b.slice(f, t) || 'note title';
-          return { body: `${b.slice(0, f)}[[${inner}]]${b.slice(t)}`, from: f + 2, to: f + 2 + inner.length };
+          const inner = b.slice(f, t) || '';
+          return { body: `${b.slice(0, f)}[[${inner}]]${b.slice(t)}`, from: f + 2 + inner.length, to: f + 2 + inner.length };
         })}
         onDelete={onDelete} />
 
@@ -195,7 +236,7 @@ export function NoteEditor({
         flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--card)',
         borderRadius: 16, boxShadow: 'var(--sh)', padding: phone ? '16px 16px 48px' : '28px 36px 72px',
       }}>
-        <div style={{ maxWidth: 740, margin: '0 auto' }}>
+        <div style={{ maxWidth: 740, margin: '0 auto', position: 'relative' }}>
           {/* Note Title - Seamless, zero-border input */}
           <textarea
             ref={(el) => { if (el) autosize(el); }}
@@ -237,32 +278,58 @@ export function NoteEditor({
               onLink={(n) => void openLink(n)}
               known={(n) => !!linkTargets(n)} />
           ) : (
-            <textarea
-              ref={(el) => { area.current = el; if (el) autosize(el); }}
-              value={body}
-              onChange={(e) => { setBodyAndQueue(e.target.value); autosize(e.target); }}
-              onKeyDown={onKeyDown}
-              placeholder="Start writing… Use # for heading, $$ for math block, $..$ for inline math, [[ ]] to link notes."
-              aria-label="Note body"
-              rows={8}
-              className="note-editor-clean-input"
-              style={{
-                width: '100%',
-                minHeight: 360,
-                resize: 'none',
-                overflow: 'hidden',
-                fontSize: phone ? 14.5 : 15.5,
-                lineHeight: 1.76,
-                letterSpacing: '-.01em',
-                color: 'var(--tx)',
-                fontFamily: 'inherit',
-                border: 'none',
-                outline: 'none',
-                boxShadow: 'none',
-                background: 'transparent',
-                padding: '8px 0',
-                display: 'block',
-              }} />
+            <>
+              <textarea
+                ref={(el) => { area.current = el; if (el) autosize(el); }}
+                value={body}
+                onChange={(e) => { setBodyAndQueue(e.target.value); autosize(e.target); checkWikiLink(e.target.value, e.target.selectionStart); }}
+                onClick={(e) => checkWikiLink(e.currentTarget.value, e.currentTarget.selectionStart)}
+                onKeyUp={(e) => checkWikiLink(e.currentTarget.value, e.currentTarget.selectionStart)}
+                onKeyDown={onKeyDown}
+                placeholder="Start writing… Use # for heading, $$ for math block, $..$ for inline math, [[ ]] to link notes."
+                aria-label="Note body"
+                rows={8}
+                className="note-editor-clean-input"
+                style={{
+                  width: '100%',
+                  minHeight: 360,
+                  resize: 'none',
+                  overflow: 'hidden',
+                  fontSize: phone ? 14.5 : 15.5,
+                  lineHeight: 1.76,
+                  letterSpacing: '-.01em',
+                  color: 'var(--tx)',
+                  fontFamily: 'inherit',
+                  border: 'none',
+                  outline: 'none',
+                  boxShadow: 'none',
+                  background: 'transparent',
+                  padding: '8px 0',
+                  display: 'block',
+                }} />
+              {wikiLinkOpen && (
+                <div className="rise" style={{
+                  position: 'absolute', top: 120, left: 0, right: 0, margin: '0 auto', maxWidth: 400, zIndex: 10,
+                  background: 'var(--card)', borderRadius: 12, boxShadow: 'var(--shl)', padding: 6,
+                  border: '1px solid var(--line)',
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Link to Note</div>
+                  {filteredWikiNotes.length === 0 ? (
+                    <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--tx3)' }}>No matching notes. Press Enter to create "[[{wikiLinkQuery}]]"</div>
+                  ) : (
+                    filteredWikiNotes.map((n, i) => (
+                      <button key={n.id} onClick={() => insertWikiLink(n.title)} className="hov lensrow" style={{
+                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 8,
+                        background: wikiLinkIndex === i ? 'var(--card2)' : 'transparent',
+                        fontSize: 13.5, fontWeight: wikiLinkIndex === i ? 700 : 500, color: 'var(--tx)', border: 'none', cursor: 'pointer',
+                      }}>
+                        <Icon name="book" size={12} color="var(--tx3)" /> <span style={{ marginLeft: 6 }}>{n.title || 'Untitled'}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {/* Footer Metadata */}
@@ -318,9 +385,9 @@ export function NoteEditor({
 /* ------------------------------------------------------------------ toolbar */
 
 function Toolbar({
-  phone, read, onBack, onToggleRead, onKind, onMark, onOpenMath, onOpenSketch, onDivider, onLink, onDelete,
+  phone, read, dirty, onBack, onToggleRead, onKind, onMark, onOpenMath, onOpenSketch, onDivider, onLink, onDelete,
 }: {
-  phone: boolean; read: boolean;
+  phone: boolean; read: boolean; dirty: boolean;
   onBack?: () => void;
   onToggleRead: () => void;
   onKind: (k: LineKind) => void;
@@ -379,6 +446,10 @@ function Toolbar({
       {btn('Link a note', 'link', onLink)}
 
       <span style={{ marginLeft: 'auto' }} />
+
+      <span style={{ fontSize: 11, fontWeight: 600, color: dirty ? 'var(--accTx)' : 'var(--tx3)', marginRight: 12 }}>
+        {dirty ? 'Saving…' : 'Saved'}
+      </span>
 
       {/* Segmented Mode Switch (Write / Read) */}
       <div style={{

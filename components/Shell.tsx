@@ -263,6 +263,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // 1 to 5: Top Navigation Shortcuts
+      if ((e.metaKey || e.ctrlKey) && ['1', '2', '3', '4', '5'].includes(e.key)) {
+        if (overlayOpen) return;
+        e.preventDefault();
+        const routeMap: Record<string, string> = {
+          '1': '/home/',
+          '2': '/calendar/',
+          '3': '/tasks/',
+          '4': '/notebooks/',
+          '5': '/projects/',
+        };
+        router.push(routeMap[e.key]);
+        return;
+      }
+
       // 6. Quick Creation: T for Task, N for Note, E for Expense
       if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
@@ -373,7 +388,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           flex: 'none', position: 'relative', zIndex: 2,
           display: 'flex', flexDirection: 'column', padding: sidebarMode === 'hidden' ? 0 : '14px 0', overflow: 'hidden',
           border: 0, borderRadius: 0,
-          borderRight: sidebarMode === 'hidden' ? 'none' : `1px solid ${dark ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.9)'}`,
+          borderRight: sidebarMode === 'hidden' ? 'none' : '1px solid var(--line)',
           boxShadow: sidebarMode === 'hidden' ? 'none' : (dark
             ? 'inset -1px 0 0 rgba(255,255,255,.07), inset 1px 0 0 rgba(255,255,255,.16)'
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)'),

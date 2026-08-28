@@ -30,65 +30,94 @@ export function SwipeableRow({
   const [offsetX, setOffsetX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const startXRef = useRef<number | null>(null);
-  const currentXRef = useRef<number | null>(null);
+  const startYRef = useRef<number | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
   const elementRef = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (disabled || e.button !== 0) return;
-    // Don't intercept button or input clicks
     const target = e.target as HTMLElement;
     if (target.closest('button, input, textarea, select, a, [contenteditable="true"]')) {
       return;
     }
 
     startXRef.current = e.clientX;
-    currentXRef.current = e.clientX;
-    setIsSwiping(true);
-    elementRef.current?.setPointerCapture(e.pointerId);
+    startYRef.current = e.clientY;
+    pointerIdRef.current = e.pointerId;
+    isDraggingRef.current = false;
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isSwiping || startXRef.current === null) return;
-    currentXRef.current = e.clientX;
-    const delta = e.clientX - startXRef.current;
+    if (startXRef.current === null || startYRef.current === null) return;
+    const deltaX = e.clientX - startXRef.current;
+    const deltaY = e.clientY - startYRef.current;
+
+    // Check if horizontal intent is confirmed before capturing pointer
+    if (!isDraggingRef.current) {
+      if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        isDraggingRef.current = true;
+        setIsSwiping(true);
+        try {
+          elementRef.current?.setPointerCapture(pointerIdRef.current!);
+        } catch { /* ignore */ }
+      } else if (Math.abs(deltaY) > 8) {
+        // Vertical scroll intent — cancel swipe
+        startXRef.current = null;
+        startYRef.current = null;
+        return;
+      } else {
+        return;
+      }
+    }
 
     // Dampen drag past 120px
     const maxDrag = 140;
-    const clamped = Math.max(-maxDrag, Math.min(maxDrag, delta));
+    const clamped = Math.max(-maxDrag, Math.min(maxDrag, deltaX));
     setOffsetX(clamped);
   };
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (!isSwiping || startXRef.current === null) return;
-      try {
-        elementRef.current?.releasePointerCapture(e.pointerId);
-      } catch { /* ignore */ }
+      if (startXRef.current === null) return;
+
+      const wasDragging = isDraggingRef.current;
+      if (wasDragging && pointerIdRef.current !== null) {
+        try {
+          elementRef.current?.releasePointerCapture(pointerIdRef.current);
+        } catch { /* ignore */ }
+      }
 
       const delta = offsetX;
       setIsSwiping(false);
       startXRef.current = null;
-      currentXRef.current = null;
+      startYRef.current = null;
+      pointerIdRef.current = null;
+      isDraggingRef.current = false;
 
-      if (delta >= threshold && onSwipeRight) {
-        playTick();
-        setOffsetX(120);
-        setTimeout(() => {
-          onSwipeRight();
+      if (wasDragging) {
+        if (delta >= threshold && onSwipeRight) {
+          playTick();
+          setOffsetX(120);
+          setTimeout(() => {
+            onSwipeRight();
+            setOffsetX(0);
+          }, 180);
+        } else if (delta <= -threshold && onSwipeLeft) {
+          playClick();
+          setOffsetX(-120);
+          setTimeout(() => {
+            onSwipeLeft();
+            setOffsetX(0);
+          }, 180);
+        } else {
           setOffsetX(0);
-        }, 180);
-      } else if (delta <= -threshold && onSwipeLeft) {
-        playClick();
-        setOffsetX(-120);
-        setTimeout(() => {
-          onSwipeLeft();
-          setOffsetX(0);
-        }, 180);
+        }
       } else {
         setOffsetX(0);
       }
     },
-    [isSwiping, offsetX, threshold, onSwipeRight, onSwipeLeft]
+    [offsetX, threshold, onSwipeRight, onSwipeLeft]
   );
 
   const isTriggeredRight = offsetX >= threshold;

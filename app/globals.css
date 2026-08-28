@@ -162,7 +162,7 @@ input, textarea { font: inherit; color: inherit; background: none; border: 0; ou
 @keyframes shimmer { 0% { background-position: -420px 0 } 100% { background-position: 420px 0 } }
 @keyframes dn { 0% { background-position: 0% 50% } 50% { background-position: 100% 50% } 100% { background-position: 0% 50% } }
 @keyframes sun { 0% { transform: translate(-30px, 40px); opacity: .55 } 30% { transform: translate(120px, -30px); opacity: .85 } 60% { transform: translate(300px, 10px); opacity: .5 } 100% { transform: translate(-30px, 40px); opacity: .55 } }
-@keyframes pop { 0% { transform: scale(.4); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+@keyframes pop { 0% { transform: scale(0.96); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
 @keyframes cellpop { 0% { transform: scale(1) } 45% { transform: scale(1.14) } 100% { transform: scale(1) } }
 @keyframes rise { 0% { transform: translateY(14px) scale(.97); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
 @keyframes drain { from { transform: scaleX(1) } to { transform: scaleX(0) } }
@@ -187,7 +187,7 @@ input, textarea { font: inherit; color: inherit; background: none; border: 0; ou
 .skq { background: linear-gradient(90deg, var(--sk1) 0%, var(--sk2) 46%, var(--sk1) 92%); background-size: 420px 100%; animation: shimmer 1.25s linear infinite; animation-play-state: var(--anim, running); }
 .dnl { animation: dn 48s ease-in-out infinite; animation-play-state: var(--anim, running); }
 .sunl { animation: sun 48s ease-in-out infinite; animation-play-state: var(--anim, running); }
-.pop { animation: pop .34s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.pop { animation: pop .34s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .cellpop { animation: cellpop .34s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .rise { animation: rise .3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .drain { animation: drain 4.2s linear forwards; }
@@ -450,6 +450,19 @@ body {
   transform: translate(-50%, -50%);
   width: max(100%, 44px);
   height: max(100%, 44px);
+  z-index: 1;
+}
+
+.k-squish {
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.k-squish:active {
+  transform: scale(0.96);
+}
+.nomo .k-squish {
+  transition: none !important;
+  transform: none !important;
 }
 
 /* ---- Task Deadline Alert Animations & Hierarchy ------------------------- */

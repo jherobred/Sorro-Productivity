@@ -109,6 +109,64 @@ export function TaskComposer({
     { n: 'Next week', v: nextWeek() },
   ];
 
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let t = e.target.value;
+    let changed = false;
+
+    const pMatch = t.match(/(?:^|\s)(!high|!med|!low|!!!|!!|!)(?:\s|$)/i);
+    if (pMatch) {
+      const p = pMatch[1].toLowerCase();
+      if (p === '!high' || p === '!!!') setPriority('high');
+      else if (p === '!med' || p === '!!') setPriority('med');
+      else if (p === '!low' || p === '!') setPriority('low');
+      t = t.replace(pMatch[0], ' ');
+      changed = true;
+    }
+
+    const lMatch = t.match(/(?:^|\s)#(\w+)(?:\s|$)/i);
+    if (lMatch && lists) {
+      const listName = lMatch[1].toLowerCase();
+      const list = lists.find(l => l.name.toLowerCase() === listName);
+      if (list) {
+        setListId(list.id);
+        t = t.replace(lMatch[0], ' ');
+        changed = true;
+      }
+    }
+
+    const dMatch = t.match(/(?:^|\s)(today|tomorrow|tonight|next mon(?:day)?)(?:\s|$)/i);
+    if (dMatch) {
+      const d = dMatch[1].toLowerCase();
+      if (d === 'today' || d === 'tonight') setDue(ymd(new Date()));
+      else if (d === 'tomorrow') setDue(shift(1));
+      else if (d.startsWith('next mon')) setDue(nextWeek());
+      t = t.replace(dMatch[0], ' ');
+      changed = true;
+    }
+
+    const tMatch = t.match(/(?:^|\s)(\d{1,2}:\d{2}(?:am|pm)?|\d{1,2}(?:am|pm))(?:\s|$)/i);
+    if (tMatch) {
+      const timeStr = tMatch[1].toLowerCase();
+      let hh = 0; let mm = 0;
+      if (timeStr.includes(':')) {
+        const [h, mPart] = timeStr.split(':');
+        hh = parseInt(h, 10);
+        mm = parseInt(mPart, 10);
+        if (timeStr.includes('pm') && hh < 12) hh += 12;
+        if (timeStr.includes('am') && hh === 12) hh = 0;
+      } else {
+        hh = parseInt(timeStr, 10);
+        if (timeStr.includes('pm') && hh < 12) hh += 12;
+        if (timeStr.includes('am') && hh === 12) hh = 0;
+      }
+      setTime(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+      t = t.replace(tMatch[0], ' ');
+      changed = true;
+    }
+
+    setTitle(changed ? t.replace(/\s+/g, ' ').trimStart() : t);
+  };
+
   return (
     <div ref={box} style={{
       background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)',
@@ -121,7 +179,7 @@ export function TaskComposer({
         <input
           value={title}
           onFocus={() => setOpen(true)}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={handleTitleChange}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -143,6 +201,29 @@ export function TaskComposer({
           </button>
         )}
       </div>
+
+      {(due || time || priority || (listId && listId !== defaultListId)) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, paddingLeft: 26 }}>
+          {(due || time) && (
+            <Chip on onClick={() => { setDue(null); setTime(''); }}>
+              {due === ymd(new Date()) ? 'Today' : due === shift(1) ? 'Tomorrow' : due === nextWeek() ? 'Next week' : due} {time}
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          )}
+          {priority && (
+            <Chip on onClick={() => setPriority(null)} tint={PRIORITIES.find(p => p.v === priority)?.c}>
+              {PRIORITIES.find(p => p.v === priority)?.n}
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          )}
+          {listId && listId !== defaultListId && (
+            <Chip on onClick={() => setListId(defaultListId)} tint={lists.find(l => l.id === listId)?.color}>
+              {lists.find(l => l.id === listId)?.name}
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          )}
+        </div>
+      )}
 
       {open && (
         <div className="k-bloom" style={{ marginTop: 10 }}>
