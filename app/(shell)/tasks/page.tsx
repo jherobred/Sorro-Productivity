@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TasksSkeleton } from '@/components/Skeleton';
 import { Page } from '@/components/Page';
@@ -74,7 +75,16 @@ export default function TasksPage() {
   }, []);
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
-  const [detail, setDetail] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const [detail, setDetail] = useState<string | null>(() => searchParams?.get('detail') ?? null);
+
+  useEffect(() => {
+    const detailId = searchParams?.get('detail');
+    if (detailId) {
+      setDetail(detailId);
+    }
+  }, [searchParams]);
+
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
@@ -601,12 +611,16 @@ function TaskRow({
               />
             ) : (
               <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   setLocalEditing(true);
                   onStartInlineEdit?.();
                 }}
-                style={{ textAlign: 'left' }}
+                style={{ textAlign: 'left', cursor: 'pointer' }}
               >
                 {/* Title + Alarm Emoji */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

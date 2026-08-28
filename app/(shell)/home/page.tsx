@@ -585,11 +585,16 @@ export default function HomePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
               {deadlines.length === 0 && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Nothing due soon.</div>}
               {deadlines.map((d) => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  key={d.id}
+                  onClick={() => router.push(`/tasks?detail=${d.id}`)}
+                  className="hov k-squish"
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 6px', borderRadius: 8 }}
+                >
                   <div style={{ fontSize: 12, fontWeight: 700, color: d.days <= 7 ? AMBER : 'var(--tx2)', width: 40, fontVariantNumeric: 'tabular-nums' }}>
                     {d.days}d
                   </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>{d.title}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</div>
                 </div>
               ))}
             </div>

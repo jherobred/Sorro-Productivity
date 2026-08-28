@@ -89,8 +89,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       }
 
       if (foundPeople.length) g.push({ g: 'People', items: foundPeople });
-      if (tasks.data?.length) g.push({ g: 'Tasks', items: tasks.data.map((r) => ({ id: r.id, n: r.title, m: 'Task', ic: 'task', go: jump('/tasks/') })) });
-      if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({ id: r.id, n: r.title || 'Untitled', m: r.title.toLowerCase().includes(term.toLowerCase()) ? 'Note' : 'In the text', ic: 'book', go: jump('/notebooks/') })) });
+      if (tasks.data?.length) g.push({ g: 'Tasks', items: tasks.data.map((r) => ({ id: r.id, n: r.title, m: 'Task', ic: 'task', go: jump(`/tasks/?detail=${r.id}`) })) });
+      if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({ id: r.id, n: r.title || 'Untitled', m: r.title.toLowerCase().includes(term.toLowerCase()) ? 'Note' : 'In the text', ic: 'book', go: jump(`/notebooks/?open=${r.id}`) })) });
       if (events.data?.length) g.push({ g: 'Calendar Events', items: events.data.map((r) => ({ id: r.id, n: r.title, m: new Date(r.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), ic: 'cal', go: jump('/calendar/') })) });
       if (projectsRes.data?.length) g.push({ g: 'Projects', items: projectsRes.data.map((r) => ({ id: r.id, n: r.name, m: 'Project', ic: 'proj', go: jump(`/projects/${r.id}/`) })) });
       setHits(g);

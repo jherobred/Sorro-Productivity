@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Mascot } from './challenges/Mascot';
 import { currentUserId } from '@/lib/supabase';
 import { hueOf } from '@/lib/people';
@@ -19,6 +20,7 @@ export function FocusHub({
   onClose?: () => void;
   initialDuration?: number;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<'timer' | 'briefing'>('timer');
   const [duration, setDuration] = useState<number>(initialDuration * 60);
   const [timeLeft, setTimeLeft] = useState<number>(initialDuration * 60);
@@ -309,12 +311,25 @@ export function FocusHub({
                 {openTasks.slice(0, 4).map((t) => {
                   const countdown = formatTaskCountdown(t);
                   return (
-                    <div key={t.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
-                      borderRadius: 9, background: 'var(--card2)', border: '1px solid var(--line)',
-                    }}>
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        onClose?.();
+                        router.push(`/tasks/?detail=${t.id}`);
+                      }}
+                      className="hov k-squish"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
+                        borderRadius: 9, background: 'var(--card2)', border: '1px solid var(--line)',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <button
-                        onClick={() => { playTick(); TA.complete.mutate({ id: t.id, done: true }); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playTick();
+                          TA.complete.mutate({ id: t.id, done: true });
+                        }}
                         style={{
                           width: 16, height: 16, borderRadius: '50%', border: '1.5px solid var(--line2)',
                           background: 'transparent', cursor: 'pointer', flex: 'none', padding: 0,

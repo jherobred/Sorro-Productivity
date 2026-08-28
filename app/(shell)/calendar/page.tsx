@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from '@/components/Icon';
 import { CalendarSkeleton } from '@/components/Skeleton';
 import { ScheduleImport } from '@/components/ScheduleImport';
@@ -1760,9 +1761,23 @@ function TaskPopover({
     when = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`;
   }
 
+  const router = useRouter();
+
   return (
     <CalPopover x={x} y={y} onClose={onClose} label={task.title || '(No title)'} width={340}>
       <PopoverActions onClose={onClose}>
+        <button
+          onClick={() => {
+            onClose();
+            router.push(`/tasks/?detail=${task.id}`);
+          }}
+          className="hov k-squish"
+          aria-label="Edit task details"
+          title="Open in Tasks editor"
+          style={ACT}
+        >
+          <Icon name="edit" size={15} color="var(--tx2)" />
+        </button>
         <button
           onClick={() => {
             setDone(!done);
