@@ -733,92 +733,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </kbd>
             </button>
 
-            {/* Quick Capture (+) action */}
-            <button
-              onClick={openCapture}
-              className="hov k-squish"
-              title="Quick Capture"
-              aria-label="Quick Capture"
-              aria-expanded={!!capture}
-              style={{
-                height: 34,
-                padding: '0 11px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--tx)',
-                cursor: 'pointer',
-              }}
-            >
-              <Icon name="plus" size={14} color="var(--accTx)" />
-              <span>Capture</span>
-            </button>
-
-            {/* Dedicated View Mode Switcher */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'var(--card2)',
-                border: '1px solid var(--line2)',
-                borderRadius: 8,
-                padding: 2,
-                gap: 2,
-              }}
-            >
-              <button
-                onClick={() => setViewMode('web')}
-                className="k-squish"
-                title="Dedicated Web View"
-                aria-label="Dedicated Web View"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: viewMode === 'web' || (viewMode === 'auto' && !phone) ? 'var(--acc)' : 'transparent',
-                  color: viewMode === 'web' || (viewMode === 'auto' && !phone) ? ON_ACCENT : 'var(--tx2)',
-                  transition: 'all .15s',
-                }}
-              >
-                <Icon name="monitor" size={13} color={viewMode === 'web' || (viewMode === 'auto' && !phone) ? ON_ACCENT : 'var(--tx2)'} />
-                <span>Web</span>
-              </button>
-              <button
-                onClick={() => setViewMode('phone')}
-                className="k-squish"
-                title="Dedicated Phone View"
-                aria-label="Dedicated Phone View"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: viewMode === 'phone' || (viewMode === 'auto' && phone) ? 'var(--acc)' : 'transparent',
-                  color: viewMode === 'phone' || (viewMode === 'auto' && phone) ? ON_ACCENT : 'var(--tx2)',
-                  transition: 'all .15s',
-                }}
-              >
-                <Icon name="phone" size={13} color={viewMode === 'phone' || (viewMode === 'auto' && phone) ? ON_ACCENT : 'var(--tx2)'} />
-                <span>Phone</span>
-              </button>
-            </div>
-
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
@@ -916,31 +830,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {SECTIONS.find((x) => x.id === section)?.name ?? 'basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
-
-            {/* Mobile View Mode Toggle */}
-            <button
-              onClick={() => setViewMode(phone ? 'web' : 'phone')}
-              className="hov k-squish"
-              title={phone ? 'Switch to Dedicated Web View' : 'Dedicated Phone View'}
-              aria-label="Switch view mode"
-              style={{
-                height: 32,
-                padding: '0 8px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11,
-                fontWeight: 700,
-                color: 'var(--tx2)',
-                cursor: 'pointer',
-              }}
-            >
-              <Icon name={phone ? 'monitor' : 'phone'} size={12} color="var(--accTx)" />
-              <span>{phone ? 'Web' : 'Phone'}</span>
-            </button>
 
             {/* Mobile Tour Button - only shown if user has NOT completed onboarding yet */}
             {!seen.has(getActiveTabKey()) && (

@@ -62,84 +62,48 @@ export function useBackGuard() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Track section changes. Re-visiting a section collapses the loop rather than
-  // growing the stack, so back can't get stuck ping-ponging between two pages.
   useEffect(() => {
-    const prior = stack.lastIndexOf(pathname);
-    if (prior >= 0) stack.length = prior;
-    stack.push(pathname);
+    // Keep internal stack for section tracking
+    if (stack[stack.length - 1] !== pathname) {
+      stack.push(pathname);
+    }
   }, [pathname]);
 
   useEffect(() => {
-    /**
-     * One back gesture, one step — however many handlers heard it.
-     *
-     * The mouse's side button fires `mousedown`, and Chrome navigates on it
-     * anyway despite the preventDefault, which lands a `popstate` a few
-     * milliseconds later. Both called goBack, so one press popped two entries
-     * off the stack: from a note you did not land on the notebook, you landed
-     * on Home. Anything inside this window is the same gesture arriving twice.
-     */
     let lastAt = 0;
     const goBack = () => {
       const now = Date.now();
-      if (now - lastAt < 400) return;
+      if (now - lastAt < 300) return;
       lastAt = now;
 
+      // If an overlay is open, dismiss the overlay first
       if (closeTopOverlay()) return;
-      // stack ends with the current path; the one before it is the target.
-      if (stack.length > 1) {
-        stack.pop();
-        router.push(stack[stack.length - 1]);
-        return;
+
+      // Otherwise navigate back in history
+      if (typeof window !== 'undefined' && window.history.length > 1) {
+        window.history.back();
+      } else if (pathname !== '/home/') {
+        router.push('/home/');
       }
-      if (pathname !== '/home/') router.push('/home/');
-      // Otherwise we are at the root of the session: stay put.
     };
 
-    // A sentinel entry means the platform's own back has somewhere to land, so
-    // a gesture-back can never pop past the first page and unload the app.
-    if (typeof history !== 'undefined' && !history.state?.bdGuard) {
-      history.replaceState({ ...history.state, bdGuard: true }, '');
-      history.pushState({ ...history.state, bdGuard: true, bdSentinel: true }, '');
-    }
-
-    const onPop = () => {
-      // Re-arm the sentinel first so the next back also has somewhere to land.
-      history.pushState({ bdGuard: true, bdSentinel: true }, '');
-      goBack();
+    const onPop = (e: PopStateEvent) => {
+      // If an overlay is open, intercept back to close the overlay instead of navigating away
+      if (overlays.length > 0) {
+        if (closeTopOverlay()) {
+          // Re-push current state so page URL doesn't navigate away
+          window.history.pushState(null, '', window.location.href);
+        }
+      }
     };
 
-    // Mouse button 3 is "back", 4 is "forward". Chrome and Edge navigate on
-    // pointerdown, so cancelling there is what actually stops it — auxclick is
-    // too late. Typing in a field is exempt so the gesture stays predictable.
+    // Mouse button 3 is "back", 4 is "forward"
     const onDown = (e: MouseEvent) => {
       if (e.button !== 3 && e.button !== 4) return;
       e.preventDefault();
       if (e.button === 3) goBack();
     };
 
-    /**
-     * Escape is the fourth way to dismiss something, and it was the one route
-     * never wired up: 14 of the 19 dialogs had no Escape at all. They already
-     * register here, so this is one listener rather than 14 copies of it.
-     *
-     * It closes an overlay and never navigates. Back walks the section stack
-     * when nothing is open; Escape on a bare page does nothing, which is what
-     * people expect from it.
-     *
-     * Two things must not double-dismiss:
-     *
-     * `defaultPrevented` lets a local handler win. Eight components already
-     * close themselves on Escape, and two of them (ContextMenu, SearchPalette)
-     * are *not* in this stack — without the check, Escape closed the menu and
-     * the sheet behind it on one press. Each of those eight now calls
-     * preventDefault, so exactly one mechanism fires.
-     *
-     * A field keeps its own Escape. A dozen inline editors bind it to mean
-     * "cancel this edit" and most do not preventDefault, so closing the sheet
-     * around them would throw away the edit and the sheet together.
-     */
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;

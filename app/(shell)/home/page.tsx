@@ -11,8 +11,8 @@ import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
 import { Buddy } from '@/components/Buddy';
-import { BuddyCompanion } from '@/components/BuddyCompanion';
 import { DailyQuests } from '@/components/DailyQuests';
+import { UpcomingTasksCarousel } from '@/components/UpcomingTasksCarousel';
 import { FocusHub } from '@/components/FocusHub';
 import { playTick } from '@/lib/audio';
 import { useLayout } from '@/lib/useLayout';
@@ -231,19 +231,6 @@ export default function HomePage() {
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 9, background: 'rgba(120,140,180,.16)' }}>
-                  {(['morning', 'afternoon', 'evening'] as Tod[]).map((t) => (
-                    <button key={t} onClick={() => { setTod(t); setGreetSeq((n) => n + 1); }}
-                      style={{
-                        padding: '4px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 700, textTransform: 'capitalize',
-                        background: tod === t ? `color-mix(in srgb, ${prefs.accent} 20%, transparent)` : 'transparent',
-                        color: tod === t ? 'var(--accTx)' : 'var(--tx3)',
-                      }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-
                 <button
                   onClick={() => setFocusOpen(true)}
                   className="k-squish"
@@ -259,6 +246,7 @@ export default function HomePage() {
                     fontSize: 11.5,
                     fontWeight: 700,
                     color: 'var(--accTx)',
+                    cursor: 'pointer',
                   }}
                 >
                   <Icon name="clock" size={13} color="var(--accTx)" />
@@ -267,11 +255,6 @@ export default function HomePage() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 6 }}>
-                {/* The same creature that runs your lane on the challenge
-                    board, on the page you open first. It is derived from your
-                    id, so it costs nothing and it is already yours. Its face
-                    reads off whether anything got ticked today — never off how
-                    much is left, which would make a bad morning worse. */}
                 <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
                 <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)' }}>
                   {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -282,127 +265,146 @@ export default function HomePage() {
           </div>
 
           <div style={{ display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' }}>
-            {/* Up next */}
-            <div style={{
-              flex: 'none', width: 353, borderRadius: 16, padding: '16px 18px',
-              background: `color-mix(in srgb, ${INDIGO} 14%, var(--card))`,
-              border: `1.5px solid color-mix(in srgb, ${INDIGO} 36%, transparent)`,
-              boxShadow: `0 4px 20px color-mix(in srgb, ${INDIGO} 12%, transparent)`,
-              minHeight: 180, display: 'flex', flexDirection: 'column',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ ...KICKER, color: INDIGO }}>{isOngoing ? 'Happening Now' : 'Up next'}</div>
-                  {upNext && (
-                    // Live indicator: pulsating dot
-                    <span style={{ position: 'relative', width: 7, height: 7, flex: 'none' }}>
-                      <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: isOngoing ? PAL.mint : INDIGO }} />
-                      <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isOngoing ? PAL.mint : INDIGO}` }} />
-                    </span>
-                  )}
-                </div>
-                {upNext && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
-                    {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}
-                  </span>
-                )}
-              </div>
-
-              {upNext ? (
-                <>
-                  <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {upNext.title}
-                  </div>
-                  {upNext.location && (
-                    <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Icon name="pin" size={11} color="var(--tx3)" />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{upNext.location}</span>
-                    </div>
-                  )}
-
-                  {/* Highly Visible Seconds Countdown Box */}
+            {/* Up next with animated Border Trail matching event calendar color */}
+            {(() => {
+              const upNextColor = upNext?.color || INDIGO;
+              return (
+                <div className="border-trail-wrap" style={{ flex: 'none', width: 353 }}>
+                  <div
+                    className="border-trail-spinner"
+                    style={{
+                      background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, ${upNextColor} 60deg, transparent 120deg)`,
+                    }}
+                  />
                   <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
-                    background: `color-mix(in srgb, ${INDIGO} 18%, var(--card2))`,
-                    border: `1.5px solid color-mix(in srgb, ${INDIGO} 45%, transparent)`,
-                    boxShadow: `0 3px 12px color-mix(in srgb, ${INDIGO} 18%, transparent)`,
+                    position: 'relative',
+                    width: '100%',
+                    borderRadius: 15,
+                    padding: '16px 18px',
+                    background: `color-mix(in srgb, ${upNextColor} 14%, var(--card))`,
+                    border: `1px solid color-mix(in srgb, ${upNextColor} 32%, transparent)`,
+                    boxShadow: `0 4px 20px color-mix(in srgb, ${upNextColor} 14%, transparent)`,
+                    minHeight: 180,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    zIndex: 1,
                   }}>
-                    {/* Middle Aligned "Ends In" / "Starts In" Badge */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
-                      color: INDIGO, textAlign: 'center', width: '100%',
-                    }}>
-                      <Icon name="clock" size={12} color={INDIGO} />
-                      <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ ...KICKER, color: upNextColor }}>{isOngoing ? 'Happening Now' : 'Up next'}</div>
+                        {upNext && (
+                          <span style={{ position: 'relative', width: 7, height: 7, flex: 'none' }}>
+                            <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: isOngoing ? PAL.mint : upNextColor }} />
+                            <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isOngoing ? PAL.mint : upNextColor}` }} />
+                          </span>
+                        )}
+                      </div>
+                      {upNext && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                          {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}
+                        </span>
+                      )}
                     </div>
 
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      fontSize: 25, fontWeight: 800, color: 'var(--tx)',
-                      fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                      padding: '4px 0 2px',
-                    }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span>{String(hrsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
+                    {upNext ? (
+                      <>
+                        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {upNext.title}
+                        </div>
+                        {upNext.location && (
+                          <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="pin" size={11} color="var(--tx3)" />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{upNext.location}</span>
+                          </div>
+                        )}
+
+                        {/* Seconds Countdown Box */}
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
+                          background: `color-mix(in srgb, ${upNextColor} 18%, var(--card2))`,
+                          border: `1.5px solid color-mix(in srgb, ${upNextColor} 45%, transparent)`,
+                          boxShadow: `0 3px 12px color-mix(in srgb, ${upNextColor} 18%, transparent)`,
+                        }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                            fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                            color: upNextColor, textAlign: 'center', width: '100%',
+                          }}>
+                            <Icon name="clock" size={12} color={upNextColor} />
+                            <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
+                          </div>
+
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            fontSize: 25, fontWeight: 800, color: 'var(--tx)',
+                            fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            padding: '4px 0 2px',
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span>{String(hrsUntil).padStart(2, '0')}</span>
+                              <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
+                            </div>
+                            <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span>{String(minsUntil).padStart(2, '0')}</span>
+                              <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
+                            </div>
+                            <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ color: upNextColor }}>{String(secsUntil).padStart(2, '0')}</span>
+                              <span style={{ fontSize: 8.5, fontWeight: 700, color: upNextColor, letterSpacing: '.06em' }}>SEC</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${upNextColor} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
+                          <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : upNextColor, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ margin: 'auto 0', textAlign: 'center' }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
                       </div>
-                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span>{String(minsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
-                      </div>
-                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: INDIGO }}>{String(secsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: INDIGO, letterSpacing: '.06em' }}>SEC</span>
-                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
+                      <button onClick={() => router.push('/calendar/')} className="acc k-squish"
+                        style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                        Open schedule
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!upNext) { toast('Nothing to snooze'); return; }
+                          A.snooze.mutate({ id: upNext.id });
+                          toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
+                        }}
+                        className="hov k-squish"
+                        style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        Snooze 10m
+                      </button>
                     </div>
                   </div>
-
-                  <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
-                    <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
-                  </div>
-                </>
-              ) : (
-                <div style={{ margin: 'auto 0', textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
-                  <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
                 </div>
-              )}
+              );
+            })()}
 
-              <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
-                <button onClick={() => router.push('/calendar/')} className="acc k-squish"
-                  style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                  Open schedule
-                </button>
-                <button
-                  onClick={() => {
-                    // Silence was the bug: with nothing scheduled this did
-                    // nothing at all and looked broken.
-                    if (!upNext) { toast('Nothing to snooze'); return; }
-                    A.snooze.mutate({ id: upNext.id });
-                    toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
-                  }}
-                  className="hov k-squish"
-                  style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  Snooze 10m
-                </button>
-              </div>
-            </div>
-
-            {/* The rest of today */}
+            {/* The rest of today with event labels */}
             <div style={{
               flex: 1, minWidth: 260, borderRadius: 15, padding: '14px 16px',
               background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
+              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
                 <div style={KICKER}>The rest of today</div>
-                <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>to 10 PM</div>
+                <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
+                  {todays.length} event{todays.length === 1 ? '' : 's'} to 10 PM
+                </div>
               </div>
-              <div style={{ position: 'relative', height: 34, marginBottom: 9 }}>
+
+              <div style={{ position: 'relative', height: 34, marginBottom: 8 }}>
                 <div style={{ position: 'absolute', top: 15, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
                 {todays.map((e) => {
                   const s = hoursOf(e.starts_at);
@@ -410,31 +412,60 @@ export default function HomePage() {
                   const left = ((s - 9) / 13) * 100;
                   if (left < -5 || left > 100) return null;
                   return (
-                    <div key={e.id} style={{
-                      position: 'absolute', top: 8, left: `${Math.max(0, left)}%`,
-                      width: `${Math.max(4, (len / 13) * 100)}%`, height: 16, borderRadius: 5, background: e.color,
-                    }} />
+                    <div
+                      key={e.id}
+                      title={`${e.title} (${hhmm(hoursOf(e.starts_at))} - ${hhmm(hoursOf(e.ends_at))})`}
+                      onClick={() => router.push('/calendar/')}
+                      style={{
+                        position: 'absolute', top: 6, left: `${Math.max(0, left)}%`,
+                        width: `${Math.max(4, (len / 13) * 100)}%`, height: 20, borderRadius: 6, background: e.color,
+                        display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '0 4px',
+                        boxShadow: `0 2px 8px color-mix(in srgb, ${e.color} 30%, transparent)`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {e.title}
+                      </span>
+                    </div>
                   );
                 })}
-                <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)' }} />
+                <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)', zIndex: 2 }} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
                 <span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
+              </div>
+
+              {/* Event Labels List */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {todays.slice(0, 3).map((e) => (
+                  <span
+                    key={e.id}
+                    onClick={() => router.push('/calendar/')}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '2px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
+                      background: 'var(--card2)', border: '1px solid var(--line)',
+                      color: 'var(--tx2)', cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color, flex: 'none' }} />
+                    <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+                    <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
+                  </span>
+                ))}
+                {todays.length > 3 && (
+                  <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 3} more</span>
+                )}
+                {todays.length === 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for the rest of today</span>
+                )}
               </div>
             </div>
 
-            {/* Overdue */}
-            <div style={{
-              flex: 'none', width: 353, borderRadius: 15, padding: '14px 16px',
-              background: `color-mix(in srgb,${CORAL_T} 12%,transparent)`,
-              border: `1px solid color-mix(in srgb,${CORAL_T} 34%,transparent)`,
-            }}>
-              <div style={{ ...KICKER, color: `color-mix(in srgb,${CORAL_T} 78%,var(--tx))`, marginBottom: 8 }}>Overdue</div>
-              <div style={{ fontSize: 26, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>{overdue.length}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: 'var(--tx2)' }}>
-                {overdue.length ? `Oldest is ${oldest} day${oldest === 1 ? '' : 's'} old` : 'Nothing is late'}
-              </div>
-            </div>
+            {/* Upcoming Tasks Sliding Carousel (Replacing Overdue) */}
+            <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} />
           </div>
         </div>
       </div>
@@ -443,23 +474,18 @@ export default function HomePage() {
         <Announcements phone={phone} />
 
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-          {/* Interactive Study Buddy Companion */}
-          <div data-tour="home-buddy" style={{ gridColumn: phone ? 'span 1' : 'span 2' }}>
-            <BuddyCompanion
-              daysSince={daysSinceDone}
-              streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
-              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
-              onStartFocus={() => setFocusOpen(true)}
-            />
-          </div>
-
-          {/* Daily RPG Quests */}
-          <div data-tour="home-quests" style={{ gridColumn: 'span 1' }}>
+          {/* Combined Study Buddy & Daily Quests Hub */}
+          <div data-tour="home-quests" style={{ gridColumn: phone ? 'span 1' : 'span 3' }}>
             <DailyQuests
               tasks={tasks}
               habits={habits}
               ticks={ticks}
               notesCount={recent.length}
+              eventsCount={todays.length}
+              daysSinceDone={daysSinceDone}
+              streakDays={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
+              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
+              onStartFocus={() => setFocusOpen(true)}
             />
           </div>
 
@@ -696,17 +722,25 @@ function Scratchpad({ phone }: { phone: boolean }) {
   };
 
   return (
-    <div style={{ ...CARD, gridColumn: phone ? 'auto' : 'span 2' }}>
+    <div style={{
+      ...CARD,
+      gridColumn: phone ? 'auto' : 'span 2',
+      background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
+      border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
+      boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
+    }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-        <div style={KICKER}>Scratchpad</div>
+        <div style={{ ...KICKER, color: 'var(--pal-amber)' }}>Scratchpad</div>
         <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>{notes.length} kept</div>
       </div>
 
       <div style={{
         display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 12,
-        background: 'var(--card2)', border: '1px solid var(--line)', marginBottom: 12,
+        background: 'color-mix(in srgb, #FFF9E6 14%, var(--card2))',
+        border: '1px solid color-mix(in srgb, #F5B33C 28%, var(--line))',
+        marginBottom: 12,
       }}>
-        <Icon name="plus" size={15} color="var(--accTx)" />
+        <Icon name="plus" size={15} color="var(--pal-amber)" />
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -715,8 +749,8 @@ function Scratchpad({ phone }: { phone: boolean }) {
           placeholder="Jot something — Enter to keep it"
           style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--tx)', resize: 'none', fontFamily: 'inherit', background: 'transparent' }}
         />
-        <button onClick={keep} className="acc"
-          style={{ flex: 'none', padding: '5px 11px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11, fontWeight: 800 }}>
+        <button onClick={keep} className="acc k-squish"
+          style={{ flex: 'none', padding: '5px 11px', borderRadius: 8, background: 'var(--pal-amber)', color: '#0A0912', fontSize: 11, fontWeight: 800 }}>
           Keep
         </button>
       </div>

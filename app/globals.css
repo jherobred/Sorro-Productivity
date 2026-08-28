@@ -573,3 +573,27 @@ body {
 .countdown-live-badge {
   animation: countdown-pulse 2s infinite ease-in-out;
 }
+
+/* ---- Card Border Trail Animation --------------------------------------- */
+@keyframes border-trail-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.border-trail-wrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 1.5px;
+}
+
+.border-trail-spinner {
+  position: absolute;
+  inset: -150%;
+  animation: border-trail-spin 4s linear infinite;
+  pointer-events: none;
+}

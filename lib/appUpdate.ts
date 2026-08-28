@@ -140,37 +140,10 @@ export function useAlwaysFullscreen(want: boolean) {
     document.addEventListener('keydown', ask, opts);
     document.addEventListener('touchstart', ask, opts);
 
-    /**
-     * Coming back out, on purpose or by accident.
-     *
-     * A back swipe in Chrome on Android leaves fullscreen. The browser does
-     * that itself and there is no cancelling it — `preventDefault` on a back
-     * gesture is not a thing a page is allowed to do. So the interception has
-     * to happen *after*: notice that we are suddenly not fullscreen any more,
-     * and ask whether that was meant.
-     *
-     * The dialog's own button is what makes the way back possible. A page
-     * cannot re-enter fullscreen from an event handler the user did not cause,
-     * but a tap on "Stay fullscreen" is exactly the gesture the API wants.
-     */
-    const onChange = () => {
-      if (document.fullscreenElement) { armed = true; return; }
-      if (declined.current) return;
-      void import('./ask').then(({ confirmAsk }) => confirmAsk('Leave fullscreen?', {
-        message: 'Back takes you out of fullscreen. You can go straight back in.',
-        confirmLabel: 'Stay fullscreen',
-      }).then((stay) => {
-        if (stay) void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
-        else declined.current = true;
-      }));
-    };
-    document.addEventListener('fullscreenchange', onChange);
-
     return () => {
       document.removeEventListener('pointerdown', ask, opts);
       document.removeEventListener('keydown', ask, opts);
       document.removeEventListener('touchstart', ask, opts);
-      document.removeEventListener('fullscreenchange', onChange);
     };
   }, [want]);
 }

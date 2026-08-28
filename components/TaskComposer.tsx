@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { PAL } from '@/lib/pal';
 import type { List, NewTask } from '@/lib/tasks';
+import { TextLoop } from '@/components/core/text-loop';
 
 /**
  * Creating a task was one text field and nothing else.
@@ -169,30 +170,77 @@ export function TaskComposer({
 
   return (
     <div ref={box} style={{
-      background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--sh)',
-      border: `1px solid ${open ? 'color-mix(in srgb, var(--acc) 40%, transparent)' : 'var(--line)'}`,
-      padding: open ? '14px 15px' : '13px 15px',
-      transition: 'border-color .2s, padding .2s',
+      background: 'color-mix(in srgb, var(--card2) 65%, var(--card))',
+      borderRadius: 16,
+      boxShadow: open ? '0 0 0 2px color-mix(in srgb, var(--acc) 35%, transparent), var(--sh)' : 'var(--sh)',
+      border: `1.5px solid ${open ? 'var(--acc)' : 'color-mix(in srgb, var(--line2) 80%, transparent)'}`,
+      padding: open ? '14px 16px' : '13px 16px',
+      transition: 'border-color .2s, box-shadow .2s, padding .2s',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
         <Icon name="plus" size={15} color="var(--accTx)" />
-        <input
-          value={title}
-          onFocus={() => setOpen(true)}
-          onChange={handleTitleChange}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            }
-            if (e.key === 'Escape') {
-              setOpen(false);
-              (e.target as HTMLElement).blur();
-            }
-          }}
-          placeholder="Add a task (press Enter)"
-          aria-label="Task title"
-          style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: open ? 600 : 500, color: 'var(--tx)', background: 'transparent', border: 'none', outline: 'none' }} />
+        <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+          <input
+            value={title}
+            onFocus={() => setOpen(true)}
+            onChange={handleTitleChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              }
+              if (e.key === 'Escape') {
+                setOpen(false);
+                (e.target as HTMLElement).blur();
+              }
+            }}
+            aria-label="Task title"
+            style={{
+              width: '100%',
+              fontSize: 13.5,
+              fontWeight: open ? 600 : 500,
+              color: 'var(--tx)',
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              position: 'relative',
+              zIndex: 2,
+            }}
+          />
+          {!title && (
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                display: 'flex',
+                alignItems: 'center',
+                pointerEvents: 'none',
+                zIndex: 1,
+                color: 'var(--tx3, #8E918F)',
+                fontSize: 13.5,
+                fontWeight: 500,
+                opacity: 0.95,
+              }}
+            >
+              <TextLoop interval={3600}>
+                <span>Add a task (press Enter)</span>
+                <span>✨ Imagine: What bold idea could you build today?</span>
+                <span>⚡ Template: Draft essay thesis and outline</span>
+                <span>🎨 Creativity: Design new logo & visual identity</span>
+                <span>🧠 Focus: Solve complex problem set before deadline</span>
+                <span>💡 Spark: Capture inspirational thoughts & research notes</span>
+                <span>📚 Study: Review key lecture formulas and slides</span>
+                <span>🚀 Momentum: Code frontend feature and deploy live</span>
+                <span>🎯 Goal: 25-minute Pomodoro deep work sprint</span>
+                <span>🏃 Habit: Complete daily physical workout & hydrate</span>
+              </TextLoop>
+            </div>
+          )}
+        </div>
         {!open && (
           <button onClick={() => setOpen(true)} className="hov k-squish"
             aria-label="More options" title="More options"

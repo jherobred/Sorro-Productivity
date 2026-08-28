@@ -16,7 +16,6 @@ import { useScratch } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
 import { useEvents, type Ev, hhmm, hoursOf } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
-import { BuddyCompanion } from './BuddyCompanion';
 import { DailyQuests } from './DailyQuests';
 import { FocusHub } from './FocusHub';
 import { playTick } from '@/lib/audio';
@@ -250,21 +249,17 @@ export function PhoneHome({ name }: { name: string }) {
             </button>
           )}
 
-          {/* Interactive Pet Companion */}
-          <div style={{ marginTop: 12 }}>
-            <BuddyCompanion
-              streak={bestStreak}
-              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
-              onStartFocus={() => setFocusOpen(true)}
-            />
-          </div>
-
-          {/* Daily Quests */}
+          {/* Combined Companion & Daily Quests */}
           <div style={{ marginTop: 12 }}>
             <DailyQuests
               tasks={tasks}
               habits={habits}
               ticks={ticks}
+              notesCount={scratch.length}
+              eventsCount={todaysEvents.length}
+              streakDays={bestStreak}
+              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
+              onStartFocus={() => setFocusOpen(true)}
             />
           </div>
 
@@ -355,12 +350,15 @@ export function PhoneHome({ name }: { name: string }) {
 
           <div style={{
             display: 'flex', alignItems: 'center', gap: 11, marginTop: 12, padding: '11px 12px',
-            borderRadius: 14, background: 'var(--card)', border: '1px solid var(--line)', boxShadow: 'var(--sh)',
+            borderRadius: 14,
+            background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
+            border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
+            boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
           }}>
-            <span style={{ width: 3, alignSelf: 'stretch', minHeight: 36, borderRadius: 2, background: PAL.cyan, flex: 'none' }} />
+            <span style={{ width: 3, alignSelf: 'stretch', minHeight: 36, borderRadius: 2, background: 'var(--pal-amber)', flex: 'none' }} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={KICKER}>Scratchpad</span>
+                <span style={{ ...KICKER, color: 'var(--pal-amber)' }}>Scratchpad</span>
                 <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--tx3)' }}>{scratch.length}</span>
               </span>
               <span style={{
@@ -370,8 +368,8 @@ export function PhoneHome({ name }: { name: string }) {
                 {scratch[0]?.text ?? 'Nothing kept yet'}
               </span>
             </span>
-            <button onClick={() => router.push('/home/')} className="acc"
-              style={{ flex: 'none', padding: '7px 12px', borderRadius: 9, background: 'var(--acc)', color: '#0C0F16', fontSize: 10.5, fontWeight: 800 }}>
+            <button onClick={() => router.push('/home/')} className="acc k-squish"
+              style={{ flex: 'none', padding: '7px 12px', borderRadius: 9, background: 'var(--pal-amber)', color: '#0A0912', fontSize: 10.5, fontWeight: 800 }}>
               Open
             </button>
           </div>
