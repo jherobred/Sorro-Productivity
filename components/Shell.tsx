@@ -379,58 +379,33 @@ export function Shell({ children }: { children: React.ReactNode }) {
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)'),
         }}>
           {sidebarMode === 'open' ? (
-            /* Open Mode Header */
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 16px 18px', minWidth: 236 }}>
+            /* Open Mode Header - 1 click partial collapses to icons */
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 16px 18px', minWidth: 236 }}>
               <button
-                onClick={() => router.push('/home/')}
+                onClick={() => setSidebarMode('compact')}
                 className="k-squish"
                 style={{ textAlign: 'left', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, outline: 'none' }}
-                title="Go to Home"
+                title="Click to partial collapse (icons only)"
+                aria-label="Click to partial collapse"
               >
                 <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1, display: 'block' }}>
                   basedly
                 </span>
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button
-                  onClick={() => setSidebarMode('compact')}
-                  className="hov k-squish"
-                  title="Collapse to tab logos only"
-                  aria-label="Collapse to tab logos only"
-                  style={{ width: 28, height: 28, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}
-                >
-                  <Icon name="collapse" size={15} color="var(--tx3)" />
-                </button>
-                <button
-                  onClick={() => setSidebarMode('hidden')}
-                  className="hov k-squish"
-                  title="Hide sidebar completely"
-                  aria-label="Hide sidebar completely"
-                  style={{ width: 28, height: 28, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}
-                >
-                  <Icon name="close" size={13} color="var(--tx3)" />
-                </button>
-              </div>
             </div>
           ) : (
-            /* Compact Icon-Only Mode Header */
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '4px 0 14px', width: 64 }}>
+            /* Compact Icon-Only Mode Header - 2nd click fully collapses */
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0 14px', width: 64 }}>
               <button
-                onClick={() => router.push('/home/')}
+                onClick={() => setSidebarMode('hidden')}
                 className="k-squish"
-                style={{ width: 38, height: 38, borderRadius: 10, display: 'grid', placeItems: 'center', cursor: 'pointer' }}
-                title="Basedly Home"
+                style={{ width: 40, height: 40, borderRadius: 10, display: 'grid', placeItems: 'center', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, outline: 'none' }}
+                title="Click to fully collapse sidebar"
+                aria-label="Click to fully collapse sidebar"
               >
-                <span style={{ fontWeight: 900, fontSize: 20, letterSpacing: '-.04em', color: 'var(--tx)' }}>B</span>
-              </button>
-              <button
-                onClick={() => setSidebarMode('open')}
-                className="hov k-squish"
-                title="Expand full sidebar"
-                aria-label="Expand full sidebar"
-                style={{ width: 28, height: 22, borderRadius: 6, display: 'grid', placeItems: 'center' }}
-              >
-                <Icon name="expand" size={13} color="var(--tx3)" />
+                <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+                  b
+                </span>
               </button>
             </div>
           )}
@@ -499,11 +474,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               if (sidebarMode === 'compact') {
                 return (
-                  <div key={sec.id} style={{ position: 'relative', margin: '3px 0' }}>
+                  <div key={sec.id} className="compact-tab-wrap">
                     <button
                       onClick={() => go(sec.id)}
                       onPointerDown={() => prefetchSection(sec.id)}
-                      title={sec.name}
                       aria-label={sec.name}
                       className={on ? 'k-squish' : 'hov k-squish'}
                       style={{
@@ -522,6 +496,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         }} />
                       )}
                     </button>
+                    <div className="compact-tooltip">
+                      {sec.name}{badge ? ` (${badge})` : ''}
+                    </div>
                   </div>
                 );
               }
@@ -652,39 +629,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {!phone && sidebarMode === 'hidden' && (
+        <button
+          onClick={() => setSidebarMode('open')}
+          title="Click to reset sidebar to normal (3/3)"
+          aria-label="Reset sidebar to normal"
+          className="k-squish"
+          style={{
+            position: 'fixed', left: 10, top: 10, zIndex: 30,
+            width: 32, height: 32, borderRadius: 9,
+            background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--sh)',
+            display: 'grid', placeItems: 'center', cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontWeight: 900, fontSize: 17, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+            b
+          </span>
+        </button>
+      )}
+
       {/* Main viewport */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
-          <div style={{ height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', borderBottom: '1px solid var(--line)' }}>
-            {/* Top-left Basedly Brand + Chevron Trigger for Expanding or Toggling Sidebar */}
-            <button
-              onClick={cycleSidebarMode}
-              className="k-squish"
-              title={sidebarMode === 'hidden' ? 'Expand sidebar (Ctrl+\\)' : (sidebarMode === 'compact' ? 'Expand full sidebar (Ctrl+\\)' : 'Collapse sidebar (Ctrl+\\)')}
-              aria-label="Toggle sidebar navigation"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                padding: '4px 8px 4px 2px',
-                marginRight: 4,
-                borderRadius: 8,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>basedly</span>
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22,
-                borderRadius: 6, background: 'var(--card2)', border: '1px solid var(--line2)',
-              }}>
-                <Icon name="chev" size={13} color="var(--tx2)" style={{
-                  transform: sidebarMode === 'hidden' ? 'rotate(0deg)' : (sidebarMode === 'compact' ? 'rotate(90deg)' : 'rotate(180deg)'),
-                  transition: 'transform .24s cubic-bezier(0.16,1,0.3,1)',
-                }} />
-              </span>
-            </button>
+          <div style={{
+            height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 12,
+            padding: sidebarMode === 'hidden' ? '0 20px 0 52px' : '0 20px',
+            borderBottom: '1px solid var(--line)',
+            transition: 'padding-left .28s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
             {/* Consolidated Minimalist Command Hub Search Bar */}
             <button
               onClick={() => setSearch(true)}
