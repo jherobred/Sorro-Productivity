@@ -11,6 +11,7 @@ import { PAL } from '@/lib/pal';
 import { displayOf, type Person } from '@/lib/people';
 import { useComments, type Item } from '@/lib/community';
 import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
+import { PayRpModal } from '@/components/community/PayRpModal';
 
 /**
  * A post, opened.
@@ -137,6 +138,7 @@ function Panel({
 }) {
   const { data: list = [], isLoading } = useComments(item.kind, item.id, true);
   const [draft, setDraft] = useState('');
+  const [tipping, setTipping] = useState(false);
   const who = displayOf(profiles, item.author_id, me);
   const photo = item.kind === 'photo';
 
@@ -226,7 +228,42 @@ function Panel({
           <button onClick={onShare} className="tap" aria-label="Share this post" style={{ display: 'flex' }}>
             <Icon name="send" size={18} color="var(--tx2)" />
           </button>
+
+          {item.author_id !== me && (
+            <button
+              onClick={() => setTipping(true)}
+              className="hov k-squish"
+              title="Pay with RP"
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 11px',
+                borderRadius: 8,
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(129, 140, 248, 0.35)',
+                color: '#818CF8',
+                fontSize: 11.5,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              <span>💎</span>
+              <span>Pay RP</span>
+            </button>
+          )}
         </div>
+
+        {tipping && (
+          <PayRpModal
+            postId={item.id}
+            authorId={item.author_id}
+            authorName={who.label}
+            postTitle={item.title || item.body}
+            onClose={() => setTipping(false)}
+          />
+        )}
 
         <div style={{ padding: '0 15px 9px', fontSize: 12, fontWeight: 800 }}>
           {reactions} {photo ? (reactions === 1 ? 'like' : 'likes') : (reactions === 1 ? 'upvote' : 'upvotes')}

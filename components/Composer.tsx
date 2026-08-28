@@ -29,7 +29,14 @@ import { TAGS, MAX_IMAGES } from '@/lib/community';
  * storage, and storage is not the writer's problem.
  */
 
-export type Draft = { title: string; body: string; tag: string; images: string[] };
+export type Draft = {
+  title: string;
+  body: string;
+  tag: string;
+  images: string[];
+  accept_rp?: boolean;
+  suggested_rp?: number;
+};
 
 export function Composer({ onClose, onPost }: {
   onClose: () => void;
@@ -42,6 +49,8 @@ export function Composer({ onClose, onPost }: {
   const [body, setBody] = useState('');
   /** '' is a real answer: not every post is one of six categories. */
   const [tag, setTag] = useState('');
+  const [acceptRp, setAcceptRp] = useState<boolean>(true);
+  const [suggestedRp, setSuggestedRp] = useState<number>(25);
   const [images, setImages] = useState<{ path: string; url: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const first = useRef<HTMLInputElement>(null);
@@ -93,7 +102,14 @@ export function Composer({ onClose, onPost }: {
 
   const send = () => {
     if (!ready) return;
-    onPost({ title: title.trim(), body: body.trim(), tag, images: images.map((i) => i.path) });
+    onPost({
+      title: title.trim(),
+      body: body.trim(),
+      tag,
+      images: images.map((i) => i.path),
+      accept_rp: acceptRp,
+      suggested_rp: suggestedRp,
+    });
     onClose();
   };
 
@@ -209,6 +225,52 @@ export function Composer({ onClose, onPost }: {
                 );
               })}
             </div>
+          </div>
+
+          {/* RP Currency Acceptance Card */}
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: 14,
+              background: acceptRp ? 'rgba(99, 102, 241, 0.12)' : 'var(--card2)',
+              border: acceptRp ? '1.5px solid rgba(129, 140, 248, 0.4)' : '1px solid var(--line2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              transition: 'all .2s ease',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 20 }}>💎</span>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)' }}>
+                  Accept RP Currency / Tips
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                  Allow readers to reward you with RP for this post
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAcceptRp(!acceptRp)}
+              aria-pressed={acceptRp}
+              className="k-squish"
+              style={{
+                padding: '6px 14px',
+                borderRadius: 8,
+                fontSize: 11.5,
+                fontWeight: 800,
+                background: acceptRp ? '#6366F1' : 'var(--card)',
+                border: acceptRp ? '1px solid #818CF8' : '1px solid var(--line)',
+                color: acceptRp ? '#FFFFFF' : 'var(--tx2)',
+                cursor: 'pointer',
+              }}
+            >
+              {acceptRp ? 'Accepted ✓' : 'Disabled'}
+            </button>
           </div>
         </div>
 

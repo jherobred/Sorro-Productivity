@@ -34,6 +34,8 @@ import {
 import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
 import { useFollows } from '@/lib/follows';
+import { PayRpModal } from '@/components/community/PayRpModal';
+import { setPostRpConfig, getPostRpConfig } from '@/lib/rpTransfers';
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'new', label: 'Latest' },
@@ -54,6 +56,7 @@ export default function CommunityPage() {
   const [composing, setComposing] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Item | null>(null);
+  const [tippingItem, setTippingItem] = useState<Item | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -599,6 +602,7 @@ export default function CommunityPage() {
                 onOpen={() => setViewing(key(item))}
                 onShare={() => setSharing(item)}
                 onTagClick={(tag) => { setSearchQuery(tag.replace(/^#/, '')); toast(`Filter: ${tag}`); }}
+                onTip={() => setTippingItem(item)}
               />
             ))}
           </div>
@@ -809,7 +813,28 @@ export default function CommunityPage() {
       {tab === 'casino' && <Casino onExit={() => setTab('feed')} />}
 
       {composing && (
-        <Composer onClose={() => setComposing(false)} onPost={A.post} />
+        <Composer
+          onClose={() => setComposing(false)}
+          onPost={(draft) => {
+            A.post(draft);
+            if (draft.accept_rp !== undefined) {
+              setPostRpConfig(draft.title || draft.body || 'draft', {
+                accept_rp: draft.accept_rp,
+                suggested_rp: draft.suggested_rp,
+              });
+            }
+          }}
+        />
+      )}
+
+      {tippingItem && (
+        <PayRpModal
+          postId={tippingItem.id}
+          authorId={tippingItem.author_id}
+          authorName={displayOf(profiles, tippingItem.author_id, me).label}
+          postTitle={tippingItem.title || tippingItem.body}
+          onClose={() => setTippingItem(null)}
+        />
       )}
 
       {open_ && (
@@ -851,7 +876,7 @@ export default function CommunityPage() {
 
 function XPostCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
-  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick,
+  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick, onTip,
 }: {
   item: Item;
   me: string;
@@ -871,11 +896,13 @@ function XPostCard({
   onOpen: () => void;
   onShare: () => void;
   onTagClick?: (tag: string) => void;
+  onTip?: () => void;
 }) {
   const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
   const targetHandle = profiles[item.author_id]?.handle || item.author_id;
+  const rpConfig = getPostRpConfig(item.id);
 
   const views = usePostViews();
   const bookmarks = useBookmarks();
@@ -1027,6 +1054,50 @@ function XPostCard({
             onReact={onReact}
             size="sm"
           />
+
+          {item.author_id !== me && (
+            <button
+              onClick={onTip}
+              className="hov k-squish"
+              title="Pay / Tip with RP"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 7,
+                background: 'rgba(99, 102, 241, 0.12)',
+                border: '1px solid rgba(129, 140, 248, 0.35)',
+                color: '#818CF8',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              <span>💎</span>
+              <span>Pay RP</span>
+              {rpConfig.total_tipped > 0 && (
+                <span style={{ color: '#A5B4FC', fontSize: 9.5 }}>({rpConfig.total_tipped})</span>
+              )}
+            </button>
+          )}
+
+          {isMine && rpConfig.total_tipped > 0 && (
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 11,
+                fontWeight: 800,
+                color: '#34D399',
+              }}
+              title="Total RP tipped on your post"
+            >
+              <span>💎</span>
+              <span>+{rpConfig.total_tipped} RP</span>
+            </span>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>
             <Icon name="eye" size={14} color="var(--tx3)" />
