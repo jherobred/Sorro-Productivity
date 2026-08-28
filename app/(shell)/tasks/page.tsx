@@ -17,6 +17,13 @@ import { ContextMenu } from '@/components/ContextMenu';
 import { SwipeableRow } from '@/components/SwipeableRow';
 
 import { TaskDatePicker } from '@/components/TaskDatePicker';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselNavigation,
+  CarouselIndicator,
+  CarouselItem,
+} from '@/components/core/carousel';
 
 /**
  * Ported from Basedly.dc.html and redesigned to match Google Tasks UX & aesthetic:
@@ -204,6 +211,50 @@ export default function TasksPage() {
 
             {g.items.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '6px 8px 14px' }}>{g.empty}</div>
+            )}
+
+            {/* Carousel for Upcoming tasks with 1-minute cycle animation */}
+            {g.n === 'Upcoming' && g.items.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <Carousel autoPlayInterval={60000} className="flex flex-col flex-1 justify-between rounded-xl bg-[var(--card2)] border border-[var(--line2)] p-4 shadow-sm">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--pal-mint)' }}>
+                      Upcoming Carousel (1-Min Cycle)
+                    </span>
+                    <CarouselNavigation alwaysShow />
+                  </div>
+                  <CarouselContent>
+                    {g.items.map((r) => (
+                      <CarouselItem key={r.task.id}>
+                        <div
+                          onClick={() => { setDetail(r.task.id); setTsw(null); }}
+                          style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 70 }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 6, color: PRI_COL[r.pri], background: 'var(--card)', border: '1px solid var(--line)' }}>
+                              {r.pri} Priority
+                            </span>
+                            {r.dueLabel && (
+                              <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+                                📅 {r.dueLabel}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx)' }}>
+                            {r.task.title}
+                          </div>
+                          {r.task.notes && (
+                            <div style={{ fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.task.notes}
+                            </div>
+                          )}
+                        </div>
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <CarouselIndicator />
+                </Carousel>
+              </div>
             )}
 
             {g.items.map((r) => (

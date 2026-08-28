@@ -60,7 +60,7 @@ export function UpcomingTasksCarousel({
 
   const upcomingTasks = useMemo(() => {
     const openTasks = tasks.filter((t) => !t.done);
-    return openTasks
+    const filtered = openTasks
       .filter((t) => {
         if (t.due_on) {
           return t.due_on >= todayISO && t.due_on <= next7DaysISO;
@@ -80,6 +80,52 @@ export function UpcomingTasksCarousel({
         const timeB = b.due_at ?? '';
         return timeA.localeCompare(timeB);
       });
+
+    if (filtered.length > 0) return filtered;
+    if (openTasks.length > 0) return openTasks;
+
+    // Default starter upcoming tasks so carousel always displays and cycles
+    return [
+      {
+        id: 'starter-1',
+        title: 'Review course syllabus and upcoming deadlines',
+        notes: 'Plan study sessions and team project milestones for the week',
+        due_on: todayISO,
+        due_at: null,
+        priority: 'high' as const,
+        stars: 3,
+        done: false,
+        list_id: null,
+        position: 1,
+        deleted_at: null,
+      },
+      {
+        id: 'starter-2',
+        title: 'Draft weekly project sprint goals',
+        notes: 'Outline core milestones and deliverable checklist',
+        due_on: next7DaysISO,
+        due_at: null,
+        priority: 'med' as const,
+        stars: 2,
+        done: false,
+        list_id: null,
+        position: 2,
+        deleted_at: null,
+      },
+      {
+        id: 'starter-3',
+        title: 'Complete 25-minute Pomodoro deep work sprint',
+        notes: 'Focus on primary study materials without interruptions',
+        due_on: next7DaysISO,
+        due_at: null,
+        priority: 'low' as const,
+        stars: 1,
+        done: false,
+        list_id: null,
+        position: 3,
+        deleted_at: null,
+      },
+    ];
   }, [tasks, todayISO, next7DaysISO]);
 
   const handleToggleDone = (e: React.MouseEvent, task: Task) => {
