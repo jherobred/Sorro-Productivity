@@ -1,0 +1,401 @@
+import os
+import subprocess
+
+# High-end geometric vector glyphs for the Otter Companion
+# All rendered with pure mathematical curves, crisp negative space cutouts, and solid terracotta tone
+
+GLYPHS = [
+    (
+        "Concept 1: Modernist Streamlined Otter",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Main Body & Head Silhouette -->
+            <path d="
+                M 16 16
+                C 16 10, 22 8, 26 12
+                C 30 10, 34 10, 38 12
+                C 42 8, 48 10, 48 16
+                C 52 24, 52 36, 48 44
+                C 46 48, 42 52, 38 52
+                C 42 56, 48 56, 52 52
+                C 54 50, 56 52, 54 55
+                C 48 61, 38 60, 32 54
+                C 24 54, 16 48, 16 36
+                Z
+            "/>
+            <!-- Negative Space Eyes -->
+            <rect x="24" y="20" width="4" height="7" rx="2" fill="#0D0B16"/>
+            <rect x="36" y="20" width="4" height="7" rx="2" fill="#0D0B16"/>
+            <!-- Negative Space Snout / Nose -->
+            <circle cx="32" cy="28" r="2.2" fill="#0D0B16"/>
+            <!-- Negative Space Clasped Paws -->
+            <path d="M 28 36 C 28 34, 30 33, 32 33 C 34 33, 36 34, 36 36 C 36 38, 34 39, 32 39 C 30 39, 28 38, 28 36 Z" fill="#0D0B16"/>
+        </svg>
+        """,
+        "Sleek continuous vector silhouette with organic otter ears, negative space eyes, sweet snout, and clasped chest paws."
+    ),
+    (
+        "Concept 2: Geometric Block-Otter (Refined Claude-Sibling)",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Ears -->
+            <rect x="16" y="14" width="8" height="8" rx="3"/>
+            <rect x="40" y="14" width="8" height="8" rx="3"/>
+            <!-- Head & Body Box -->
+            <rect x="14" y="18" width="36" height="30" rx="6"/>
+            <!-- Side Arm/Paw Tabs -->
+            <rect x="8" y="28" width="6" height="8" rx="3"/>
+            <rect x="50" y="28" width="6" height="8" rx="3"/>
+            <!-- Bottom Feet -->
+            <rect x="20" y="46" width="6" height="8" rx="3"/>
+            <rect x="38" y="46" width="6" height="8" rx="3"/>
+            <!-- Tail -->
+            <path d="M 48 42 C 54 42, 58 46, 56 52 C 54 54, 50 50, 48 46 Z"/>
+            <!-- Negative Space Eyes -->
+            <rect x="22" y="24" width="5" height="8" rx="2.5" fill="#0D0B16"/>
+            <rect x="37" y="24" width="5" height="8" rx="2.5" fill="#0D0B16"/>
+            <!-- Negative Space Snout -->
+            <rect x="30" y="32" width="4" height="3" rx="1.5" fill="#0D0B16"/>
+            <!-- Negative Space Center Paw Notch -->
+            <rect x="28" y="39" width="8" height="3" rx="1.5" fill="#0D0B16"/>
+        </svg>
+        """,
+        "Balanced geometric construct: rounded corner ears, iconic slot eyes, horizontal paw tabs, and tail fin."
+    ),
+    (
+        "Concept 3: Floating Back-Swimmer Glyph",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Head & Ears -->
+            <circle cx="20" cy="22" r="5"/>
+            <circle cx="44" cy="22" r="5"/>
+            <rect x="16" y="20" width="32" height="24" rx="8"/>
+            <!-- Body flowing downwards -->
+            <path d="
+                M 18 36
+                C 18 46, 24 52, 32 52
+                C 40 52, 46 46, 46 36
+                Z
+            "/>
+            <!-- Tail curving up -->
+            <path d="M 44 44 C 52 46, 56 50, 54 56 C 50 58, 44 54, 40 48 Z"/>
+            <!-- Negative Space Eyes -->
+            <rect x="23" y="26" width="4" height="6" rx="2" fill="#0D0B16"/>
+            <rect x="37" y="26" width="4" height="6" rx="2" fill="#0D0B16"/>
+            <!-- Negative Space Cute Paws Holding Belly -->
+            <circle cx="28" cy="38" r="2.5" fill="#0D0B16"/>
+            <circle cx="36" cy="38" r="2.5" fill="#0D0B16"/>
+            <!-- Snout -->
+            <ellipse cx="32" cy="31" rx="2" ry="1.5" fill="#0D0B16"/>
+        </svg>
+        """,
+        "Classic floating otter with circular ear caps, sweet eye pills, rounded belly, and dual paws."
+    ),
+    (
+        "Concept 4: Iconic Minimal Otter Face Badge",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Top Ears -->
+            <circle cx="17" cy="19" r="6"/>
+            <circle cx="47" cy="19" r="6"/>
+            <!-- Head Pill Base -->
+            <rect x="12" y="18" width="40" height="34" rx="14"/>
+            <!-- Negative Space Inner Ear -->
+            <circle cx="17" cy="19" r="2.5" fill="#0D0B16"/>
+            <circle cx="47" cy="19" r="2.5" fill="#0D0B16"/>
+            <!-- Negative Space Big Eyes -->
+            <rect x="21" y="26" width="5" height="9" rx="2.5" fill="#0D0B16"/>
+            <rect x="38" y="26" width="5" height="9" rx="2.5" fill="#0D0B16"/>
+            <!-- Negative Space Muzzle & Whiskers -->
+            <path d="M 28 37 C 28 35, 36 35, 36 37 C 36 39, 28 39, 28 37 Z" fill="#0D0B16"/>
+            <circle cx="32" cy="35" r="1.8" fill="#0D0B16"/>
+            <line x1="16" y1="36" x2="22" y2="36" stroke="#0D0B16" stroke-width="2" stroke-linecap="round"/>
+            <line x1="42" y1="36" x2="48" y2="36" stroke="#0D0B16" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        """,
+        "Signature high-charm face glyph: prominent round ears, negative space whiskers, big pill eyes."
+    ),
+    (
+        "Concept 5: Chibi Sitting Companion (Full Body)",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Ears -->
+            <circle cx="19" cy="17" r="4.5"/>
+            <circle cx="45" cy="17" r="4.5"/>
+            <!-- Head -->
+            <rect x="15" y="16" width="34" height="22" rx="9"/>
+            <!-- Body -->
+            <rect x="19" y="32" width="26" height="20" rx="8"/>
+            <!-- Feet -->
+            <rect x="21" y="50" width="6" height="4" rx="2"/>
+            <rect x="37" y="50" width="6" height="4" rx="2"/>
+            <!-- Tail -->
+            <path d="M 43 44 C 52 44, 55 48, 53 53 C 49 55, 45 50, 41 46 Z"/>
+            <!-- Negative Space Eyes -->
+            <rect x="23" y="22" width="4" height="7" rx="2" fill="#0D0B16"/>
+            <rect x="37" y="22" width="4" height="7" rx="2" fill="#0D0B16"/>
+            <!-- Negative Space Snout -->
+            <circle cx="32" cy="28" r="1.8" fill="#0D0B16"/>
+            <!-- Negative Space Chest Paws -->
+            <path d="M 28 38 C 28 36, 36 36, 36 38 C 36 41, 28 41, 28 38 Z" fill="#0D0B16"/>
+        </svg>
+        """,
+        "Full-body sitting chibi companion with proportional head, round tummy, paws, feet, and tail."
+    ),
+    (
+        "Concept 6: Minimalist Pure-Glyph Otter",
+        """
+        <svg viewBox="0 0 64 64" fill="#D97757">
+            <!-- Pure continuous silhouette -->
+            <path d="
+                M 20 18
+                C 17 14, 23 11, 26 15
+                C 29 14, 35 14, 38 15
+                C 41 11, 47 14, 44 18
+                C 48 24, 48 34, 46 42
+                C 44 48, 40 52, 34 52
+                C 40 54, 48 53, 50 48
+                C 52 47, 54 49, 52 52
+                C 46 60, 34 58, 28 52
+                C 20 50, 16 42, 16 30
+                C 16 24, 18 20, 20 18
+                Z
+            "/>
+            <!-- Sleek Eye Cutouts -->
+            <circle cx="26" cy="24" r="2.5" fill="#0D0B16"/>
+            <circle cx="38" cy="24" r="2.5" fill="#0D0B16"/>
+            <!-- Nose -->
+            <path d="M 31 30 L 33 30 L 32 32 Z" fill="#0D0B16"/>
+            <!-- Hands -->
+            <rect x="29" y="36" width="6" height="3" rx="1.5" fill="#0D0B16"/>
+        </svg>
+        """,
+        "Ultra-clean typographic glyph silhouette: smooth organic contours, circular eyes, minimal triangular nose."
+    ),
+]
+
+def build_html():
+    cards = []
+    for idx, (title, svg_code, desc) in enumerate(GLYPHS, 1):
+        cards.append(f"""
+        <div class="card">
+            <div class="header">
+                <span class="num">0{idx}</span>
+                <h3>{title}</h3>
+            </div>
+            <div class="preview-row">
+                <!-- Large Glyph Preview -->
+                <div class="preview-box">
+                    <div class="glyph-wrap">
+                        {svg_code}
+                    </div>
+                    <span class="label">Mascot Glyph</span>
+                </div>
+                <!-- App Icon Squircle Preview -->
+                <div class="app-icon-box">
+                    <div class="glyph-app">
+                        {svg_code}
+                    </div>
+                </div>
+                <!-- Lockup with basedly wordmark -->
+                <div class="lockup-box">
+                    <div class="glyph-small">
+                        {svg_code}
+                    </div>
+                    <span class="wordmark">basedly</span>
+                </div>
+            </div>
+            <p class="desc">{desc}</p>
+        </div>
+        """)
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    background: #0A0912;
+    color: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }}
+  .title-area {{
+    text-align: center;
+    margin-bottom: 36px;
+  }}
+  .title-area h1 {{
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+    color: #FBF7EE;
+  }}
+  .title-area p {{
+    font-size: 14px;
+    color: #94A3B8;
+  }}
+  .grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+    max-width: 1100px;
+  }}
+  .card {{
+    background: #14121E;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }}
+  .header {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+  .num {{
+    background: rgba(217, 119, 87, 0.2);
+    color: #D97757;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(217, 119, 87, 0.4);
+  }}
+  .header h3 {{
+    font-size: 16px;
+    font-weight: 700;
+    color: #FBF7EE;
+    letter-spacing: -0.02em;
+  }}
+  .preview-row {{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #0D0B16;
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }}
+  .preview-box {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }}
+  .glyph-wrap {{
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .glyph-wrap svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .app-icon-box {{
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    background: #1C1917;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .glyph-app {{
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .glyph-app svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .label {{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748B;
+    font-weight: 600;
+  }}
+  .lockup-box {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    padding-left: 16px;
+    border-left: 1px solid rgba(255,255,255,0.08);
+  }}
+  .glyph-small {{
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .glyph-small svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .wordmark {{
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #FBF7EE;
+  }}
+  .desc {{
+    font-size: 12.5px;
+    color: #94A3B8;
+    line-height: 1.45;
+  }}
+</style>
+</head>
+<body>
+  <div class="title-area">
+    <h1>Iconic Otter Mascot Glyph Explorations</h1>
+    <p>High-end minimalist vector glyph companions in warm Anthropic terracotta (#D97757)</p>
+  </div>
+  <div class="grid">
+    {''.join(cards)}
+  </div>
+</body>
+</html>"""
+    with open("scripts/iconic_otters.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("Wrote scripts/iconic_otters.html")
+
+def render_png():
+    edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    edge = next((p for p in edge_paths if os.path.exists(p)), None)
+    if not edge:
+        return
+    cwd = os.path.abspath(os.getcwd())
+    cmd = [
+        edge,
+        "--headless",
+        "--disable-gpu",
+        "--hide-scrollbars",
+        "--window-size=1200,1200",
+        f"--screenshot={os.path.join(cwd, 'public', 'iconic-otters.png')}",
+        f"file:///{os.path.join(cwd, 'scripts', 'iconic_otters.html')}"
+    ]
+    subprocess.run(cmd, check=False)
+    print("Rendered: public/iconic-otters.png")
+
+if __name__ == "__main__":
+    build_html()
+    render_png()
