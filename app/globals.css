@@ -392,6 +392,38 @@ body {
   transform: translateY(-50%) translateX(0);
 }
 
+/* Google Tasks Styling & Row Hover */
+.google-task-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+  transition: background .15s ease;
+  user-select: none;
+  border-radius: 8px;
+}
+.google-task-row:hover {
+  background: var(--card2) !important;
+}
+.google-task-drag {
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.google-task-row:hover .google-task-drag {
+  opacity: 0.6;
+}
+.google-task-actions {
+  opacity: 0.35;
+  transition: opacity .15s ease;
+}
+.google-task-row:hover .google-task-actions,
+.google-task-row:focus-within .google-task-actions {
+  opacity: 1;
+}
+
 /* Announced, not drawn. Each section keeps an h1 naming it for screen readers
    while the visible line carries something the navigation is not already
    saying. Clipped rather than display:none, which would remove it from the
