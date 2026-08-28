@@ -7,12 +7,14 @@ import { usePathname, useRouter } from 'next/navigation';
  * Clean navigation & overlay back handling.
  *
  * Back gestures on mobile/browser:
- * 1. Closes the topmost overlay if one is open.
+ * 1. Closes the topmost overlay if one is open without double-popping.
  * 2. If no overlay is open, standard browser back naturally pops history.
  */
 
-const overlays: { id: number; close: () => void }[] = [];
+type OverlayEntry = { id: number; close: () => void; pushedHistory: boolean };
+const overlays: OverlayEntry[] = [];
 let nextId = 1;
+let isHandlingPopState = false;
 
 /**
  * Register an open overlay so back closes it rather than changing section.
@@ -20,29 +22,42 @@ let nextId = 1;
  */
 export function pushOverlay(close: () => void): () => void {
   const id = nextId++;
-  overlays.push({ id, close });
+  let pushedHistory = false;
 
   if (typeof window !== 'undefined' && window.history) {
     try {
       window.history.pushState({ bdOverlay: id }, '');
+      pushedHistory = true;
     } catch {}
   }
 
+  const entry: OverlayEntry = { id, close, pushedHistory };
+  overlays.push(entry);
+
   return () => {
-    const i = overlays.findIndex((o) => o.id === id);
-    if (i >= 0) {
-      overlays.splice(i, 1);
-      if (typeof window !== 'undefined' && window.history?.state?.bdOverlay === id) {
-        window.history.back();
+    const idx = overlays.findIndex((o) => o.id === id);
+    if (idx >= 0) {
+      overlays.splice(idx, 1);
+    }
+    // Only pop history if this disposal was triggered programmatically (e.g. clicking an X button),
+    // and NOT because the user already pressed the browser back button (popstate).
+    if (!isHandlingPopState && pushedHistory && typeof window !== 'undefined') {
+      if (window.history?.state?.bdOverlay === id) {
+        try {
+          window.history.back();
+        } catch {}
       }
     }
   };
 }
 
 /** Closes the topmost overlay if there is one. */
-function closeTopOverlay(): boolean {
-  const top = overlays.pop();
+export function closeTopOverlay(): boolean {
+  if (overlays.length === 0) return false;
+  const top = overlays[overlays.length - 1];
   if (!top) return false;
+  
+  // Trigger close
   top.close();
   return true;
 }
@@ -64,9 +79,17 @@ export function useBackGuard() {
   useEffect(() => {
     const onPop = (e: PopStateEvent) => {
       if (overlays.length > 0) {
-        const top = overlays.pop();
+        const top = overlays[overlays.length - 1];
         if (top) {
-          top.close();
+          isHandlingPopState = true;
+          try {
+            top.close();
+          } finally {
+            // Reset on next microtask so React cleanup effects see isHandlingPopState = true
+            setTimeout(() => {
+              isHandlingPopState = false;
+            }, 0);
+          }
         }
       }
     };
@@ -87,7 +110,9 @@ export function useBackGuard() {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       if (el?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return;
-      if (closeTopOverlay()) e.preventDefault();
+      if (closeTopOverlay()) {
+        e.preventDefault();
+      }
     };
 
     window.addEventListener('popstate', onPop);
@@ -101,11 +126,14 @@ export function useBackGuard() {
       const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
       if (!cap?.isNativePlatform?.()) return;
       const { App } = await import('@capacitor/app');
-      const handle = await App.addListener('backButton', () => {
+      const handle = await App.addListener('backButton', ({ canGoBack }) => {
         if (overlays.length > 0) {
           closeTopOverlay();
-        } else {
+        } else if (canGoBack) {
           window.history.back();
+        } else {
+          // At root of app, minimize/exit
+          App.minimizeApp();
         }
       });
       dispose = () => void handle.remove();

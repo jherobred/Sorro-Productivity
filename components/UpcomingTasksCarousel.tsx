@@ -50,15 +50,12 @@ export function UpcomingTasksCarousel({
   const router = useRouter();
   const A = useTaskActions();
 
-  // Compute end of current week
-  const endOfWeekISO = useMemo(() => {
+  // Compute next 7 days ISO
+  const next7DaysISO = useMemo(() => {
     const d = new Date();
-    const day = d.getDay();
-    const distToSunday = day === 0 ? 0 : 7 - day;
-    const end = new Date(d);
-    end.setDate(d.getDate() + distToSunday);
+    d.setDate(d.getDate() + 7);
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${end.getFullYear()}-${p(end.getMonth() + 1)}-${p(end.getDate())}`;
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   }, []);
 
   const upcomingTasks = useMemo(() => {
@@ -66,9 +63,9 @@ export function UpcomingTasksCarousel({
     return openTasks
       .filter((t) => {
         if (t.due_on) {
-          return t.due_on >= todayISO && t.due_on <= endOfWeekISO;
+          return t.due_on >= todayISO && t.due_on <= next7DaysISO;
         }
-        return t.priority === 'high';
+        return true;
       })
       .sort((a, b) => {
         const pA = PRIORITY_ORDER[a.priority ?? ''] ?? 0;
@@ -83,7 +80,7 @@ export function UpcomingTasksCarousel({
         const timeB = b.due_at ?? '';
         return timeA.localeCompare(timeB);
       });
-  }, [tasks, todayISO, endOfWeekISO]);
+  }, [tasks, todayISO, next7DaysISO]);
 
   const handleToggleDone = (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();
@@ -93,7 +90,7 @@ export function UpcomingTasksCarousel({
   };
 
   const getDueLabel = (due_on: string | null, due_at: string | null) => {
-    if (!due_on) return 'This week';
+    if (!due_on) return 'Next 7 days';
     if (due_on === todayISO) {
       if (due_at) {
         const d = new Date(due_at);
@@ -125,7 +122,7 @@ export function UpcomingTasksCarousel({
       }}
     >
       {upcomingTasks.length > 0 ? (
-        <Carousel autoPlayInterval={6500} className="flex flex-col flex-1 justify-between">
+        <Carousel autoPlayInterval={60000} className="flex flex-col flex-1 justify-between">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="check" size={13} color="var(--pal-amber)" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useId } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -27,7 +27,18 @@ import {
   MorphingPopoverTrigger,
   MorphingPopoverContent,
 } from '@/components/core/morphing-popover';
-import { ArrowLeftIcon, ChevronDown, ChevronUp, Plus, Camera } from 'lucide-react';
+import {
+  MorphingDialog,
+  MorphingDialogTrigger,
+  MorphingDialogContent,
+  MorphingDialogTitle,
+  MorphingDialogImage,
+  MorphingDialogSubtitle,
+  MorphingDialogClose,
+  MorphingDialogDescription,
+  MorphingDialogContainer,
+} from '@/components/core/morphing-dialog';
+import { ArrowLeftIcon, ChevronDown, ChevronUp, Plus, Camera, PlusIcon } from 'lucide-react';
 
 const CARD: React.CSSProperties = {
   background: 'var(--card)',
@@ -721,19 +732,27 @@ export function PhoneHome({ name }: { name: string }) {
         {open.length === 0 && <Empty>Nothing on your plate.</Empty>}
       </div>
 
-      {/* Note Journal Shortcut in Home Phone View using MorphingPopover */}
+      {/* Note Journal Shortcut in Home Phone View using MorphingPopover & MorphingDialog */}
       <div style={{ marginTop: 12 }}>
         <PhoneJournalShortcut
           scratch={scratch}
-          onSave={(text, title) => {
+          onSave={(text, title, photo_url) => {
             SA.add.mutate({
               id: crypto.randomUUID(),
               title: title || undefined,
               text,
+              photo_url,
               tag: 'Journal',
               color: TAG_COLOR.Journal,
             });
             toast('Note saved to Journal ✨');
+          }}
+          onDelete={(id) => {
+            const item = scratch.find((s) => s.id === id);
+            if (item) {
+              SA.removeWithUndo(item);
+              toast('Journal entry removed');
+            }
           }}
         />
       </div>
@@ -770,130 +789,285 @@ export function PhoneHome({ name }: { name: string }) {
 function PhoneJournalShortcut({
   scratch = [],
   onSave,
+  onDelete,
 }: {
   scratch: any[];
-  onSave: (text: string, title?: string) => void;
+  onSave: (text: string, title?: string, photo_url?: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const uniqueId = useId();
   const [note, setNote] = useState('');
   const [title, setTitle] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const closeMenu = () => {
     setNote('');
     setTitle('');
+    setPhoto(null);
     setIsOpen(false);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPhoto(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!note.trim() && !title.trim()) return;
-    onSave(note.trim(), title.trim());
+    if (!note.trim() && !title.trim() && !photo) return;
+    onSave(note.trim(), title.trim(), photo || undefined);
     closeMenu();
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 11,
-        padding: '11px 12px',
-        borderRadius: 14,
-        background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
-        border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
-        boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
-      }}
-    >
-      <span
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div
         style={{
-          width: 3,
-          alignSelf: 'stretch',
-          minHeight: 36,
-          borderRadius: 2,
-          background: 'var(--pal-amber)',
-          flex: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 11,
+          padding: '11px 12px',
+          borderRadius: 14,
+          background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
+          border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
+          boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
         }}
-      />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ ...KICKER, color: 'var(--pal-amber)' }}>Journal</span>
-          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--tx3)' }}>{scratch.length}</span>
-        </span>
+      >
         <span
           style={{
-            display: 'block',
-            fontSize: 12,
-            fontWeight: 500,
-            color: 'var(--tx2)',
-            marginTop: 3,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            width: 3,
+            alignSelf: 'stretch',
+            minHeight: 36,
+            borderRadius: 2,
+            background: 'var(--pal-amber)',
+            flex: 'none',
           }}
-        >
-          {scratch[0]?.text || scratch[0]?.title || 'Nothing kept yet'}
+        />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ ...KICKER, color: 'var(--pal-amber)' }}>Journal</span>
+            <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--tx3)' }}>{scratch.length}</span>
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--tx2)',
+              marginTop: 3,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {scratch[0]?.text || scratch[0]?.title || 'Nothing kept yet'}
+          </span>
         </span>
-      </span>
 
-      {/* Morphing Popover for Quick Journal Entry */}
-      <MorphingPopover
-        transition={{
-          type: 'spring',
-          bounce: 0.05,
-          duration: 0.3,
-        }}
-        open={isOpen}
-        onOpenChange={setIsOpen}
-      >
-        <MorphingPopoverTrigger className="flex h-8 items-center rounded-lg bg-[var(--pal-amber)] px-3 text-xs font-bold text-[#0A0912] shadow-sm">
-          <motion.span layoutId={`popover-label-${uniqueId}`} className="flex items-center gap-1">
-            <Plus size={12} />
-            <span>Add Note</span>
-          </motion.span>
-        </MorphingPopoverTrigger>
+        {/* Morphing Popover for Quick Journal Entry */}
+        <MorphingPopover
+          transition={{
+            type: 'spring',
+            bounce: 0.05,
+            duration: 0.3,
+          }}
+          open={isOpen}
+          onOpenChange={setIsOpen}
+        >
+          <MorphingPopoverTrigger className="flex h-8 items-center rounded-lg bg-[var(--pal-amber)] px-3 text-xs font-bold text-[#0A0912] shadow-sm">
+            <motion.span layoutId={`popover-label-${uniqueId}`} className="flex items-center gap-1">
+              <Plus size={12} />
+              <span>Add Note</span>
+            </motion.span>
+          </MorphingPopoverTrigger>
 
-        <MorphingPopoverContent className="rounded-xl border border-[var(--line2)] bg-[var(--card)] p-0 shadow-2xl">
-          <div className="h-[210px] w-[310px] sm:w-[350px]">
-            <form className="flex h-full flex-col" onSubmit={handleSubmit}>
-              <div className="p-3 pb-0">
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Title (optional)..."
-                  className="w-full bg-transparent text-xs font-bold text-[var(--tx)] placeholder-[var(--tx3)] focus:outline-none border-b border-[var(--line)] pb-1.5"
+          <MorphingPopoverContent className="rounded-xl border border-[var(--line2)] bg-[var(--card)] p-0 shadow-2xl">
+            <div className="h-[250px] w-[310px] sm:w-[350px]">
+              <form className="flex h-full flex-col" onSubmit={handleSubmit}>
+                <div className="p-3 pb-0 flex items-center justify-between gap-2 border-b border-[var(--line)]">
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Title (optional)..."
+                    className="w-full bg-transparent text-xs font-bold text-[var(--tx)] placeholder-[var(--tx3)] focus:outline-none pb-1.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Attach photo"
+                    className="flex items-center gap-1 text-[11px] font-bold text-[var(--pal-amber)] bg-[var(--card2)] px-2 py-1 rounded-md border border-[var(--line)]"
+                  >
+                    <Camera size={12} />
+                    <span>{photo ? 'Photo ✓' : 'Photo'}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+
+                {photo && (
+                  <div className="relative mx-3 mt-2 h-16 w-24 overflow-hidden rounded-md border border-[var(--line)] flex-none">
+                    <img src={photo} alt="Upload preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setPhoto(null)}
+                      className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/80 text-[10px] text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <textarea
+                  className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs text-[var(--tx)] placeholder-[var(--tx3)] focus:outline-none"
+                  autoFocus
+                  value={note}
+                  placeholder="Capture your thoughts or moments of your day..."
+                  onChange={(e) => setNote(e.target.value)}
                 />
-              </div>
 
-              <textarea
-                className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs text-[var(--tx)] placeholder-[var(--tx3)] focus:outline-none"
-                autoFocus
-                value={note}
-                placeholder="Capture your thoughts or day..."
-                onChange={(e) => setNote(e.target.value)}
-              />
+                <div key="close" className="flex justify-between items-center py-2.5 px-3 border-t border-[var(--line)] bg-[var(--card2)]">
+                  <button
+                    type="button"
+                    className="flex items-center rounded-lg bg-[var(--card)] px-2 py-1 text-xs text-[var(--tx)] hover:bg-[var(--line)]"
+                    onClick={closeMenu}
+                    aria-label="Close popover"
+                  >
+                    <ArrowLeftIcon size={14} className="text-[var(--tx)]" />
+                  </button>
+                  <button
+                    className="flex h-7 items-center justify-center rounded-lg bg-[var(--pal-amber)] px-3 text-xs font-bold text-[#0A0912] active:scale-95"
+                    type="submit"
+                    aria-label="Submit note"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
+            </div>
+          </MorphingPopoverContent>
+        </MorphingPopover>
+      </div>
 
-              <div key="close" className="flex justify-between items-center py-2.5 px-3 border-t border-[var(--line)] bg-[var(--card2)]">
-                <button
-                  type="button"
-                  className="flex items-center rounded-lg bg-[var(--card)] px-2 py-1 text-xs text-[var(--tx)] hover:bg-[var(--line)]"
-                  onClick={closeMenu}
-                  aria-label="Close popover"
+      {/* Journal entries cards in phone view using MorphingDialog */}
+      {scratch.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {scratch.slice(0, 4).map((entry) => (
+            <MorphingDialog
+              key={entry.id}
+              transition={{
+                type: 'spring',
+                bounce: 0.05,
+                duration: 0.25,
+              }}
+            >
+              <MorphingDialogTrigger
+                style={{ borderRadius: '12px' }}
+                className="flex items-center gap-3 overflow-hidden border border-zinc-800/60 bg-[var(--card2)] p-2.5 text-left transition-all hover:border-zinc-700/80 shadow-sm"
+              >
+                {entry.photo_url ? (
+                  <MorphingDialogImage
+                    src={entry.photo_url}
+                    alt={entry.title || entry.text}
+                    className="h-12 w-12 rounded-lg object-cover flex-none"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-[var(--card)] text-base">
+                    📔
+                  </div>
+                )}
+                <div className="flex grow flex-col min-w-0">
+                  <MorphingDialogTitle className="text-xs font-bold text-[var(--tx)] truncate">
+                    {entry.title || entry.text}
+                  </MorphingDialogTitle>
+                  <MorphingDialogSubtitle className="text-[10.5px] text-[var(--tx3)] truncate">
+                    {entry.title ? entry.text : 'Journal entry'}
+                  </MorphingDialogSubtitle>
+                </div>
+              </MorphingDialogTrigger>
+
+              <MorphingDialogContainer>
+                <MorphingDialogContent
+                  style={{ borderRadius: '18px' }}
+                  className="relative h-auto max-h-[85vh] w-[92vw] max-w-[420px] border border-zinc-800 bg-[var(--card)] p-5 overflow-y-auto shadow-2xl"
                 >
-                  <ArrowLeftIcon size={14} className="text-[var(--tx)]" />
-                </button>
-                <button
-                  className="flex h-7 items-center justify-center rounded-lg bg-[var(--pal-amber)] px-3 text-xs font-bold text-[#0A0912] active:scale-95"
-                  type="submit"
-                  aria-label="Submit note"
-                >
-                  Submit
-                </button>
-              </div>
-            </form>
-          </div>
-        </MorphingPopoverContent>
-      </MorphingPopover>
+                  {entry.photo_url && (
+                    <MorphingDialogImage
+                      src={entry.photo_url}
+                      alt={entry.title || entry.text}
+                      className="h-48 w-full rounded-xl object-cover mb-4"
+                    />
+                  )}
+                  <div className="flex items-center justify-between mb-2">
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        background: 'color-mix(in srgb, var(--pal-amber) 20%, transparent)',
+                        color: 'var(--pal-amber)',
+                        fontSize: 10,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {entry.tag || 'Journal'}
+                    </span>
+                    <span className="text-[10px] text-[var(--tx3)]">
+                      {new Date(entry.created_at || Date.now()).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+
+                  <MorphingDialogTitle className="text-base font-bold text-[var(--tx)] mb-2">
+                    {entry.title || 'Journal Entry'}
+                  </MorphingDialogTitle>
+
+                  <MorphingDialogDescription
+                    disableLayoutAnimation
+                    variants={{
+                      initial: { opacity: 0, y: 10 },
+                      animate: { opacity: 1, y: 0 },
+                      exit: { opacity: 0, y: 10 },
+                    }}
+                    className="text-xs leading-relaxed text-[var(--tx2)] whitespace-pre-wrap mb-4"
+                  >
+                    {entry.text}
+                  </MorphingDialogDescription>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--line)]">
+                    {onDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(entry.id)}
+                        className="text-xs text-[var(--pal-coral)] font-bold hover:underline"
+                      >
+                        Delete entry
+                      </button>
+                    )}
+                    <MorphingDialogClose className="ml-auto rounded-lg bg-[var(--card2)] px-3 py-1.5 text-xs font-bold text-[var(--tx)]" />
+                  </div>
+                </MorphingDialogContent>
+              </MorphingDialogContainer>
+            </MorphingDialog>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

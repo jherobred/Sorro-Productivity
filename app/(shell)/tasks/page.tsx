@@ -670,6 +670,43 @@ function TaskRow({
                   </span>
                 )}
 
+                {/* Attached Links in Task Row */}
+                {(() => {
+                  const urlMatch = row.task.notes?.match(/https?:\/\/[^\s]+/i);
+                  if (!urlMatch) return null;
+                  const url = urlMatch[0];
+                  let host = url;
+                  try {
+                    host = new URL(url).hostname.replace(/^www\./, '');
+                  } catch {}
+                  return (
+                    <div style={{ marginTop: 4 }}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 7px',
+                          borderRadius: 6,
+                          background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
+                          border: '1px solid color-mix(in srgb, var(--pal-sky) 30%, transparent)',
+                          color: 'var(--pal-sky)',
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <Icon name="link" size={10} color="var(--pal-sky)" />
+                        <span>{host}</span>
+                      </a>
+                    </div>
+                  );
+                })()}
+
                 {/* Date / Time Pill Chip */}
                 {row.task.due_on && (
                   <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 5 }}>
@@ -883,6 +920,8 @@ function TaskEditSidepanel({
 }) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? '');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const prevTaskIdRef = useRef(task.id);
   const titleRef = useRef(title);
   const notesRef = useRef(notes);
@@ -892,6 +931,17 @@ function TaskEditSidepanel({
   const stars = task.stars || 0;
   const alert = getTaskAlert(task);
   const countdown = formatTaskCountdown(task, nowMs);
+
+  const handleAddLink = useCallback(() => {
+    if (!newLinkUrl.trim()) return;
+    const url = newLinkUrl.trim();
+    const nextNotes = notes ? `${notes}\n\n🔗 ${url}` : `🔗 ${url}`;
+    setNotes(nextNotes);
+    onPatch({ notes: nextNotes });
+    setNewLinkUrl('');
+    setShowLinkInput(false);
+    toast('Link attached to task 🔗');
+  }, [newLinkUrl, notes, onPatch]);
 
   // Sync only when opening a different task
   useEffect(() => {
@@ -1176,6 +1226,187 @@ function TaskEditSidepanel({
               outline: 'none',
             }}
           />
+        </div>
+
+        {/* Links Section */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={KICKER}>Attached Links</div>
+            {!showLinkInput && (
+              <button
+                type="button"
+                onClick={() => setShowLinkInput(true)}
+                className="k-squish"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--pal-sky)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="plus" size={11} color="var(--pal-sky)" />
+                <span>Add a Link</span>
+              </button>
+            )}
+          </div>
+
+          {showLinkInput && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <input
+                type="url"
+                value={newLinkUrl}
+                onChange={(e) => setNewLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddLink();
+                  }
+                }}
+                placeholder="https://example.com"
+                autoFocus
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddLink}
+                className="k-squish"
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  background: 'var(--pal-sky)',
+                  color: '#0A0912',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Attach
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLinkInput(false);
+                  setNewLinkUrl('');
+                }}
+                className="k-squish"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: 'var(--card2)',
+                  border: '1px solid var(--line2)',
+                  color: 'var(--tx3)',
+                  fontSize: 11.5,
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Extracted Links */}
+          {(() => {
+            const urls = notes.match(/https?:\/\/[^\s]+/gi) || [];
+            if (urls.length === 0 && !showLinkInput) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => setShowLinkInput(true)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px dashed var(--line2)',
+                    background: 'transparent',
+                    color: 'var(--tx3)',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="link" size={12} color="var(--tx3)" />
+                  <span>Add a Link</span>
+                </button>
+              );
+            }
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {urls.map((url, i) => {
+                  let host = url;
+                  try {
+                    host = new URL(url).hostname.replace(/^www\./, '');
+                  } catch {}
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        background: 'var(--card2)',
+                        border: '1px solid var(--line2)',
+                      }}
+                    >
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          color: 'var(--pal-sky)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Icon name="link" size={12} color="var(--pal-sky)" />
+                        <span>{host}</span>
+                      </a>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          color: 'var(--tx3)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Open ↗
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Due Date & Time */}

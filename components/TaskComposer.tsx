@@ -59,6 +59,8 @@ export function TaskComposer({
   const [time, setTime] = useState('');
   const [priority, setPriority] = useState<'low' | 'med' | 'high' | null>(null);
   const [stars, setStars] = useState(0);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const [listId, setListId] = useState<string | null>(defaultListId);
   const box = useRef<HTMLDivElement>(null);
 
@@ -70,15 +72,16 @@ export function TaskComposer({
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (box.current?.contains(e.target as Node)) return;
-      if (!title.trim() && !notes.trim()) setOpen(false);
+      if (!title.trim() && !notes.trim() && !linkUrl.trim()) setOpen(false);
     };
     window.addEventListener('pointerdown', onDown);
     return () => window.removeEventListener('pointerdown', onDown);
-  }, [open, title, notes]);
+  }, [open, title, notes, linkUrl]);
 
   const reset = () => {
     setTitle(''); setNotes(''); setDue(null); setTime('');
     setPriority(null); setStars(0); setListId(defaultListId);
+    setLinkUrl(''); setShowLinkInput(false);
   };
 
   const submit = () => {
@@ -91,11 +94,16 @@ export function TaskComposer({
         due_at = d.toISOString();
       }
     }
+    let finalNotes = notes.trim();
+    if (linkUrl.trim()) {
+      const url = linkUrl.trim();
+      finalNotes = finalNotes ? `${finalNotes}\n\n🔗 ${url}` : `🔗 ${url}`;
+    }
     onCreate({
       id: crypto.randomUUID(),
       title: t,
       listId: listId || null,
-      notes: notes.trim(),
+      notes: finalNotes,
       due_on: due || null,
       due_at,
       priority: priority || null,
@@ -228,15 +236,15 @@ export function TaskComposer({
             >
               <TextLoop interval={3600}>
                 <span>Add a task (press Enter)</span>
-                <span>✨ Imagine: What bold idea could you build today?</span>
-                <span>⚡ Template: Draft essay thesis and outline</span>
-                <span>🎨 Creativity: Design new logo & visual identity</span>
-                <span>🧠 Focus: Solve complex problem set before deadline</span>
-                <span>💡 Spark: Capture inspirational thoughts & research notes</span>
-                <span>📚 Study: Review key lecture formulas and slides</span>
-                <span>🚀 Momentum: Code frontend feature and deploy live</span>
-                <span>🎯 Goal: 25-minute Pomodoro deep work sprint</span>
-                <span>🏃 Habit: Complete daily physical workout & hydrate</span>
+                <span>Draft essay thesis and outline</span>
+                <span>Design new logo & visual identity</span>
+                <span>Solve complex problem set before deadline</span>
+                <span>Review key lecture formulas and slides</span>
+                <span>Code frontend feature and deploy live</span>
+                <span>25-minute deep focus sprint</span>
+                <span>Complete daily physical workout and hydrate</span>
+                <span>Read next chapter of assigned book</span>
+                <span>Organize research notes and study materials</span>
               </TextLoop>
             </div>
           )}
@@ -250,7 +258,7 @@ export function TaskComposer({
         )}
       </div>
 
-      {(due || time || priority || (listId && listId !== defaultListId)) && (
+      {(due || time || priority || linkUrl || (listId && listId !== defaultListId)) && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, paddingLeft: 26 }}>
           {(due || time) && (
             <Chip on onClick={() => { setDue(null); setTime(''); }}>
@@ -261,6 +269,12 @@ export function TaskComposer({
           {priority && (
             <Chip on onClick={() => setPriority(null)} tint={PRIORITIES.find(p => p.v === priority)?.c}>
               {PRIORITIES.find(p => p.v === priority)?.n}
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          )}
+          {linkUrl && (
+            <Chip on onClick={() => setLinkUrl('')} tint="var(--pal-sky)">
+              🔗 {linkUrl.replace(/^https?:\/\//, '').slice(0, 22)}
               <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
             </Chip>
           )}
@@ -292,6 +306,68 @@ export function TaskComposer({
               resize: 'vertical', background: 'transparent', marginBottom: 11,
               border: 'none', outline: 'none',
             }} />
+
+          <Row label="Link">
+            {!showLinkInput && !linkUrl ? (
+              <button
+                type="button"
+                onClick={() => setShowLinkInput(true)}
+                className="k-chip"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  minHeight: 30,
+                  padding: '0 11px',
+                  borderRadius: 999,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  border: '1px dashed var(--line2)',
+                  background: 'transparent',
+                  color: 'var(--tx2)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="link" size={12} color="var(--tx3)" />
+                <span>Add a Link</span>
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com/resource"
+                  autoFocus
+                  style={{
+                    ...FIELD,
+                    flex: 1,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!linkUrl) setShowLinkInput(false);
+                    else setLinkUrl('');
+                  }}
+                  className="k-squish"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 6,
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: 'var(--card2)',
+                    border: '1px solid var(--line2)',
+                    color: 'var(--tx3)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="close" size={12} color="var(--tx3)" />
+                </button>
+              </div>
+            )}
+          </Row>
 
           <Row label="Due">
             {dueChips.map((c) => (
