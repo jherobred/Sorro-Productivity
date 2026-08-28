@@ -9,7 +9,7 @@ import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
-import { useLists, useTasks, useTaskActions, getTaskAlert, type Task, type List } from '@/lib/tasks';
+import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task, type List } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
@@ -65,6 +65,13 @@ export default function TasksPage() {
   const { data: lists = [] } = useLists();
   const { data: tasks = [], isPending } = useTasks();
   const A = useTaskActions();
+
+  // 1-second interval ticker for live real-time countdowns
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
@@ -191,6 +198,7 @@ export default function TasksPage() {
               <TaskRow
                 key={r.task.id}
                 row={r}
+                nowMs={nowMs}
                 phone={phone}
                 accent={prefs.accent}
                 leaving={leaving.has(r.task.id)}
@@ -418,14 +426,17 @@ export default function TasksPage() {
         />
       )}
 
-      {/* Task Detail Sheet */}
+      {/* Smooth Edit Sidepanel on the Right */}
       {detailTask && (
-        <TaskDetail
+        <TaskEditSidepanel
           task={detailTask}
           lists={lists}
+          nowMs={nowMs}
+          phone={phone}
           onClose={() => setDetail(null)}
           onPatch={(patch) => A.update.mutate({ id: detailTask.id, patch })}
           onDelete={() => { A.removeWithUndo(detailTask); setDetail(null); }}
+          onComplete={() => A.complete.mutate({ id: detailTask.id, done: !detailTask.done })}
         />
       )}
     </Page>
@@ -433,10 +444,11 @@ export default function TasksPage() {
 }
 
 function TaskRow({
-  row, phone, accent, leaving,
+  row, nowMs, phone, accent, leaving,
   onCheck, onOpen, onDelete, onPatch, onStar, onOpenMenu, onOpenDatePicker, lp,
 }: {
   row: Row;
+  nowMs: number;
   phone: boolean;
   accent: string;
   leaving: boolean;
@@ -469,6 +481,7 @@ function TaskRow({
 
   const alert = getTaskAlert(row.task);
   const alertClass = alert ? `task-alert-${alert.tier}` : '';
+  const countdown = formatTaskCountdown(row.task, nowMs);
 
   return (
     <div className={leaving ? 'leaving' : ''} style={{ position: 'relative' }}>
@@ -676,6 +689,25 @@ function TaskRow({
                         }
                       />
                       <span>{row.dueLabel || row.task.due_on}</span>
+                      {countdown && (
+                        <span
+                          style={{
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
+                            padding: '1px 5px',
+                            borderRadius: 6,
+                            background: countdown.isOverdue || alert?.tier === 'red'
+                              ? 'color-mix(in srgb, var(--pal-coral) 25%, transparent)'
+                              : alert?.tier === 'orange'
+                              ? 'color-mix(in srgb, #FF9A3C 25%, transparent)'
+                              : 'color-mix(in srgb, var(--pal-amber) 20%, transparent)',
+                            marginLeft: 4,
+                          }}
+                        >
+                          ⏱️ {countdown.text}
+                        </span>
+                      )}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -798,18 +830,23 @@ const CHIP = (on: boolean): React.CSSProperties => ({
   color: on ? 'var(--accTx)' : 'var(--tx2)',
 });
 
-function TaskDetail({
-  task, lists, onClose, onPatch, onDelete,
+function TaskEditSidepanel({
+  task, lists, nowMs, phone, onClose, onPatch, onDelete, onComplete,
 }: {
   task: Task;
   lists: List[];
+  nowMs: number;
+  phone: boolean;
   onClose: () => void;
   onPatch: (p: Partial<Task>) => void;
   onDelete: () => void;
+  onComplete: () => void;
 }) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? '');
   const stars = task.stars || 0;
+  const alert = getTaskAlert(task);
+  const countdown = formatTaskCountdown(task, nowMs);
 
   useEffect(() => {
     setTitle(task.title);
@@ -829,7 +866,7 @@ function TaskDetail({
     }
   };
 
-  const handleDone = () => {
+  const handleClose = () => {
     handleCommitTitle();
     handleCommitNotes();
     onClose();
@@ -851,137 +888,348 @@ function TaskDetail({
 
   if (typeof document === 'undefined') return null;
 
-  // Portalled: `main` carries the zoom pref and the page-entry transform, so a
-  // fixed sheet rendered inside it is positioned against `main`, not the
-  // viewport (HANDOFF fact 2).
   return createPortal((
     <>
-      <div onClick={handleDone} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.44)', zIndex: 30 }} />
-      <div className="sheet" style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 31,
-        maxHeight: 'calc(100% - 56px)', overflowY: 'auto',
-        background: 'var(--card)', borderRadius: '22px 22px 0 0', padding: '20px 22px 24px',
-        boxShadow: 'var(--shl)', border: '1px solid var(--line2)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)' }}>{title || 'Task Detail'}</div>
-          <button onClick={onDelete} className="hov k-squish" title="Delete task"
-            style={{ marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer' }}>
-            <Icon name="trash" size={14} color="var(--tx2)" />
-          </button>
-          <button onClick={handleDone} className="hov k-squish" style={{ width: 26, height: 26, borderRadius: 8, color: 'var(--tx3)', fontSize: 15, background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+      {/* Backdrop */}
+      <div
+        onClick={handleClose}
+        className="fade"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.44)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 49,
+        }}
+      />
+
+      {/* Edit Sidepanel on Right */}
+      <div
+        className="edit-sidepanel"
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: phone ? '100%' : '440px',
+          maxWidth: '100vw',
+          zIndex: 50,
+          background: 'var(--card)',
+          borderLeft: '1px solid var(--line2)',
+          boxShadow: 'var(--shl, 0 18px 48px rgba(0,0,0,0.6))',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          padding: '24px 24px 30px',
+        }}
+      >
+        {/* Header Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={onComplete}
+              className="k-squish"
+              title={task.done ? 'Mark incomplete' : 'Mark completed'}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                border: `2px solid ${task.done ? 'var(--pal-mint)' : 'var(--acc)'}`,
+                background: task.done ? 'var(--pal-mint)' : 'transparent',
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              {task.done && <Icon name="check" size={14} color="#040C1A" />}
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--tx3)' }}>
+              Edit Task
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={onDelete}
+              className="hov k-squish"
+              title="Delete task"
+              style={{ width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer' }}
+            >
+              <Icon name="trash" size={15} color="var(--pal-coral)" />
+            </button>
+            <button
+              onClick={handleClose}
+              className="hov k-squish"
+              title="Close sidepanel"
+              style={{ width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer' }}
+            >
+              <Icon name="close" size={15} color="var(--tx2)" />
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px 22px' }}>
-          <div>
-            <div style={KICKER}>Title</div>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleCommitTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleCommitTitle();
-                  (e.target as HTMLElement).blur();
-                }
-              }}
-              placeholder="Task title"
+        {/* Live Countdown Timer Card */}
+        {countdown && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderRadius: 14,
+              marginBottom: 18,
+              background: alert?.tier === 'red' || countdown.isOverdue
+                ? 'color-mix(in srgb, var(--pal-coral) 16%, var(--card2))'
+                : alert?.tier === 'orange'
+                ? 'color-mix(in srgb, #FF9A3C 14%, var(--card2))'
+                : 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
+              border: `1px solid ${
+                alert?.tier === 'red' || countdown.isOverdue
+                  ? 'var(--pal-coral)'
+                  : alert?.tier === 'orange'
+                  ? '#FF9A3C'
+                  : 'var(--pal-amber)'
+              }`,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="task-alarm-emoji" style={{ fontSize: 20 }}>
+                {alert?.emoji || '⏱️'}
+              </span>
+              <div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    letterSpacing: '-.02em',
+                    fontVariantNumeric: 'tabular-nums',
+                    color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx)',
+                  }}
+                >
+                  {countdown.text}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
+                  {countdown.isOverdue ? 'Passed deadline' : 'Live deadline countdown'}
+                </div>
+              </div>
+            </div>
+
+            <span
               style={{
-                width: '100%', marginTop: 6, padding: '8px 11px', borderRadius: 10,
-                border: '1px solid var(--line2)', fontSize: 13, fontWeight: 600,
-                color: 'var(--tx)', background: 'var(--card2)', outline: 'none',
+                fontSize: 11,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                padding: '4px 9px',
+                borderRadius: 8,
+                background: 'var(--card)',
+                color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx2)',
+                border: '1px solid var(--line2)',
+              }}
+            >
+              {alert?.label || 'Deadline'}
+            </span>
+          </div>
+        )}
+
+        {/* Title Input */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={KICKER}>Title</div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleCommitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCommitTitle();
+                (e.target as HTMLElement).blur();
+              }
+            }}
+            placeholder="Task title"
+            style={{
+              width: '100%',
+              marginTop: 6,
+              padding: '11px 14px',
+              borderRadius: 12,
+              border: '1px solid var(--line2)',
+              fontSize: 15,
+              fontWeight: 600,
+              color: 'var(--tx)',
+              background: 'var(--card2)',
+              outline: 'none',
+              transition: 'border-color .15s ease',
+            }}
+          />
+        </div>
+
+        {/* Description / Notes */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={KICKER}>Notes / Description</div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={handleCommitNotes}
+            rows={4}
+            placeholder="Add details, links, or notes…"
+            style={{
+              width: '100%',
+              marginTop: 6,
+              padding: '11px 14px',
+              borderRadius: 12,
+              border: '1px solid var(--line2)',
+              background: 'var(--card2)',
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: 'var(--tx)',
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {/* Due Date & Time */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={KICKER}>Due Date & Time</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
+            {dues.map((d) => (
+              <button
+                key={d.n}
+                onClick={() => onPatch({ due_on: d.v, due_at: d.v ? task.due_at : null })}
+                style={CHIP(task.due_on === d.v)}
+              >
+                {d.n}
+              </button>
+            ))}
+            <input
+              type="date"
+              value={task.due_on ?? ''}
+              onChange={(e) => onPatch({ due_on: e.target.value || null })}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: '1px solid var(--line2)',
+                background: 'var(--card2)',
+                color: 'var(--tx)',
+                fontSize: 12,
+                fontWeight: 600,
               }}
             />
+            {task.due_on && (
+              <input
+                type="time"
+                value={
+                  task.due_at
+                    ? new Date(task.due_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+                    : ''
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    onPatch({ due_at: null });
+                  } else {
+                    const d = new Date(`${task.due_on}T${val}`);
+                    if (!isNaN(d.getTime())) {
+                      onPatch({ due_at: d.toISOString() });
+                    }
+                  }
+                }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              />
+            )}
           </div>
+        </div>
 
-          <div>
-            <div style={KICKER}>Priority</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-              {priorities.map((p) => (
-                <button
-                  key={p.n}
-                  onClick={() => onPatch({ priority: p.v })}
-                  style={CHIP(task.priority === p.v || (!task.priority && p.v === null))}
-                >
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: p.c }} />
-                  {p.n}
-                </button>
-              ))}
-            </div>
+        {/* Priority */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={KICKER}>Priority</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {priorities.map((p) => (
+              <button
+                key={p.n}
+                onClick={() => onPatch({ priority: p.v })}
+                style={CHIP(task.priority === p.v || (!task.priority && p.v === null))}
+              >
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: p.c }} />
+                {p.n}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div>
+        {/* List */}
+        {lists.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
             <div style={KICKER}>List</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {lists.map((l) => (
                 <button key={l.id} onClick={() => onPatch({ list_id: l.id })} style={CHIP(task.list_id === l.id)}>
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: l.color }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
                   {l.name}
                 </button>
               ))}
             </div>
           </div>
+        )}
 
-          <div>
-            <div style={KICKER}>Due Date</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
-              {dues.map((d) => (
-                <button key={d.n} onClick={() => onPatch({ due_on: d.v })} style={CHIP(task.due_on === d.v)}>{d.n}</button>
-              ))}
-              <input
-                type="date"
-                value={task.due_on ?? ''}
-                onChange={(e) => onPatch({ due_on: e.target.value || null })}
+        {/* Rating */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={KICKER}>Rating</div>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button
+                key={v}
+                onClick={() => onPatch({ stars: stars === v ? 0 : v })}
+                title={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                className="hov k-squish"
                 style={{
-                  padding: '5px 8px',
-                  borderRadius: 8,
-                  border: '1px solid var(--line2)',
-                  background: 'var(--card2)',
-                  color: 'var(--tx)',
-                  fontSize: 11.5,
-                  fontWeight: 600,
+                  fontSize: 20,
+                  lineHeight: 1,
+                  padding: '2px 4px',
+                  color: v <= stars ? 'var(--pal-amber, #F9AB00)' : 'var(--line2)',
+                  transition: 'color .16s, transform .15s',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
                 }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div style={KICKER}>Rating</div>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6 }}>
-              {[1, 2, 3, 4, 5].map((v) => (
-                <button key={v} onClick={() => onPatch({ stars: stars === v ? 0 : v })} title={`${v} ${v === 1 ? 'star' : 'stars'}`}
-                  style={{ fontSize: 16, lineHeight: 1, padding: '0 1px', color: v <= stars ? 'var(--accTx)' : 'var(--line2)', transition: 'color .16s', background: 'none', border: 'none', cursor: 'pointer' }}>
-                  ★
-                </button>
-              ))}
-              <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>
-                {stars ? `${stars} of 5` : 'Not rated'}
-              </span>
+              >
+                ★
+              </button>
+            ))}
+            <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--tx3)' }}>
+              {stars ? `${stars} of 5 stars` : 'Not rated'}
             </span>
-          </div>
+          </span>
         </div>
 
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <div style={KICKER}>Notes</div>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={handleCommitNotes}
-            rows={3}
-            placeholder="Add a note…"
+        {/* Done / Save Footer */}
+        <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--line2)' }}>
+          <button
+            onClick={handleClose}
+            className="acc k-squish"
             style={{
-              width: '100%', marginTop: 6, padding: '10px 12px', borderRadius: 11,
-              border: '1px solid var(--line2)', background: 'var(--card2)',
-              fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical',
-              fontFamily: 'inherit', outline: 'none',
+              width: '100%',
+              padding: '12px 24px',
+              borderRadius: 12,
+              background: 'var(--acc)',
+              color: 'var(--ink)',
+              fontSize: 14,
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: 'var(--sh)',
             }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 9, marginTop: 18 }}>
-          <button onClick={handleDone} className="acc k-squish"
-            style={{ padding: '11px 24px', borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
+          >
             Done
           </button>
         </div>

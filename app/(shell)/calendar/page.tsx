@@ -12,7 +12,7 @@ import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
-import { useTasks, useTaskActions, getTaskAlert, type Task } from '@/lib/tasks';
+import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, liveEventIds, GRID_START, GRID_END, type Ev, type Span,
@@ -412,6 +412,10 @@ export default function CalendarPage() {
           onDelete={() => {
             TA.removeWithUndo(pop.task);
             setPop(null);
+          }}
+          onUpdateTitle={(title) => {
+            TA.update.mutate({ id: pop.task.id, patch: { title } });
+            setPop((prev) => prev && prev.kind === 'task' ? { ...prev, task: { ...prev.task, title } } : prev);
           }}
         />
       )}
@@ -1722,16 +1726,30 @@ function EventPopover({
  * Google Tasks / Calendar style Task Details Popover
  */
 function TaskPopover({
-  task, x, y, onClose, onComplete, onDelete,
+  task, x, y, onClose, onComplete, onDelete, onUpdateTitle,
 }: {
   task: Task; x: number; y: number;
   onClose: () => void;
   onComplete: () => void;
   onDelete: () => void;
+  onUpdateTitle?: (title: string) => void;
 }) {
   const [done, setDone] = useState(task.done);
   const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--acc)';
-  const displayTitle = task.title?.trim() || '(No title)';
+  const isNoTitle = !task.title || task.title.trim() === '' || task.title === '(No title)';
+  const [editingTitle, setEditingTitle] = useState(isNoTitle);
+  const [titleInput, setTitleInput] = useState(isNoTitle ? '' : task.title);
+  const alert = getTaskAlert(task);
+  const countdown = formatTaskCountdown(task);
+
+  const saveTitle = () => {
+    const trimmed = titleInput.trim();
+    if (trimmed && trimmed !== task.title) {
+      onUpdateTitle?.(trimmed);
+    } else if (!trimmed) {
+      onUpdateTitle?.('(No title)');
+    }
+  };
 
   let when = 'No date';
   if (task.due_at) {
@@ -1743,7 +1761,7 @@ function TaskPopover({
   }
 
   return (
-    <CalPopover x={x} y={y} onClose={onClose} label={displayTitle} width={340}>
+    <CalPopover x={x} y={y} onClose={onClose} label={task.title || '(No title)'} width={340}>
       <PopoverActions onClose={onClose}>
         <button
           onClick={() => {
@@ -1793,19 +1811,69 @@ function TaskPopover({
         </button>
 
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 700,
-              letterSpacing: '-.02em',
-              lineHeight: 1.3,
-              color: done ? 'var(--tx3)' : 'var(--tx)',
-              textDecoration: done ? 'line-through' : 'none',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {displayTitle}
-          </div>
+          {editingTitle ? (
+            <input
+              autoFocus
+              value={titleInput}
+              onChange={(e) => setTitleInput(e.target.value)}
+              onBlur={() => { saveTitle(); setEditingTitle(false); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveTitle();
+                  setEditingTitle(false);
+                }
+              }}
+              placeholder="Add title"
+              style={{
+                width: '100%',
+                fontSize: 16,
+                fontWeight: 700,
+                color: 'var(--tx)',
+                background: 'var(--card2)',
+                border: '1px solid var(--acc)',
+                borderRadius: 8,
+                padding: '5px 9px',
+                outline: 'none',
+                marginBottom: 2,
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setEditingTitle(true)}
+              title="Click to edit title"
+              style={{
+                fontSize: 17,
+                fontWeight: 700,
+                letterSpacing: '-.02em',
+                lineHeight: 1.3,
+                color: done ? 'var(--tx3)' : isNoTitle ? 'var(--tx3)' : 'var(--tx)',
+                textDecoration: done ? 'line-through' : 'none',
+                overflowWrap: 'anywhere',
+                cursor: 'pointer',
+              }}
+            >
+              {task.title?.trim() || '(No title)'}
+            </div>
+          )}
+
+          {/* Countdown timer badge in calendar popover */}
+          {countdown && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4,
+              fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              padding: '2px 7px', borderRadius: 6,
+              background: countdown.isOverdue || alert?.tier === 'red'
+                ? 'color-mix(in srgb, var(--pal-coral) 20%, var(--card2))'
+                : alert?.tier === 'orange'
+                ? 'color-mix(in srgb, #FF9A3C 20%, var(--card2))'
+                : 'color-mix(in srgb, var(--pal-amber) 16%, var(--card2))',
+              color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx)',
+              border: `1px solid ${countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--line2)'}`,
+            }}>
+              <span>{alert?.emoji || '⏱️'}</span>
+              <span>{countdown.text}</span>
+            </div>
+          )}
 
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>
             {when}

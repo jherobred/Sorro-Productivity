@@ -94,6 +94,60 @@ export function getTaskAlert(task: Task): TaskAlert | null {
   return null;
 }
 
+/**
+ * Returns dynamic live countdown timer details for task deadlines:
+ * - Overdue: "Overdue 2h 15m" or "Overdue 14m 20s"
+ * - Today: "02:14:35 left"
+ * - Tomorrow / days: "1d 6h left"
+ */
+export function formatTaskCountdown(task: Task, nowMs: number = Date.now()): {
+  text: string;
+  isOverdue: boolean;
+  totalMs: number;
+} | null {
+  if (task.done) return null;
+  if (!task.due_on && !task.due_at) return null;
+
+  let dueTime: number;
+  if (task.due_at) {
+    dueTime = new Date(task.due_at).getTime();
+  } else {
+    const [y, m, d] = task.due_on!.split('-').map(Number);
+    dueTime = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+  }
+
+  const diffMs = dueTime - nowMs;
+  const isOverdue = diffMs < 0;
+  const absMs = Math.abs(diffMs);
+
+  const days = Math.floor(absMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((absMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const mins = Math.floor((absMs % (1000 * 60 * 60)) / (1000 * 60));
+  const secs = Math.floor((absMs % (1000 * 60)) / 1000);
+
+  if (isOverdue) {
+    if (days > 0) return { text: `Overdue ${days}d ${hours}h`, isOverdue: true, totalMs: diffMs };
+    if (hours > 0) return { text: `Overdue ${hours}h ${mins}m`, isOverdue: true, totalMs: diffMs };
+    return { text: `Overdue ${mins}m ${secs}s`, isOverdue: true, totalMs: diffMs };
+  }
+
+  if (days > 1) {
+    return { text: `${days}d ${hours}h left`, isOverdue: false, totalMs: diffMs };
+  }
+  if (days === 1) {
+    return { text: `1d ${hours}h left`, isOverdue: false, totalMs: diffMs };
+  }
+  if (hours > 0) {
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(mins).padStart(2, '0');
+    const ss = String(secs).padStart(2, '0');
+    return { text: `${hh}:${mm}:${ss} left`, isOverdue: false, totalMs: diffMs };
+  }
+  const mm = String(mins).padStart(2, '0');
+  const ss = String(secs).padStart(2, '0');
+  return { text: `${mm}:${ss} left`, isOverdue: false, totalMs: diffMs };
+}
+
 const TASKS_KEY = ['tasks'] as const;
 const LISTS_KEY = ['lists'] as const;
 
