@@ -988,8 +988,9 @@ one, change the other in the same commit.
   tab is the same width — true on a phone, false on a desktop. The active tab
   carries its own background now, so the highlight cannot drift.
 
-**Archived** — `archive/canvas-v1/` (`CanvasBoard.tsx`, `GraphView.tsx`,
-`lib-canvas.ts`). Excluded from `tsconfig.json`, imported by nothing.
+**Archived** — the v1 canvas (`CanvasBoard.tsx`, `GraphView.tsx`,
+`lib-canvas.ts`) lived in `archive/canvas-v1/` and was deleted once nothing
+imported it. Read it in git history if you need it.
 
 **Verified in the browser (fixture mode).** Tabs, both new panes on desktop and
 at 375px, the graph's counts and its settings toggles, hover hit-testing,
@@ -1002,9 +1003,9 @@ optimistic paths were sampled inside their window.
 
 ## Touched 2026-08-19 (notebook rewrite)
 
-The whole notes system was archived and rebuilt on Evernote's model. Old files
-are in `archive/notebooks-v1/` (excluded from `tsconfig.json`, imported by
-nothing) — read them for history, do not wire them back up.
+The whole notes system was archived and rebuilt on Evernote's model. The old
+files lived in `archive/notebooks-v1/` and were deleted once nothing imported
+them — read them in git history, do not wire them back up.
 
 **New**
 `lib/md.ts` (markdown parse / render / edit, pure), `lib/md.check.ts`
