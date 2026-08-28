@@ -15,22 +15,44 @@ export const PAL = {
 
 export type PalKey = keyof typeof PAL;
 
+/**
+ * Section hues, retuned warm.
+ *
+ * The old set was indigo, sky, spring green, violet, hot pink — a saturated
+ * cool spectrum sitting on a ground that is now warm ink. Two problems: it
+ * fought the ground, and `tasks` and `money` were the same hex, so two
+ * sidebar rows lit up identically.
+ *
+ * Each value keeps roughly the lightness of the one it replaces, which is what
+ * `hueTx()` and the 16% sidebar tint are tuned against, and every one clears
+ * 5:1 against `--card2` in the dark theme where the calendar draws it as text.
+ */
 export const SECHUE: Record<string, string> = {
-  home: '#8B7CFF',
-  calendar: '#38BDF8',
-  tasks: '#34D9A0',
-  notebooks: '#B07CFF',
-  projects: '#FFC24B',
-  habits: '#FF6B6B',
-  body: '#FF6FA8',
-  money: '#34D9A0',
-  profile: '#FF6FA8',
-  files: '#7C8CFF',
-  people: '#38D6F2',
+  home: '#F0865C',
+  calendar: '#63BCD6',
+  tasks: '#6FD69C',
+  notebooks: '#D18FD6',
+  projects: '#F0B44E',
+  habits: '#F07A63',
+  body: '#E886A2',
+  money: '#9CCB6A',
+  profile: '#E29578',
+  files: '#A0A6E8',
+  people: '#6FC7BC',
   // community intentionally absent — it tints to the user's accent.
 };
 
-export const DEFAULT_ACCENT = '#7C6CFF';
+/** Ember. See the `--acc` note in globals.css for why it is not indigo. */
+export const DEFAULT_ACCENT = '#E8734A';
+
+/**
+ * The accent every account is carrying right now, because it was the default
+ * and almost nobody opens the swatch grid. A stored value that is exactly this
+ * is the old default rather than a choice, so it is dropped on read and the
+ * account picks up DEFAULT_ACCENT. Anything else is a real preference and is
+ * left alone. Delete this and the constant once no live profile still holds it.
+ */
+export const LEGACY_ACCENT = '#7C6CFF';
 
 /** Interaction constants — README.md "Interaction constants". These are tuned; reuse them. */
 export const K = {

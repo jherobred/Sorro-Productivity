@@ -220,7 +220,7 @@ export default function CalendarPage() {
     }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: phone ? 9 : 16, flexWrap: 'wrap', flex: 'none' }}>
         {showHeading && (
-          <h1 style={{ fontSize: phone ? 17 : 24, fontWeight: 800, letterSpacing: '-.028em' }}>{heading}</h1>
+          <h1 className="bd-title" style={{ fontSize: phone ? 19 : 26, fontWeight: 700 }}>{heading}</h1>
         )}
 
         <div style={{ marginLeft: showHeading ? 'auto' : 0, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', width: showHeading ? undefined : '100%' }}>

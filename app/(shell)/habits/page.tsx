@@ -116,7 +116,7 @@ export default function HabitsPage() {
             />
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h1 style={{ fontSize: phone ? 20 : 22, fontWeight: 900, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                <h1 className="bd-title" style={{ fontSize: phone ? 21 : 24, fontWeight: 700, margin: 0, color: 'var(--tx)' }}>
                   Daily Habits
                 </h1>
                 <span

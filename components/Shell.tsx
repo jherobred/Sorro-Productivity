@@ -335,9 +335,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
     dark ? `color-mix(in srgb, ${hue} 84%, #FFFFFF)` : `color-mix(in srgb, ${hue} 62%, #1C1A26)`;
 
   return (
-    <div style={{
+    <div className="bd-frame" style={{
       height: '100dvh', display: 'flex', flexDirection: phone ? 'column' : 'row',
-      background: 'var(--bg)', color: 'var(--tx)', overflow: 'hidden', position: 'relative',
+      color: 'var(--tx)', overflow: 'hidden', position: 'relative',
       // Insets live here rather than on <body>: the frame is exactly the
       // viewport, and padding shrinks it from the inside instead of pushing it
       // past the bottom edge.
@@ -379,7 +379,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               title="Go to Home"
             >
               <div style={{ width: 22, height: 22, background: acc, borderRadius: 6, flex: 'none' }} />
-              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', color: 'var(--tx)' }}>Basedly</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, letterSpacing: '-.015em', color: 'var(--tx)' }}>Basedly</div>
             </button>
             <button
               onClick={() => toggleRail(false)}
@@ -738,7 +738,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div style={{ height: 46, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
             <button
               onClick={() => router.push('/home/')}
-              style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0 }}
+              style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 700, letterSpacing: '-.015em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0 }}
               title="Go to Home"
             >
               {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}

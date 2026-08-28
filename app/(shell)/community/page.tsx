@@ -296,7 +296,7 @@ export default function CommunityPage() {
                   <Icon name="back" size={16} color="var(--tx)" />
                 </button>
                 <div>
-                  <h1 style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: 'var(--tx)' }}>
+                  <h1 className="bd-title" style={{ fontSize: 19, fontWeight: 700, margin: 0, color: 'var(--tx)' }}>
                     Community Feed
                   </h1>
                   <div style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 600 }}>

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0A0912',
+  themeColor: '#141210',
   width: 'device-width',
   initialScale: 1,
   // No maximumScale: Android WebView honours it, and this ships as an APK,
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `(function(){try{var p=JSON.parse(localStorage.getItem('basedly-prefs')||'{}');
 var r=document.documentElement;
 r.setAttribute('data-theme',p.theme==='light'?'light':'dark');
-if(p.accent){r.style.setProperty('--acc',p.accent);
+if(p.accent&&p.accent!=='#7C6CFF'){r.style.setProperty('--acc',p.accent);
 r.style.setProperty('--accTx','color-mix(in srgb, '+p.accent+(p.theme==='light'?' 62%, #1C1A26)':' 82%, #FFFFFF)'));
 r.style.setProperty('--gl2','color-mix(in srgb, '+p.accent+' 55%, transparent)');}
 var mo=p.motion!==false;

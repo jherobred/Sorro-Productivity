@@ -20,7 +20,10 @@ export function lg(opts: {
   const t = opts.tint;
   const k = opts.strength ?? 1;
   const dark = opts.dark ?? true;
-  const base = dark ? '18,16,28' : '255,255,255';
+  // The scrim the glass is mixed over. Was 18,16,28 — a cool violet-black —
+  // which is what kept the sidebar and phone nav reading blue while the rest
+  // of the app moved to warm ink.
+  const base = dark ? '26,20,15' : '255,255,255';
 
   const a1 = (dark ? 0.3 * k : 0.52 * k).toFixed(3);
   const a2 = (dark ? 0.52 * k : 0.7 * k).toFixed(3);
@@ -31,7 +34,9 @@ export function lg(opts: {
     background:
       `linear-gradient(160deg, rgba(${base},${a1}) 0%, rgba(${base},${a2}) 52%, rgba(${base},${a3}) 100%), ` +
       `radial-gradient(120% 100% at 12% 0%, color-mix(in srgb, ${t} ${Math.round((dark ? 26 : 18) * k)}%, transparent) 0%, transparent 62%), ` +
-      `radial-gradient(110% 90% at 92% 100%, color-mix(in srgb, ${PAL.cyan} ${Math.round((dark ? 16 : 11) * k)}%, transparent) 0%, transparent 60%)`,
+      // Second wash. Cyan against a warm scrim read as a colour cast rather
+      // than depth; amber is the same move in the ground's own temperature.
+      `radial-gradient(110% 90% at 92% 100%, color-mix(in srgb, ${PAL.amber} ${Math.round((dark ? 16 : 11) * k)}%, transparent) 0%, transparent 60%)`,
     backdropFilter: blur,
     WebkitBackdropFilter: blur,
     border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.85)'}`,

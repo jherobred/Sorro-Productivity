@@ -63,12 +63,18 @@ export function Page({
         {(meta || actions) && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            marginBottom: phone ? 12 : 16, minHeight: 34, flex: 'none',
+            marginBottom: phone ? 14 : 18, minHeight: 34, flex: 'none',
           }}>
             {meta && (
+              // This line is the only thing on the page the navigation is not
+              // already saying, and it was drawn as a 14px grey label — the
+              // same treatment as a form hint. Set in the display face at
+              // reading size and in full-strength text, it becomes the page's
+              // first line instead of its smallest one.
               <div style={{
-                fontSize: phone ? 13 : 14, fontWeight: 700, letterSpacing: '-.01em',
-                color: 'var(--tx2)', minWidth: 0,
+                fontFamily: 'var(--font-display)',
+                fontSize: phone ? 16.5 : 19, fontWeight: 600, letterSpacing: '-.012em',
+                lineHeight: 1.24, color: 'var(--tx)', minWidth: 0,
               }}>
                 {meta}
               </div>

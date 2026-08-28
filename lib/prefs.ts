@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
-import { DEFAULT_ACCENT } from './pal';
+import { DEFAULT_ACCENT, LEGACY_ACCENT } from './pal';
 import { EMPTY_PLAN } from './lift';
 
 export type Prefs = {
@@ -133,10 +133,17 @@ export function applyPrefs(p: Prefs) {
  * quietly undo a root class another component had just set — which is why the
  * sidebar collapsed and then silently sprang back open.
  */
+/** Merge a stored or server snapshot over the defaults, dropping dead values. */
+function merge(stored: Partial<Prefs>): Prefs {
+  const p = { ...DEFAULT_PREFS, ...stored };
+  if (p.accent === LEGACY_ACCENT) p.accent = DEFAULT_ACCENT;
+  return p;
+}
+
 function read(): Prefs {
   if (typeof window === 'undefined') return DEFAULT_PREFS;
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') };
+    return merge(JSON.parse(localStorage.getItem(LS_KEY) || '{}'));
   } catch {
     return DEFAULT_PREFS;
   }
@@ -168,7 +175,7 @@ async function hydrateFromServer() {
   const { data } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
   const remote = data?.prefs as Partial<Prefs> | undefined;
   if (!remote || Object.keys(remote).length === 0) return;
-  state = { ...DEFAULT_PREFS, ...remote };
+  state = merge(remote);
   localStorage.setItem(LS_KEY, JSON.stringify(state));
   applyPrefs(state);
   emit();

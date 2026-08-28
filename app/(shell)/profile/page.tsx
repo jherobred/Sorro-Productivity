@@ -819,7 +819,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
             {/* Right Info & Stats */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                <h1 className="bd-title" style={{ fontSize: 21, fontWeight: 700, margin: 0, color: 'var(--tx)' }}>
                   @{who.handle}
                 </h1>
                 <span style={{

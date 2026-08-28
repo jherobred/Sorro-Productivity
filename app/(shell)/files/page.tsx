@@ -233,7 +233,7 @@ export default function FilesPage() {
             <Icon name="files" size={18} color={PAL.indigo} />
           </div>
           <div>
-            <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-.025em', lineHeight: 1.2, whiteSpace: 'nowrap' }}>Basedly Drive</div>
+            <div className="bd-title" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap' }}>Basedly Drive</div>
             <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
               {folder ? `Drive › ${folders.find((f) => f.id === folder)?.name ?? '…'}` : 'Drive'} · {human(files.reduce((s, f) => s + f.size_bytes, 0))}
             </div>
