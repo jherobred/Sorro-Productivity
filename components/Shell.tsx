@@ -387,7 +387,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 8,
+                  gap: 6,
                   textAlign: 'left',
                   cursor: 'pointer',
                   background: 'transparent',
@@ -398,21 +398,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Click to partial collapse (icons only)"
                 aria-label="Click to partial collapse"
               >
-                <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1, display: 'block' }}>
+                <span style={{ fontWeight: 900, fontSize: 21, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
                   basedly
                 </span>
-                <span style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 20,
-                  height: 20,
-                  borderRadius: 6,
-                  background: 'var(--card2)',
-                  border: '1px solid var(--line2)',
-                }}>
-                  <Icon name="chev" size={11} color="var(--tx3)" style={{ transform: 'rotate(180deg)' }} />
-                </span>
+                <Icon name="chev" size={14} color="var(--tx3)" style={{ transform: 'rotate(180deg)', opacity: 0.75, marginTop: 1 }} />
               </button>
             </div>
           ) : (
@@ -422,7 +411,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 onClick={() => setSidebarMode('hidden')}
                 className="k-squish"
                 style={{
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 3,
@@ -438,10 +427,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Click to fully collapse sidebar"
                 aria-label="Click to fully collapse sidebar"
               >
-                <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+                <span style={{ fontWeight: 900, fontSize: 21, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
                   b
                 </span>
-                <Icon name="chev" size={11} color="var(--tx3)" style={{ transform: 'rotate(180deg)' }} />
+                <Icon name="chev" size={12} color="var(--tx3)" style={{ transform: 'rotate(180deg)', opacity: 0.75 }} />
               </button>
             </div>
           )}

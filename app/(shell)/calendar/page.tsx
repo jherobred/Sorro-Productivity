@@ -55,7 +55,7 @@ export default function CalendarPage() {
    */
   const [pop, setPop] = useState<
     | { kind: 'event'; ev: Ev; span?: Span | null; x: number; y: number }
-    | { kind: 'slot'; day: number; hour: number; allDay: boolean; x: number; y: number }
+    | { kind: 'slot'; day: number; hour: number; endHour?: number; allDay: boolean; x: number; y: number }
     | null>(null);
   const [edit, setEdit] = useState<Ev | null>(null);
 
@@ -202,8 +202,8 @@ export default function CalendarPage() {
    */
   const openEvent = (ev: Ev, x: number, y: number, span?: Span | null) =>
     setPop({ kind: 'event', ev, x, y, span: span ?? null });
-  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false) =>
-    setPop({ kind: 'slot', day, hour, allDay, x, y });
+  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false, endHour?: number) =>
+    setPop({ kind: 'slot', day, hour, endHour, allDay, x, y });
 
   /**
    * The phone header is deliberately thin. Day view already highlights the day
@@ -381,7 +381,7 @@ function Grid({
   sel: string | null;
   setSel: (id: string | null) => void;
   openEvent: (ev: Ev, x: number, y: number, span?: Span | null) => void;
-  openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean) => void;
+  openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean, endHour?: number) => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
 }) {
   const { prefs } = usePrefs();
@@ -390,6 +390,14 @@ function Grid({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);
   const [resize, setResize] = useState<{ id: string; end: number } | null>(null);
+  /** Google Calendar style Drag-to-Create automatic event slot */
+  const [slotDrag, setSlotDrag] = useState<{
+    day: number;
+    startHour: number;
+    currentHour: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   /** A whole run being dragged, as an offset in days and hours from where it is. */
   /** Which *one* day of a run is being dragged, and by how much. */
   const [spanDrag, setSpanDrag] = useState<
@@ -397,6 +405,51 @@ function Grid({
   const [taskDrag, setTaskDrag] = useState<{ task: Task; day: number; hour: number | null } | null>(null);
 
   const hours = Array.from({ length: SPAN + 1 }, (_, i) => GRID_START + i);
+
+  const onSlotPointerDown = (e: React.PointerEvent, day: number, rawStartHour: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = bodyRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const snapHour = Math.floor(rawStartHour * 2) / 2;
+
+    setSlotDrag({
+      day,
+      startHour: snapHour,
+      currentHour: snapHour + 0.5,
+      startX,
+      startY,
+    });
+
+    const onMove = (m: PointerEvent) => {
+      const rawH = GRID_START + ((m.clientY - rect.top) / rect.height) * SPAN;
+      const snappedH = Math.max(GRID_START, Math.min(GRID_END, Math.round(rawH * 2) / 2));
+      setSlotDrag((prev) => (prev ? { ...prev, currentHour: snappedH } : null));
+    };
+
+    const onUp = (m: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+
+      setSlotDrag((curr) => {
+        if (!curr) return null;
+        const s = Math.min(curr.startHour, curr.currentHour);
+        const rawE = Math.max(curr.startHour, curr.currentHour);
+        const eHour = rawE === s ? s + 1 : Math.max(s + 0.5, rawE);
+
+        openSlot(curr.day, s, m.clientX, m.clientY, false, eHour);
+        return null;
+      });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   /**
    * Park the scroll on the morning, once. Opening a full-day grid at midnight
@@ -707,20 +760,51 @@ function Grid({
             const idx = colOf(i);
             return (
               <div key={i} style={{ position: 'relative', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined }}>
+                {/* Google Calendar Drag-to-Create Live Preview Block */}
+                {slotDrag && slotDrag.day === idx && (() => {
+                  const s = Math.min(slotDrag.startHour, slotDrag.currentHour);
+                  const rawE = Math.max(slotDrag.startHour, slotDrag.currentHour);
+                  const e = rawE === s ? s + 0.5 : Math.max(s + 0.5, rawE);
+                  return (
+                    <div
+                      aria-hidden
+                      style={{
+                        position: 'absolute',
+                        left: 3,
+                        right: 3,
+                        top: `${pct(s)}%`,
+                        height: `${Math.max((0.5 / SPAN) * 100, pct(e) - pct(s))}%`,
+                        borderRadius: 8,
+                        padding: '4px 7px',
+                        background: 'color-mix(in srgb, var(--acc, #A8C7FA) 35%, var(--card))',
+                        border: '1.5px solid var(--acc, #A8C7FA)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                        color: 'var(--tx)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        (No title)
+                      </span>
+                      <span style={{ fontSize: 9.5, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
+                        {hhmm(s)} – {hhmm(e)}
+                      </span>
+                    </div>
+                  );
+                })()}
+
                 {hours.slice(0, -1).map((h, hi) => (
-                  <button
+                  <div
                     key={h}
-                    // Clicking used to create "New event" on the spot and leave
-                    // you to find and rename it. It now opens a bubble that
-                    // asks what the thing is, which is the only question worth
-                    // asking at that moment.
-                    onClick={(p) => openSlot(idx, h, p.clientX, p.clientY)}
+                    onPointerDown={(p) => onSlotPointerDown(p, idx, h)}
                     className="hov"
                     aria-label={`Add event at ${hhmm(h)}`}
                     style={{
                       position: 'absolute', left: 0, right: 0,
                       top: `${(hi / SPAN) * 100}%`, height: `${(1 / SPAN) * 100}%`,
-                      background: 'transparent', border: 'none', cursor: 'pointer', zIndex: 1,
+                      background: 'transparent', cursor: 'pointer', zIndex: 1,
                     }}
                   />
                 ))}
@@ -1430,17 +1514,18 @@ function EventPopover({
  * you to hunt for it and rename it.
  */
 function QuickCreate({
-  x, y, ws, day, hour, allDay, accent, onClose, onCreate,
+  x, y, ws, day, hour, endHour, allDay, accent, onClose, onCreate,
 }: {
-  x: number; y: number; ws: Date; day: number; hour: number; allDay: boolean;
+  x: number; y: number; ws: Date; day: number; hour: number; endHour?: number; allDay: boolean;
   accent: string; onClose: () => void; onCreate: (title: string) => void;
 }) {
   const [title, setTitle] = useState('');
   const d = new Date(ws);
   d.setDate(d.getDate() + day);
+  const eH = endHour !== undefined ? endHour : hour + 1;
   const when = allDay
     ? `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`
-    : `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hour)} – ${hhmm(hour + 1)}`;
+    : `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hour)} – ${hhmm(eH)}`;
 
   return (
     <CalPopover x={x} y={y} onClose={onClose} label="New event">

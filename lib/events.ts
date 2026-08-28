@@ -369,21 +369,21 @@ export function useEventActions(ws: Date) {
   });
 
   /**
-   * Create an event at a grid slot: one hour by default, or the whole day when
-   * called from the all-day tray. The tray used to make a 7:00 timed event
-   * while its tooltip promised an all-day item.
+   * Create an event at a grid slot: one hour by default (or specified endHour), or the whole day when
+   * called from the all-day tray.
    */
-  const addAt = (day: number, hour: number, accent: string, allDay = false, title?: string) => {
+  const addAt = (day: number, hour: number, accent: string, allDay = false, title?: string, endHour?: number) => {
     const id = crypto.randomUUID();
+    const eH = allDay ? 23.98 : (endHour !== undefined ? endHour : hour + 1);
     create.mutate({
       id,
       title: title?.trim() || (allDay ? 'All-day item' : 'New event'),
       starts_at: at(ws, day, allDay ? 0 : hour),
-      ends_at: at(ws, day, allDay ? 23.98 : hour + 1),
+      ends_at: at(ws, day, eH),
       all_day: allDay,
       color: accent,
     });
-    toast(allDay ? 'New all-day item' : `New event at ${hhmm(hour)}`);
+    toast(allDay ? 'New all-day item' : `New event: ${hhmm(hour)} – ${hhmm(eH)}`);
     return id;
   };
 
