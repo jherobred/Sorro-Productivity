@@ -76,6 +76,43 @@ export default function NotebooksPage() {
   const mine = useMemo(() => notes.filter((n) => n.notebook_id === nbId), [notes, nbId]);
   const note = mine.find((n) => n.id === noteId) ?? null;
 
+  // Synchronize tab with dropdown picks and URL query parameter
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncFocus = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const focus = sp.get('focus') || sp.get('tab');
+      if (focus) {
+        const lower = focus.toLowerCase();
+        if (lower === 'notebooks' || lower === 'notes') setTab('notebooks');
+        else if (lower === 'canvas' || lower === 'canvases') setTab('canvas');
+        else if (lower === 'graph') setTab('graph');
+        else if (lower === 'journal') setTab('journal');
+        else if (lower === 'java' || lower === 'code') setTab('code');
+      }
+    };
+
+    syncFocus();
+    window.addEventListener('popstate', syncFocus);
+    const onCustomFocus = (e: Event) => {
+      const detail = (e as CustomEvent<{ section: string; focus: string }>).detail;
+      if (detail && detail.section === 'notebooks' && detail.focus) {
+        const lower = detail.focus.toLowerCase();
+        if (lower === 'notebooks' || lower === 'notes') setTab('notebooks');
+        else if (lower === 'canvas' || lower === 'canvases') setTab('canvas');
+        else if (lower === 'graph') setTab('graph');
+        else if (lower === 'journal') setTab('journal');
+        else if (lower === 'java' || lower === 'code') setTab('code');
+      }
+    };
+    window.addEventListener('basedly:focus', onCustomFocus);
+
+    return () => {
+      window.removeEventListener('popstate', syncFocus);
+      window.removeEventListener('basedly:focus', onCustomFocus);
+    };
+  }, []);
+
   // A notebook that goes away (deleted, or the last note moved out from under
   // the selection) must not leave the screen pointing at nothing.
   useEffect(() => { if (nbId && !notebook) { setNbId(null); setNoteId(null); } }, [nbId, notebook]);

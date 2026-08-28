@@ -26,6 +26,7 @@ import { usePostViews, recordPostView } from '@/lib/views';
 import { StoriesTray } from '@/components/stories/StoriesTray';
 import { StoryViewer } from '@/components/stories/StoryViewer';
 import { StoryCreator } from '@/components/stories/StoryCreator';
+import { Casino } from '@/components/casino/Casino';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort,
@@ -45,7 +46,7 @@ export default function CommunityPage() {
   const router = useRouter();
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
-  const [tab, setTab] = useState<'feed' | 'messages' | 'challenges'>('feed');
+  const [tab, setTab] = useState<'feed' | 'messages' | 'challenges' | 'casino'>('feed');
   const [subTab, setSubTab] = useState<SubTab>('posts');
   const [me, setMe] = useState('');
   const [sort, setSort] = useState<Sort>('new');
@@ -73,6 +74,7 @@ export default function CommunityPage() {
         if (lower === 'feed') setTab('feed');
         else if (lower === 'messages') setTab('messages');
         else if (lower === 'challenges') setTab('challenges');
+        else if (lower === 'casino') setTab('casino');
       }
     };
 
@@ -85,6 +87,7 @@ export default function CommunityPage() {
         if (lower === 'feed') setTab('feed');
         else if (lower === 'messages') setTab('messages');
         else if (lower === 'challenges') setTab('challenges');
+        else if (lower === 'casino') setTab('casino');
       }
     };
     window.addEventListener('basedly:focus', onCustomFocus);
@@ -234,6 +237,7 @@ export default function CommunityPage() {
               { id: 'feed', label: 'Feed', icon: 'chat' },
               { id: 'messages', label: 'Messages', icon: 'send' },
               { id: 'challenges', label: 'Challenges', icon: 'trophy' },
+              { id: 'casino', label: 'Casino 🐊', icon: 'spark' },
             ]}
             value={tab} onChange={setTab} phone={phone} label="Community sections" />
         </div>
@@ -801,6 +805,8 @@ export default function CommunityPage() {
       {tab === 'messages' && <Messages me={me} />}
 
       {tab === 'challenges' && <Challenges />}
+
+      {tab === 'casino' && <Casino onExit={() => setTab('feed')} />}
 
       {composing && (
         <Composer onClose={() => setComposing(false)} onPost={A.post} />

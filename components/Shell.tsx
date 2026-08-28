@@ -53,14 +53,14 @@ type Section = { id: string; name: string; ic: IconName; badge?: string; kids?: 
 const SECTIONS: Section[] = [
   { id: 'home', name: 'Home', ic: 'home' },
   { id: 'calendar', name: 'Calendar', ic: 'cal', kids: [{ n: 'Classes', c: PAL.indigo }, { n: 'Personal', c: PAL.mint }, { n: 'Org — CSSS', c: PAL.violet }] },
-  { id: 'tasks', name: 'Tasks', ic: 'task', kids: [{ n: 'School', c: PAL.indigo, m: '7' }, { n: 'Personal', c: PAL.amber, m: '3' }, { n: 'Errands', c: PAL.mint, m: '2' }] },
-  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: '3rd year', c: PAL.indigo }, { n: 'Capstone research', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Canvases', c: PAL.cyan }] },
+  { id: 'tasks', name: 'Tasks', ic: 'task' },
+  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: 'Notebooks', c: PAL.indigo }, { n: 'Canvas', c: PAL.cyan }, { n: 'Graph', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Java', c: PAL.amber }] },
   { id: 'projects', name: 'Projects', ic: 'proj' },
   { id: 'habits', name: 'Habits', ic: 'habit' },
   { id: 'body', name: 'Body', ic: 'heart', kids: [{ n: 'Health', c: PAL.pink }, { n: 'Food', c: PAL.amber }, { n: 'Gym', c: PAL.mint }] },
   { id: 'money', name: 'Money', ic: 'money', lock: true },
   { id: 'profile', name: 'Profile', ic: 'focus' },
-  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
+  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }, { n: 'Casino', c: PAL.mint }] },
   { id: 'files', name: 'Files', ic: 'files' },
   { id: 'people', name: 'People', ic: 'people' },
 ];
@@ -127,6 +127,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (tabParam === 'challenges') return 'community_challenges';
       if (tabParam === 'messages') return 'community_messages';
+      if (tabParam === 'casino') return 'community_casino';
       return 'community_feed';
     }
     return sec;
