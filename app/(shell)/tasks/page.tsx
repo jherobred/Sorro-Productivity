@@ -124,6 +124,7 @@ export default function TasksPage() {
   ];
 
   const complete = (r: Row) => {
+    if (leaving.has(r.task.id)) return;
     setLeaving((s) => new Set(s).add(r.task.id));
     setTimeout(() => {
       A.complete.mutate({ id: r.task.id, done: true });

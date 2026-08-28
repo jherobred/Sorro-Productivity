@@ -51,8 +51,8 @@ export function NoteEditor({
 
   const timer = useRef<number>(0);
   const latest = useRef<{ title: string; body: string } | null>(null);
-  const saveRef = useRef(onSave);
-  saveRef.current = onSave;
+  const savesMap = useRef(new Map<string, typeof onSave>());
+  savesMap.current.set(note.id, onSave);
 
   const queue = useCallback((t: string, b: string) => {
     markPending(note.id, { title: t, body: b });
@@ -62,7 +62,8 @@ export function NoteEditor({
     timer.current = window.setTimeout(() => {
       const v = latest.current;
       latest.current = null;
-      if (v) { saveRef.current(v); setDirty(false); }
+      const saveFn = savesMap.current.get(note.id);
+      if (v && saveFn) { saveFn(v); setDirty(false); }
     }, SAVE_DEBOUNCE_MS);
   }, [note.id]);
 
@@ -72,7 +73,8 @@ export function NoteEditor({
       clearTimeout(timer.current);
       const v = latest.current;
       latest.current = null;
-      if (v) saveRef.current(v);
+      const saveFn = savesMap.current.get(id);
+      if (v && saveFn) saveFn(v);
       else clearPending(id);
     };
   }, [note.id]);

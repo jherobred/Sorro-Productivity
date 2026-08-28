@@ -160,7 +160,10 @@ const LOG_BUY = defineMutation('money.logBuy', async (v: { item: ToBuy; account_
     .from('bd_to_buy')
     .update({ bought_at: new Date().toISOString(), transaction_id: data.id })
     .eq('id', v.item.id);
-  if (e2) throw e2;
+  if (e2) {
+    await supabase.from('bd_transactions').delete().eq('id', data.id);
+    throw e2;
+  }
 });
 
 export function useMoneyActions() {

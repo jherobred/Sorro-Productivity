@@ -134,7 +134,7 @@ export default function HomePage() {
   }, []);
 
   const open = tasks.filter((t) => !t.done);
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = today;
   /** Whole days since anything was ticked, or null if nothing ever has been. */
   const lastDone = tasks.map((t) => t.completed_at).filter(Boolean).sort().at(-1);
   const daysSinceDone = lastDone
