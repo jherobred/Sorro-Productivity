@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { BirdMascot } from '@/components/BasedlyLogo';
+
 
 /**
  * OAuth landing. detectSessionInUrl exchanges the PKCE code automatically, so
@@ -74,7 +76,7 @@ export default function AuthCallback() {
           </button>
         </div>
       ) : (
-        <div className="glowring" style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--acc)' }} />
+        <BirdMascot size={36} className="glowring" />
       )}
     </main>
   );

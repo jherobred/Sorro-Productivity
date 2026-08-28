@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { signInWithGoogle, listenForNativeAuth } from '@/lib/nativeAuth';
+import { BasedlyLogo } from '@/components/BasedlyLogo';
+
 
 export default function SignIn() {
   const router = useRouter();
@@ -61,10 +63,7 @@ export default function SignIn() {
       />
 
       <div className="rise" style={{ width: '100%', maxWidth: 380, zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 30 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--acc)' }} />
-          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em' }}>Basedly</span>
-        </div>
+        <BasedlyLogo size={28} style={{ marginBottom: 30 }} />
 
         <h1
           style={{
