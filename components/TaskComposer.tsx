@@ -170,10 +170,10 @@ export function TaskComposer({
 
   return (
     <div ref={box} style={{
-      background: 'color-mix(in srgb, var(--card2) 65%, var(--card))',
+      background: 'var(--card2)',
       borderRadius: 16,
-      boxShadow: open ? '0 0 0 2px color-mix(in srgb, var(--acc) 35%, transparent), var(--sh)' : 'var(--sh)',
-      border: `1.5px solid ${open ? 'var(--acc)' : 'color-mix(in srgb, var(--line2) 80%, transparent)'}`,
+      boxShadow: open ? '0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent), var(--sh)' : 'var(--sh)',
+      border: `1.5px solid ${open ? 'var(--acc)' : 'var(--line2)'}`,
       padding: open ? '14px 16px' : '13px 16px',
       transition: 'border-color .2s, box-shadow .2s, padding .2s',
     }}>
@@ -220,7 +220,7 @@ export function TaskComposer({
                 alignItems: 'center',
                 pointerEvents: 'none',
                 zIndex: 1,
-                color: 'var(--tx3, #8E918F)',
+                color: 'var(--tx2)',
                 fontSize: 13.5,
                 fontWeight: 500,
                 opacity: 0.95,
