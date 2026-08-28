@@ -520,161 +520,117 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
               />
             )}
 
-            {/* Render 6 Columns with Continuous Top-to-Bottom Box Scrolls when Active */}
-            {Array.from({ length: COLS }).map((_, c) => {
-              const isColRolling = spinningCols[c];
+            {/* 6x5 Permanent Stone Grid: Main box frames remain stationary while symbols scroll inside */}
+            {Array.from({ length: ROWS }).map((_, r) =>
+              Array.from({ length: COLS }).map((_, c) => {
+                const isColRolling = spinningCols[c];
+                const sym = grid[r][c];
+                const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
 
-              return (
-                <div
-                  key={`col-${c}`}
-                  style={{
-                    position: 'relative',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    overflow: 'hidden',
-                    borderRadius: 10,
-                  }}
-                >
-                  {/* Active Top-to-Bottom Rolling Reel Strip with Full Stone Boxes */}
-                  {isColRolling ? (
-                    <motion.div
-                      animate={{ y: ['-60%', '0%'] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: turboMode ? 0.2 : 0.32,
-                        ease: 'linear',
-                      }}
+                return (
+                  <div
+                    key={`cell-${r}-${c}`}
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '1 / 1',
+                      borderRadius: 10,
+                      background: isWinning
+                        ? 'radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(14, 165, 233, 0.2) 100%)'
+                        : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
+                      border: isWinning ? '2px solid #38BDF8' : '1.5px solid rgba(212, 175, 55, 0.25)',
+                      boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Basalt Stone Hieroglyph Watermark Background */}
+                    <div
                       style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                        filter: 'blur(1.5px)',
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: 0.08,
+                        fontSize: 10,
+                        display: 'grid',
+                        placeItems: 'center',
+                        pointerEvents: 'none',
+                        color: '#FDE047',
                       }}
                     >
-                      {/* Full sequence of stone boxes scrolling downwards together */}
-                      {MERRAMUN_SYMBOLS.concat(MERRAMUN_SYMBOLS.slice(0, 4)).map((sym, idx) => (
-                        <div
-                          key={`dummy-box-${idx}`}
-                          style={{
-                            position: 'relative',
-                            aspectRatio: '1 / 1',
-                            borderRadius: 10,
-                            background: 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
-                            border: '1.5px solid rgba(212, 175, 55, 0.28)',
-                            boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.6)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              opacity: 0.08,
-                              fontSize: 10,
-                              display: 'grid',
-                              placeItems: 'center',
-                              pointerEvents: 'none',
-                              color: '#FDE047',
-                            }}
-                          >
-                            𓀀𓁐𓃠𓆓𓇯
-                          </div>
-                          <MerramunIcon id={sym.id} size={28} />
-                        </div>
-                      ))}
-                    </motion.div>
-                  ) : (
-                    /* Landed Reel Symbols with Spring Bounce Drop on Full Stone Boxes */
-                    Array.from({ length: ROWS }).map((_, r) => {
-                      const sym = grid[r][c];
-                      const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
+                      𓀀𓁐𓃠𓆓𓇯
+                    </div>
 
-                      return (
-                        <motion.div
-                          key={`${r}-${c}-${sym.id}`}
-                          initial={{ y: -100, opacity: 0 }}
-                          animate={{
-                            y: 0,
-                            opacity: 1,
-                            scale: isWinning ? [1, 1.25, 0.5] : 1,
-                            filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
-                          }}
-                          transition={{
-                            y: { type: 'spring', damping: 14, stiffness: 220, delay: r * 0.04 },
-                            opacity: { duration: 0.12, delay: r * 0.04 },
-                          }}
-                          style={{
-                            position: 'relative',
-                            aspectRatio: '1 / 1',
-                            borderRadius: 10,
-                            background: isWinning
-                              ? 'radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(14, 165, 233, 0.2) 100%)'
-                              : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
-                            border: isWinning ? '2px solid #38BDF8' : '1.5px solid rgba(212, 175, 55, 0.28)',
-                            boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {/* Basalt Stone Hieroglyph Texture Background */}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              opacity: 0.08,
-                              fontSize: 10,
-                              display: 'grid',
-                              placeItems: 'center',
-                              pointerEvents: 'none',
-                              color: '#FDE047',
-                            }}
-                          >
-                            𓀀𓁐𓃠𓆓𓇯
-                          </div>
+                    {/* Sparkling Dissolve Blue Particle Dust on Tumble */}
+                    {isWinning && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.7 }}
+                        animate={{ opacity: [0, 1, 0], scale: [0.7, 1.4, 1.7] }}
+                        transition={{ duration: 0.45 }}
+                        style={{
+                          position: 'absolute',
+                          inset: -4,
+                          pointerEvents: 'none',
+                          background: 'radial-gradient(circle, rgba(56,189,248,0.9) 0%, rgba(253,224,71,0.6) 50%, transparent 80%)',
+                          mixBlendMode: 'screen',
+                          zIndex: 10,
+                        }}
+                      />
+                    )}
 
-                          {/* Sparkling Dissolve Blue Particle Dust on Tumble */}
-                          {isWinning && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.7 }}
-                              animate={{ opacity: [0, 1, 0], scale: [0.7, 1.4, 1.7] }}
-                              transition={{ duration: 0.45 }}
-                              style={{
-                                position: 'absolute',
-                                inset: -4,
-                                pointerEvents: 'none',
-                                background: 'radial-gradient(circle, rgba(56,189,248,0.9) 0%, rgba(253,224,71,0.6) 50%, transparent 80%)',
-                                mixBlendMode: 'screen',
-                                zIndex: 10,
-                              }}
-                            />
-                          )}
-
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              zIndex: 2,
-                            }}
-                          >
-                            <MerramunIcon id={sym.id} size={28} />
-                          </div>
-                        </motion.div>
-                      );
-                    })
-                  )}
-                </div>
-              );
-            })}
+                    {/* Symbol Movement: Scroll inside the cell while spinning, drop in and bounce on land */}
+                    {isColRolling ? (
+                      <motion.div
+                        key={`rolling-${c}`}
+                        animate={{ y: ['-100%', '100%'] }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: turboMode ? 0.16 : 0.24,
+                          ease: 'linear',
+                        }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 12,
+                          filter: 'blur(1.2px)',
+                          zIndex: 2,
+                        }}
+                      >
+                        <MerramunIcon id={MERRAMUN_SYMBOLS[(r + c) % MERRAMUN_SYMBOLS.length].id} size={28} />
+                        <MerramunIcon id={MERRAMUN_SYMBOLS[(r + c + 3) % MERRAMUN_SYMBOLS.length].id} size={28} />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key={`landed-${r}-${c}-${sym.id}`}
+                        initial={{ y: -65, opacity: 0 }}
+                        animate={{
+                          y: 0,
+                          opacity: 1,
+                          scale: isWinning ? [1, 1.25, 0.5] : 1,
+                          filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
+                        }}
+                        transition={{
+                          y: { type: 'spring', damping: 14, stiffness: 240, delay: r * 0.035 },
+                          opacity: { duration: 0.1, delay: r * 0.035 },
+                        }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 2,
+                        }}
+                      >
+                        <MerramunIcon id={sym.id} size={28} />
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Tumble Win Live Indicator & Rolling Multiplier Banner */}
