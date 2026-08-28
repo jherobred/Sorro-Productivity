@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { TabRail } from './TabRail';
@@ -479,7 +480,7 @@ export function PhoneHome({ name }: { name: string }) {
       )}
 
       {/* Focus Station Dialog Modal */}
-      {focusOpen && (
+      {focusOpen && typeof document !== 'undefined' && createPortal(
         <div
           onClick={() => setFocusOpen(false)}
           role="dialog"
@@ -499,7 +500,7 @@ export function PhoneHome({ name }: { name: string }) {
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440 }}>
             <FocusHub onClose={() => setFocusOpen(false)} />
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   );

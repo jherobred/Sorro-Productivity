@@ -53,7 +53,8 @@ export function ContextMenu({
 }) {
   useEffect(() => {
     const close = () => onClose();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     // Defer so the opening gesture's own pointerup does not close it.
     const t = setTimeout(() => window.addEventListener('pointerdown', close, { once: true }), 0);
     window.addEventListener('keydown', onKey);

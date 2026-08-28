@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import {
   type StorySlide, type StorySticker, type StoryTextOverlay,
@@ -164,7 +165,7 @@ export function StoryCreator({
     onClose();
   };
 
-  return (
+  const body = (
     <div style={{
       position: 'fixed',
       inset: 0,
@@ -828,6 +829,11 @@ export function StoryCreator({
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
 
 function getCssFilter(filterName?: string): string {

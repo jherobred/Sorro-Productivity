@@ -133,7 +133,8 @@ export function Lightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'ArrowRight') setI((n) => Math.min(n + 1, items.length - 1));
       if (e.key === 'ArrowLeft') setI((n) => Math.max(n - 1, 0));
       if (e.key === '0') reset();

@@ -22,7 +22,8 @@ export function AskHost() {
 
   useEffect(() => {
     if (!req) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') resolveAsk(null); };
+    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); resolveAsk(null); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [req]);

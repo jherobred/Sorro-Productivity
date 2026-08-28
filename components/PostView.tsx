@@ -58,7 +58,8 @@ export function PostView({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (/input|textarea/i.test((e.target as HTMLElement)?.tagName ?? '')) return;
-      if (e.key === 'Escape') onClose();
+      // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'ArrowRight') go(Math.min(i + 1, items.length - 1));
       if (e.key === 'ArrowLeft') go(Math.max(i - 1, 0));
     };

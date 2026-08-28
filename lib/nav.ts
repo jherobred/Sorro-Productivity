@@ -119,9 +119,38 @@ export function useBackGuard() {
       if (e.button === 3) goBack();
     };
 
+    /**
+     * Escape is the fourth way to dismiss something, and it was the one route
+     * never wired up: 14 of the 19 dialogs had no Escape at all. They already
+     * register here, so this is one listener rather than 14 copies of it.
+     *
+     * It closes an overlay and never navigates. Back walks the section stack
+     * when nothing is open; Escape on a bare page does nothing, which is what
+     * people expect from it.
+     *
+     * Two things must not double-dismiss:
+     *
+     * `defaultPrevented` lets a local handler win. Eight components already
+     * close themselves on Escape, and two of them (ContextMenu, SearchPalette)
+     * are *not* in this stack — without the check, Escape closed the menu and
+     * the sheet behind it on one press. Each of those eight now calls
+     * preventDefault, so exactly one mechanism fires.
+     *
+     * A field keeps its own Escape. A dozen inline editors bind it to mean
+     * "cancel this edit" and most do not preventDefault, so closing the sheet
+     * around them would throw away the edit and the sheet together.
+     */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return;
+      if (closeTopOverlay()) e.preventDefault();
+    };
+
     window.addEventListener('popstate', onPop);
     window.addEventListener('mousedown', onDown);
     window.addEventListener('auxclick', onDown);
+    window.addEventListener('keydown', onKey);
 
     // Android hardware/gesture back, when running inside the Capacitor shell.
     let dispose: (() => void) | undefined;
@@ -137,6 +166,7 @@ export function useBackGuard() {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('auxclick', onDown);
+      window.removeEventListener('keydown', onKey);
       dispose?.();
     };
   }, [router, pathname]);

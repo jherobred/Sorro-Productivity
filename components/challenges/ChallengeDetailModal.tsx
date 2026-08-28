@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, type IconName } from '@/components/Icon';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
@@ -84,7 +85,7 @@ export function ChallengeDetailModal({
     toast(`Progress updated to ${bumpValue} ${challenge.unit || 'points'}! 🔥`);
   };
 
-  return (
+  const body = (
     <div
       onClick={onClose}
       style={{
@@ -485,4 +486,9 @@ export function ChallengeDetailModal({
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }

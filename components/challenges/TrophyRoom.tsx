@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '../Icon';
 import { usePrefs } from '@/lib/prefs';
 import { rankOf } from '@/lib/rank';
@@ -216,7 +217,7 @@ function TrophyViewer({ won, onClose }: { won: Won; onClose: () => void }) {
     return () => { stop = true; dispose?.(); };
   }, [metal.a, metal.b, prefs.accent, prefs.motion]);
 
-  return (
+  const body = (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(4,4,8,.9)',
       display: 'grid', placeItems: 'center', padding: 18,
@@ -256,4 +257,9 @@ function TrophyViewer({ won, onClose }: { won: Won; onClose: () => void }) {
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }

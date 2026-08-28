@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import katex from 'katex';
 import { Icon, type IconName } from '../Icon';
 import { MathEquationEditor } from './MathEquationEditor';
@@ -296,17 +297,17 @@ export function NoteEditor({
       </div>
 
       {/* Math LaTeX Formula Composer Modal */}
-      {mathEditorOpen && (
+      {mathEditorOpen && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <MathEquationEditor onInsert={insertLatexBlock} onClose={() => setMathEditorOpen(false)} />
-        </div>
+        </div>, document.body
       )}
 
       {/* Interactive Math Sketchpad Modal */}
-      {sketchpadOpen && (
+      {sketchpadOpen && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <MathSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
-        </div>
+        </div>, document.body
       )}
     </div>
   );

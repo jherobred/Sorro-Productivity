@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
@@ -348,7 +349,7 @@ export function Challenges() {
 function TemplatePicker({ onClose, onPick }: { onClose: () => void; onPick: (t: Template) => void }) {
   useOverlayBack(true, onClose);
 
-  return (
+  const body = (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.55)',
       display: 'grid', placeItems: 'center', padding: 16,
@@ -406,6 +407,11 @@ function TemplatePicker({ onClose, onPick }: { onClose: () => void; onPick: (t: 
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
 
 /* -------------------------------------------------------- who is in this */
@@ -1026,7 +1032,7 @@ function Composer({ onClose, onCreate, initial, template }: {
     });
   };
 
-  return (
+  const body = (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
         aria-label={initial ? `Edit ${initial.name}` : 'New challenge'} className="k-bloom navsb"
@@ -1203,6 +1209,11 @@ function Composer({ onClose, onCreate, initial, template }: {
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

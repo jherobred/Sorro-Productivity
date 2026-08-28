@@ -32,7 +32,8 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); } };
     document.addEventListener('mousedown', away);
     document.addEventListener('keydown', key);
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', key); };

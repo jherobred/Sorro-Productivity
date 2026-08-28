@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { TierBadge } from './TierBadge';
 import { playCelebration } from '@/lib/audio';
@@ -68,7 +69,8 @@ export function RankUpCard({ from, to, up, onClose }: {
 
   useEffect(() => {
     if (up) playCelebration();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, up]);
@@ -76,7 +78,7 @@ export function RankUpCard({ from, to, up, onClose }: {
   const hue = to.tier.hue;
   const tierChanged = from.tier.name !== to.tier.name;
 
-  return (
+  const body = (
     <div onClick={onClose} role="dialog" aria-modal="true"
       aria-label={`${up ? 'Promoted' : 'Demoted'} to ${to.label}`}
       style={{
@@ -147,4 +149,9 @@ export function RankUpCard({ from, to, up, onClose }: {
       </div>
     </div>
   );
+
+  // `main` carries the font-scale zoom and the page-entry transform, so it is
+  // the containing block for anything fixed inside it. Portal to the body or
+  // this overlay is positioned against the page, not the viewport.
+  return typeof document === 'undefined' ? null : createPortal(body, document.body);
 }
