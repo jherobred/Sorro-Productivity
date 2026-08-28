@@ -373,31 +373,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ? 'inset -1px 0 0 rgba(255,255,255,.07), inset 1px 0 0 rgba(255,255,255,.16)'
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px 14px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 10px 14px 14px' }}>
             <button
               onClick={() => router.push('/home/')}
               className="hov k-squish"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, textAlign: 'left', cursor: 'pointer' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 11,
+                flex: 1,
+                textAlign: 'left',
+                cursor: 'pointer',
+                padding: '5px 8px',
+                borderRadius: 10,
+              }}
               title="Go to Home"
             >
-              <BirdMascot size={22} />
-              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', color: 'var(--tx)' }}>Basedly</div>
+              <BirdMascot size={32} />
+              <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.03em', color: 'var(--tx)' }}>Basedly</div>
             </button>
             <button
               onClick={() => toggleRail(false)}
               className="hov k-squish" title="Collapse sidebar (Ctrl+\\)" aria-label="Collapse sidebar"
-              style={{ width: 26, height: 26, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+              style={{ width: 28, height: 28, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
               <Icon name="collapse" size={15} color="var(--tx3)" />
-            </button>
-          </div>
-
-          <div style={{ padding: '0 12px 12px' }}>
-            <button onClick={() => setSearch(true)} className="hov" style={{
-              display: 'flex', alignItems: 'center', gap: 9, width: '100%', height: 34, padding: '0 11px',
-              borderRadius: 9, background: 'var(--card)', border: '1px solid var(--line)',
-            }}>
-              <Icon name="search" size={14} color="var(--tx3)" />
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 12, fontWeight: 500, color: 'var(--tx3)' }}>Search</span>
             </button>
           </div>
 
@@ -737,13 +736,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
 
         {phone && (
-          <div style={{ height: 46, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ height: 48, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
             <button
               onClick={() => router.push('/home/')}
-              style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, fontWeight: 800, letterSpacing: '-.03em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
               title="Go to Home"
             >
-              {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
+              <BirdMascot size={26} />
+              <span>{SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}</span>
             </button>
             <span style={{ marginLeft: 'auto' }} />
 
