@@ -2,7 +2,7 @@
    Lifted verbatim from Basedly.dc.html <helmet>. Every number here is a spec
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
 @import 'katex/dist/katex.min.css';
 
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
@@ -25,28 +25,21 @@
 /* ---- Theme tokens (Warm Minimalist & Editorial UI) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
-  /* Warm ink. The old surfaces were blue-grey (#111216 / #1A1C25) while the
-     light theme was warm paper and the header of this file calls the system
-     "Warm Minimalist" - the two themes were not the same design. These hold
-     the same lightness, biased warm, so nothing sized against them moves. */
-  --bg: #141210;
-  --panel: #1B1815;
-  --card: #201C18;
-  --card2: #2A251F;
-  --line: rgba(255, 246, 232, .085);
-  --line2: rgba(255, 246, 232, .16);
-  --tx: #F0EBE3;
-  --tx2: #A9A196;
-  /* Was #6B7280, 3.8:1 on the ground. This is 4.8:1. */
-  --tx3: #8A8177;
-  --hov: rgba(255, 244, 226, .065);
-  /* Two layers, not one: a tight contact shadow that reads as a card edge and
-     a wide ambient one that reads as height. One 16px blur gives neither. */
-  --sh: 0 1px 2px rgba(0, 0, 0, .34), 0 6px 18px rgba(0, 0, 0, .3);
-  --shl: 0 2px 6px rgba(0, 0, 0, .4), 0 18px 44px rgba(0, 0, 0, .52);
-  --ink: #141210;
-  --sk1: rgba(255, 246, 232, .045);
-  --sk2: rgba(255, 246, 232, .1);
+  --bg: #111216;
+  --panel: #16181F;
+  --card: #1A1C25;
+  --card2: #232532;
+  --line: rgba(255, 255, 255, .08);
+  --line2: rgba(255, 255, 255, .15);
+  --tx: #EAEBED;
+  --tx2: #9CA3AF;
+  --tx3: #6B7280;
+  --hov: rgba(255, 255, 255, .06);
+  --sh: 0 4px 16px rgba(0, 0, 0, .32);
+  --shl: 0 12px 36px rgba(0, 0, 0, .5);
+  --ink: #111216;
+  --sk1: rgba(255, 255, 255, .04);
+  --sk2: rgba(255, 255, 255, .09);
   
   /* Spot Pastels Dark Variants */
   --pastel-red: rgba(253, 235, 236, .14);
@@ -60,20 +53,18 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #F6F3ED;
-  --panel: #EFEBE3;
-  --card: #FFFDFA;
-  --card2: #F9F6F0;
-  /* Hairlines and shadows tinted with the ground's own brown. Pure black greys
-     a warm surface. */
-  --line: rgba(58, 44, 30, .09);
-  --line2: rgba(58, 44, 30, .15);
-  --tx: #2A2521;
-  --tx2: #57514A;
-  --tx3: #7A7168;
-  --hov: rgba(58, 44, 30, .05);
-  --sh: 0 1px 2px rgba(58, 44, 30, .06), 0 4px 14px rgba(58, 44, 30, .06);
-  --shl: 0 2px 6px rgba(58, 44, 30, .08), 0 16px 40px rgba(58, 44, 30, .12);
+  --bg: #F7F6F3;
+  --panel: #F1EFEA;
+  --card: #FFFFFF;
+  --card2: #FBFBFA;
+  --line: rgba(0, 0, 0, .07);
+  --line2: rgba(0, 0, 0, .12);
+  --tx: #2F3437;
+  --tx2: #5A5D61;
+  --tx3: #787774;
+  --hov: rgba(0, 0, 0, .04);
+  --sh: 0 2px 8px rgba(0, 0, 0, .04);
+  --shl: 0 8px 24px rgba(0, 0, 0, .07);
   --ink: #FFFFFF;
   --sk1: rgba(0, 0, 0, .04);
   --sk2: rgba(0, 0, 0, .08);
@@ -91,14 +82,10 @@
 
 /* Accent is user-settable; --accTx is the accent tuned for text on panels. */
 :root {
-  /* Ember, not indigo. #7C6CFF sat at 4.0:1 behind the near-black label every
-     accent fill puts on it (tab rail, phone nav, primary buttons); this clears
-     6.1:1 with the same ink. Still a preference - DEFAULT_ACCENT in lib/pal.ts
-     is the one place to change it. */
-  --acc: #E8734A;
-  --acc2: #F0B44E;
-  --accTx: color-mix(in srgb, #E8734A 82%, #FFFFFF);
-  --gl2: color-mix(in srgb, #E8734A 35%, transparent);
+  --acc: #7C6CFF;
+  --acc2: #38D6F2;
+  --accTx: color-mix(in srgb, #7C6CFF 82%, #FFFFFF);
+  --gl2: color-mix(in srgb, #7C6CFF 35%, transparent);
   --anim: running;
   --cols: repeat(3, 1fr);
 }
@@ -115,45 +102,6 @@
   --pal-pink: #FF6FA8;
   --pal-sky: #38BDF8;
   --pal-lime: #A3E635;
-}
-
-/* ---- Display face -------------------------------------------------------
-   Archivo runs the interface: labels, counts, buttons, anything scanned. It
-   was also running the few lines meant to be *read* - the wordmark, the line
-   under the chrome that tells you what today actually holds - so those lines
-   looked like more chrome. Fraunces carries those instead. Two roles, two
-   faces; the split is what makes a hierarchy without a size arms race.
-   ------------------------------------------------------------------------ */
-:root {
-  --font-display: Fraunces, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
-}
-
-/* The title line of a section. Every page hand-rolls its own heading inline, so
-   this owns only what they all got wrong together: the face, and the tracking.
-   -.03em is a grotesque's setting — on a serif at 24px it runs the serifs of
-   adjacent letters into each other. `font-optical-sizing` lets Fraunces move
-   its own contrast and terminals up as the size grows, which is the whole
-   reason to use a variable serif here. */
-.bd-title {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  letter-spacing: -.014em;
-}
-
-/* ---- The ground ---------------------------------------------------------
-   Every surface in the app is a card on one flat fill, and a flat fill is the
-   single clearest tell that a screen was never art-directed. This gives the
-   app frame a tooth: a fine fractal grain over a warm wash pulled from the
-   accent. Painted through the stylesheet rather than an overlay element, so
-   there is no extra box to stack the sidebar, sheets and modals above.
-   ------------------------------------------------------------------------ */
-.bd-frame {
-  background-color: var(--bg);
-  background-image:
-    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='g'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='.8'%20numOctaves='3'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='160'%20height='160'%20filter='url(%23g)'%20opacity='.16'/%3E%3C/svg%3E"),
-    radial-gradient(128% 84% at 50% -14%, color-mix(in srgb, var(--acc) 11%, transparent) 0%, transparent 62%);
-  background-size: 160px 160px, auto;
-  background-repeat: repeat, no-repeat;
 }
 
 /* ---- Reset (verbatim) --------------------------------------------------- */
@@ -177,7 +125,7 @@ html[data-theme='light'] body { background: var(--bg, #F6F5F9); color: var(--tx,
 h1, h2, h3, h4, h5, h6 { margin: 0; font-size: inherit; line-height: inherit; letter-spacing: inherit; color: var(--tx); }
 p { margin: 0; }
 a { color: var(--accTx, #8B7CFF); text-decoration: none; }
-a:hover { color: var(--acc2, #F0B44E); }
+a:hover { color: var(--acc2, #38D6F2); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 input, textarea { font: inherit; color: inherit; background: none; border: 0; outline: none; }
 ::selection { background: rgba(124, 108, 255, .3); }

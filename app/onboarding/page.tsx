@@ -131,9 +131,9 @@ export default function Onboarding() {
 
   return (
     <main
-      className="bd-frame"
       style={{
         minHeight: '100dvh',
+        background: 'var(--bg)',
         color: 'var(--tx)',
         display: 'flex',
         flexDirection: 'column',

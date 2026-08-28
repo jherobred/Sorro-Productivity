@@ -30,9 +30,9 @@ export default function SignIn() {
 
   return (
     <main
-      className="bd-frame"
       style={{
         height: '100dvh',
+        background: 'var(--bg)',
         color: 'var(--tx)',
         display: 'flex',
         flexDirection: 'column',

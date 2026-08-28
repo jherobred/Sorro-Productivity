@@ -43,7 +43,7 @@ export default function MorePage() {
 
   return (
     <div style={{ padding: '14px 14px 26px' }}>
-      <div className="bd-title" style={{ fontSize: 26, fontWeight: 700 }}>More</div>
+      <div style={{ fontSize: 23, fontWeight: 800, letterSpacing: '-.03em' }}>More</div>
       <div style={{ fontSize: 11.5, color: 'var(--tx3)', margin: '3px 0 15px' }}>
         Everything that isn’t on the tab bar
       </div>

@@ -224,8 +224,7 @@ export default function HomePage() {
                 ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10, marginBottom: 6 }
                 : { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 5 }}>
                 <div key={greetSeq} aria-label={greeting}
-                  className="bd-title"
-                  style={{ fontSize: phone ? 25 : 30, fontWeight: 700, lineHeight: 1.06 }}>
+                  style={{ fontSize: phone ? 23 : 27, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.05 }}>
                   {greeting.split('').map((c, i) => (
                     <span key={i} aria-hidden className="fade" style={{ animationDelay: `${i * 0.025}s`, whiteSpace: 'pre' }}>{c}</span>
                   ))}

@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   webDir: 'out',
   android: {
     // The app is dark-first and owns all its own scrolling.
-    backgroundColor: '#141210',
+    backgroundColor: '#07060D',
   },
   plugins: {
     // Edge to edge. With `overlaysWebView: false` the webview started below the
