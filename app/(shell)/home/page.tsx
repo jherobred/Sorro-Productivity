@@ -273,14 +273,9 @@ export default function HomePage() {
                     reads off whether anything got ticked today — never off how
                     much is left, which would make a bad morning worse. */}
                 <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
-                <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span>{new Date(now).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                  <span>·</span>
-                  <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontWeight: 700, color: 'var(--tx)' }}>
-                    {new Date(now).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                  <span>·</span>
-                  <span>{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}</span>
+                <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)' }}>
+                  {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
                 </div>
               </div>
             </div>
@@ -327,22 +322,20 @@ export default function HomePage() {
 
                   {/* Highly Visible Seconds Countdown Box */}
                   <div style={{
-                    display: 'flex', flexDirection: 'column', gap: 4,
-                    padding: '9px 12px', borderRadius: 12, margin: '8px 0 10px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
                     background: `color-mix(in srgb, ${INDIGO} 18%, var(--card2))`,
                     border: `1.5px solid color-mix(in srgb, ${INDIGO} 45%, transparent)`,
                     boxShadow: `0 3px 12px color-mix(in srgb, ${INDIGO} 18%, transparent)`,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Icon name="clock" size={13} color={INDIGO} />
-                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: INDIGO }}>
-                          {isOngoing ? 'Ends in' : 'Starts in'}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)' }}>
-                        {hrsUntil > 0 ? `${hrsUntil}h ${minsUntil}m ${secsUntil}s` : `${minsUntil}m ${secsUntil}s`}
-                      </span>
+                    {/* Middle Aligned "Ends In" / "Starts In" Badge */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                      color: INDIGO, textAlign: 'center', width: '100%',
+                    }}>
+                      <Icon name="clock" size={12} color={INDIGO} />
+                      <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
                     </div>
 
                     <div style={{
@@ -374,22 +367,9 @@ export default function HomePage() {
                   </div>
                 </>
               ) : (
-                <div style={{ margin: 'auto 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
-                    <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
-                  </div>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 12px', borderRadius: 10,
-                    background: `color-mix(in srgb, ${INDIGO} 10%, var(--card2))`,
-                    border: `1px solid color-mix(in srgb, ${INDIGO} 25%, transparent)`,
-                  }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: INDIGO }}>Current Time</span>
-                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: 13.5, fontWeight: 800, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums' }}>
-                      {new Date(now).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
+                <div style={{ margin: 'auto 0', textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
                 </div>
               )}
 

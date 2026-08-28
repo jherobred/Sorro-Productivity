@@ -37,6 +37,8 @@ import { useTabOnboarding } from '@/lib/useTabOnboarding';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
 import { ShopModal } from './ShopModal';
+import { BirdMascot } from './BasedlyLogo';
+
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -378,7 +380,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, textAlign: 'left', cursor: 'pointer' }}
               title="Go to Home"
             >
-              <div style={{ width: 22, height: 22, background: acc, borderRadius: 6, flex: 'none' }} />
+              <BirdMascot size={22} />
               <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', color: 'var(--tx)' }}>Basedly</div>
             </button>
             <button

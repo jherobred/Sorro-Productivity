@@ -2,7 +2,7 @@
    Lifted verbatim from Basedly.dc.html <helmet>. Every number here is a spec
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import 'katex/dist/katex.min.css';
 
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
@@ -22,52 +22,52 @@
    nothing below is affected; see the header of gym.css for why. */
 @import './gym.css';
 
-/* ---- Theme tokens (Warm Minimalist & Editorial UI) ---------------------------- */
+/* ---- Theme tokens (Pure Dark Obsidian & Clean Modern Light) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
-  --bg: #111216;
-  --panel: #16181F;
-  --card: #1A1C25;
-  --card2: #232532;
-  --line: rgba(255, 255, 255, .08);
-  --line2: rgba(255, 255, 255, .15);
-  --tx: #EAEBED;
-  --tx2: #9CA3AF;
-  --tx3: #6B7280;
-  --hov: rgba(255, 255, 255, .06);
-  --sh: 0 4px 16px rgba(0, 0, 0, .32);
-  --shl: 0 12px 36px rgba(0, 0, 0, .5);
-  --ink: #111216;
-  --sk1: rgba(255, 255, 255, .04);
-  --sk2: rgba(255, 255, 255, .09);
+  --bg: #0A0912;
+  --panel: #0E0D18;
+  --card: #17161F;
+  --card2: #211F2C;
+  --line: rgba(170, 166, 210, .11);
+  --line2: rgba(170, 166, 210, .19);
+  --tx: #EFEDF5;
+  --tx2: #A6A2BE;
+  --tx3: #8A86A6;
+  --hov: rgba(170, 166, 210, .075);
+  --sh: 0 6px 22px rgba(0, 0, 0, .46);
+  --shl: 0 18px 48px rgba(0, 0, 0, .6);
+  --ink: #0A0912;
+  --sk1: rgba(170, 166, 210, .06);
+  --sk2: rgba(170, 166, 210, .13);
   
   /* Spot Pastels Dark Variants */
-  --pastel-red: rgba(253, 235, 236, .14);
+  --pastel-red: rgba(255, 107, 107, .15);
   --pastel-red-tx: #FFA3A3;
-  --pastel-blue: rgba(225, 243, 254, .14);
+  --pastel-blue: rgba(56, 189, 248, .15);
   --pastel-blue-tx: #93D5FE;
-  --pastel-green: rgba(237, 243, 236, .14);
+  --pastel-green: rgba(52, 217, 160, .15);
   --pastel-green-tx: #8FE39B;
-  --pastel-yellow: rgba(251, 243, 219, .14);
+  --pastel-yellow: rgba(255, 194, 75, .15);
   --pastel-yellow-tx: #FDE08B;
 }
 
 :root[data-theme='light'] {
-  --bg: #F7F6F3;
-  --panel: #F1EFEA;
+  --bg: #F6F5F9;
+  --panel: #F0EEF5;
   --card: #FFFFFF;
-  --card2: #FBFBFA;
-  --line: rgba(0, 0, 0, .07);
-  --line2: rgba(0, 0, 0, .12);
-  --tx: #2F3437;
-  --tx2: #5A5D61;
-  --tx3: #787774;
-  --hov: rgba(0, 0, 0, .04);
-  --sh: 0 2px 8px rgba(0, 0, 0, .04);
-  --shl: 0 8px 24px rgba(0, 0, 0, .07);
+  --card2: #F7F5FA;
+  --line: rgba(38, 32, 54, .11);
+  --line2: rgba(38, 32, 54, .19);
+  --tx: #1C1A26;
+  --tx2: #5D5875;
+  --tx3: #6F6A82;
+  --hov: rgba(38, 32, 54, .05);
+  --sh: 0 3px 12px rgba(40, 34, 60, .13);
+  --shl: 0 14px 38px rgba(40, 34, 60, .2);
   --ink: #FFFFFF;
-  --sk1: rgba(0, 0, 0, .04);
-  --sk2: rgba(0, 0, 0, .08);
+  --sk1: rgba(38, 32, 54, .05);
+  --sk2: rgba(38, 32, 54, .1);
 
   /* Spot Pastels Light Variants */
   --pastel-red: #FDEBEC;
@@ -90,7 +90,7 @@
   --cols: repeat(3, 1fr);
 }
 
-/* Category palette (PAL) - Desaturated Warm Spot Tints */
+/* Category palette (PAL) - Clean Spot Tints */
 :root {
   --pal-coral: #FF6B6B;
   --pal-indigo: #7C8CFF;
@@ -109,9 +109,11 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg, #07060D);
+  background: var(--bg, #0A0912);
   color: var(--tx, #EFEDF5);
-  font-family: Archivo, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
