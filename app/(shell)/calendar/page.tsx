@@ -55,7 +55,8 @@ export default function CalendarPage() {
    */
   const [pop, setPop] = useState<
     | { kind: 'event'; ev: Ev; span?: Span | null; x: number; y: number }
-    | { kind: 'slot'; day: number; hour: number; endHour?: number; allDay: boolean; x: number; y: number }
+    | { kind: 'task'; task: Task; x: number; y: number }
+    | { kind: 'slot'; day: number; hour: number; endHour?: number; allDay: boolean; initialTab?: 'event' | 'task'; x: number; y: number }
     | null>(null);
   const [edit, setEdit] = useState<Ev | null>(null);
 
@@ -202,8 +203,10 @@ export default function CalendarPage() {
    */
   const openEvent = (ev: Ev, x: number, y: number, span?: Span | null) =>
     setPop({ kind: 'event', ev, x, y, span: span ?? null });
-  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false, endHour?: number) =>
-    setPop({ kind: 'slot', day, hour, endHour, allDay, x, y });
+  const openTask = (task: Task, x: number, y: number) =>
+    setPop({ kind: 'task', task, x, y });
+  const openSlot = (day: number, hour: number, x: number, y: number, allDay = false, endHour?: number, initialTab: 'event' | 'task' = 'event') =>
+    setPop({ kind: 'slot', day, hour, endHour, allDay, initialTab, x, y });
 
   /**
    * The phone header is deliberately thin. Day view already highlights the day
@@ -310,13 +313,13 @@ export default function CalendarPage() {
           )}
           {!isPending && view === 'week' && (
             <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
-              sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
+              sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
           )}
           {!isPending && view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
               <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
-                sel={sel} setSel={setSel} openEvent={openEvent} openSlot={openSlot} onSchedule={schedule} />
+                sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
           {!isPending && view === 'month' && (
@@ -351,11 +354,44 @@ export default function CalendarPage() {
           }} />
       )}
 
+      {pop?.kind === 'task' && (
+        <TaskPopover
+          task={pop.task}
+          x={pop.x}
+          y={pop.y}
+          onClose={() => setPop(null)}
+          onComplete={() => {
+            TA.complete.mutate({ id: pop.task.id, done: !pop.task.done });
+            setPop(null);
+          }}
+          onDelete={() => {
+            TA.removeWithUndo(pop.task);
+            setPop(null);
+          }}
+        />
+      )}
+
       {pop?.kind === 'slot' && (
         <QuickCreate
           x={pop.x} y={pop.y} ws={ws} day={pop.day} hour={pop.hour} endHour={pop.endHour} allDay={pop.allDay}
+          initialTab={pop.initialTab || 'event'}
           accent={prefs.accent}
           onClose={() => setPop(null)}
+          onCreateTask={(title, notes) => {
+            const dueDate = new Date(ws);
+            dueDate.setDate(dueDate.getDate() + pop.day);
+            const dueOn = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+            const dueAt = pop.allDay ? null : at(ws, pop.day, pop.hour);
+            TA.create.mutate({
+              id: crypto.randomUUID(),
+              title: title.trim() || '(No title)',
+              notes: notes || '',
+              due_on: dueOn,
+              due_at: dueAt,
+              priority: null,
+            });
+            setPop(null);
+          }}
           onCreate={(title) => {
             A.addAt(pop.day, pop.hour, prefs.accent, pop.allDay, title.trim() || '(No title)', pop.endHour);
             setPop(null);
@@ -410,7 +446,7 @@ export default function CalendarPage() {
 /* ---------------------------------------------------------------- week/day */
 
 function Grid({
-  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openSlot, onSchedule,
+  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule,
 }: {
   days: number;
   dayOffset?: number;
@@ -422,7 +458,8 @@ function Grid({
   sel: string | null;
   setSel: (id: string | null) => void;
   openEvent: (ev: Ev, x: number, y: number, span?: Span | null) => void;
-  openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean, endHour?: number) => void;
+  openTask: (task: Task, x: number, y: number) => void;
+  openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean, endHour?: number, initialTab?: 'event' | 'task') => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
 }) {
   const { prefs } = usePrefs();
@@ -661,12 +698,16 @@ function Grid({
     e.preventDefault();
     e.stopPropagation();
     const rect = () => bodyRef.current?.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
     let moved = false;
 
     const onMove = (m: PointerEvent) => {
-      moved = true;
+      if (Math.hypot(m.clientX - startX, m.clientY - startY) > 5) {
+        moved = true;
+      }
       const r = rect();
-      if (!r) return;
+      if (!r || !moved) return;
       const inside = m.clientY > r.top && m.clientY < r.bottom;
       const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor(((m.clientX - r.left) / r.width) * days)));
       const hour = inside
@@ -675,12 +716,12 @@ function Grid({
       setTaskDrag({ task: t, day, hour });
     };
 
-    const onUp = () => {
+    const onUp = (m: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       setTaskDrag((d) => {
         if (d && moved) onSchedule(d.task, d.day, d.hour);
-        else if (!moved) TA.complete.mutate({ id: t.id, done: !t.done });
+        else if (!moved) openTask(t, m.clientX, m.clientY);
         return null;
       });
     };
@@ -752,8 +793,8 @@ function Grid({
                   <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} compact />
                 ))}
 
-                <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true)} className="hov"
-                  title="Add an all-day item" aria-label="Add an all-day item"
+                <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task')} className="hov"
+                  title="Add a task or all-day item" aria-label="Add a task or all-day item"
                   style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
                 </button>
@@ -1573,111 +1614,334 @@ function EventPopover({
 }
 
 /**
- * Google Calendar style QuickCreate popover with segmented tab pills, (No title) fallback,
- * and More options trigger.
+ * Google Tasks / Calendar style Task Details Popover
+ */
+function TaskPopover({
+  task, x, y, onClose, onComplete, onDelete,
+}: {
+  task: Task; x: number; y: number;
+  onClose: () => void;
+  onComplete: () => void;
+  onDelete: () => void;
+}) {
+  const [done, setDone] = useState(task.done);
+  const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--acc)';
+  const displayTitle = task.title?.trim() || '(No title)';
+
+  let when = 'No date';
+  if (task.due_at) {
+    const d = new Date(task.due_at);
+    when = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(task.due_at))}`;
+  } else if (task.due_on) {
+    const d = new Date(`${task.due_on}T12:00:00`);
+    when = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`;
+  }
+
+  return (
+    <CalPopover x={x} y={y} onClose={onClose} label={displayTitle} width={340}>
+      <PopoverActions onClose={onClose}>
+        <button
+          onClick={() => {
+            setDone(!done);
+            onComplete();
+          }}
+          className="hov k-squish"
+          aria-label={done ? 'Mark incomplete' : 'Mark completed'}
+          title={done ? 'Mark incomplete' : 'Mark completed'}
+          style={ACT}
+        >
+          <Icon name={done ? 'check' : 'task'} size={15} color={done ? 'var(--pal-mint)' : 'var(--tx2)'} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="hov k-squish"
+          aria-label="Delete task"
+          title="Delete"
+          style={ACT}
+        >
+          <Icon name="trash" size={15} color="var(--pal-coral)" />
+        </button>
+      </PopoverActions>
+
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        <button
+          type="button"
+          onClick={() => {
+            setDone(!done);
+            onComplete();
+          }}
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            border: `2px solid ${done ? 'var(--pal-mint)' : hue}`,
+            background: done ? 'var(--pal-mint)' : 'transparent',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            flex: 'none',
+            marginTop: 3,
+            padding: 0,
+          }}
+        >
+          {done && <Icon name="check" size={11} color="var(--ink)" />}
+        </button>
+
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: 700,
+              letterSpacing: '-.02em',
+              lineHeight: 1.3,
+              color: done ? 'var(--tx3)' : 'var(--tx)',
+              textDecoration: done ? 'line-through' : 'none',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {displayTitle}
+          </div>
+
+          <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>
+            {when}
+          </div>
+
+          {task.notes && (
+            <div style={{ fontSize: 12.5, color: 'var(--tx2)', marginTop: 10, lineHeight: 1.5, background: 'var(--card2)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line2)' }}>
+              {task.notes}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 12 }}>
+            <Icon name="task" size={14} color="var(--tx3)" />
+            <span>My Tasks</span>
+          </div>
+        </div>
+      </div>
+    </CalPopover>
+  );
+}
+
+/**
+ * Google Calendar style QuickCreate popover with Event / Task / Out of office / Working location tabs.
  */
 function QuickCreate({
-  x, y, ws, day, hour, endHour, allDay, accent, onClose, onCreate, onMoreOptions,
+  x, y, ws, day, hour, endHour, allDay, initialTab = 'event', accent, onClose, onCreate, onCreateTask, onMoreOptions,
 }: {
   x: number; y: number; ws: Date; day: number; hour: number; endHour?: number; allDay: boolean;
-  accent: string; onClose: () => void; onCreate: (title: string, loc?: string) => void;
+  initialTab?: 'event' | 'task' | 'out_of_office' | 'working_location';
+  accent: string; onClose: () => void;
+  onCreate: (title: string, loc?: string, desc?: string) => void;
+  onCreateTask?: (title: string, notes?: string) => void;
   onMoreOptions?: (title: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'event' | 'task' | 'reminder'>('event');
+  const [activeTab, setActiveTab] = useState<'event' | 'task' | 'out_of_office' | 'working_location'>(initialTab);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
+  const [notes, setNotes] = useState('');
   const d = new Date(ws);
   d.setDate(d.getDate() + day);
   const eH = endHour !== undefined ? endHour : hour + 1;
   const when = allDay
-    ? `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`
+    ? `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`
     : `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hour)} – ${hhmm(eH)}`;
 
   const handleSave = () => {
-    onCreate(title.trim() || '(No title)', location);
+    if (activeTab === 'task') {
+      onCreateTask?.(title.trim() || '(No title)', notes);
+    } else {
+      onCreate(title.trim() || '(No title)', location, notes);
+    }
   };
 
   return (
-    <CalPopover x={x} y={y} onClose={onClose} label="New event" width={340}>
-      <PopoverActions onClose={onClose} />
-
-      {/* Google Calendar Tab Pills */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-        {(['event', 'task', 'reminder'] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '5px 14px',
-                borderRadius: 18,
-                fontSize: 12,
-                fontWeight: 700,
-                textTransform: 'capitalize',
-                cursor: 'pointer',
-                border: `1px solid ${isActive ? 'var(--acc)' : 'transparent'}`,
-                background: isActive ? 'color-mix(in srgb, var(--acc) 22%, var(--card))' : 'transparent',
-                color: isActive ? 'var(--accTx, var(--tx))' : 'var(--tx3)',
-                transition: 'all .15s ease',
-              }}
-            >
-              {tab}
-            </button>
-          );
-        })}
+    <CalPopover x={x} y={y} onClose={onClose} label="New event" width={380}>
+      {/* Top Header with Drag Handle & Close */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Icon name="more" size={16} color="var(--tx3)" style={{ opacity: 0.6 }} />
+        <button
+          onClick={onClose}
+          className="hov k-squish"
+          aria-label="Close"
+          title="Close"
+          style={{ width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        >
+          <Icon name="close" size={15} color="var(--tx2)" />
+        </button>
       </div>
 
-      {/* Title Input */}
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-        placeholder="Add title"
-        style={{
-          width: '100%',
-          minHeight: 42,
-          padding: '10px 14px',
-          borderRadius: 10,
-          border: '1px solid var(--line2)',
-          background: 'var(--card2)',
-          color: 'var(--tx)',
-          fontSize: 15,
-          fontWeight: 600,
-          marginBottom: 12,
-        }}
-      />
-
-      {/* Date & Time Row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginBottom: 10 }}>
-        <Icon name="clock" size={14} color="var(--tx3)" />
-        <span>{when}</span>
-      </div>
-
-      {/* Location Row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, marginBottom: 14 }}>
-        <Icon name="pin" size={14} color="var(--tx3)" />
+      {/* Large Title Input with Underline */}
+      <div style={{ marginBottom: 14 }}>
         <input
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="Add location"
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+          placeholder="Add title and time"
           style={{
-            flex: 1,
+            width: '100%',
             background: 'transparent',
             border: 'none',
-            borderBottom: '1px dashed var(--line2)',
-            padding: '2px 0 4px',
-            fontSize: 12.5,
+            borderBottom: '2px solid var(--acc)',
+            padding: '4px 0 8px',
             color: 'var(--tx)',
+            fontSize: 19,
+            fontWeight: 600,
+            letterSpacing: '-.015em',
             outline: 'none',
           }}
         />
       </div>
 
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+      {/* Segmented Tab Pills */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 2 }}>
+        {[
+          { id: 'event', label: 'Event' },
+          { id: 'task', label: 'Task' },
+          { id: 'out_of_office', label: 'Out of office' },
+          { id: 'working_location', label: 'Working location' },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 18,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: `1px solid ${isActive ? 'var(--acc)' : 'transparent'}`,
+                background: isActive ? 'color-mix(in srgb, var(--acc) 22%, var(--card))' : 'transparent',
+                color: isActive ? 'var(--accTx, var(--tx))' : 'var(--tx2)',
+                whiteSpace: 'nowrap',
+                transition: 'all .15s ease',
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Date & Time Row with Add Time pill */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <Icon name="clock" size={15} color="var(--tx3)" style={{ marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{when}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>Does not repeat</div>
+          </div>
+        </div>
+        {allDay && (
+          <span style={{ fontSize: 11.5, fontWeight: 700, padding: '4px 10px', borderRadius: 12, border: '1px solid var(--line2)', color: 'var(--tx2)' }}>
+            All day
+          </span>
+        )}
+      </div>
+
+      {activeTab === 'task' ? (
+        <>
+          {/* Task Description */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="text" size={15} color="var(--tx3)" />
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add description or notes"
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px dashed var(--line2)',
+                padding: '4px 0',
+                fontSize: 13,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Task List Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <Icon name="task" size={15} color="var(--tx3)" />
+            <div style={{ fontSize: 13, color: 'var(--tx2)' }}>My Tasks</div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Add Guests */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="people" size={15} color="var(--tx3)" />
+            <span style={{ fontSize: 13, color: 'var(--tx3)' }}>Add guests</span>
+          </div>
+
+          {/* Video Conferencing */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="spark" size={15} color="var(--pal-amber)" />
+            <span style={{ fontSize: 13, color: 'var(--tx2)' }}>Add Google Meet video conferencing</span>
+          </div>
+
+          {/* Location Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="pin" size={15} color="var(--tx3)" />
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Add rooms or location"
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px dashed var(--line2)',
+                padding: '4px 0',
+                fontSize: 13,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Description Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="text" size={15} color="var(--tx3)" />
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add description or a Google Drive attachment"
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px dashed var(--line2)',
+                padding: '4px 0',
+                fontSize: 13,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Calendar User Profile row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <Icon name="cal" size={15} color="var(--tx3)" />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>
+                Basedly Calendar
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: accent }} />
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>
+                Free · Default visibility · Do not notify
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Footer Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingTop: 4 }}>
         <button
           type="button"
           onClick={() => onMoreOptions?.(title)}
@@ -1695,12 +1959,13 @@ function QuickCreate({
         >
           More options
         </button>
+
         <button
           type="button"
           onClick={handleSave}
           className="acc k-squish"
           style={{
-            padding: '7px 22px',
+            padding: '8px 24px',
             borderRadius: 18,
             background: 'var(--acc)',
             color: 'var(--ink)',
