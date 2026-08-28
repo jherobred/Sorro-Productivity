@@ -20,6 +20,8 @@ import { Integrations } from './Integrations';
 import { useAppUpdate, useFullscreen, APP_VERSION, UPDATE_URL } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
 import { useProfiles } from '@/lib/people';
+import { BasedlyLogo, BirdMascot } from './BasedlyLogo';
+
 
 /**
  * Unified Settings & Profile Center.
@@ -1163,6 +1165,10 @@ export function SettingsModal({
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={SECTION_TITLE}>Application Information</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--card)', borderRadius: 14, border: '1px solid var(--line)' }}>
+              <BasedlyLogo size={24} />
+              <span style={{ fontSize: 11.5, color: 'var(--tx3)', fontWeight: 600 }}>v{APP_VERSION}</span>
+            </div>
             <div style={{ background: 'var(--card2)', padding: 14, borderRadius: 14, border: '1px solid var(--line2)', fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--tx3)' }}>Version</span>
