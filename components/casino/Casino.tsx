@@ -33,7 +33,7 @@ export function Casino({ onExit }: CasinoProps) {
   const [activeGame, setActiveGame] = useState<'blackjack' | 'slots'>('blackjack');
 
   return (
-    <div className="w-full flex flex-col items-center gap-5 select-none" style={{ maxWidth: 1040, margin: '0 auto' }}>
+    <div className="w-full flex flex-col items-center gap-5 select-none" style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* 18+ Legal Age Verification Onboarding Gate */}
       {!isAgeVerified && (
         <CasinoAgeGate
