@@ -351,14 +351,15 @@ body {
 /* Collapsible desktop sidebar (Notion's Ctrl+\). Driven by a root class so it
    repaints with the rest of the chrome, and animated on width because the
    content beside it genuinely has to reflow into the space. */
-/* Collapsed means the rail leaves the tree, not that it is styled to zero
-   width. Animating a flex item's width out is what a drawer usually does, but
-   here the rail is a flex *item* whose used width refused to follow the
-   cascade, so the reliable version is to unmount it and slide the replacement
-   in. Reopening plays `railin`, which is the same motion the eye expects. */
-.bd-rail { animation: railin .3s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes railin { from { width: 0; opacity: .4; } }
-.nomo .bd-rail { animation: none; }
+.bd-rail {
+  transition: width .28s cubic-bezier(0.16, 1, 0.3, 1),
+              min-width .28s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width .28s cubic-bezier(0.16, 1, 0.3, 1),
+              transform .28s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity .22s ease;
+  will-change: width, min-width;
+}
+.nomo .bd-rail { transition: none !important; }
 
 /* Announced, not drawn. Each section keeps an h1 naming it for screen readers
    while the visible line carries something the navigation is not already

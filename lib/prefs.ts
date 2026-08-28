@@ -11,7 +11,7 @@ export type Prefs = {
   motion: boolean;
   navPicks: string[];
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
-  sidebar: 'open' | 'collapsed';
+  sidebar: 'open' | 'compact' | 'hidden' | 'collapsed';
   /** Which shared space you are in. null is Personal, which is not a row. */
   workspace: string | null;
   lockEvents: boolean;
