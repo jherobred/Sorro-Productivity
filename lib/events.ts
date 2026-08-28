@@ -377,7 +377,7 @@ export function useEventActions(ws: Date) {
     const eH = allDay ? 23.98 : (endHour !== undefined ? endHour : hour + 1);
     create.mutate({
       id,
-      title: title?.trim() || (allDay ? 'All-day item' : 'New event'),
+      title: title?.trim() || (allDay ? 'All-day item' : '(No title)'),
       starts_at: at(ws, day, allDay ? 0 : hour),
       ends_at: at(ws, day, eH),
       all_day: allDay,

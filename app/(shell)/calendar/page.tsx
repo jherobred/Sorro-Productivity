@@ -352,15 +352,56 @@ export default function CalendarPage() {
       )}
 
       {pop?.kind === 'slot' && (
-        <QuickCreate x={pop.x} y={pop.y} ws={ws} day={pop.day} hour={pop.hour} allDay={pop.allDay}
+        <QuickCreate
+          x={pop.x} y={pop.y} ws={ws} day={pop.day} hour={pop.hour} endHour={pop.endHour} allDay={pop.allDay}
           accent={prefs.accent}
           onClose={() => setPop(null)}
-          onCreate={(title) => { A.addAt(pop.day, pop.hour, prefs.accent, pop.allDay, title); setPop(null); }} />
+          onCreate={(title) => {
+            A.addAt(pop.day, pop.hour, prefs.accent, pop.allDay, title.trim() || '(No title)', pop.endHour);
+            setPop(null);
+          }}
+          onMoreOptions={(title) => {
+            const startIso = at(ws, pop.day, pop.allDay ? 0 : pop.hour);
+            const endIso = at(ws, pop.day, pop.allDay ? 23.98 : (pop.endHour ?? pop.hour + 1));
+            const draftEv: Ev = {
+              id: crypto.randomUUID(),
+              title: title?.trim() || '(No title)',
+              starts_at: startIso,
+              ends_at: endIso,
+              color: prefs.accent,
+              location: '',
+              all_day: pop.allDay,
+              remind_minutes: 10,
+              snoozed_until: null,
+              deleted_at: null,
+            };
+            setEdit(draftEv);
+            setPop(null);
+          }}
+        />
       )}
 
       {edit && (
-        <EditSheet ev={edit} onClose={() => setEdit(null)}
-          onSave={(patch) => { A.update.mutate({ id: edit.id, patch }); setEdit(null); }} />
+        <EditSheet
+          ev={edit}
+          onClose={() => setEdit(null)}
+          onSave={(patch) => {
+            const exists = events.some((e) => e.id === edit.id);
+            if (exists) {
+              A.update.mutate({ id: edit.id, patch });
+            } else {
+              A.create.mutate({
+                id: edit.id,
+                title: patch.title || '(No title)',
+                starts_at: patch.starts_at || edit.starts_at,
+                ends_at: patch.ends_at || edit.ends_at,
+                color: patch.color || edit.color,
+                all_day: patch.all_day ?? edit.all_day,
+              });
+            }
+            setEdit(null);
+          }}
+        />
       )}
     </div>
   );
@@ -904,7 +945,7 @@ function EventChip({
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
         {locked && <Icon name="lock" size={9} color={ink} />}
-        {ev.title}
+        {ev.title?.trim() || '(No title)'}
       </span>
       <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
         {label} {ev.location}
@@ -961,7 +1002,7 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
         zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
-        {s.ev.title}
+        {s.ev.title?.trim() || '(No title)'}
         {!lifted && (
           <span style={{
             marginLeft: 'auto', flex: 'none', padding: '1px 7px', borderRadius: 999,
@@ -1452,49 +1493,72 @@ function EventPopover({
   const when = ev.all_day
     ? start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
     : `${start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(ev.starts_at))} – ${hhmm(hoursOf(ev.ends_at))}`;
+  const dayName = start.toLocaleDateString(undefined, { weekday: 'long' });
+  const displayTitle = ev.title?.trim() || '(No title)';
 
   return (
-    <CalPopover x={x} y={y} onClose={onClose} label={ev.title}>
+    <CalPopover x={x} y={y} onClose={onClose} label={displayTitle} width={340}>
       <PopoverActions onClose={onClose}>
         {!locked && (
           <>
             <button onClick={onEdit} className="hov k-squish" aria-label="Edit event" title="Edit"
-              style={ACT}><Icon name="edit" size={14} color="var(--tx2)" /></button>
-            <button onClick={onDuplicate} className="hov k-squish" aria-label="Duplicate event" title="Duplicate"
-              style={ACT}><Icon name="copy" size={14} color="var(--tx2)" /></button>
+              style={ACT}><Icon name="edit" size={15} color="var(--tx2)" /></button>
             <button onClick={onDelete} className="hov k-squish"
               aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'}
               title={runDays > 1 ? 'Delete this day' : 'Delete'}
-              style={ACT}><Icon name="trash" size={14} color="var(--pal-coral)" /></button>
+              style={ACT}><Icon name="trash" size={15} color="var(--pal-coral)" /></button>
+            <button onClick={onDuplicate} className="hov k-squish" aria-label="Duplicate event" title="Duplicate"
+              style={ACT}><Icon name="copy" size={15} color="var(--tx2)" /></button>
+            <button onClick={onEdit} className="hov k-squish" aria-label="More options" title="More options"
+              style={ACT}><Icon name="dots" size={15} color="var(--tx2)" /></button>
           </>
         )}
       </PopoverActions>
 
-      <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
-        <span aria-hidden style={{ width: 13, height: 13, borderRadius: 4, background: ev.color, flex: 'none', marginTop: 3 }} />
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: ev.color, flex: 'none', marginTop: 4 }} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-            {ev.title}
+          <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.3, color: 'var(--tx)', overflowWrap: 'anywhere' }}>
+            {displayTitle}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.5 }}>{when}</div>
-          {ev.location && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx2)', marginTop: 7 }}>
-              <Icon name="pin" size={13} color="var(--tx3)" />{ev.location}
+          <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Weekly on {dayName}</div>
+
+          {/* Meeting Notes Section */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 11, marginTop: 14,
+            padding: '9px 12px', borderRadius: 12,
+            background: 'var(--card2)', border: '1px solid var(--line2)',
+          }}>
+            <Icon name="files" size={15} color="var(--pal-sky)" style={{ marginTop: 2 }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--pal-sky)' }}>Take meeting notes</div>
+              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>Start a new document to capture notes</div>
             </div>
-          )}
+          </div>
+
+          {/* Notification Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 12 }}>
+            <Icon name="bell" size={14} color="var(--tx3)" />
+            <span>{ev.remind_minutes ? `${ev.remind_minutes} minutes before` : '10 minutes before'}</span>
+          </div>
+
+          {/* Calendar Account Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 8 }}>
+            <Icon name="cal" size={14} color="var(--tx3)" />
+            <span>{ev.location || 'Basedly Calendar'}</span>
+          </div>
+
           {locked && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 9 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 10 }}>
               <Icon name="lock" size={12} color="var(--tx3)" />Synced — edit it where it came from
             </div>
           )}
 
-          {/* A repeating class is N rows drawn as one bar. Everything above
-              acts on the day you clicked; this is the way to reach all of it,
-              and it says how many so it can never be a surprise. */}
           {runDays > 1 && !locked && (
             <button onClick={onDeleteRun} className="hov"
               style={{
-                display: 'flex', alignItems: 'center', gap: 7, marginTop: 11, padding: '7px 10px',
+                display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, padding: '7px 10px',
                 width: '100%', borderRadius: 9, border: '1px solid var(--line2)',
                 fontSize: 11.5, fontWeight: 700, color: 'var(--pal-coral)',
               }}>
@@ -1509,17 +1573,19 @@ function EventPopover({
 }
 
 /**
- * Clicking an empty slot asks the one question worth asking — what is this? —
- * and gets out of the way. It used to create "New event" immediately and leave
- * you to hunt for it and rename it.
+ * Google Calendar style QuickCreate popover with segmented tab pills, (No title) fallback,
+ * and More options trigger.
  */
 function QuickCreate({
-  x, y, ws, day, hour, endHour, allDay, accent, onClose, onCreate,
+  x, y, ws, day, hour, endHour, allDay, accent, onClose, onCreate, onMoreOptions,
 }: {
   x: number; y: number; ws: Date; day: number; hour: number; endHour?: number; allDay: boolean;
-  accent: string; onClose: () => void; onCreate: (title: string) => void;
+  accent: string; onClose: () => void; onCreate: (title: string, loc?: string) => void;
+  onMoreOptions?: (title: string) => void;
 }) {
+  const [activeTab, setActiveTab] = useState<'event' | 'task' | 'reminder'>('event');
   const [title, setTitle] = useState('');
+  const [location, setLocation] = useState('');
   const d = new Date(ws);
   d.setDate(d.getDate() + day);
   const eH = endHour !== undefined ? endHour : hour + 1;
@@ -1527,35 +1593,129 @@ function QuickCreate({
     ? `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`
     : `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hour)} – ${hhmm(eH)}`;
 
-  return (
-    <CalPopover x={x} y={y} onClose={onClose} label="New event">
-      <PopoverActions onClose={onClose} />
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') onCreate(title); }}
-        placeholder="Add a title"
-        style={{
-          width: '100%', minHeight: 40, padding: '9px 11px', borderRadius: 10,
-          border: '1px solid var(--line2)', background: 'var(--card2)', color: 'var(--tx)',
-          fontSize: 14, fontWeight: 600,
-        }} />
+  const handleSave = () => {
+    onCreate(title.trim() || '(No title)', location);
+  };
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--tx2)', margin: '11px 0 13px' }}>
-        <span aria-hidden style={{ width: 11, height: 11, borderRadius: 3, background: accent, flex: 'none' }} />
-        <Icon name="clock" size={13} color="var(--tx3)" />{when}
+  return (
+    <CalPopover x={x} y={y} onClose={onClose} label="New event" width={340}>
+      <PopoverActions onClose={onClose} />
+
+      {/* Google Calendar Tab Pills */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+        {(['event', 'task', 'reminder'] as const).map((tab) => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '5px 14px',
+                borderRadius: 18,
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: 'capitalize',
+                cursor: 'pointer',
+                border: `1px solid ${isActive ? 'var(--acc)' : 'transparent'}`,
+                background: isActive ? 'color-mix(in srgb, var(--acc) 22%, var(--card))' : 'transparent',
+                color: isActive ? 'var(--accTx, var(--tx))' : 'var(--tx3)',
+                transition: 'all .15s ease',
+              }}
+            >
+              {tab}
+            </button>
+          );
+        })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => onCreate(title)} className="acc k-squish"
-          style={{ flex: 1, minHeight: 38, borderRadius: 10, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800 }}>
-          Save
+      {/* Title Input */}
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+        placeholder="Add title"
+        style={{
+          width: '100%',
+          minHeight: 42,
+          padding: '10px 14px',
+          borderRadius: 10,
+          border: '1px solid var(--line2)',
+          background: 'var(--card2)',
+          color: 'var(--tx)',
+          fontSize: 15,
+          fontWeight: 600,
+          marginBottom: 12,
+        }}
+      />
+
+      {/* Date & Time Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginBottom: 10 }}>
+        <Icon name="clock" size={14} color="var(--tx3)" />
+        <span>{when}</span>
+      </div>
+
+      {/* Location Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, marginBottom: 14 }}>
+        <Icon name="pin" size={14} color="var(--tx3)" />
+        <input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Add location"
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            borderBottom: '1px dashed var(--line2)',
+            padding: '2px 0 4px',
+            fontSize: 12.5,
+            color: 'var(--tx)',
+            outline: 'none',
+          }}
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => onMoreOptions?.(title)}
+          className="hov k-squish"
+          style={{
+            padding: '7px 12px',
+            borderRadius: 16,
+            border: 'none',
+            background: 'transparent',
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: 'var(--tx2)',
+            cursor: 'pointer',
+          }}
+        >
+          More options
         </button>
-        <button onClick={onClose} className="hov k-squish"
-          style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
-          Cancel
+        <button
+          type="button"
+          onClick={handleSave}
+          className="acc k-squish"
+          style={{
+            padding: '7px 22px',
+            borderRadius: 18,
+            background: 'var(--acc)',
+            color: 'var(--ink)',
+            fontSize: 13,
+            fontWeight: 800,
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: 'var(--sh)',
+          }}
+        >
+          Save
         </button>
       </div>
     </CalPopover>
   );
 }
 
-const ACT: React.CSSProperties = { width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center' };
+const ACT: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' };
