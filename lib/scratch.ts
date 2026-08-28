@@ -8,16 +8,28 @@ import { PAL } from './pal';
 import { settler } from './settle';
 
 export type Scratch = {
-  id: string; text: string; tag: string; color: string;
-  pinned: boolean; position: number; created_at: string;
+  id: string;
+  text: string;
+  title?: string;
+  photo_url?: string;
+  tag: string;
+  color: string;
+  pinned: boolean;
+  position: number;
+  created_at: string;
 };
 
 const KEY = ['scratch'] as const;
 
-/** Tag cycle from the prototype's scratchpad. */
-export const SCRATCH_TAGS = ['Note', 'Idea', 'Todo', 'Link'] as const;
+/** Tag cycle from the prototype's scratchpad / journal. */
+export const SCRATCH_TAGS = ['Journal', 'Note', 'Idea', 'Todo', 'Memory', 'Link'] as const;
 export const TAG_COLOR: Record<string, string> = {
-  Note: PAL.cyan, Idea: PAL.amber, Todo: PAL.mint, Link: PAL.violet,
+  Journal: PAL.amber,
+  Note: PAL.cyan,
+  Idea: PAL.indigo,
+  Todo: PAL.mint,
+  Memory: PAL.coral,
+  Link: PAL.violet,
 };
 
 export function useScratch() {
@@ -31,19 +43,63 @@ export function useScratch() {
         .order('pinned', { ascending: false })
         .order('position');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((d) => {
+        // Try parsing JSON payload if photo_url / title was stored inside text
+        let title: string | undefined;
+        let photo_url: string | undefined;
+        let text = d.text;
+        if (text.startsWith('__JOURNAL__')) {
+          try {
+            const parsed = JSON.parse(text.replace('__JOURNAL__', ''));
+            title = parsed.title;
+            photo_url = parsed.photo_url;
+            text = parsed.text;
+          } catch {}
+        }
+        return {
+          ...d,
+          title,
+          photo_url,
+          text,
+        };
+      });
     },
   });
 }
 
-const ADD = defineMutation('scratch.add', async (v: { id: string; text: string; tag: string; color: string }) => {
+const ADD = defineMutation('scratch.add', async (v: { id: string; text: string; title?: string; photo_url?: string; tag: string; color: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_scratch').insert({ ...v, user_id, position: Date.now() % 2_000_000_000 });
+  let dbText = v.text;
+  if (v.photo_url || v.title) {
+    dbText = '__JOURNAL__' + JSON.stringify({
+      title: v.title,
+      photo_url: v.photo_url,
+      text: v.text,
+    });
+  }
+  const { error } = await supabase.from('bd_scratch').insert({
+    id: v.id,
+    user_id,
+    text: dbText,
+    tag: v.tag,
+    color: v.color,
+    position: Date.now() % 2_000_000_000,
+  });
   if (error) throw error;
 });
 
 const SAVE = defineMutation('scratch.save', async (v: { id: string; patch: Partial<Scratch> }) => {
-  const { error } = await supabase.from('bd_scratch').update(v.patch).eq('id', v.id);
+  const patch: Record<string, unknown> = { ...v.patch };
+  if (v.patch.photo_url !== undefined || v.patch.title !== undefined || v.patch.text !== undefined) {
+    patch.text = '__JOURNAL__' + JSON.stringify({
+      title: v.patch.title,
+      photo_url: v.patch.photo_url,
+      text: v.patch.text,
+    });
+    delete patch.title;
+    delete patch.photo_url;
+  }
+  const { error } = await supabase.from('bd_scratch').update(patch).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -69,7 +125,24 @@ export function useScratchActions() {
     if (ctx) queryClient.setQueryData(KEY, ctx);
   };
 
-  const add = useMutation<unknown, Error, { id: string; text: string; tag: string; color: string }>({ mutationKey: ADD, onSettled: settle });
+  const add = useMutation({
+    mutationKey: ADD,
+    onMutate: (v: { id: string; text: string; title?: string; photo_url?: string; tag: string; color: string }) =>
+      patchLocal((p) => [{
+        id: v.id,
+        text: v.text,
+        title: v.title,
+        photo_url: v.photo_url,
+        tag: v.tag,
+        color: v.color,
+        pinned: false,
+        position: 0,
+        created_at: new Date().toISOString(),
+      }, ...p]),
+    onError: rollback,
+    onSettled: settle,
+  });
+
   const restore = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE, onSettled: settle });
 
   const save = useMutation({
@@ -89,21 +162,12 @@ export function useScratchActions() {
 
   const removeWithUndo = (n: Scratch) => {
     del.mutate({ id: n.id });
-    toast('Note deleted', () => restore.mutate({ id: n.id }));
+    toast('Entry deleted', () => restore.mutate({ id: n.id }));
   };
 
   return { add, save, del, restore, removeWithUndo };
 }
 
-/** "3m", "2h", "yesterday" — the compact stamp the scratchpad rows show. */
-/**
- * A complete phrase, not a fragment.
- *
- * This used to return bare tokens — "now", "yesterday", "3m" — and five call
- * sites appended " ago" to them, which rendered "yesterday ago" and "now ago"
- * on the feed and in Settings. Owning the whole phrase is the only version that
- * cannot be misused: there is nothing left for a caller to add.
- */
 export function ago(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
   if (mins < 1) return 'just now';

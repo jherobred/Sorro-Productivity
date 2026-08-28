@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -24,6 +24,18 @@ import { useScratch, useScratchActions, SCRATCH_TAGS, TAG_COLOR, ago, type Scrat
 import { useNotifications, useNotifActions, NOTIF_HUE, NOTIF_ICON, ago as notifAgo } from '@/lib/notify';
 import { Streak, streakFrom } from '@/components/Streak';
 import { PhoneHome } from '@/components/PhoneHome';
+import {
+  MorphingDialog,
+  MorphingDialogTrigger,
+  MorphingDialogContent,
+  MorphingDialogTitle,
+  MorphingDialogImage,
+  MorphingDialogSubtitle,
+  MorphingDialogClose,
+  MorphingDialogDescription,
+  MorphingDialogContainer,
+} from '@/components/core/morphing-dialog';
+import { PlusIcon, Camera, Trash2, Pin, CheckSquare } from 'lucide-react';
 
 const AMBER = '#F5B33C';
 const CARD: React.CSSProperties = {
@@ -689,29 +701,58 @@ export default function HomePage() {
   );
 }
 
-/** Scratchpad — spans two grid columns on desktop (scratchCardStyle). */
+/** Journal & Scratchpad — full journal with photo captures and MorphingDialog */
 function Scratchpad({ phone }: { phone: boolean }) {
   const { data: notes = [] } = useScratch();
   const A = useScratchActions();
   const [draft, setDraft] = useState('');
+  const [titleDraft, setTitleDraft] = useState('');
+  const [photoDraft, setPhotoDraft] = useState<string | null>(null);
+  const [tag, setTag] = useState<string>('Journal');
   const [filter, setFilter] = useState<string>('All');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPhotoDraft(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const keep = () => {
     const t = draft.trim();
-    // Pressing Keep on an empty field used to do nothing and say nothing.
-    if (!t) { toast('Type something first'); return; }
-    A.add.mutate({ id: crypto.randomUUID(), text: t, tag: 'Note', color: TAG_COLOR.Note });
+    const ttl = titleDraft.trim();
+    if (!t && !ttl && !photoDraft) {
+      toast('Type something or add a photo first');
+      return;
+    }
+    A.add.mutate({
+      id: crypto.randomUUID(),
+      title: ttl || undefined,
+      text: t,
+      photo_url: photoDraft || undefined,
+      tag,
+      color: TAG_COLOR[tag] || PAL.amber,
+    });
     setDraft('');
+    setTitleDraft('');
+    setPhotoDraft(null);
+    toast('Added to Journal ✨');
   };
 
   const shown = filter === 'All' ? notes : notes.filter((n) => n.tag === filter);
 
-  /** "→ Task" promotes a scratch note into the first task list and clears it. */
   const toTask = async (n: Scratch) => {
     try {
       const user_id = await currentUserId();
       const { data: list } = await supabase.from('bd_lists').select('id').order('position').limit(1).maybeSingle();
-      const { error } = await supabase.from('bd_tasks').insert({ user_id, title: n.text, list_id: list?.id ?? null });
+      const { error } = await supabase.from('bd_tasks').insert({ user_id, title: n.title ? `${n.title}: ${n.text}` : n.text, list_id: list?.id ?? null });
       if (error) throw error;
       A.removeWithUndo(n);
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -729,103 +770,317 @@ function Scratchpad({ phone }: { phone: boolean }) {
       border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
       boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-        <div style={{ ...KICKER, color: 'var(--pal-amber)' }}>Scratchpad</div>
-        <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>{notes.length} kept</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--pal-amber)' }} />
+          <div style={{ ...KICKER, color: 'var(--pal-amber)' }}>Daily Journal & Capture</div>
+        </div>
+        <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>{notes.length} entries</div>
       </div>
 
+      {/* Composer Container */}
       <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 11px', borderRadius: 12,
-        background: 'color-mix(in srgb, #FFF9E6 14%, var(--card2))',
+        borderRadius: 14,
+        background: 'color-mix(in srgb, #FFF9E6 16%, var(--card2))',
         border: '1px solid color-mix(in srgb, #F5B33C 28%, var(--line))',
+        padding: '10px 12px',
         marginBottom: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
       }}>
-        <Icon name="plus" size={15} color="var(--pal-amber)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flex: 'none', color: 'var(--pal-amber)' }}>
+            <PlusIcon size={16} />
+          </div>
+          <input
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            placeholder="Title (optional)..."
+            style={{
+              flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: 'var(--tx)',
+              background: 'transparent', border: 'none', outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach photo to your day"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 6,
+              background: photoDraft ? 'color-mix(in srgb, var(--pal-amber) 25%, transparent)' : 'var(--card)',
+              border: '1px solid var(--line)', color: photoDraft ? 'var(--pal-amber)' : 'var(--tx2)',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <Camera size={13} />
+            <span>{photoDraft ? 'Photo Added' : 'Add Photo'}</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoUpload}
+            style={{ display: 'none' }}
+          />
+        </div>
+
+        {photoDraft && (
+          <div style={{ position: 'relative', width: 80, height: 60, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line2)' }}>
+            <img src={photoDraft} alt="Attached preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <button
+              type="button"
+              onClick={() => setPhotoDraft(null)}
+              style={{
+                position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 10, display: 'grid', placeItems: 'center', border: 'none',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); keep(); } }}
-          rows={1}
-          placeholder="Jot something — Enter to keep it"
-          style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--tx)', resize: 'none', fontFamily: 'inherit', background: 'transparent' }}
+          rows={2}
+          placeholder="Capture thoughts, moments, or photos of your day..."
+          style={{
+            width: '100%', fontSize: 12.5, lineHeight: 1.5, color: 'var(--tx)',
+            resize: 'none', fontFamily: 'inherit', background: 'transparent', border: 'none', outline: 'none',
+          }}
         />
-        <button onClick={keep} className="acc k-squish"
-          style={{ flex: 'none', padding: '5px 11px', borderRadius: 8, background: 'var(--pal-amber)', color: '#0A0912', fontSize: 11, fontWeight: 800 }}>
-          Keep
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            {SCRATCH_TAGS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTag(t)}
+                style={{
+                  padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+                  background: tag === t ? `color-mix(in srgb, ${TAG_COLOR[t]} 25%, transparent)` : 'transparent',
+                  color: tag === t ? TAG_COLOR[t] : 'var(--tx3)',
+                  border: `1px solid ${tag === t ? TAG_COLOR[t] : 'transparent'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={keep}
+            className="acc k-squish"
+            style={{
+              padding: '5px 14px', borderRadius: 8, background: 'var(--pal-amber)',
+              color: '#0A0912', fontSize: 11, fontWeight: 800, border: 'none', cursor: 'pointer',
+            }}
+          >
+            Keep
+          </button>
+        </div>
       </div>
 
+      {/* Tag Filters */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {['All', ...SCRATCH_TAGS].map((f) => (
-          <button key={f} onClick={() => setFilter(f)}
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
             style={{
-              padding: '4px 10px', borderRadius: 7, fontSize: 10.5, fontWeight: 700,
-              background: filter === f ? 'color-mix(in srgb, var(--acc) 20%, transparent)' : 'transparent',
-              color: filter === f ? 'var(--accTx)' : 'var(--tx3)',
-            }}>
+              padding: '3px 9px', borderRadius: 7, fontSize: 10.5, fontWeight: 700,
+              background: filter === f ? 'color-mix(in srgb, var(--pal-amber) 20%, transparent)' : 'transparent',
+              color: filter === f ? 'var(--pal-amber)' : 'var(--tx3)',
+              border: 'none', cursor: 'pointer',
+            }}
+          >
             {f}
           </button>
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {shown.map((n) => <ScratchRow key={n.id} n={n} A={A} onToTask={toTask} />)}
+      {/* Journal Cards List with MorphingDialog */}
+      <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+        {shown.map((n) => (
+          <JournalCard key={n.id} n={n} A={A} onToTask={toTask} />
+        ))}
         {shown.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '4px 2px' }}>Nothing kept under this tag yet.</div>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', padding: '8px 2px' }}>
+            No journal entries kept under this tag yet.
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function ScratchRow({ n, A, onToTask }: { n: Scratch; A: ReturnType<typeof useScratchActions>; onToTask: (n: Scratch) => void }) {
-  const cycleTag = () => {
-    const i = SCRATCH_TAGS.indexOf(n.tag as (typeof SCRATCH_TAGS)[number]);
-    const next = SCRATCH_TAGS[(i + 1) % SCRATCH_TAGS.length];
-    A.save.mutate({ id: n.id, patch: { tag: next, color: TAG_COLOR[next] } });
-  };
-
+function JournalCard({
+  n,
+  A,
+  onToTask,
+}: {
+  n: Scratch;
+  A: ReturnType<typeof useScratchActions>;
+  onToTask: (n: Scratch) => void;
+}) {
   return (
-    <div className="pop" style={{
-      padding: '10px 11px', borderRadius: 12, background: 'var(--card2)', border: '1px solid var(--line)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-        <span style={{ width: 3, alignSelf: 'stretch', minHeight: 30, borderRadius: 2, background: n.color, flex: 'none' }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, fontWeight: 500, textWrap: 'pretty' }}>{n.text}</div>
-          {/* Tag + stamp sit left; the actions are pushed to the right edge,
-              matching the prototype's row (markup 571–577). */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <button onClick={cycleTag} title="Change tag"
+    <MorphingDialog
+      transition={{
+        type: 'spring',
+        bounce: 0.05,
+        duration: 0.25,
+      }}
+    >
+      <MorphingDialogTrigger
+        style={{ borderRadius: '12px' }}
+        className="flex flex-col overflow-hidden border border-zinc-800/60 bg-[var(--card2)] transition-all hover:border-zinc-700/80 shadow-sm"
+      >
+        {n.photo_url && (
+          <MorphingDialogImage
+            src={n.photo_url}
+            alt={n.title || n.text}
+            className="h-36 w-full object-cover"
+          />
+        )}
+        <div className="flex grow flex-col p-3">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span
               style={{
-                padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 800, flex: 'none',
-                color: n.color, background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
-              }}>
+                padding: '2px 6px',
+                borderRadius: 5,
+                fontSize: 9.5,
+                fontWeight: 800,
+                color: n.color,
+                background: `color-mix(in srgb, ${n.color} 16%, transparent)`,
+              }}
+            >
               {n.tag}
-            </button>
-            <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{ago(n.created_at)}</span>
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{ago(n.created_at)}</span>
+          </div>
 
-            <button onClick={() => onToTask(n)} className="hov" title="Turn into a task"
+          {n.title && (
+            <MorphingDialogTitle className="text-sm font-bold text-[var(--tx)] line-clamp-1 mb-1">
+              {n.title}
+            </MorphingDialogTitle>
+          )}
+
+          <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.45, textWrap: 'pretty' }} className="line-clamp-3">
+            {n.text}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 6, borderTop: '1px solid var(--line)' }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToTask(n);
+              }}
+              className="hov"
+              title="Turn into a task"
               style={{
-                marginLeft: 'auto', flex: 'none', padding: '4px 9px', borderRadius: 7,
-                border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)',
-              }}>
-              → Task
+                padding: '2px 6px', borderRadius: 5, border: '1px solid var(--line2)',
+                fontSize: 10, fontWeight: 700, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 3,
+              }}
+            >
+              <CheckSquare size={10} />
+              <span>→ Task</span>
             </button>
-            <button onClick={() => A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } })}
-              className="hov" title={n.pinned ? 'Unpin' : 'Pin to top'}
-              style={{ flex: 'none', padding: '3px 7px', borderRadius: 6, fontSize: 11, color: n.pinned ? 'var(--accTx)' : 'var(--tx3)' }}>
-              {n.pinned ? '★' : '☆'}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                A.save.mutate({ id: n.id, patch: { pinned: !n.pinned } });
+              }}
+              className="hov"
+              title={n.pinned ? 'Unpin' : 'Pin to top'}
+              style={{
+                marginLeft: 'auto', padding: '2px 5px', borderRadius: 5, fontSize: 10,
+                color: n.pinned ? 'var(--pal-amber)' : 'var(--tx3)', border: 'none', background: 'transparent',
+              }}
+            >
+              <Pin size={11} />
             </button>
-            <button onClick={() => A.removeWithUndo(n)} className="hov"
-              aria-label={`Delete note: ${n.text.slice(0, 30)}`} title="Delete note"
-              style={{ flex: 'none', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
-              <Icon name="trash" size={13} color="var(--tx3)" />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                A.removeWithUndo(n);
+              }}
+              className="hov"
+              title="Delete"
+              style={{ padding: '2px 5px', borderRadius: 5, color: 'var(--tx3)', border: 'none', background: 'transparent' }}
+            >
+              <Trash2 size={11} />
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </MorphingDialogTrigger>
+
+      <MorphingDialogContainer>
+        <MorphingDialogContent
+          style={{ borderRadius: '20px' }}
+          className="pointer-events-auto relative flex h-auto w-full max-w-lg flex-col overflow-hidden border border-zinc-700 bg-[var(--card)] shadow-2xl"
+        >
+          {n.photo_url && (
+            <MorphingDialogImage
+              src={n.photo_url}
+              alt={n.title || n.text}
+              className="h-64 w-full object-cover"
+            />
+          )}
+          <div className="p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  color: n.color,
+                  background: `color-mix(in srgb, ${n.color} 18%, transparent)`,
+                }}
+              >
+                {n.tag}
+              </span>
+              <MorphingDialogSubtitle className="text-xs text-[var(--tx3)]">
+                {new Date(n.created_at).toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })} · {ago(n.created_at)}
+              </MorphingDialogSubtitle>
+            </div>
+
+            {n.title && (
+              <MorphingDialogTitle className="text-xl font-extrabold text-[var(--tx)] mb-2">
+                {n.title}
+              </MorphingDialogTitle>
+            )}
+
+            <MorphingDialogDescription
+              disableLayoutAnimation
+              variants={{
+                initial: { opacity: 0, scale: 0.95, y: 20 },
+                animate: { opacity: 1, scale: 1, y: 0 },
+                exit: { opacity: 0, scale: 0.95, y: 20 },
+              }}
+            >
+              <p className="mt-2 text-[14px] leading-relaxed text-[var(--tx)] whitespace-pre-wrap">
+                {n.text}
+              </p>
+            </MorphingDialogDescription>
+          </div>
+          <MorphingDialogClose className="text-white" />
+        </MorphingDialogContent>
+      </MorphingDialogContainer>
+    </MorphingDialog>
   );
 }
 

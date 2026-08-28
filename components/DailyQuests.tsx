@@ -140,186 +140,122 @@ export function DailyQuests({
       {/* Main Grid: Left Buddy, Right Quests */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(250px, 310px) 1fr',
-          gap: 20,
-          alignItems: 'stretch',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
         }}
       >
-        {/* Left Side: Study Buddy Companion */}
+        {/* Left Side: Study Buddy Companion (Level above buddy, buddy itself, micro buttons) */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
+            alignItems: 'center',
+            justifyContent: 'center',
             borderRight: '1px solid var(--line2)',
-            paddingRight: 18,
-            position: 'relative',
+            paddingRight: 16,
+            minWidth: 100,
+            flex: 'none',
           }}
         >
-          {/* Top Info Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Level above buddy */}
+          <div style={{ marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 800,
+                color: hue,
+                textTransform: 'uppercase',
+                letterSpacing: '.06em',
+                padding: '2px 7px',
+                borderRadius: 6,
+                background: `color-mix(in srgb, ${hue} 15%, transparent)`,
+              }}
+            >
+              Lvl {petLevel}
+            </span>
+          </div>
+
+          {/* Buddy Mascot */}
+          <div
+            onClick={handlePet}
+            role="button"
+            tabIndex={0}
+            aria-label="Pet study buddy"
+            className="k-squish"
+            style={{
+              position: 'relative',
+              cursor: 'pointer',
+              transform: bouncing ? 'scale(1.15) translateY(-3px)' : 'scale(1)',
+              transition: 'transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+          >
+            <Mascot
+              id={me || 'me'}
+              mood={currentMood}
+              hue={hue}
+              size={54}
+              variant="full"
+              accessory={equipped.mascotAccessory}
+              crown={equipped.mascotAccessory === 'crown'}
+            />
+            {hearts.map((h) => (
               <span
+                key={h.id}
                 style={{
-                  fontSize: 10.5,
-                  fontWeight: 800,
-                  color: hue,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.06em',
-                  padding: '2px 7px',
-                  borderRadius: 6,
-                  background: `color-mix(in srgb, ${hue} 15%, transparent)`,
+                  position: 'absolute',
+                  top: 0,
+                  left: '50%',
+                  transform: `translate(${h.x}px, ${h.y}px)`,
+                  fontSize: 13,
+                  animation: 'pop 0.8s ease-out forwards',
+                  pointerEvents: 'none',
                 }}
               >
-                Lvl {petLevel} Buddy
+                💖
               </span>
-              {equipped.titleText && (
-                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pal-amber)' }}>
-                  {equipped.titleText}
-                </span>
-              )}
-            </div>
-
-            {/* Micro Interaction Actions */}
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                onClick={handleGiveCoffee}
-                title="Give Coffee"
-                className="hov k-squish"
-                style={{
-                  padding: '3px 6px',
-                  borderRadius: 6,
-                  background: 'var(--card2)',
-                  border: '1px solid var(--line)',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                }}
-              >
-                ☕
-              </button>
-              <button
-                onClick={handleCelebrate}
-                title="Cheer"
-                className="hov k-squish"
-                style={{
-                  padding: '3px 6px',
-                  borderRadius: 6,
-                  background: 'var(--card2)',
-                  border: '1px solid var(--line)',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                }}
-              >
-                🎉
-              </button>
-            </div>
+            ))}
           </div>
 
-          {/* Avatar + Speech */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 10px' }}>
-            <div
-              onClick={handlePet}
-              role="button"
-              tabIndex={0}
-              aria-label="Pet study buddy"
-              className="k-squish"
-              style={{
-                position: 'relative',
-                cursor: 'pointer',
-                flex: 'none',
-                transform: bouncing ? 'scale(1.15) translateY(-3px)' : 'scale(1)',
-                transition: 'transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1)',
-              }}
-            >
-              <Mascot
-                id={me || 'me'}
-                mood={currentMood}
-                hue={hue}
-                size={48}
-                variant="full"
-                accessory={equipped.mascotAccessory}
-                crown={equipped.mascotAccessory === 'crown'}
-              />
-              {hearts.map((h) => (
-                <span
-                  key={h.id}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: '50%',
-                    transform: `translate(${h.x}px, ${h.y}px)`,
-                    fontSize: 13,
-                    animation: 'pop 0.8s ease-out forwards',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  💖
-                </span>
-              ))}
-            </div>
-
-            {/* Speech Bubble */}
-            <div
-              onClick={handlePet}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                background: 'var(--card2)',
-                padding: '8px 11px',
-                borderRadius: 10,
-                border: '1px solid var(--line2)',
-                position: 'relative',
-                cursor: 'pointer',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: 500,
-                  lineHeight: 1.4,
-                  color: 'var(--tx)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                }}
-              >
-                {BUDDY_QUOTES[quoteIdx % BUDDY_QUOTES.length]}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Focus Button */}
-          {onStartFocus && (
+          {/* Micro Interaction Actions (Coffee / Cheer) */}
+          <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
             <button
-              onClick={onStartFocus}
-              className="k-squish"
+              onClick={handleGiveCoffee}
+              title="Give Coffee"
+              className="hov k-squish"
               style={{
-                width: '100%',
-                padding: '6px 10px',
-                borderRadius: 8,
-                background: 'color-mix(in srgb, var(--acc) 16%, var(--card2))',
-                border: '1px solid color-mix(in srgb, var(--acc) 35%, transparent)',
-                color: 'var(--accTx)',
-                fontSize: 11,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
+                padding: '2px 5px',
+                borderRadius: 5,
+                background: 'var(--card2)',
+                border: '1px solid var(--line)',
+                fontSize: 10,
                 cursor: 'pointer',
               }}
             >
-              <Icon name="clock" size={12} color="var(--accTx)" />
-              <span>Start Focus Sprint with Buddy</span>
+              ☕
             </button>
-          )}
+            <button
+              onClick={handleCelebrate}
+              title="Cheer"
+              className="hov k-squish"
+              style={{
+                padding: '2px 5px',
+                borderRadius: 5,
+                background: 'var(--card2)',
+                border: '1px solid var(--line)',
+                fontSize: 10,
+                cursor: 'pointer',
+              }}
+            >
+              🎉
+            </button>
+          </div>
         </div>
 
         {/* Right Side: Daily RPG Quests */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 220 }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>

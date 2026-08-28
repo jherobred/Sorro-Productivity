@@ -38,6 +38,7 @@ import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
 import { ShopModal } from './ShopModal';
 import { BirdMascot } from './BasedlyLogo';
+import { ToolbarDynamic } from './ToolbarDynamic';
 
 
 /**
@@ -692,46 +693,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             borderBottom: '1px solid var(--line)',
             transition: 'padding-left .28s cubic-bezier(0.16, 1, 0.3, 1)',
           }}>
-            {/* Consolidated Minimalist Command Hub Search Bar */}
-            <button
-              onClick={() => setSearch(true)}
-              className="hov k-squish"
-              title="Search or jump to (⌘K)"
-              aria-label="Search or jump to"
-              style={{
-                height: 34,
-                width: 320,
-                padding: '0 12px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                color: 'var(--tx3)',
-                fontSize: 12.5,
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="search" size={14} color="var(--tx3)" />
-                <span style={{ color: 'var(--tx3)' }}>Quick search or jump to...</span>
-              </div>
-              <kbd
-                style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  fontFamily: 'monospace',
-                  padding: '2px 5px',
-                  borderRadius: 4,
-                  border: '1px solid var(--line)',
-                  background: 'var(--card)',
-                  color: 'var(--tx2)',
-                }}
-              >
-                ⌘K
-              </kbd>
-            </button>
+            {/* Circular Dark Mode Dynamic Search Toolbar */}
+            <ToolbarDynamic onSearch={() => setSearch(true)} placeholder="Search or jump to (⌘K)..." />
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
