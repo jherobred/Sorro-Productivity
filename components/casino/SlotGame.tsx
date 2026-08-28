@@ -38,7 +38,7 @@ export const MERRAMUN_SYMBOLS: MerramunSymbol[] = [
 
 /**
  * Authentic Real-World Slot Weighting Pool (~96.5% RTP, 28% Hit Rate)
- * Balanced with dead spins, near misses, and explosive tumble runs.
+ * High suspense with realistic dead spins and high-multiplier bonus payouts.
  */
 const REAL_SLOT_REEL_POOL = [
   'ankh', 'ankh', 'ankh', 'ankh', 'ankh', 'ankh', 'ankh', 'ankh',
@@ -78,11 +78,11 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
   const [bet, setBet] = useState<number>(50);
   const [customBetInput, setCustomBetInput] = useState<string>('50');
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
+  const [spinningCols, setSpinningCols] = useState<boolean[]>([false, false, false, false, false, false]);
   const [multiplier, setMultiplier] = useState<number>(1);
   const [tumbleWin, setTumbleWin] = useState<number>(0);
   const [lastWinSummary, setLastWinSummary] = useState<string | null>(null);
   const [winningCells, setWinningCells] = useState<{ r: number; c: number }[]>([]);
-  const [fallingCols, setFallingCols] = useState<number[]>([]);
   const [teaserCol, setTeaserCol] = useState<number | null>(null);
   const [screenShake, setScreenShake] = useState<boolean>(false);
   const [showCoinShower, setShowCoinShower] = useState<boolean>(false);
@@ -97,10 +97,20 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
   const [turboMode, setTurboMode] = useState<boolean>(false);
   const [bigWinOverlay, setBigWinOverlay] = useState<{ amount: number; title: string } | null>(null);
 
-  // Sync bet with custom input
+  // Auto-dismiss Big Win Screen after 3.4 seconds
+  useEffect(() => {
+    if (bigWinOverlay) {
+      const timer = setTimeout(() => {
+        setBigWinOverlay(null);
+      }, 3400);
+      return () => clearTimeout(timer);
+    }
+  }, [bigWinOverlay]);
+
+  // Adjust Custom Bet Amount
   const updateBetAmount = (amount: number) => {
     if (isSpinning) return;
-    const clamped = Math.max(1, Math.floor(amount));
+    const clamped = Math.max(1, Math.min(credits > 0 ? credits : 1, Math.floor(amount)));
     setBet(clamped);
     setCustomBetInput(String(clamped));
     casinoAudio.playChip();
@@ -187,7 +197,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       setTimeout(() => setScreenShake(false), 280);
 
       // Slower dissolve pause for addictive visual payoff
-      await new Promise((r) => setTimeout(r, turboMode ? 250 : 520));
+      await new Promise((r) => setTimeout(r, turboMode ? 250 : 540));
 
       // Drop new symbols column by column with falling animation
       const nextGrid: MerramunSymbol[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null as never));
@@ -222,7 +232,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
     return { finalGrid: activeGrid, totalWin: spinWin, summary };
   };
 
-  // Main Spin Execution (Slower, Staggered Falling Animation)
+  // Main Spin Execution (Continuous Top-to-Bottom Reel Scrolls with Staggered Landings)
   const handleSpin = useCallback(
     async (isBonusSpin = false) => {
       if (isSpinning) return;
@@ -245,33 +255,40 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       setWinningCells([]);
       setMultiplier(isBonusSpin ? bonusMultiplier : 1);
 
-      // Generate staggered drops column by column with falling sequence
+      // Trigger all 6 columns into top-to-bottom continuous scroll
+      setSpinningCols([true, true, true, true, true, true]);
+
+      // Generate target landing grid
       const newGrid = generateInitialGrid();
-      const loadedCols: number[] = [];
 
+      // Initial scroll duration before column 1 starts locking in
+      await new Promise((r) => setTimeout(r, turboMode ? 200 : 450));
+
+      // Stop columns one by one from left to right with mechanical landing thud
       let scatterCountSoFar = 0;
-      for (let c = 0; c < COLS; c++) {
-        loadedCols.push(c);
-        setFallingCols([...loadedCols]);
+      const activeSpinState = [true, true, true, true, true, true];
 
+      for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
           if (newGrid[r][c].id === 'scatter') scatterCountSoFar++;
         }
 
         if (scatterCountSoFar >= 3 && c >= 4) {
-          // Teaser on reel 5 & 6! Slower anticipation
+          // Teaser on reel 5 & 6! Suspenseful delay
           setTeaserCol(c);
           casinoAudio.playScatterTeaser();
-          await new Promise((r) => setTimeout(r, turboMode ? 350 : 750));
+          await new Promise((r) => setTimeout(r, turboMode ? 350 : 800));
         } else {
-          casinoAudio.playReelLand(c);
-          // Deliberately paced column drop for addictive falling feel
-          await new Promise((r) => setTimeout(r, turboMode ? 60 : 130));
+          await new Promise((r) => setTimeout(r, turboMode ? 70 : 160));
         }
+
+        // Lock in column c
+        activeSpinState[c] = false;
+        setSpinningCols([...activeSpinState]);
+        casinoAudio.playReelLand(c);
       }
 
       setGrid(newGrid);
-      setFallingCols([]);
       setTeaserCol(null);
 
       // Check total scatters
@@ -283,7 +300,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       }
 
       // Settle pause before tumbles start
-      await new Promise((r) => setTimeout(r, turboMode ? 140 : 300));
+      await new Promise((r) => setTimeout(r, turboMode ? 150 : 320));
 
       // Execute tumble sequence
       const { totalWin } = await performTumble(
@@ -369,7 +386,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
   };
 
   return (
-    <div className="w-full flex flex-col items-center gap-4 select-none" style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div className="w-full flex flex-col items-center gap-4 select-none" style={{ maxWidth: 1120, margin: '0 auto' }}>
       {/* Coin Shower Particle Fountain */}
       <CoinShower active={showCoinShower} />
 
@@ -465,7 +482,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             </div>
           </div>
 
-          {/* 6x5 Deep Basalt Hieroglyph Reels Grid */}
+          {/* 6x5 Deep Basalt Hieroglyph Reels Grid with Continuous Top-to-Bottom Scroll */}
           <div
             style={{
               position: 'relative',
@@ -478,6 +495,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
               border: '2px solid #854D0E',
               boxShadow: 'inset 0 0 25px rgba(0,0,0,0.9), 0 0 15px rgba(133, 77, 14, 0.3)',
               width: '100%',
+              overflow: 'hidden',
             }}
           >
             {/* Scatter Teaser Anticipation Glow on Reel 5 & 6 */}
@@ -502,89 +520,146 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
               />
             )}
 
-            {grid.map((row, r) =>
-              row.map((sym, c) => {
-                const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
-                return (
-                  <div
-                    key={`${r}-${c}`}
-                    style={{
-                      position: 'relative',
-                      aspectRatio: '1 / 1',
-                      borderRadius: 10,
-                      background: isWinning
-                        ? 'radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(14, 165, 233, 0.2) 100%)'
-                        : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
-                      border: isWinning ? '2px solid #38BDF8' : '1px solid rgba(212, 175, 55, 0.2)',
-                      boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* Basalt Stone Hieroglyph Texture Background */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        opacity: 0.08,
-                        fontSize: 10,
-                        display: 'grid',
-                        placeItems: 'center',
-                        pointerEvents: 'none',
-                        color: '#FDE047',
-                      }}
-                    >
-                      𓀀𓁐𓃠𓆓𓇯
-                    </div>
+            {/* Render 6 Columns with Continuous Top-to-Bottom Scroll when Active */}
+            {Array.from({ length: COLS }).map((_, c) => {
+              const isColRolling = spinningCols[c];
 
-                    {/* Sparkling Dissolve Blue Particle Dust on Tumble */}
-                    {isWinning && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.7 }}
-                        animate={{ opacity: [0, 1, 0], scale: [0.7, 1.4, 1.7] }}
-                        transition={{ duration: 0.45 }}
-                        style={{
-                          position: 'absolute',
-                          inset: -4,
-                          pointerEvents: 'none',
-                          background: 'radial-gradient(circle, rgba(56,189,248,0.9) 0%, rgba(253,224,71,0.6) 50%, transparent 80%)',
-                          mixBlendMode: 'screen',
-                          zIndex: 10,
-                        }}
-                      />
-                    )}
-
-                    {/* Falling on top of each other symbol animation */}
+              return (
+                <div
+                  key={`col-${c}`}
+                  style={{
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Active Top-to-Bottom Rolling Reel Strip */}
+                  {isColRolling ? (
                     <motion.div
-                      key={sym.id + '-' + r + '-' + c}
-                      initial={{ y: -80, opacity: 0 }}
-                      animate={{
-                        y: 0,
-                        opacity: 1,
-                        scale: isWinning ? [1, 1.25, 0.5] : 1,
-                        filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
-                      }}
+                      animate={{ y: ['-50%', '0%'] }}
                       transition={{
-                        y: { type: 'spring', damping: 14, stiffness: 220, delay: (r * 0.04) + (c * 0.06) },
-                        opacity: { duration: 0.15, delay: (r * 0.04) + (c * 0.06) },
+                        repeat: Infinity,
+                        duration: turboMode ? 0.18 : 0.26,
+                        ease: 'linear',
                       }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 2,
+                        gap: 6,
+                        filter: 'blur(2px)',
                       }}
                     >
-                      <MerramunIcon id={sym.id} size={28} />
+                      {/* Double sequence of dummy symbols for seamless vertical continuous roll */}
+                      {MERRAMUN_SYMBOLS.concat(MERRAMUN_SYMBOLS.slice(0, 3)).map((sym, idx) => (
+                        <div
+                          key={`dummy-${idx}`}
+                          style={{
+                            position: 'relative',
+                            aspectRatio: '1 / 1',
+                            borderRadius: 10,
+                            background: 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
+                            border: '1px solid rgba(212, 175, 55, 0.2)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <MerramunIcon id={sym.id} size={28} />
+                        </div>
+                      ))}
                     </motion.div>
-                  </div>
-                );
-              })
-            )}
+                  ) : (
+                    /* Landed Reel Symbols with Spring Bounce Drop */
+                    Array.from({ length: ROWS }).map((_, r) => {
+                      const sym = grid[r][c];
+                      const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
+
+                      return (
+                        <div
+                          key={`${r}-${c}`}
+                          style={{
+                            position: 'relative',
+                            aspectRatio: '1 / 1',
+                            borderRadius: 10,
+                            background: isWinning
+                              ? 'radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(14, 165, 233, 0.2) 100%)'
+                              : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
+                            border: isWinning ? '2px solid #38BDF8' : '1px solid rgba(212, 175, 55, 0.2)',
+                            boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {/* Basalt Stone Hieroglyph Texture Background */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              opacity: 0.08,
+                              fontSize: 10,
+                              display: 'grid',
+                              placeItems: 'center',
+                              pointerEvents: 'none',
+                              color: '#FDE047',
+                            }}
+                          >
+                            𓀀𓁐𓃠𓆓𓇯
+                          </div>
+
+                          {/* Sparkling Dissolve Blue Particle Dust on Tumble */}
+                          {isWinning && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.7 }}
+                              animate={{ opacity: [0, 1, 0], scale: [0.7, 1.4, 1.7] }}
+                              transition={{ duration: 0.45 }}
+                              style={{
+                                position: 'absolute',
+                                inset: -4,
+                                pointerEvents: 'none',
+                                background: 'radial-gradient(circle, rgba(56,189,248,0.9) 0%, rgba(253,224,71,0.6) 50%, transparent 80%)',
+                                mixBlendMode: 'screen',
+                                zIndex: 10,
+                              }}
+                            />
+                          )}
+
+                          {/* Falling on top of each other symbol animation with bouncy settle */}
+                          <motion.div
+                            key={sym.id + '-' + r + '-' + c}
+                            initial={{ y: -80, opacity: 0 }}
+                            animate={{
+                              y: 0,
+                              opacity: 1,
+                              scale: isWinning ? [1, 1.25, 0.5] : 1,
+                              filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
+                            }}
+                            transition={{
+                              y: { type: 'spring', damping: 14, stiffness: 220, delay: r * 0.04 },
+                              opacity: { duration: 0.12, delay: r * 0.04 },
+                            }}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              zIndex: 2,
+                            }}
+                          >
+                            <MerramunIcon id={sym.id} size={28} />
+                          </motion.div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Tumble Win Live Indicator & Rolling Multiplier Banner */}
@@ -698,19 +773,38 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
 
             {/* Custom Numeric Input Field with Stepper Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Decrement Stepper */}
+              <button
+                type="button"
+                disabled={isSpinning || bet <= 1}
+                onClick={() => updateBetAmount(bet - 10 > 0 ? bet - 10 : 1)}
+                style={{
+                  padding: '10px 10px',
+                  borderRadius: 8,
+                  background: '#1E293B',
+                  border: '1px solid #334155',
+                  color: '#CBD5E1',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
+                }}
+              >
+                -10
+              </button>
+
               <button
                 type="button"
                 disabled={isSpinning}
                 onClick={() => updateBetAmount(Math.floor(bet / 2))}
                 style={{
-                  padding: '10px 12px',
+                  padding: '10px 10px',
                   borderRadius: 8,
                   background: '#1E293B',
                   border: '1px solid #334155',
                   color: '#CBD5E1',
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: 800,
-                  cursor: 'pointer',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
                 }}
               >
                 ½
@@ -746,17 +840,36 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                 disabled={isSpinning}
                 onClick={() => updateBetAmount(bet * 2)}
                 style={{
-                  padding: '10px 12px',
+                  padding: '10px 10px',
                   borderRadius: 8,
                   background: '#1E293B',
                   border: '1px solid #334155',
                   color: '#CBD5E1',
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: 800,
-                  cursor: 'pointer',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
                 }}
               >
                 2X
+              </button>
+
+              {/* Increment Stepper */}
+              <button
+                type="button"
+                disabled={isSpinning}
+                onClick={() => updateBetAmount(bet + 10)}
+                style={{
+                  padding: '10px 10px',
+                  borderRadius: 8,
+                  background: '#1E293B',
+                  border: '1px solid #334155',
+                  color: '#CBD5E1',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
+                }}
+              >
+                +10
               </button>
 
               <button
@@ -769,9 +882,9 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                   background: '#1E293B',
                   border: '1px solid #334155',
                   color: '#FDE047',
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: 800,
-                  cursor: 'pointer',
+                  cursor: isSpinning ? 'not-allowed' : 'pointer',
                 }}
               >
                 MAX
@@ -780,7 +893,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
 
             {/* Quick Preset Buttons */}
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {[10, 25, 50, 100, 250, 500, 1000].map((bVal) => (
+              {[5, 10, 25, 50, 100, 250, 500, 1000].map((bVal) => (
                 <button
                   key={bVal}
                   type="button"
@@ -944,16 +1057,20 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
         </div>
       </div>
 
-      {/* Sensational Big Win Celebration Modal */}
+      {/* Sensational Big Win Celebration Dynamic Modal (Auto-fades after 3.4s) */}
       <AnimatePresence>
         {bigWinOverlay && (
-          <div
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35 }}
             onClick={() => setBigWinOverlay(null)}
             style={{
               position: 'fixed',
               inset: 0,
               zIndex: 9999,
-              background: 'rgba(0,0,0,0.88)',
+              background: 'rgba(0,0,0,0.85)',
               backdropFilter: 'blur(14px)',
               display: 'flex',
               alignItems: 'center',
@@ -963,31 +1080,51 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             }}
           >
             <motion.div
-              initial={{ scale: 0.5, opacity: 0, rotate: -6 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              exit={{ scale: 0.5, opacity: 0 }}
-              transition={{ type: 'spring', damping: 15 }}
+              initial={{ scale: 0.7, y: 35, opacity: 0 }}
+              animate={{
+                scale: [0.7, 1.05, 0.98, 1],
+                y: [35, -10, 4, 0],
+                opacity: 1,
+              }}
+              exit={{ scale: 0.85, y: -25, opacity: 0 }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
               style={{
+                position: 'relative',
                 textAlign: 'center',
-                padding: '36px 44px',
+                padding: '38px 48px',
                 borderRadius: 24,
                 background: 'linear-gradient(180deg, #1C1504 0%, #070B14 100%)',
                 border: '3px solid #D4AF37',
                 boxShadow: '0 0 70px rgba(212, 175, 55, 0.7)',
+                overflow: 'visible',
               }}
             >
-              <div style={{ fontSize: 44, marginBottom: 8 }}>🌙👑💀</div>
+              {/* Radiant pulsating aura */}
+              <motion.div
+                animate={{ scale: [1, 1.3, 1], opacity: [0.35, 0.75, 0.35] }}
+                transition={{ repeat: Infinity, duration: 2.2 }}
+                style={{
+                  position: 'absolute',
+                  inset: -20,
+                  borderRadius: 30,
+                  background: 'radial-gradient(circle, rgba(253, 224, 71, 0.4) 0%, transparent 70%)',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+
+              <div style={{ fontSize: 48, marginBottom: 8 }}>🌙👑💀</div>
               <h1 style={{ fontSize: 28, fontWeight: 900, color: '#FDE047', margin: '0 0 10px', letterSpacing: '.08em', fontFamily: 'serif' }}>
                 {bigWinOverlay.title}
               </h1>
               <div style={{ fontSize: 44, fontWeight: 900, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums' }}>
                 +<RollingNumber value={bigWinOverlay.amount} durationMs={1200} /> <span style={{ fontSize: 24, color: '#FDE047' }}>DOS COIN</span>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--tx3)', marginTop: 14 }}>
-                Click anywhere to collect & continue
+              <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 14 }}>
+                Auto-collecting in 3s · Click anywhere to skip
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
