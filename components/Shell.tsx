@@ -388,7 +388,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 title="Go to Home"
               >
                 <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1, display: 'block' }}>
-                  Basedly
+                  basedly
                 </span>
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -674,7 +674,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 cursor: 'pointer',
               }}
             >
-              <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>Basedly</span>
+              <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>basedly</span>
               <span style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22,
                 borderRadius: 6, background: 'var(--card2)', border: '1px solid var(--line2)',
@@ -846,7 +846,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               }}
               title="Go to Home"
             >
-              {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
+              {SECTIONS.find((x) => x.id === section)?.name ?? 'basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
 
