@@ -50,30 +50,10 @@ export function BuyItemModal({
         sellerId,
         price,
         itemName: listing.item_name,
-        deliveryInfo: listing.delivery_info,
+        deliveryInfo: note.trim() ? `${listing.delivery_info ? `${listing.delivery_info} | ` : ''}Note: "${note.trim()}"` : listing.delivery_info,
       });
 
       if (ok) {
-        // Send DM receipt to seller
-        const dmId = await startDm(sellerId);
-        if (dmId) {
-          const { supabase } = await import('@/lib/supabase');
-          const myId = (await supabase.auth.getUser()).data.user?.id;
-          if (myId) {
-            const txId = `buy_${Date.now()}`;
-            const dmText = encodeRpSendMessage(
-              price,
-              txId,
-              `🛍️ Purchased "${listing.item_name}" for ${price.toLocaleString()} RP! ${note ? `Note: "${note}"` : ''}`
-            );
-            await supabase.from('bd_messages').insert({
-              conversation_id: dmId,
-              author_id: myId,
-              body: dmText,
-            });
-          }
-        }
-
         await qc.invalidateQueries({ queryKey: RANKED });
         playCelebration();
         toast(`🎉 Successfully purchased "${listing.item_name}" for ${price.toLocaleString()} RP!`);

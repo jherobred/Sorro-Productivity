@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { useRanked, RANKED } from '@/lib/challenges';
-import { sendRp } from '@/lib/rpTransfers';
+import { sendRpWithPostNotification } from '@/lib/rpTransfers';
 import { toast } from '@/lib/toast';
 import { playClick } from '@/lib/audio';
 import { useLayout } from '@/lib/useLayout';
@@ -35,7 +35,7 @@ export function PayRpModal({
   const [note, setNote] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
 
-  const PRESETS = [5, 10, 25, 50, 100, 250];
+  const PRESETS = [5, 10, 25, 50, 100, 250, 500, 1000, 5000];
 
   const handlePreset = (val: number) => {
     playClick();
@@ -63,16 +63,18 @@ export function PayRpModal({
 
     setBusy(true);
     try {
-      const ok = await sendRp({
-        toUserId: authorId,
+      const ok = await sendRpWithPostNotification({
+        authorId,
+        authorName,
         amount,
-        reason: note || `Tip for post: ${postTitle || 'Community Post'}`,
+        postTitle: postTitle || 'Community Post',
         postId,
+        note: note.trim(),
       });
 
       if (ok) {
         await qc.invalidateQueries({ queryKey: RANKED });
-        toast(`💎 Sent ${amount.toLocaleString()} RP to ${authorName}!`);
+        toast(`💎 Sent ${amount.toLocaleString()} RP to ${authorName}! Notification sent in chat.`);
         if (onSuccess) onSuccess(amount);
         onClose();
       }
@@ -100,16 +102,16 @@ export function PayRpModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Pay with RP"
+        aria-label="Pay / Tip with RP"
         className="k-bloom"
         style={{
           width: 440,
           maxWidth: '100%',
           borderRadius: phone ? '20px 20px 0 0' : 20,
-          background: 'linear-gradient(180deg, #131722 0%, #0B0E17 100%)',
-          border: '1.5px solid rgba(129, 140, 248, 0.35)',
+          background: 'linear-gradient(180deg, #181926 0%, #0F101A 100%)',
+          border: '1px solid rgba(255,255,255,0.15)',
           boxShadow: '0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(99, 102, 241, 0.2)',
-          padding: '20px 22px 24px',
+          padding: '22px 24px 26px',
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
@@ -118,14 +120,14 @@ export function PayRpModal({
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 22 }}>💎</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 24 }}>💎</span>
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: '#F8FAFC' }}>
+              <h2 style={{ fontSize: 16.5, fontWeight: 900, margin: 0, color: '#F8FAFC' }}>
                 Pay / Tip with RP
               </h2>
-              <span style={{ fontSize: 11.5, color: '#94A3B8' }}>
-                Reward <strong style={{ color: '#C7D2FE' }}>{authorName}</strong> for their post
+              <span style={{ fontSize: 12, color: '#94A3B8' }}>
+                Rewarding <strong style={{ color: '#818CF8' }}>{authorName}</strong>
               </span>
             </div>
           </div>
@@ -148,116 +150,111 @@ export function PayRpModal({
           </button>
         </div>
 
-        {/* Post Summary & Available Balance */}
+        {/* Balance preview */}
         <div
           style={{
-            padding: '10px 14px',
-            borderRadius: 12,
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(129, 140, 248, 0.25)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: 12,
+            background: 'rgba(99, 102, 241, 0.12)',
+            border: '1px solid rgba(129, 140, 248, 0.3)',
           }}
         >
-          <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: '#818CF8', textTransform: 'uppercase' }}>Target Post</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#F1F5F9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {postTitle || 'Community Contribution'}
-            </div>
-          </div>
-          <div style={{ textAlign: 'right', flex: 'none' }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Your Balance</div>
-            <div style={{ fontSize: 13.5, fontWeight: 900, color: '#38BDF8' }}>
-              {myRp.toLocaleString()} RP 💎
-            </div>
-          </div>
-        </div>
-
-        {/* Preset Amount Chips */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Select RP Amount
+          <span style={{ fontSize: 12, color: '#C7D2FE', fontWeight: 600 }}>Your RP Balance</span>
+          <span style={{ fontSize: 14, fontWeight: 900, color: '#FDE047', fontFamily: 'monospace' }}>
+            💎 {myRp.toLocaleString()} RP
           </span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {PRESETS.map((val) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => handlePreset(val)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 10,
-                  fontSize: 12.5,
-                  fontWeight: 900,
-                  background: amount === val ? 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)' : 'rgba(255,255,255,0.05)',
-                  border: amount === val ? '1.5px solid #818CF8' : '1px solid rgba(255,255,255,0.1)',
-                  color: amount === val ? '#FFFFFF' : '#CBD5E1',
-                  cursor: 'pointer',
-                  boxShadow: amount === val ? '0 2px 10px rgba(99, 102, 241, 0.4)' : 'none',
-                }}
-              >
-                {val} RP 💎
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Custom RP Input */}
+        {/* Preset chips */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Custom Amount
+            Choose Amount
           </span>
-          <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {PRESETS.map((p) => {
+              const on = amount === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => handlePreset(p)}
+                  className="k-squish"
+                  style={{
+                    flex: '1 0 calc(25% - 6px)',
+                    minWidth: 55,
+                    padding: '8px 6px',
+                    borderRadius: 10,
+                    fontSize: 12.5,
+                    fontWeight: 900,
+                    background: on ? '#6366F1' : 'rgba(255,255,255,0.05)',
+                    border: on ? '1.5px solid #818CF8' : '1px solid rgba(255,255,255,0.1)',
+                    color: on ? '#FFFFFF' : '#CBD5E1',
+                    cursor: 'pointer',
+                    transition: 'all .15s ease',
+                  }}
+                >
+                  +{p} 💎
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom Input */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
+            Or Custom Amount (Unlimited)
+          </span>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <input
               type="number"
-              min="1"
-              max={myRp}
+              min={1}
               value={customInput}
               onChange={(e) => handleCustomChange(e.target.value)}
-              placeholder="Enter RP amount"
+              placeholder="e.g. 500000"
               style={{
                 width: '100%',
-                padding: '10px 14px',
+                padding: '10px 45px 10px 14px',
                 borderRadius: 10,
-                background: '#06080F',
-                border: '1.5px solid rgba(129, 140, 248, 0.4)',
-                color: '#FFFFFF',
+                background: '#07080F',
+                border: '1px solid rgba(255,255,255,0.14)',
+                color: '#F8FAFC',
                 fontSize: 15,
                 fontWeight: 900,
                 fontFamily: 'monospace',
               }}
             />
-            <span style={{ position: 'absolute', right: 12, top: 11, fontSize: 12, fontWeight: 800, color: '#818CF8' }}>
-              RP 💎
-            </span>
+            <span style={{ position: 'absolute', right: 12, fontSize: 15, pointerEvents: 'none' }}>💎</span>
           </div>
         </div>
 
-        {/* Optional Note / Message */}
+        {/* Optional Note */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Optional Note
+            Add a Note (Optional)
           </span>
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Great tip! Thanks for sharing."
-            maxLength={80}
+            placeholder="e.g. Great insight! Thanks for sharing."
+            maxLength={100}
             style={{
               width: '100%',
-              padding: '9px 12px',
+              padding: '10px 14px',
               borderRadius: 10,
-              background: '#06080F',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: '#07080F',
+              border: '1px solid rgba(255,255,255,0.14)',
               color: '#F8FAFC',
               fontSize: 12.5,
             }}
           />
         </div>
 
-        {/* Pay Button */}
+        {/* Submit */}
         <button
           type="button"
           disabled={busy || amount <= 0 || amount > myRp}
@@ -265,18 +262,24 @@ export function PayRpModal({
           className="k-squish"
           style={{
             marginTop: 4,
-            padding: '13px 20px',
+            padding: '12px 20px',
             borderRadius: 12,
-            background: busy || amount > myRp ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)',
+            background: busy || amount <= 0 || amount > myRp
+              ? 'rgba(255,255,255,0.1)'
+              : 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
             border: '1.5px solid #818CF8',
-            color: '#FFFFFF',
-            fontSize: 14,
+            color: busy || amount <= 0 || amount > myRp ? '#94A3B8' : '#FFFFFF',
+            fontSize: 13.5,
             fontWeight: 900,
-            cursor: busy || amount > myRp ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 18px rgba(99, 102, 241, 0.45)',
+            cursor: busy || amount <= 0 || amount > myRp ? 'not-allowed' : 'pointer',
+            boxShadow: amount <= myRp ? '0 4px 16px rgba(99, 102, 241, 0.4)' : 'none',
           }}
         >
-          {busy ? 'Processing RP Transfer…' : `Pay ${amount.toLocaleString()} RP 💎`}
+          {busy
+            ? 'Sending RP…'
+            : amount > myRp
+            ? 'Insufficient Balance'
+            : `Send ${amount.toLocaleString()} RP & Notify 💎`}
         </button>
       </div>
     </div>

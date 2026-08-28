@@ -314,7 +314,6 @@ export function Composer({ onClose, onPost }: {
                     <input
                       type="number"
                       min={1}
-                      max={100000}
                       value={priceRp}
                       onChange={(e) => setPriceRp(Math.max(1, parseInt(e.target.value, 10) || 1))}
                       style={{
