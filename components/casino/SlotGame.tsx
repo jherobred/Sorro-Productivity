@@ -520,7 +520,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
               />
             )}
 
-            {/* Render 6 Columns with Continuous Top-to-Bottom Scroll when Active */}
+            {/* Render 6 Columns with Continuous Top-to-Bottom Box Scrolls when Active */}
             {Array.from({ length: COLS }).map((_, c) => {
               const isColRolling = spinningCols[c];
 
@@ -533,53 +533,81 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                     flexDirection: 'column',
                     gap: 6,
                     overflow: 'hidden',
+                    borderRadius: 10,
                   }}
                 >
-                  {/* Active Top-to-Bottom Rolling Reel Strip */}
+                  {/* Active Top-to-Bottom Rolling Reel Strip with Full Stone Boxes */}
                   {isColRolling ? (
                     <motion.div
-                      animate={{ y: ['-50%', '0%'] }}
+                      animate={{ y: ['-60%', '0%'] }}
                       transition={{
                         repeat: Infinity,
-                        duration: turboMode ? 0.18 : 0.26,
+                        duration: turboMode ? 0.2 : 0.32,
                         ease: 'linear',
                       }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 6,
-                        filter: 'blur(2px)',
+                        filter: 'blur(1.5px)',
                       }}
                     >
-                      {/* Double sequence of dummy symbols for seamless vertical continuous roll */}
-                      {MERRAMUN_SYMBOLS.concat(MERRAMUN_SYMBOLS.slice(0, 3)).map((sym, idx) => (
+                      {/* Full sequence of stone boxes scrolling downwards together */}
+                      {MERRAMUN_SYMBOLS.concat(MERRAMUN_SYMBOLS.slice(0, 4)).map((sym, idx) => (
                         <div
-                          key={`dummy-${idx}`}
+                          key={`dummy-box-${idx}`}
                           style={{
                             position: 'relative',
                             aspectRatio: '1 / 1',
                             borderRadius: 10,
                             background: 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
-                            border: '1px solid rgba(212, 175, 55, 0.2)',
+                            border: '1.5px solid rgba(212, 175, 55, 0.28)',
+                            boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.6)',
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            overflow: 'hidden',
                           }}
                         >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              opacity: 0.08,
+                              fontSize: 10,
+                              display: 'grid',
+                              placeItems: 'center',
+                              pointerEvents: 'none',
+                              color: '#FDE047',
+                            }}
+                          >
+                            𓀀𓁐𓃠𓆓𓇯
+                          </div>
                           <MerramunIcon id={sym.id} size={28} />
                         </div>
                       ))}
                     </motion.div>
                   ) : (
-                    /* Landed Reel Symbols with Spring Bounce Drop */
+                    /* Landed Reel Symbols with Spring Bounce Drop on Full Stone Boxes */
                     Array.from({ length: ROWS }).map((_, r) => {
                       const sym = grid[r][c];
                       const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
 
                       return (
-                        <div
-                          key={`${r}-${c}`}
+                        <motion.div
+                          key={`${r}-${c}-${sym.id}`}
+                          initial={{ y: -100, opacity: 0 }}
+                          animate={{
+                            y: 0,
+                            opacity: 1,
+                            scale: isWinning ? [1, 1.25, 0.5] : 1,
+                            filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
+                          }}
+                          transition={{
+                            y: { type: 'spring', damping: 14, stiffness: 220, delay: r * 0.04 },
+                            opacity: { duration: 0.12, delay: r * 0.04 },
+                          }}
                           style={{
                             position: 'relative',
                             aspectRatio: '1 / 1',
@@ -587,7 +615,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                             background: isWinning
                               ? 'radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(14, 165, 233, 0.2) 100%)'
                               : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
-                            border: isWinning ? '2px solid #38BDF8' : '1px solid rgba(212, 175, 55, 0.2)',
+                            border: isWinning ? '2px solid #38BDF8' : '1.5px solid rgba(212, 175, 55, 0.28)',
                             boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
                             display: 'flex',
                             flexDirection: 'column',
@@ -629,20 +657,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                             />
                           )}
 
-                          {/* Falling on top of each other symbol animation with bouncy settle */}
-                          <motion.div
-                            key={sym.id + '-' + r + '-' + c}
-                            initial={{ y: -80, opacity: 0 }}
-                            animate={{
-                              y: 0,
-                              opacity: 1,
-                              scale: isWinning ? [1, 1.25, 0.5] : 1,
-                              filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
-                            }}
-                            transition={{
-                              y: { type: 'spring', damping: 14, stiffness: 220, delay: r * 0.04 },
-                              opacity: { duration: 0.12, delay: r * 0.04 },
-                            }}
+                          <div
                             style={{
                               display: 'flex',
                               flexDirection: 'column',
@@ -652,8 +667,8 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                             }}
                           >
                             <MerramunIcon id={sym.id} size={28} />
-                          </motion.div>
-                        </div>
+                          </div>
+                        </motion.div>
                       );
                     })
                   )}
