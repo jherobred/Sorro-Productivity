@@ -35,7 +35,8 @@ import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
 import { useFollows } from '@/lib/follows';
 import { PayRpModal } from '@/components/community/PayRpModal';
-import { setPostRpConfig, getPostRpConfig } from '@/lib/rpTransfers';
+import { BuyItemModal } from '@/components/community/BuyItemModal';
+import { setPostRpConfig, getPostRpConfig, getPostListing, setPostListing, type ListingKind } from '@/lib/rpTransfers';
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'new', label: 'Latest' },
@@ -57,6 +58,7 @@ export default function CommunityPage() {
   const [viewing, setViewing] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Item | null>(null);
   const [tippingItem, setTippingItem] = useState<Item | null>(null);
+  const [buyingItem, setBuyingItem] = useState<Item | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -607,6 +609,7 @@ export default function CommunityPage() {
                 onShare={() => setSharing(item)}
                 onTagClick={(tag) => { setSearchQuery(tag.replace(/^#/, '')); toast(`Filter: ${tag}`); }}
                 onTip={() => setTippingItem(item)}
+                onBuyItem={() => setBuyingItem(item)}
               />
             ))}
           </div>
@@ -820,11 +823,12 @@ export default function CommunityPage() {
         <Composer
           onClose={() => setComposing(false)}
           onPost={(draft) => {
-            A.post(draft);
-            if (draft.accept_rp !== undefined) {
-              setPostRpConfig(draft.title || draft.body || 'draft', {
-                accept_rp: draft.accept_rp,
+            const createdId = A.post(draft);
+            if (draft.accept_rp !== undefined || draft.listing) {
+              setPostRpConfig(createdId, {
+                accept_rp: draft.accept_rp ?? true,
                 suggested_rp: draft.suggested_rp,
+                listing: draft.listing,
               });
             }
           }}
@@ -838,6 +842,16 @@ export default function CommunityPage() {
           authorName={displayOf(profiles, tippingItem.author_id, me).label}
           postTitle={tippingItem.title || tippingItem.body}
           onClose={() => setTippingItem(null)}
+        />
+      )}
+
+      {buyingItem && getPostListing(buyingItem.id) && (
+        <BuyItemModal
+          postId={buyingItem.id}
+          sellerId={buyingItem.author_id}
+          sellerName={displayOf(profiles, buyingItem.author_id, me).label}
+          listing={getPostListing(buyingItem.id)!}
+          onClose={() => setBuyingItem(null)}
         />
       )}
 
@@ -880,7 +894,7 @@ export default function CommunityPage() {
 
 function XPostCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
-  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick, onTip,
+  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick, onTip, onBuyItem,
 }: {
   item: Item;
   me: string;
@@ -901,12 +915,14 @@ function XPostCard({
   onShare: () => void;
   onTagClick?: (tag: string) => void;
   onTip?: () => void;
+  onBuyItem?: () => void;
 }) {
   const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
   const targetHandle = profiles[item.author_id]?.handle || item.author_id;
   const rpConfig = getPostRpConfig(item.id);
+  const listing = getPostListing(item.id);
 
   const views = usePostViews();
   const bookmarks = useBookmarks();
@@ -1012,6 +1028,108 @@ function XPostCard({
             {item.images.length > 0 && (
               <div style={{ borderRadius: 14, overflow: 'hidden', margin: '8px 0 10px', border: '1px solid var(--line2)' }}>
                 <PostImages paths={item.images} tint={who.hue} alt={item.title || item.body || 'Post image'} onOpen={onOpen} />
+              </div>
+            )}
+
+            {/* Marketplace / Selling Card */}
+            {listing && listing.is_for_sale && (
+              <div
+                style={{
+                  margin: '8px 0 10px',
+                  padding: '12px 14px',
+                  borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%)',
+                  border: listing.is_sold ? '1px solid var(--line2)' : '1.5px solid rgba(16, 185, 129, 0.45)',
+                  boxShadow: listing.is_sold ? 'none' : '0 4px 18px rgba(16, 185, 129, 0.14)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>
+                      {listing.item_type === 'service' ? '🛠️' : listing.item_type === 'digital' ? '💻' : listing.item_type === 'account' ? '🎮' : '📦'}
+                    </span>
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em',
+                      color: listing.is_sold ? 'var(--tx3)' : '#34D399',
+                    }}>
+                      {listing.item_type} for sale
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                      fontSize: 13.5, fontWeight: 900,
+                      color: listing.is_sold ? 'var(--tx3)' : '#FDE047',
+                      fontFamily: 'monospace',
+                    }}>
+                      💎 {listing.price_rp.toLocaleString()} RP
+                    </span>
+                    {listing.is_sold ? (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '2px 7px', borderRadius: 6,
+                        background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)',
+                      }}>
+                        Sold Out
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '2px 7px', borderRadius: 6,
+                        background: 'rgba(16, 185, 129, 0.2)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)',
+                      }}>
+                        Available
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)' }}>
+                      {listing.item_name || item.title || 'Marketplace Item'}
+                    </div>
+                    {listing.delivery_info && (
+                      <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                        📦 {listing.delivery_info}
+                      </div>
+                    )}
+                  </div>
+
+                  {!isMine && !listing.is_sold && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBuyItem?.();
+                      }}
+                      className="k-squish"
+                      style={{
+                        flex: 'none',
+                        padding: '7px 15px',
+                        borderRadius: 9,
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        border: '1px solid #34D399',
+                        color: '#041F14',
+                        fontSize: 11.5,
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
+                      }}
+                    >
+                      Buy with RP 🛍️
+                    </button>
+                  )}
+
+                  {!isMine && listing.is_sold && listing.buyer_id === me && (
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399' }}>
+                      ✓ You purchased this
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1430,6 +1548,13 @@ function ItemEdit({
   const [busy, setBusy] = useState(false);
   const initialUrls = useSignedUrls('bd-feed', item.images);
 
+  const initialListing = getPostListing(item.id);
+  const [isSelling, setIsSelling] = useState<boolean>(initialListing?.is_for_sale ?? false);
+  const [listingType, setListingType] = useState<ListingKind>(initialListing?.item_type ?? 'item');
+  const [priceRp, setPriceRp] = useState<number>(initialListing?.price_rp ?? 50);
+  const [deliveryInfo, setDeliveryInfo] = useState<string>(initialListing?.delivery_info ?? '');
+  const [isSold, setIsSold] = useState<boolean>(initialListing?.is_sold ?? false);
+
   useEffect(() => {
     if (item.images.length > 0) {
       setImages(item.images.map((path, i) => ({ path, url: initialUrls[i] || '' })));
@@ -1461,6 +1586,20 @@ function ItemEdit({
     }
   };
 
+  const handleSave = () => {
+    if (!ready || busy) return;
+    setPostListing(item.id, isSelling ? {
+      is_for_sale: true,
+      price_rp: priceRp,
+      item_name: t.trim() || 'Marketplace Item',
+      item_type: listingType,
+      description: b.trim(),
+      delivery_info: deliveryInfo.trim(),
+      is_sold: isSold,
+    } : null);
+    onSave(t.trim(), b.trim(), images.map((x) => x.path), tag);
+  };
+
   const ready = !!(t.trim() || b.trim() || images.length > 0);
 
   return (
@@ -1478,7 +1617,7 @@ function ItemEdit({
         autoFocus
         value={t}
         onChange={(e) => setT(e.target.value)}
-        placeholder="Title (optional)"
+        placeholder={isSelling ? "Item or Service Title" : "Title (optional)"}
         aria-label="Title"
         style={{
           width: '100%',
@@ -1498,7 +1637,7 @@ function ItemEdit({
         value={b}
         onChange={(e) => setB(e.target.value)}
         rows={3}
-        placeholder="Caption or post content…"
+        placeholder={isSelling ? "Describe item condition, service scope, delivery details…" : "Caption or post content…"}
         aria-label="Body"
         style={{
           width: '100%',
@@ -1594,6 +1733,113 @@ function ItemEdit({
         </label>
       )}
 
+      {/* Marketplace / Selling Controls */}
+      <div
+        style={{
+          padding: '10px 12px',
+          borderRadius: 12,
+          background: isSelling ? 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.2) 100%)' : 'var(--card)',
+          border: isSelling ? '1.5px solid #10B981' : '1px solid var(--line2)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🛍️</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--tx)' }}>
+                Sell Item / Service
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+                Accept RP purchase payments on this post
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSelling(!isSelling)}
+            className="k-squish"
+            style={{
+              padding: '4px 12px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 800,
+              background: isSelling ? '#10B981' : 'transparent',
+              border: isSelling ? '1px solid #34D399' : '1px solid var(--line2)',
+              color: isSelling ? '#041F14' : 'var(--tx2)',
+              cursor: 'pointer',
+            }}
+          >
+            {isSelling ? 'Selling ✓' : 'Enable'}
+          </button>
+        </div>
+
+        {isSelling && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Price:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={priceRp}
+                  onChange={(e) => setPriceRp(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  style={{
+                    width: 85,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    background: 'var(--card2)',
+                    border: '1px solid var(--line2)',
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: '#FDE047',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#FDE047' }}>RP 💎</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSold(!isSold)}
+                className="k-squish"
+                style={{
+                  marginLeft: 'auto',
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  background: isSold ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                  border: isSold ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(16,185,129,0.4)',
+                  color: isSold ? '#F87171' : '#34D399',
+                  cursor: 'pointer',
+                }}
+              >
+                {isSold ? 'Marked as Sold Out' : 'Status: In Stock / Available'}
+              </button>
+            </div>
+
+            <input
+              type="text"
+              value={deliveryInfo}
+              onChange={(e) => setDeliveryInfo(e.target.value)}
+              placeholder="Delivery notes (e.g. Instant code / Discord DM / Campus pickup)"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                borderRadius: 6,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                fontSize: 11.5,
+                color: 'var(--tx)',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Tag Selection Chips */}
       <div>
         <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>
@@ -1644,7 +1890,7 @@ function ItemEdit({
         <button
           type="button"
           disabled={!ready || busy}
-          onClick={() => ready && !busy && onSave(t.trim(), b.trim(), images.map((x) => x.path), tag)}
+          onClick={handleSave}
           className="acc k-squish"
           style={{
             minHeight: 34, padding: '0 18px', borderRadius: 9,

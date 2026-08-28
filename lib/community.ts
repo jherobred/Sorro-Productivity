@@ -483,7 +483,7 @@ export function useCommunityActions(me: string) {
      * `bd_threads`. Both carry a title and a tag now, so nothing is lost
      * either way and the writer never sees the seam.
      */
-    post(v: { title: string; body: string; tag: string; images: string[] }) {
+    post(v: { title: string; body: string; tag: string; images: string[] }): string {
       const id = crypto.randomUUID();
       if (v.images.length) {
         addPost.mutate({
@@ -494,6 +494,7 @@ export function useCommunityActions(me: string) {
         addThread.mutate({ id, title: v.title, body: v.body, tag: v.tag });
       }
       toast(v.title ? `Posted “${v.title.slice(0, 30)}”` : 'Posted');
+      return id;
     },
     /** Soft delete, with the row kept so Undo is a single flag. */
     remove(item: Item) {

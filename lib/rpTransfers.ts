@@ -17,14 +17,29 @@ export type RpTransaction = {
   created_at: string;
 };
 
+export type ListingKind = 'item' | 'service' | 'digital' | 'account' | 'other';
+
+export type PostListing = {
+  is_for_sale: boolean;
+  price_rp: number;
+  item_name: string;
+  item_type: ListingKind;
+  description?: string;
+  delivery_info?: string;
+  is_sold: boolean;
+  buyer_id?: string;
+  sold_at?: string;
+};
+
 export type PostRpSettings = {
   accept_rp: boolean;
   min_rp?: number;
   suggested_rp?: number;
   total_tipped: number;
+  listing?: PostListing | null;
 };
 
-const POST_RP_STORAGE_KEY = 'basedly_post_rp_settings_v1';
+const POST_RP_STORAGE_KEY = 'basedly_post_rp_settings_v2';
 const RP_REQUESTS_STORAGE_KEY = 'basedly_rp_requests_v1';
 
 // Read all post RP settings from persistent registry
@@ -45,25 +60,101 @@ function saveStoredPostRpSettings(settings: Record<string, PostRpSettings>) {
   } catch { /* ignore */ }
 }
 
-/** Set post RP acceptance settings */
-export function setPostRpConfig(postId: string, config: { accept_rp: boolean; suggested_rp?: number }) {
+/** Set post RP acceptance and listing settings */
+export function setPostRpConfig(
+  postId: string,
+  config: {
+    accept_rp: boolean;
+    suggested_rp?: number;
+    listing?: PostListing | null;
+  }
+) {
   const current = getStoredPostRpSettings();
   current[postId] = {
     accept_rp: config.accept_rp,
     suggested_rp: config.suggested_rp || 10,
     total_tipped: current[postId]?.total_tipped || 0,
+    listing: config.listing !== undefined ? config.listing : current[postId]?.listing || null,
   };
   saveStoredPostRpSettings(current);
 }
 
-/** Get post RP settings and total tips */
+/** Get post RP settings, tips, and listing info */
 export function getPostRpConfig(postId: string): PostRpSettings {
   const all = getStoredPostRpSettings();
-  return all[postId] || { accept_rp: false, suggested_rp: 10, total_tipped: 0 };
+  return all[postId] || { accept_rp: false, suggested_rp: 10, total_tipped: 0, listing: null };
+}
+
+/** Set marketplace listing for a post */
+export function setPostListing(postId: string, listing: PostListing | null) {
+  const current = getStoredPostRpSettings();
+  const existing = current[postId] || { accept_rp: true, suggested_rp: 10, total_tipped: 0, listing: null };
+  existing.listing = listing;
+  if (listing && listing.is_for_sale) {
+    existing.accept_rp = true;
+  }
+  current[postId] = existing;
+  saveStoredPostRpSettings(current);
+}
+
+/** Get marketplace listing for a post */
+export function getPostListing(postId: string): PostListing | null {
+  const cfg = getPostRpConfig(postId);
+  return cfg.listing || null;
 }
 
 /**
- * Execute an RP transfer from current user to a recipient (for tips, direct sends, or invoices).
+ * Buy a listed item or service on a post using RP
+ */
+export async function buyPostItem({
+  postId,
+  sellerId,
+  price,
+  itemName,
+  deliveryInfo,
+}: {
+  postId: string;
+  sellerId: string;
+  price: number;
+  itemName: string;
+  deliveryInfo?: string;
+}): Promise<boolean> {
+  const myId = await currentUserId();
+  if (!myId) {
+    toast('Please sign in to make a purchase');
+    return false;
+  }
+
+  if (myId === sellerId) {
+    toast('You cannot purchase your own listing');
+    return false;
+  }
+
+  const ok = await sendRp({
+    toUserId: sellerId,
+    amount: price,
+    reason: `Purchased: ${itemName}`,
+    postId,
+  });
+
+  if (!ok) return false;
+
+  // Mark listing as sold
+  const all = getStoredPostRpSettings();
+  const existing = all[postId];
+  if (existing && existing.listing) {
+    existing.listing.is_sold = true;
+    existing.listing.buyer_id = myId;
+    existing.listing.sold_at = new Date().toISOString();
+    all[postId] = existing;
+    saveStoredPostRpSettings(all);
+  }
+
+  return true;
+}
+
+/**
+ * Execute an RP transfer from current user to a recipient (for tips, direct sends, purchases, or invoices).
  */
 export async function sendRp({
   toUserId,
@@ -104,7 +195,7 @@ export async function sendRp({
 
     const senderCurrentRp = myRanked?.rp ?? 0;
     if (senderCurrentRp < amount) {
-      toast(`Insufficient RP (You have ${senderCurrentRp} RP, need ${amount} RP)`);
+      toast(`Insufficient RP (You have ${senderCurrentRp.toLocaleString()} RP, need ${amount.toLocaleString()} RP)`);
       return false;
     }
 
@@ -150,7 +241,7 @@ export async function sendRp({
     // 4. Update post tip total if applicable
     if (postId) {
       const all = getStoredPostRpSettings();
-      const existing = all[postId] || { accept_rp: true, suggested_rp: 10, total_tipped: 0 };
+      const existing = all[postId] || { accept_rp: true, suggested_rp: 10, total_tipped: 0, listing: null };
       existing.total_tipped = (existing.total_tipped || 0) + amount;
       all[postId] = existing;
       saveStoredPostRpSettings(all);
