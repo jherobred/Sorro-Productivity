@@ -397,7 +397,7 @@ export default function HomePage() {
 
               if (upNext) {
                 return (
-                  <div className="border-trail-wrap" style={{ flex: 'none', width: 353, display: 'flex' }}>
+                  <div className="border-trail-wrap" style={{ flex: 'none', width: 280, display: 'flex' }}>
                     <div
                       className="border-trail-spinner"
                       style={{
@@ -410,7 +410,7 @@ export default function HomePage() {
               }
 
               return (
-                <div style={{ flex: 'none', width: 353, display: 'flex' }}>
+                <div style={{ flex: 'none', width: 280, display: 'flex' }}>
                   {cardBody}
                 </div>
               );
@@ -418,7 +418,7 @@ export default function HomePage() {
 
             {/* The rest of today with event labels */}
             <div style={{
-              flex: 1, minWidth: 260, borderRadius: 15, padding: '16px 18px', minHeight: 180,
+              flex: 1, minWidth: 320, borderRadius: 15, padding: '16px 18px', minHeight: 180,
               background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>

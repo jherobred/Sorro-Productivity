@@ -153,7 +153,7 @@ export function UpcomingTasksCarousel({
       className={className}
       style={{
         flex: 'none',
-        width: 353,
+        width: 280,
         borderRadius: 16,
         padding: '16px 18px',
         background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
