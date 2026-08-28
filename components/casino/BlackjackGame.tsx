@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, calculateHandValue, createShoe } from '@/lib/casino';
 import { AlligatorDealer, DealerMood } from './AlligatorDealer';
-import { playCelebration, playClick } from '@/lib/audio';
+import { casinoAudio } from '@/lib/casinoAudio';
+import { CoinShower, RollingNumber } from './CasinoEffects';
 import { toast } from '@/lib/toast';
 
 export type BlackjackGameProps = {
@@ -34,9 +35,10 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   const [handBets, setHandBets] = useState<number[]>([50]);
   const [dealerHand, setDealerHand] = useState<Card[]>([]);
 
-  // Insurance
+  // Insurance & Win Celebrations
   const [insuranceBet, setInsuranceBet] = useState<number>(0);
   const [showInsurancePrompt, setShowInsurancePrompt] = useState<boolean>(false);
+  const [showCoinShower, setShowCoinShower] = useState<boolean>(false);
 
   // Result messages & dealer mood
   const [dealerMood, setDealerMood] = useState<DealerMood>('idle');
@@ -64,13 +66,13 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       toast('Not enough DOS Coins for this bet');
       return;
     }
-    playClick();
+    casinoAudio.playChip();
     setBet((prev) => prev + val);
   };
 
   const clearBet = () => {
     if (gameState !== 'betting' && gameState !== 'round_end') return;
-    playClick();
+    casinoAudio.playChip();
     setBet(0);
   };
 
@@ -80,7 +82,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       toast('Not enough DOS Coins to double bet');
       return;
     }
-    playClick();
+    casinoAudio.playChip();
     setBet((prev) => prev * 2);
   };
 
@@ -95,7 +97,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       return;
     }
 
-    playClick();
+    casinoAudio.playChip();
     setCredits((prev) => prev - bet);
     setHandBets([bet]);
     setGameState('dealing');
@@ -104,9 +106,11 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
     setRoundResultText(null);
     setShowInsurancePrompt(false);
     setInsuranceBet(0);
+    setShowCoinShower(false);
     setActiveHandIndex(0);
 
     // Initial 4 cards deal
+    casinoAudio.playCardDeal();
     const pCard1 = drawCard();
     const dCard1 = drawCard();
     const pCard2 = drawCard();
@@ -138,7 +142,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   // Player actions: HIT
   const handleHit = () => {
     if (gameState !== 'player_turn') return;
-    playClick();
+    casinoAudio.playCardDeal();
     const newCard = drawCard();
     const currentHand = [...playerHands[activeHandIndex], newCard];
     const newPlayerHands = [...playerHands];
@@ -166,7 +170,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
   // Player action: STAND
   const handleStand = () => {
     if (gameState !== 'player_turn') return;
-    playClick();
+    casinoAudio.playChip();
     if (activeHandIndex < playerHands.length - 1) {
       setActiveHandIndex(activeHandIndex + 1);
       setDealerSpeech('Playing second split hand...');
@@ -186,12 +190,13 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       toast('Not enough DOS Coins to Double Down');
       return;
     }
-    playClick();
+    casinoAudio.playChip();
     setCredits((prev) => prev - currentHandBet);
     const newHandBets = [...handBets];
     newHandBets[activeHandIndex] = currentHandBet * 2;
     setHandBets(newHandBets);
 
+    casinoAudio.playCardDeal();
     const newCard = drawCard();
     const currentHand = [...playerHands[activeHandIndex], newCard];
     const newPlayerHands = [...playerHands];
@@ -224,7 +229,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       return;
     }
 
-    playClick();
+    casinoAudio.playChip();
     setCredits((prev) => prev - bet);
 
     const hand1 = [currentHand[0], drawCard()];
@@ -274,6 +279,7 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
       let dVal = calculateHandValue(currentDealerCards);
       while (dVal.score < 17) {
         await new Promise((r) => setTimeout(r, 650));
+        casinoAudio.playCardDeal();
         const newCard = drawCard();
         currentDealerCards = [...currentDealerCards, newCard];
         setDealerHand(currentDealerCards);
@@ -337,7 +343,10 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
 
     if (totalWinPayout > 0) {
       setCredits((prev) => prev + totalWinPayout);
-      playCelebration();
+      casinoAudio.playBigWinFanfare();
+      if (totalWinPayout >= bet * 2) {
+        setShowCoinShower(true);
+      }
     }
 
     if (anyWin) {
@@ -369,6 +378,9 @@ export function BlackjackGame({ credits, setCredits, recordHandWin }: BlackjackG
 
   return (
     <div className="w-full flex flex-col items-center gap-4 select-none" style={{ maxWidth: 840, margin: '0 auto' }}>
+      {/* Coin Shower Fountain */}
+      <CoinShower active={showCoinShower} />
+
       {/* Luxury Casino Velvet Felt Table Container */}
       <div
         style={{

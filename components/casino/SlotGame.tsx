@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { playCelebration, playClick } from '@/lib/audio';
+import { casinoAudio } from '@/lib/casinoAudio';
+import { RollingNumber, CoinShower } from './CasinoEffects';
 import { toast } from '@/lib/toast';
 
 export type SlotGameProps = {
@@ -22,15 +23,15 @@ export type MerramunSymbol = {
 };
 
 export const MERRAMUN_SYMBOLS: MerramunSymbol[] = [
-  { id: 'scatter', name: 'Merramun Moon', glyph: '🌙', color: '#FCD34D', glowColor: 'rgba(252, 211, 77, 0.8)', tier: 'scatter', payoutBase: 20 },
-  { id: 'anubis', name: 'Anubis God', glyph: '🐺', color: '#818CF8', glowColor: 'rgba(129, 140, 248, 0.7)', tier: 'wild', payoutBase: 25 },
-  { id: 'skull', name: 'Crimson Skull', glyph: '💀', color: '#F87171', glowColor: 'rgba(239, 68, 68, 0.8)', tier: 'high', payoutBase: 16 },
-  { id: 'cobra', name: 'Cyan Cobra', glyph: '🐍', color: '#38BDF8', glowColor: 'rgba(56, 189, 248, 0.8)', tier: 'high', payoutBase: 14 },
-  { id: 'bastet', name: 'Bastet Cat', glyph: '🐱', color: '#60A5FA', glowColor: 'rgba(96, 165, 250, 0.7)', tier: 'high', payoutBase: 12 },
-  { id: 'eye', name: 'Eye of Horus', glyph: '👁️', color: '#FBBF24', glowColor: 'rgba(251, 191, 36, 0.7)', tier: 'mid', payoutBase: 10 },
-  { id: 'urn', name: 'Golden Urn', glyph: '🏺', color: '#EAB308', glowColor: 'rgba(234, 179, 8, 0.6)', tier: 'mid', payoutBase: 8 },
-  { id: 'scroll', name: 'Papyrus Scroll', glyph: '📜', color: '#FDE68A', glowColor: 'rgba(253, 230, 138, 0.6)', tier: 'low', payoutBase: 6 },
-  { id: 'ankh', name: 'Golden Ankh', glyph: '☥', color: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.8)', tier: 'low', payoutBase: 5 },
+  { id: 'scatter', name: 'Merramun Moon', glyph: '🌙', color: '#FCD34D', glowColor: 'rgba(252, 211, 77, 0.9)', tier: 'scatter', payoutBase: 20 },
+  { id: 'anubis', name: 'Anubis God', glyph: '🐺', color: '#818CF8', glowColor: 'rgba(129, 140, 248, 0.8)', tier: 'wild', payoutBase: 25 },
+  { id: 'skull', name: 'Crimson Skull', glyph: '💀', color: '#F87171', glowColor: 'rgba(239, 68, 68, 0.85)', tier: 'high', payoutBase: 16 },
+  { id: 'cobra', name: 'Cyan Cobra', glyph: '🐍', color: '#38BDF8', glowColor: 'rgba(56, 189, 248, 0.85)', tier: 'high', payoutBase: 14 },
+  { id: 'bastet', name: 'Bastet Cat', glyph: '🐱', color: '#60A5FA', glowColor: 'rgba(96, 165, 250, 0.75)', tier: 'high', payoutBase: 12 },
+  { id: 'eye', name: 'Eye of Horus', glyph: '👁️', color: '#FBBF24', glowColor: 'rgba(251, 191, 36, 0.75)', tier: 'mid', payoutBase: 10 },
+  { id: 'urn', name: 'Golden Urn', glyph: '🏺', color: '#EAB308', glowColor: 'rgba(234, 179, 8, 0.65)', tier: 'mid', payoutBase: 8 },
+  { id: 'scroll', name: 'Papyrus Scroll', glyph: '📜', color: '#FDE68A', glowColor: 'rgba(253, 230, 138, 0.65)', tier: 'low', payoutBase: 6 },
+  { id: 'ankh', name: 'Golden Ankh', glyph: '☥', color: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.85)', tier: 'low', payoutBase: 5 },
 ];
 
 const WEIGHTED_POOL = [
@@ -73,6 +74,9 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
   const [tumbleWin, setTumbleWin] = useState<number>(0);
   const [lastWinSummary, setLastWinSummary] = useState<string | null>(null);
   const [winningCells, setWinningCells] = useState<{ r: number; c: number }[]>([]);
+  const [teaserCol, setTeaserCol] = useState<number | null>(null);
+  const [screenShake, setScreenShake] = useState<boolean>(false);
+  const [showCoinShower, setShowCoinShower] = useState<boolean>(false);
 
   // Free Spins Bonus State
   const [freeSpinsLeft, setFreeSpinsLeft] = useState<number>(0);
@@ -84,7 +88,6 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
   const [turboMode, setTurboMode] = useState<boolean>(false);
   const [bigWinOverlay, setBigWinOverlay] = useState<{ amount: number; title: string } | null>(null);
 
-  // Find 8+ Scatter-pay matching symbols on the 6x5 grid (Merramun pays anywhere 8+)
   const findMatches = (currentGrid: MerramunSymbol[][]) => {
     const counts: Record<string, { symbol: MerramunSymbol; cells: { r: number; c: number }[] }> = {};
 
@@ -106,7 +109,6 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
           matches.push({ symbol: entry.symbol, cells: entry.cells, count: entry.cells.length });
         }
       } else if (entry.cells.length >= 8) {
-        // Standard Merramun scatter-pay triggers on 8 or more of the same symbol anywhere
         matches.push({ symbol: entry.symbol, cells: entry.cells, count: entry.cells.length });
       }
     }
@@ -114,7 +116,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
     return matches;
   };
 
-  // Perform cascading tumble
+  // Cascading Tumble with Audio & Particle Shockwaves
   const performTumble = async (
     startGrid: MerramunSymbol[][],
     currentMultiplier: number,
@@ -139,7 +141,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
         const payoutTier = m.count >= 12 ? 2.5 : m.count >= 10 ? 1.8 : 1.2;
         const payout = Math.floor(bet * (m.symbol.payoutBase / 10) * payoutTier * mult);
         stepWin += payout;
-        summary = `${m.count}X ${m.symbol.glyph} PAYS ${payout.toLocaleString()} DOS COIN`;
+        summary = `${m.count}X ${m.symbol.glyph} PAYS +${payout.toLocaleString()} DOS`;
       }
 
       spinWin += stepWin;
@@ -152,12 +154,13 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       });
       setWinningCells(winCellsArray);
 
-      if (stepWin > 0) {
-        playCelebration();
-      }
+      // Play explosion audio and screen shake
+      casinoAudio.playTumbleExplosion();
+      setScreenShake(true);
+      setTimeout(() => setScreenShake(false), 240);
 
       // Pause for sparkling cyan dissolve particle animation
-      await new Promise((r) => setTimeout(r, turboMode ? 220 : 480));
+      await new Promise((r) => setTimeout(r, turboMode ? 200 : 440));
 
       // Drop new symbols column by column
       const nextGrid: MerramunSymbol[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null as never));
@@ -185,7 +188,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       mult = Math.min(100, mult + 1);
       setMultiplier(mult);
 
-      await new Promise((r) => setTimeout(r, turboMode ? 180 : 380));
+      await new Promise((r) => setTimeout(r, turboMode ? 160 : 340));
     }
 
     return { finalGrid: activeGrid, totalWin: spinWin, summary };
@@ -201,8 +204,11 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
         return;
       }
 
-      playClick();
+      casinoAudio.playSpinStart();
       setIsSpinning(true);
+      setShowCoinShower(false);
+      setTeaserCol(null);
+
       if (!isBonusSpin) {
         setCredits((prev) => prev - bet);
         setTumbleWin(0);
@@ -211,19 +217,38 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       setWinningCells([]);
       setMultiplier(isBonusSpin ? bonusMultiplier : 1);
 
-      // Initial drop
+      // Generate staggered drops column by column
       const newGrid = generateInitialGrid();
-      setGrid(newGrid);
 
-      // Check scatter triggers
-      let initialScatters = 0;
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (newGrid[r][c].id === 'scatter') initialScatters++;
+      // Check scatter counts to trigger anticipation teaser on last reels
+      let scatterCountSoFar = 0;
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          if (newGrid[r][c].id === 'scatter') scatterCountSoFar++;
+        }
+        if (scatterCountSoFar === 3 && c === 4) {
+          // Teaser on reel 5 and 6!
+          setTeaserCol(5);
+          casinoAudio.playScatterTeaser();
+          await new Promise((r) => setTimeout(r, turboMode ? 250 : 600));
+        } else {
+          casinoAudio.playReelLand(c);
+          await new Promise((r) => setTimeout(r, turboMode ? 35 : 70));
         }
       }
 
-      await new Promise((r) => setTimeout(r, turboMode ? 150 : 320));
+      setGrid(newGrid);
+      setTeaserCol(null);
+
+      // Check total scatters
+      let totalScatters = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (newGrid[r][c].id === 'scatter') totalScatters++;
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, turboMode ? 120 : 260));
 
       // Execute tumble sequence
       const { totalWin, summary } = await performTumble(
@@ -240,19 +265,22 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
         }
 
         if (totalWin >= bet * 20) {
+          casinoAudio.playBigWinFanfare();
+          setShowCoinShower(true);
           setBigWinOverlay({
             amount: totalWin,
-            title: totalWin >= bet * 50 ? 'MERRAMUN TREASURY JACKPOT! 👑' : 'SENSATIONAL TUMBLE WIN! 💎',
+            title: totalWin >= bet * 50 ? 'ANCIENT MERRAMUN TREASURY! 👑' : 'SENSATIONAL TUMBLE WIN! 💎',
           });
         }
       }
 
       // Check 4+ Merramun Moon Scatters -> 10 Free Spins
-      if (!isBonusSpin && initialScatters >= 4) {
-        playCelebration();
+      if (!isBonusSpin && totalScatters >= 4) {
+        casinoAudio.playBigWinFanfare();
         setFreeSpinsLeft(10);
         setBonusMultiplier(2);
         setTotalBonusWon(totalWin);
+        setShowCoinShower(true);
         toast('🌙 4+ MERRAMUN MOONS! 10 FREE SPINS UNLOCKED!');
       }
 
@@ -296,31 +324,45 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
       toast(`Need ${cost.toLocaleString()} DOS Coins to Buy Merramun Feature`);
       return;
     }
-    playCelebration();
+    casinoAudio.playBigWinFanfare();
     setCredits((prev) => prev - cost);
     setFreeSpinsLeft(10);
     setBonusMultiplier(2);
     setTotalBonusWon(0);
+    setShowCoinShower(true);
     toast('FEATURE ACTIVATED: 10 Merramun Free Spins Starting! 🌙');
   };
 
   return (
     <div className="w-full flex flex-col items-center gap-4 select-none" style={{ maxWidth: 760, margin: '0 auto' }}>
+      {/* Coin Shower Fountain on Big Wins */}
+      <CoinShower active={showCoinShower} />
+
       {/* Ornate Merramun Machine Cabinet Frame */}
-      <div
+      <motion.div
+        animate={{
+          x: screenShake ? [-3, 3, -2, 2, 0] : 0,
+          y: screenShake ? [2, -2, 1, -1, 0] : 0,
+        }}
+        transition={{ duration: 0.2 }}
         style={{
           position: 'relative',
           width: '100%',
-          borderRadius: 20,
-          background: 'linear-gradient(180deg, #070B12 0%, #030508 100%)',
-          border: '3px solid #D4AF37',
-          boxShadow: '0 0 45px rgba(212, 175, 55, 0.35), 0 20px 50px rgba(0,0,0,0.9)',
+          borderRadius: 22,
+          background: freeSpinsLeft > 0
+            ? 'linear-gradient(180deg, #1C1504 0%, #080A0F 100%)'
+            : 'linear-gradient(180deg, #070B12 0%, #030508 100%)',
+          border: freeSpinsLeft > 0 ? '3.5px solid #F59E0B' : '3px solid #D4AF37',
+          boxShadow: freeSpinsLeft > 0
+            ? '0 0 55px rgba(245, 158, 11, 0.5), 0 20px 50px rgba(0,0,0,0.9)'
+            : '0 0 45px rgba(212, 175, 55, 0.35), 0 20px 50px rgba(0,0,0,0.9)',
           padding: '16px 14px 18px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           gap: 12,
           overflow: 'hidden',
+          transition: 'all 0.4s ease',
         }}
       >
         {/* Ornate Gold Merramun Pediment Header */}
@@ -382,6 +424,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
         {/* 6x5 Deep Basalt Hieroglyph Reels Grid */}
         <div
           style={{
+            position: 'relative',
             display: 'grid',
             gridTemplateColumns: 'repeat(6, 1fr)',
             gap: 6,
@@ -393,6 +436,28 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             width: '100%',
           }}
         >
+          {/* Scatter Teaser Anticipation Glow on Reel 5 & 6 */}
+          {teaserCol !== null && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.3, 0.8, 0.3] }}
+              transition={{ repeat: Infinity, duration: 0.3 }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: '34%',
+                borderRadius: 12,
+                background: 'radial-gradient(circle, rgba(253, 224, 71, 0.4) 0%, rgba(245, 158, 11, 0.15) 100%)',
+                border: '2px solid #FDE047',
+                boxShadow: '0 0 30px rgba(253, 224, 71, 0.6)',
+                pointerEvents: 'none',
+                zIndex: 15,
+              }}
+            />
+          )}
+
           {grid.map((row, r) =>
             row.map((sym, c) => {
               const isWinning = winningCells.some((cell) => cell.r === r && cell.c === c);
@@ -404,10 +469,10 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                     aspectRatio: '1 / 1',
                     borderRadius: 10,
                     background: isWinning
-                      ? 'radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, rgba(14, 165, 233, 0.15) 100%)'
+                      ? 'radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(14, 165, 233, 0.18) 100%)'
                       : 'linear-gradient(180deg, #0E1524 0%, #070B14 100%)',
                     border: isWinning ? '2px solid #38BDF8' : '1px solid rgba(212, 175, 55, 0.2)',
-                    boxShadow: isWinning ? `0 0 16px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
+                    boxShadow: isWinning ? `0 0 18px ${sym.glowColor}` : 'inset 0 2px 6px rgba(0,0,0,0.6)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -434,14 +499,14 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                   {/* Sparkling Dissolve Particles on Tumble */}
                   {isWinning && (
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: [0, 1, 0], scale: [0.8, 1.4, 1.6] }}
-                      transition={{ duration: 0.45 }}
+                      initial={{ opacity: 0, scale: 0.7 }}
+                      animate={{ opacity: [0, 1, 0], scale: [0.7, 1.4, 1.7] }}
+                      transition={{ duration: 0.42 }}
                       style={{
                         position: 'absolute',
                         inset: -4,
                         pointerEvents: 'none',
-                        background: 'radial-gradient(circle, rgba(56,189,248,0.8) 0%, rgba(253,224,71,0.5) 50%, transparent 80%)',
+                        background: 'radial-gradient(circle, rgba(56,189,248,0.85) 0%, rgba(253,224,71,0.6) 50%, transparent 80%)',
                         mixBlendMode: 'screen',
                         zIndex: 10,
                       }}
@@ -451,10 +516,10 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                   {/* Main Symbol Glyph */}
                   <motion.span
                     animate={{
-                      scale: isWinning ? [1, 1.25, 0.6] : 1,
-                      filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 10px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
+                      scale: isWinning ? [1, 1.28, 0.6] : 1,
+                      filter: isWinning ? 'brightness(1.6) drop-shadow(0 0 12px #38BDF8)' : 'drop-shadow(0 4px 6px rgba(0,0,0,0.8))',
                     }}
-                    transition={{ duration: 0.25 }}
+                    transition={{ duration: 0.22 }}
                     style={{
                       fontSize: 24,
                       lineHeight: 1,
@@ -485,7 +550,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
           )}
         </div>
 
-        {/* Tumble Win Live Indicator & Multiplier Banner */}
+        {/* Tumble Win Live Indicator & Rolling Multiplier Banner */}
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           {/* Active Pays Line */}
           <div
@@ -502,7 +567,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             {lastWinSummary || 'MATCH 8+ SYMBOLS ANYWHERE TO TUMBLE'}
           </div>
 
-          {/* TUMBLE WIN Plaque (Authentic Merramun styling) */}
+          {/* TUMBLE WIN Plaque with Rolling Number Counter */}
           <div
             style={{
               position: 'relative',
@@ -540,11 +605,11 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                 letterSpacing: '.04em',
               }}
             >
-              {tumbleWin.toLocaleString()} <span style={{ fontSize: 13, color: '#FDE047' }}>DOS</span>
+              <RollingNumber value={tumbleWin} durationMs={600} /> <span style={{ fontSize: 13, color: '#FDE047' }}>DOS</span>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Control Station: Betting, Turbo, Auto, Buy Feature */}
       <div
@@ -570,7 +635,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                 key={bVal}
                 type="button"
                 onClick={() => {
-                  playClick();
+                  casinoAudio.playChip();
                   setBet(bVal);
                 }}
                 disabled={isSpinning}
@@ -595,7 +660,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
             <button
               type="button"
               onClick={() => {
-                playClick();
+                casinoAudio.playChip();
                 setTurboMode(!turboMode);
               }}
               style={{
@@ -652,7 +717,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                 type="button"
                 disabled={isSpinning}
                 onClick={() => {
-                  playClick();
+                  casinoAudio.playChip();
                   setAutoSpins(autoSpins === count ? 0 : count);
                 }}
                 style={{
@@ -735,7 +800,7 @@ export function SlotGame({ credits, setCredits, recordSlotSpin }: SlotGameProps)
                 {bigWinOverlay.title}
               </h1>
               <div style={{ fontSize: 44, fontWeight: 900, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums' }}>
-                +{bigWinOverlay.amount.toLocaleString()} <span style={{ fontSize: 24, color: '#FDE047' }}>DOS COIN</span>
+                +<RollingNumber value={bigWinOverlay.amount} durationMs={1200} /> <span style={{ fontSize: 24, color: '#FDE047' }}>DOS COIN</span>
               </div>
               <div style={{ fontSize: 13, color: 'var(--tx3)', marginTop: 14 }}>
                 Click anywhere to collect & continue

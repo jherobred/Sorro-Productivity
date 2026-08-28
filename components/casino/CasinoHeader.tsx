@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon';
 import { RP_EXCHANGE_RATE } from '@/lib/casino';
 import { toast } from '@/lib/toast';
 import { playCelebration, playClick } from '@/lib/audio';
+import { AudioMuteToggle, HighRollerMarquee } from './CasinoEffects';
 
 export type CasinoHeaderProps = {
   credits: number;
@@ -188,8 +189,14 @@ export function CasinoHeader({
           </div>
         </div>
 
+        {/* Center: Live High-Roller Ticker Stream */}
+        <HighRollerMarquee />
+
         {/* Right: BitHit DOS Coin Balances & Exchange */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Audio Mute / Unmute Toggle */}
+          <AudioMuteToggle />
+
           {/* Daily BitHit Faucet Button */}
           <button
             type="button"
