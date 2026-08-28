@@ -589,6 +589,8 @@ body {
   border-radius: 16px;
   overflow: hidden;
   padding: 1.5px;
+  isolation: isolate;
+  contain: paint;
 }
 
 .border-trail-spinner {
@@ -596,4 +598,5 @@ body {
   inset: -150%;
   animation: border-trail-spin 4s linear infinite;
   pointer-events: none;
+  z-index: 0;
 }

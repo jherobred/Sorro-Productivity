@@ -152,15 +152,14 @@ export function UpcomingTasksCarousel({
     <div
       className={className}
       style={{
-        flex: '1 1 300px',
-        minWidth: 260,
-        width: '100%',
+        flex: 'none',
+        width: 353,
         borderRadius: 16,
         padding: '16px 18px',
         background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
         border: '1.5px solid color-mix(in srgb, var(--pal-amber) 32%, transparent)',
         boxShadow: '0 4px 20px color-mix(in srgb, var(--pal-amber) 10%, transparent)',
-        minHeight: 190,
+        minHeight: 180,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',

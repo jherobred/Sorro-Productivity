@@ -280,132 +280,145 @@ export default function HomePage() {
             {/* Up next with animated Border Trail matching event calendar color */}
             {(() => {
               const upNextColor = upNext?.color || INDIGO;
-              return (
-                <div className="border-trail-wrap" style={{ flex: '1 1 310px', minWidth: 260, width: '100%', display: 'flex' }}>
-                  <div
-                    className="border-trail-spinner"
-                    style={{
-                      background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, ${upNextColor} 60deg, transparent 120deg)`,
-                    }}
-                  />
-                  <div style={{
-                    position: 'relative',
-                    width: '100%',
-                    borderRadius: 15,
-                    padding: '16px 18px',
-                    background: `color-mix(in srgb, ${upNextColor} 14%, var(--card))`,
-                    border: `1px solid color-mix(in srgb, ${upNextColor} 32%, transparent)`,
-                    boxShadow: `0 4px 20px color-mix(in srgb, ${upNextColor} 14%, transparent)`,
-                    minHeight: 190,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    zIndex: 1,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <div style={{ ...KICKER, color: upNextColor }}>{isOngoing ? 'Happening Now' : 'Up next'}</div>
-                        {upNext && (
-                          <span style={{ position: 'relative', width: 7, height: 7, flex: 'none' }}>
-                            <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: isOngoing ? PAL.mint : upNextColor }} />
-                            <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isOngoing ? PAL.mint : upNextColor}` }} />
-                          </span>
-                        )}
-                      </div>
+              const cardBody = (
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 15,
+                  padding: '16px 18px',
+                  background: upNext ? `color-mix(in srgb, ${upNextColor} 14%, var(--card))` : 'var(--card)',
+                  border: upNext ? `1px solid color-mix(in srgb, ${upNextColor} 32%, transparent)` : '1px solid var(--line)',
+                  boxShadow: upNext ? `0 4px 20px color-mix(in srgb, ${upNextColor} 14%, transparent)` : 'var(--sh)',
+                  minHeight: 180,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  zIndex: 1,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ ...KICKER, color: upNextColor }}>{isOngoing ? 'Happening Now' : 'Up next'}</div>
                       {upNext && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
-                          {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}
+                        <span style={{ position: 'relative', width: 7, height: 7, flex: 'none' }}>
+                          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: isOngoing ? PAL.mint : upNextColor }} />
+                          <span className="halo" style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `1.5px solid ${isOngoing ? PAL.mint : upNextColor}` }} />
                         </span>
                       )}
                     </div>
-
-                    {upNext ? (
-                      <>
-                        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {upNext.title}
-                        </div>
-                        {upNext.location && (
-                          <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Icon name="pin" size={11} color="var(--tx3)" />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{upNext.location}</span>
-                          </div>
-                        )}
-
-                        {/* Seconds Countdown Box */}
-                        <div style={{
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                          padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
-                          background: `color-mix(in srgb, ${upNextColor} 18%, var(--card2))`,
-                          border: `1.5px solid color-mix(in srgb, ${upNextColor} 45%, transparent)`,
-                          boxShadow: `0 3px 12px color-mix(in srgb, ${upNextColor} 18%, transparent)`,
-                        }}>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                            fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
-                            color: upNextColor, textAlign: 'center', width: '100%',
-                          }}>
-                            <Icon name="clock" size={12} color={upNextColor} />
-                            <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
-                          </div>
-
-                          <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                            fontSize: 25, fontWeight: 800, color: 'var(--tx)',
-                            fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
-                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                            padding: '4px 0 2px',
-                          }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <span>{String(hrsUntil).padStart(2, '0')}</span>
-                              <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
-                            </div>
-                            <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <span>{String(minsUntil).padStart(2, '0')}</span>
-                              <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
-                            </div>
-                            <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <span style={{ color: upNextColor }}>{String(secsUntil).padStart(2, '0')}</span>
-                              <span style={{ fontSize: 8.5, fontWeight: 700, color: upNextColor, letterSpacing: '.06em' }}>SEC</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${upNextColor} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
-                          <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : upNextColor, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ margin: 'auto 0', textAlign: 'center' }}>
-                        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
-                        <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
-                      </div>
+                    {upNext && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                        {hhmm(hoursOf(upNext.starts_at))} – {hhmm(hoursOf(upNext.ends_at))}
+                      </span>
                     )}
-
-                    <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
-                      <button onClick={() => router.push('/calendar/')} className="acc k-squish"
-                        style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                        Open schedule
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!upNext) { toast('Nothing to snooze'); return; }
-                          A.snooze.mutate({ id: upNext.id });
-                          toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
-                        }}
-                        className="hov k-squish"
-                        style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        Snooze 10m
-                      </button>
-                    </div>
                   </div>
+
+                  {upNext ? (
+                    <>
+                      <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.25, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {upNext.title}
+                      </div>
+                      {upNext.location && (
+                        <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="pin" size={11} color="var(--tx3)" />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{upNext.location}</span>
+                        </div>
+                      )}
+
+                      {/* Seconds Countdown Box */}
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
+                        background: `color-mix(in srgb, ${upNextColor} 18%, var(--card2))`,
+                        border: `1.5px solid color-mix(in srgb, ${upNextColor} 45%, transparent)`,
+                        boxShadow: `0 3px 12px color-mix(in srgb, ${upNextColor} 18%, transparent)`,
+                      }}>
+                        <div style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                          fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                          color: upNextColor, textAlign: 'center', width: '100%',
+                        }}>
+                          <Icon name="clock" size={12} color={upNextColor} />
+                          <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
+                        </div>
+
+                        <div style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          fontSize: 25, fontWeight: 800, color: 'var(--tx)',
+                          fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          padding: '4px 0 2px',
+                        }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span>{String(hrsUntil).padStart(2, '0')}</span>
+                            <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
+                          </div>
+                          <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span>{String(minsUntil).padStart(2, '0')}</span>
+                            <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
+                          </div>
+                          <span style={{ color: upNextColor, marginTop: -10 }}>:</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ color: upNextColor }}>{String(secsUntil).padStart(2, '0')}</span>
+                            <span style={{ fontSize: 8.5, fontWeight: 700, color: upNextColor, letterSpacing: '.06em' }}>SEC</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${upNextColor} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
+                        <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : upNextColor, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ margin: 'auto 0', textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 3 }}>Nothing else today</div>
+                      <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)' }}>Your schedule is clear</div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
+                    <button onClick={() => router.push('/calendar/')} className="acc k-squish"
+                      style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                      Open schedule
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!upNext) { toast('Nothing to snooze'); return; }
+                        A.snooze.mutate({ id: upNext.id });
+                        toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
+                      }}
+                      className="hov k-squish"
+                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      Snooze 10m
+                    </button>
+                  </div>
+                </div>
+              );
+
+              if (upNext) {
+                return (
+                  <div className="border-trail-wrap" style={{ flex: 'none', width: 353, display: 'flex' }}>
+                    <div
+                      className="border-trail-spinner"
+                      style={{
+                        background: `conic-gradient(from 0deg at 50% 50%, transparent 0deg, ${upNextColor} 60deg, transparent 120deg)`,
+                      }}
+                    />
+                    {cardBody}
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ flex: 'none', width: 353, display: 'flex' }}>
+                  {cardBody}
                 </div>
               );
             })()}
 
             {/* The rest of today with event labels */}
             <div style={{
-              flex: '1.2 1 340px', minWidth: 280, borderRadius: 15, padding: '16px 18px', minHeight: 190,
+              flex: 1, minWidth: 260, borderRadius: 15, padding: '16px 18px', minHeight: 180,
               background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>
