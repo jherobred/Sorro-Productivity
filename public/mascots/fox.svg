@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <!-- Ears -->
+  <g><path d="M6 17 L10 3 L20 17 Z" fill="#F0894A"/><path d="M42 17 L38 3 L28 17 Z" fill="#F0894A"/><path d="M9 15 L11 8 L16 15 Z" fill="#C75C2E"/><path d="M39 15 L37 8 L32 15 Z" fill="#C75C2E"/></g>
+  <!-- Head Base -->
+  <ellipse cx="24" cy="26" rx="15.5" ry="14.5" fill="#F0894A"/>
+  <ellipse cx="24" cy="32.5" rx="9" ry="7" fill="#FFF1E2" opacity="0.95"/>
+  <!-- Face Markings / Nose -->
+  <ellipse cx="24" cy="32" rx="2.6" ry="2" fill="#20232E"/>
+  <!-- Eyes -->
+  <g>
+    <ellipse cx="17.5" cy="27" rx="2.7" ry="3.1" fill="#20232E"/>
+    <ellipse cx="30.5" cy="27" rx="2.7" ry="3.1" fill="#20232E"/>
+    <circle cx="18.5" cy="25.9" r="1" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="31.5" cy="25.9" r="1" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+  <!-- Eyebrows -->
+  <g stroke="#20232E" stroke-width="1.8" stroke-linecap="round" opacity="0.85">
+    <path d="M13.4 23.6 L21 26.6"/>
+    <path d="M34.6 23.6 L27 26.6"/>
+  </g>
+  <!-- Mouth -->
+  <path d="M20.6 34.8 q3.4 2.8 6.8 0" stroke="#20232E" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+</svg>

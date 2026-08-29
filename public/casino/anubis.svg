@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="anubisDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A5B4FC"/><stop offset="40%" stop-color="#6366F1"/><stop offset="100%" stop-color="#1E1B4B"/>
+    </linearGradient>
+  </defs>
+  <path d="M 18 24 L 20 6 Q 26 10 28 22 Z" fill="url(#anubisDark)"/><path d="M 46 24 L 44 6 Q 38 10 36 22 Z" fill="url(#anubisDark)"/>
+  <path d="M 24 22 L 32 18 L 40 22 L 38 34 L 46 36 L 46 40 L 34 44 L 28 38 Z" fill="url(#anubisDark)"/>
+  <path d="M 28 14 Q 32 8 36 14 Q 38 6 42 12" stroke="#38BDF8" stroke-width="2" fill="none"/>
+  <path d="M 20 42 Q 32 50 44 42 L 48 54 Q 32 60 16 54 Z" fill="url(#anubisDark)" stroke="#F59E0B" stroke-width="1.5"/>
+  <polygon points="34,26 38,28 34,30" fill="#38BDF8"/><circle cx="36" cy="28" r="0.8" fill="#FFFFFF"/>
+</svg>

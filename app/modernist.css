@@ -135,6 +135,11 @@ figcaption {
 .btn-icon { width: 36px; height: 36px; padding: 0; }
 .btn-block { width: 100%; margin-top: var(--space-2); justify-content: flex-start; text-align: left; }
 
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn-icon { width: 44px; height: 44px; }
+}
+
 /* — forms — */
 .field > label {
   display: block; font-size: 12px; margin-bottom: 5px;
@@ -175,6 +180,11 @@ textarea.input { min-height: 90px; resize: vertical; }
 .seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-bg); }
 .seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+@media (pointer: coarse) {
+  .input { min-height: 44px; }
+  .seg-opt { min-height: 44px; padding-inline: 14px; }
+}
 
 /* — cards — */
 .card {

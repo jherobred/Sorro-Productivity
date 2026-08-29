@@ -33,7 +33,7 @@
   --line2: rgba(170, 166, 210, .19);
   --tx: #EFEDF5;
   --tx2: #A6A2BE;
-  --tx3: #8A86A6;
+  --tx3: #9894B6;
   --hov: rgba(170, 166, 210, .075);
   --sh: 0 6px 22px rgba(0, 0, 0, .46);
   --shl: 0 18px 48px rgba(0, 0, 0, .6);
@@ -61,7 +61,7 @@
   --line2: rgba(38, 32, 54, .19);
   --tx: #1C1A26;
   --tx2: #5D5875;
-  --tx3: #6F6A82;
+  --tx3: #5A556E;
   --hov: rgba(38, 32, 54, .05);
   --sh: 0 3px 12px rgba(40, 34, 60, .13);
   --shl: 0 14px 38px rgba(40, 34, 60, .2);
@@ -423,6 +423,15 @@ body {
 .google-task-row:focus-within .google-task-actions {
   opacity: 1;
 }
+@media (hover: none) {
+  .google-task-actions {
+    opacity: 0.85;
+    pointer-events: auto;
+  }
+  .google-task-drag {
+    opacity: 0.4;
+  }
+}
 
 /* Announced, not drawn. Each section keeps an h1 naming it for screen readers
    while the visible line carries something the navigation is not already
@@ -453,6 +462,33 @@ body {
   z-index: 1;
 }
 
+@media (pointer: coarse) {
+  .tap::after {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .btn-icon,
+  .og-iconbtn {
+    position: relative;
+  }
+  .btn-icon::after,
+  .og-iconbtn::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    z-index: 1;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--acc, #7C6CFF);
+  outline-offset: 2px;
+}
+
 .k-squish {
   transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
@@ -460,9 +496,12 @@ body {
 .k-squish:active {
   transform: scale(0.96);
 }
-.nomo .k-squish {
-  transition: none !important;
-  transform: none !important;
+.nomo .k-squish,
+@media (prefers-reduced-motion: reduce) {
+  .k-squish {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ---- Task Deadline Alert Animations & Hierarchy ------------------------- */
@@ -600,3 +639,37 @@ body {
   pointer-events: none;
   z-index: 0;
 }
+
+/* ---- Ambient Visual Textures & Background Grids ------------------------- */
+.texture-dot {
+  background-image: url('/textures/dot-grid.svg');
+  background-repeat: repeat;
+}
+
+.texture-iso {
+  background-image: url('/textures/isometric-grid.svg');
+  background-repeat: repeat;
+}
+
+.texture-blueprint {
+  background-image: url('/textures/blueprint-grid.svg');
+  background-repeat: repeat;
+}
+
+.texture-noise {
+  background-image: url('/textures/subtle-noise.svg');
+  background-repeat: repeat;
+}
+
+.texture-topo {
+  background-image: url('/textures/topo-contour.svg');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center bottom;
+}
+
+.texture-hex {
+  background-image: url('/textures/geometric-hex.svg');
+  background-repeat: repeat;
+}
+

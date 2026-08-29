@@ -65,7 +65,7 @@ export function Trail({
         aria-label={walkers.map((w) => `${w.label}: ${w.score} ${unit}`).join('. ')}
         style={{
           position: 'relative', height, borderRadius: 12, overflow: 'hidden',
-          background: 'linear-gradient(180deg, color-mix(in srgb, var(--acc) 13%, transparent), transparent 62%), var(--card2)',
+          background: 'linear-gradient(180deg, color-mix(in srgb, var(--acc) 13%, transparent), transparent 62%), url("/textures/topo-contour.svg") no-repeat center bottom / cover, var(--card2)',
           border: '1px solid var(--line)',
         }}>
 

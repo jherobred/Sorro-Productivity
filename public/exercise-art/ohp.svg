@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160" fill="none" role="img">
+  <g>
+    <circle cx="110" cy="66" r="13" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M110 79v38" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M92 84c0-8 6-13 13-13s13 5 13 13-6 12-13 12-13-4-13-12z" fill="#FF5252" opacity="0.85"/>
+    <path d="M96 84 84 50M124 84l12-34" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M110 117l-14 30M110 117l14 30" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g>
+      <line x1="64" y1="42" x2="156" y2="42" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <rect x="56" y="27" width="6" height="30" rx="2.5" fill="currentColor"/>
+      <rect x="48" y="31" width="6" height="22" rx="2.5" fill="currentColor"/>
+      <rect x="158" y="27" width="6" height="30" rx="2.5" fill="currentColor"/>
+      <rect x="166" y="31" width="6" height="22" rx="2.5" fill="currentColor"/>
+    </g>
+    <path d="M78 150h64" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/>
+  </g>
+</svg>

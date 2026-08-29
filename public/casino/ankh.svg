@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="ankhGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF2A8"/><stop offset="40%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#92400E"/>
+    </linearGradient>
+    <radialGradient id="ruby" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF6B6B"/><stop offset="100%" stop-color="#991B1B"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="32" cy="18" rx="11" ry="13" stroke="url(#ankhGold)" stroke-width="5.5" fill="none"/>
+  <path d="M 12 33 Q 32 31 52 33 L 52 38 Q 32 36 12 38 Z" fill="url(#ankhGold)"/>
+  <path d="M 28 34 L 28 58 Q 32 60 36 58 L 36 34 Z" fill="url(#ankhGold)"/>
+  <circle cx="32" cy="35" r="3.5" fill="url(#ruby)" stroke="#78350F" stroke-width="1"/>
+  <circle cx="31" cy="34" r="1" fill="#FFFFFF"/>
+</svg>

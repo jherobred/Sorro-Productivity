@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 32" width="36" height="32" fill="none">
+  <g>
+    <rect x="3" y="5" width="30" height="24" rx="3" fill="#8B5CF6" opacity="0.3"/>
+    <path d="M4 4H15V6H32V8H34V28H32V30H6V28H4V4Z" fill="#1E0E38"/>
+    <path d="M8 6H29V10H8V6Z" fill="#F5F3FF"/>
+    <path d="M9 7H28V8H9V7Z" fill="#DDD6FE"/>
+    <path d="M7 10H33V27H31V29H9V27H7V10Z" fill="#6D28D9"/>
+    <polygon points="8,11 11,11 8,14" fill="#C4B5FD"/><polygon points="32,11 29,11 32,14" fill="#C4B5FD"/>
+    <polygon points="8,27 11,27 8,24" fill="#C4B5FD"/><polygon points="32,27 29,27 32,24" fill="#C4B5FD"/>
+    <g transform="translate(2, 0)">
+      <polygon points="18,12 21,17 18,25 15,17" fill="#8B5CF6"/>
+      <polygon points="18,12 21,17 18,25" fill="#A78BFA"/>
+      <polygon points="18,13 20,17 18,23" fill="#DDD6FE"/>
+      <polygon points="14,16 16,18 14,23 12,19" fill="#7C3AED"/>
+      <polygon points="22,16 24,19 22,23 20,18" fill="#C4B5FD"/>
+    </g>
+  </g>
+</svg>

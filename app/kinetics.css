@@ -420,3 +420,14 @@
 .nomo .mc.race { transform: rotate(7deg); }
 .nomo :is(.mc-dust, .mc-zoom) { opacity: .3; }
 .nomo :is(.tr-walk, .tr-fill) { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom) { animation: none !important; }
+  .mc.race { transform: rotate(7deg) !important; }
+  :is(.mc-dust, .mc-zoom) { opacity: .3 !important; }
+  :is(.tr-walk, .tr-fill) { transition: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

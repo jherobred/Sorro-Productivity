@@ -139,6 +139,8 @@ export function FocusHub({
       style={{
         position: 'relative',
         background: 'var(--card)',
+        backgroundImage: 'url("/textures/dot-grid.svg")',
+        backgroundRepeat: 'repeat',
         borderRadius: 20,
         padding: '24px 20px',
         boxShadow: 'var(--shl)',

@@ -33,9 +33,9 @@
   --og-surface-3: #3a3a3c;
 
   --og-label:   #ffffff;
-  --og-label-2: rgba(235, 235, 245, .60);
-  --og-label-3: rgba(235, 235, 245, .32);
-  --og-label-4: rgba(235, 235, 245, .18);
+  --og-label-2: rgba(240, 240, 250, .75);
+  --og-label-3: rgba(240, 240, 250, .54);
+  --og-label-4: rgba(240, 240, 250, .26);
 
   --og-sep: rgba(84, 84, 88, .60);
   --og-hair: .5px;
@@ -103,9 +103,9 @@
   --og-surface-3: #e3e3e8;
 
   --og-label:   #000000;
-  --og-label-2: rgba(60, 60, 67, .60);
-  --og-label-3: rgba(60, 60, 67, .30);
-  --og-label-4: rgba(60, 60, 67, .16);
+  --og-label-2: rgba(45, 45, 55, .78);
+  --og-label-3: rgba(45, 45, 55, .54);
+  --og-label-4: rgba(45, 45, 55, .25);
   --og-sep: rgba(60, 60, 67, .29);
 
   --og-green: #34c759;
@@ -313,8 +313,21 @@
 .og-setrow.og-done .og-n { background: var(--og-acc); color: var(--og-on-acc); }
 .og-setrow.og-done { opacity: .45; }
 .og-setgo {
+  position: relative;
   width: 30px; height: 30px; flex: none; border-radius: 8px; display: flex;
   align-items: center; justify-content: center; background: var(--og-surface-2); color: var(--og-label);
+}
+@media (pointer: coarse) {
+  .og-setgo::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    z-index: 1;
+  }
 }
 .og-setgo.og-on { background: var(--og-acc); color: var(--og-on-acc); }
 .og-setgo:active { background: var(--og-surface-3); }

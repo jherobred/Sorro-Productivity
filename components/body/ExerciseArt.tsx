@@ -22,19 +22,20 @@ import type { Art } from '@/lib/lift';
  * swap this component's body for an <img> and keep the `art` field as the key.
  */
 
-const INK = '#15161A';
-const RED = '#E23B3B';
+const INK = 'var(--tx, #15161A)';
+const RED = 'var(--pal-coral, #E23B3B)';
+const BENCH = 'var(--card2, #D8DBE0)';
 
 /** Where the effort is, per pattern — the red wash the dataset images use. */
 function Muscle({ d }: { d: string }) {
-  return <path d={d} fill={RED} opacity={0.8} />;
+  return <path d={d} fill={RED} opacity={0.85} />;
 }
 
 const STROKE = {
   fill: 'none', stroke: INK, strokeWidth: 5, strokeLinecap: 'round', strokeLinejoin: 'round',
 } as const;
 const THIN = {
-  fill: 'none', stroke: INK, strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round',
+  fill: 'none', stroke: INK, strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round', opacity: 0.65,
 } as const;
 
 /** A loaded barbell: the bar, and a plate stack at each end. */
@@ -59,7 +60,7 @@ const FIGURES: Record<Art, React.ReactNode> = {
   bench: (
     <>
       {/* bench */}
-      <rect x="52" y="96" width="118" height="13" rx="6" fill="#D8DBE0" />
+      <rect x="52" y="96" width="118" height="13" rx="6" fill={BENCH} />
       <path d="M74 109v22M150 109v22" {...THIN} />
       {/* body */}
       <circle cx="60" cy="82" r="13" {...STROKE} />
@@ -77,7 +78,7 @@ const FIGURES: Record<Art, React.ReactNode> = {
   /* Same press, bench raked up. */
   incline: (
     <>
-      <path d="M56 122 158 78" stroke="#D8DBE0" strokeWidth={13} strokeLinecap="round" fill="none" />
+      <path d="M56 122 158 78" stroke={BENCH} strokeWidth={13} strokeLinecap="round" fill="none" />
       <path d="M70 126v14M144 100v40" {...THIN} />
       <circle cx="150" cy="70" r="13" {...STROKE} />
       <path d="M138 78 84 104" {...STROKE} />
@@ -166,7 +167,7 @@ const FIGURES: Record<Art, React.ReactNode> = {
   /* On the floor, curling up. */
   core: (
     <>
-      <path d="M34 132h152" stroke="#D8DBE0" strokeWidth={9} strokeLinecap="round" fill="none" />
+      <path d="M34 132h152" stroke={BENCH} strokeWidth={9} strokeLinecap="round" fill="none" />
       <circle cx="74" cy="76" r="12" {...STROKE} />
       <path d="M84 84 118 106" {...STROKE} />
       <Muscle d="M92 96c12-4 24 0 30 9 3 5-1 11-7 11-12 0-23-4-27-10-2-4 0-8 4-10z" />
@@ -194,7 +195,7 @@ export function ExerciseArt({ art, compact }: { art: Art; compact?: boolean }) {
     <svg viewBox="0 0 220 160" role="img" aria-label="Exercise demonstration"
       preserveAspectRatio="xMidYMid meet"
       style={compact ? undefined : undefined}>
-      <rect width="220" height="160" fill="#FFFFFF" />
+      <rect width="220" height="160" fill="var(--card, #FFFFFF)" />
       {FIGURES[art]}
     </svg>
   );

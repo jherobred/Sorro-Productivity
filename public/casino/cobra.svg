@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="cobraBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E0F2FE"/><stop offset="40%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+  </defs>
+  <path d="M 40 16 Q 48 20 44 28 Q 38 36 44 44 Q 48 50 38 54 Q 26 56 22 48 Q 20 40 28 34 Q 34 30 32 24 Q 30 18 36 14 Q 42 10 44 14" stroke="url(#cobraBlue)" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M 32 16 Q 26 12 36 8 Q 46 12 40 16 Q 44 20 36 22 Q 28 20 32 16 Z" fill="url(#cobraBlue)"/>
+  <circle cx="38" cy="11" r="1.5" fill="#FFFFFF"/>
+  <path d="M 30 40 Q 34 38 38 40" stroke="#7DD3FC" stroke-width="2" fill="none"/>
+  <path d="M 28 46 Q 34 44 40 46" stroke="#7DD3FC" stroke-width="2" fill="none"/>
+</svg>
