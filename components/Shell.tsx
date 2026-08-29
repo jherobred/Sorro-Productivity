@@ -46,6 +46,7 @@ import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
 import { ShopModal } from './ShopModal';
 import { BirdMascot } from './BasedlyLogo';
+import { ToolbarDynamic } from './ToolbarDynamic';
 
 
 /**
@@ -60,14 +61,14 @@ type Section = { id: string; name: string; ic: IconName; badge?: string; kids?: 
 const SECTIONS: Section[] = [
   { id: 'home', name: 'Home', ic: 'home' },
   { id: 'calendar', name: 'Calendar', ic: 'cal', kids: [{ n: 'Classes', c: PAL.indigo }, { n: 'Personal', c: PAL.mint }, { n: 'Org — CSSS', c: PAL.violet }] },
-  { id: 'tasks', name: 'Tasks', ic: 'task', kids: [{ n: 'School', c: PAL.indigo, m: '7' }, { n: 'Personal', c: PAL.amber, m: '3' }, { n: 'Errands', c: PAL.mint, m: '2' }] },
-  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: '3rd year', c: PAL.indigo }, { n: 'Capstone research', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Canvases', c: PAL.cyan }] },
+  { id: 'tasks', name: 'Tasks', ic: 'task' },
+  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: 'Notebooks', c: PAL.indigo }, { n: 'Canvas', c: PAL.cyan }, { n: 'Graph', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Java', c: PAL.amber }] },
   { id: 'projects', name: 'Projects', ic: 'proj' },
   { id: 'habits', name: 'Habits', ic: 'habit' },
   { id: 'body', name: 'Body', ic: 'heart', kids: [{ n: 'Health', c: PAL.pink }, { n: 'Food', c: PAL.amber }, { n: 'Gym', c: PAL.mint }] },
   { id: 'money', name: 'Money', ic: 'money', lock: true },
   { id: 'profile', name: 'Profile', ic: 'focus' },
-  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
+  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }, { n: 'Casino', c: PAL.mint }] },
   { id: 'files', name: 'Files', ic: 'files' },
   { id: 'people', name: 'People', ic: 'people' },
 ];
@@ -95,7 +96,7 @@ function navFor(picks: string[]): Section[] {
 export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { phone } = useLayout();
+  const { phone, viewMode, setViewMode } = useLayout();
   const { prefs, update } = usePrefs();
   const [guard, setGuard] = useState<'checking' | 'ok'>('checking');
   const [capture, setCapture] = useState<{ x: number; y: number } | null>(null);
@@ -134,6 +135,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (tabParam === 'challenges') return 'community_challenges';
       if (tabParam === 'messages') return 'community_messages';
+      if (tabParam === 'casino') return 'community_casino';
       return 'community_feed';
     }
     return sec;
@@ -164,36 +166,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useLiveSync();
   // Remember whoever signs in, so switching back needs no round trip.
   useEffect(watchAccounts, []);
-  // Phone web only. A desktop browser has no address bar worth reclaiming and
-  // a window that goes fullscreen on the first click of the session is a window
-  // that has taken your screen without asking. Only on the first tap, too — the
-  // Fullscreen API refuses anything that is not a user gesture. lib/appUpdate.ts.
-  useAlwaysFullscreen(phone && prefs.alwaysFullscreen);
+  // Phone view: fullscreen by default on the first user interaction. Desktop: normal.
+  useAlwaysFullscreen(phone);
 
   /**
-   * Ctrl/Cmd+\ collapses the sidebar, the shortcut Notion and VS Code use.
-   *
-   * The pref IS the state — there is no local mirror. Holding both a `railOpen`
-   * useState and `prefs.sidebar` meant an effect syncing one to the other kept
-   * overwriting a fresh toggle with the value still in flight, so every second
-   * press did nothing.
+   * Ctrl/Cmd+\ cycles the sidebar modes: open -> compact -> hidden -> open.
    */
-  const railOpen = prefs.sidebar !== 'collapsed';
-  const toggleRail = useCallback(
-    (next?: boolean) => void update({ sidebar: (next ?? !railOpen) ? 'open' : 'collapsed' }),
-    [update, railOpen],
+  const sidebarMode: 'open' | 'compact' | 'hidden' =
+    prefs.sidebar === 'compact' ? 'compact' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'hidden' : 'open');
+
+  const setSidebarMode = useCallback(
+    (mode: 'open' | 'compact' | 'hidden') => void update({ sidebar: mode }),
+    [update],
   );
+
+  const cycleSidebarMode = useCallback(() => {
+    setSidebarMode(sidebarMode === 'open' ? 'compact' : (sidebarMode === 'compact' ? 'hidden' : 'open'));
+  }, [sidebarMode, setSidebarMode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
-        toggleRail();
+        cycleSidebarMode();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleRail]);
+  }, [cycleSidebarMode]);
   useOverlayBack(!!capture, () => setCapture(null));
 
   useEffect(() => {
@@ -250,7 +250,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       // 3. Toggle Sidebar: ⌘+B or Ctrl+B
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        toggleRail();
+        cycleSidebarMode();
         return;
       }
 
@@ -267,6 +267,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
       if (e.key === '?') {
         e.preventDefault();
         setShortcutsOpen((v) => !v);
+        return;
+      }
+
+      // 1 to 5: Top Navigation Shortcuts
+      if ((e.metaKey || e.ctrlKey) && ['1', '2', '3', '4', '5'].includes(e.key)) {
+        if (overlayOpen) return;
+        e.preventDefault();
+        const routeMap: Record<string, string> = {
+          '1': '/home/',
+          '2': '/calendar/',
+          '3': '/tasks/',
+          '4': '/notebooks/',
+          '5': '/projects/',
+        };
+        router.push(routeMap[e.key]);
         return;
       }
 
@@ -322,7 +337,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     // search/sheet/shortcutsOpen/account/settings/menu feed overlayOpen above —
     // without them here the handler would keep checking a stale (permanently
     // closed) snapshot of every overlay flag.
-  }, [router, dark, update, toggleRail, search, sheet, shortcutsOpen, account, settings, menu]);
+  }, [router, dark, update, cycleSidebarMode, search, sheet, shortcutsOpen, account, settings, menu]);
 
   // The sidebar badge reads the tasks already in cache. It used to fire a
   // count query against Supabase on every single navigation — a network round
@@ -369,87 +384,166 @@ export function Shell({ children }: { children: React.ReactNode }) {
         filter: 'blur(46px)', opacity: dark ? 0.85 : 0.6, zIndex: 0,
       }} />
 
-      {!phone && railOpen && (
+      {!phone && (
         <div className="bd-rail" style={{
           ...lg({ tint: acc, strength: 1, dark }),
-          width: 236, minWidth: 236,
+          width: sidebarMode === 'open' ? 236 : (sidebarMode === 'compact' ? 64 : 0),
+          minWidth: sidebarMode === 'open' ? 236 : (sidebarMode === 'compact' ? 64 : 0),
+          maxWidth: sidebarMode === 'open' ? 236 : (sidebarMode === 'compact' ? 64 : 0),
+          opacity: sidebarMode === 'hidden' ? 0 : 1,
+          pointerEvents: sidebarMode === 'hidden' ? 'none' : 'auto',
           flex: 'none', position: 'relative', zIndex: 2,
-          display: 'flex', flexDirection: 'column', padding: '14px 0', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', padding: sidebarMode === 'hidden' ? 0 : '14px 0', overflow: 'hidden',
           border: 0, borderRadius: 0,
-          borderRight: `1px solid ${dark ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.9)'}`,
-          boxShadow: dark
+          borderRight: sidebarMode === 'hidden' ? 'none' : '1px solid var(--line)',
+          boxShadow: sidebarMode === 'hidden' ? 'none' : (dark
             ? 'inset -1px 0 0 rgba(255,255,255,.07), inset 1px 0 0 rgba(255,255,255,.16)'
-            : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)',
+            : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)'),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 10px 14px 14px' }}>
-            <button
-              onClick={() => router.push('/home/')}
-              className="hov k-squish"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, textAlign: 'left', cursor: 'pointer' }}
-              title="Go to Home"
-            >
-              <BirdMascot size={22} />
-              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.02em', color: 'var(--tx)' }}>Basedly</div>
-            </button>
-            <button
-              onClick={() => toggleRail(false)}
-              className="hov k-squish" title="Collapse sidebar (Ctrl+\\)" aria-label="Collapse sidebar"
-              style={{ width: 26, height: 26, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
-              <Icon name="collapse" size={15} color="var(--tx3)" />
-            </button>
-          </div>
-
-          <div style={{ padding: '0 12px 12px' }}>
-            <button onClick={() => setSearch(true)} className="hov" style={{
-              display: 'flex', alignItems: 'center', gap: 9, width: '100%', height: 34, padding: '0 11px',
-              borderRadius: 9, background: 'var(--card)', border: '1px solid var(--line)',
-            }}>
-              <Icon name="search" size={14} color="var(--tx3)" />
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 12, fontWeight: 500, color: 'var(--tx3)' }}>Search</span>
-            </button>
-          </div>
-
-          <div style={{ position: 'relative', padding: '0 12px 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <button onClick={() => setSheet('note')} className="acc k-squish" style={{
-                display: 'flex', alignItems: 'center', gap: 7, flex: '1 1 auto', height: 34, padding: '0 13px',
-                borderRadius: 9, background: acc, color: ON_ACCENT, fontSize: 12.5, fontWeight: 800,
-              }}>
-                <Icon name="bookPlus" size={15} color={ON_ACCENT} />Note
-              </button>
-              <button title="New task" aria-label="New task" onClick={() => setSheet('task')} className="hov k-squish" style={SIDE_ACTION}>
-                <Icon name="taskPlus" size={15} color="var(--tx2)" />
-              </button>
-              <button title="AI helper" aria-label="AI helper" onClick={() => toast('The AI panel is switched off in this build')}
-                className="hov k-squish" style={SIDE_ACTION}>
-                <Icon name="spark" size={15} color="var(--tx2)" />
-              </button>
-              <button title="More actions" aria-label="More actions" aria-haspopup="menu" className="hov k-squish" style={SIDE_ACTION}
-                onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setMenu({
-                    x: r.left, y: r.bottom + 6, kind: 'global', label: 'Quick actions',
-                    items: [
-                      { label: 'New expense', icon: 'money', run: () => setSheet('money') },
-                      { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
-                      { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
-                      { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
-                      { label: 'Settings & Profile', icon: 'cog', run: () => { setSettingsTab('general'); setSettings(true); } },
-                    ],
-                  });
-                }}>
-                <Icon name="dots" size={15} color="var(--tx2)" />
+          {sidebarMode === 'open' ? (
+            /* Open Mode Header - 1 click partial collapses to icons */
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 16px 18px', minWidth: 236 }}>
+              <button
+                onClick={() => setSidebarMode('compact')}
+                className="k-squish"
+                style={{
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  outline: 'none',
+                }}
+                title="Click to partial collapse (icons only)"
+                aria-label="Click to partial collapse"
+              >
+                <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+                  basedly
+                </span>
               </button>
             </div>
-          </div>
+          ) : (
+            /* Compact Icon-Only Mode Header - 2nd click fully collapses */
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0 14px', width: 64 }}>
+              <button
+                onClick={() => setSidebarMode('hidden')}
+                className="k-squish"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  outline: 'none',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+                title="Click to fully collapse sidebar"
+                aria-label="Click to fully collapse sidebar"
+              >
+                <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+                  b
+                </span>
+              </button>
+            </div>
+          )}
 
-          <div className="navsb" style={{ flex: 1, overflowY: 'auto', padding: '0 8px 0 17px' }}>
+          {sidebarMode === 'open' ? (
+            /* Open Mode Action Bar */
+            <div style={{ position: 'relative', padding: '0 12px 12px', minWidth: 236 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <button onClick={() => setSheet('note')} className="acc k-squish" style={{
+                  display: 'flex', alignItems: 'center', gap: 7, flex: '1 1 auto', height: 34, padding: '0 13px',
+                  borderRadius: 9, background: acc, color: ON_ACCENT, fontSize: 12.5, fontWeight: 800,
+                }}>
+                  <Icon name="bookPlus" size={15} color={ON_ACCENT} />Note
+                </button>
+                <button title="New task" aria-label="New task" onClick={() => setSheet('task')} className="hov k-squish" style={SIDE_ACTION}>
+                  <Icon name="taskPlus" size={15} color="var(--tx2)" />
+                </button>
+                <button title="AI helper" aria-label="AI helper" onClick={() => toast('The AI panel is switched off in this build')}
+                  className="hov k-squish" style={SIDE_ACTION}>
+                  <Icon name="spark" size={15} color="var(--tx2)" />
+                </button>
+                <button title="More actions" aria-label="More actions" aria-haspopup="menu" className="hov k-squish" style={SIDE_ACTION}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setMenu({
+                      x: r.left, y: r.bottom + 6, kind: 'global', label: 'Quick actions',
+                      items: [
+                        { label: viewMode === 'phone' ? 'Switch to Web View' : 'Dedicated Phone View', icon: viewMode === 'phone' ? 'monitor' : 'phone', run: () => setViewMode(viewMode === 'phone' ? 'web' : 'phone') },
+                        { label: 'New expense', icon: 'money', run: () => setSheet('money') },
+                        { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
+                        { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
+                        { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
+                        { label: 'Settings & Profile', icon: 'cog', run: () => { setSettingsTab('general'); setSettings(true); } },
+                      ],
+                    });
+                  }}>
+                  <Icon name="dots" size={15} color="var(--tx2)" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Compact Icon-Only Note Quick Action */
+            <div style={{ padding: '0 0 10px', display: 'flex', justifyContent: 'center', width: 64 }}>
+              <button
+                onClick={() => setSheet('note')}
+                title="New note"
+                aria-label="New note"
+                className="acc k-squish"
+                style={{
+                  width: 38, height: 38, borderRadius: 10, background: acc, color: ON_ACCENT,
+                  display: 'grid', placeItems: 'center', cursor: 'pointer',
+                }}
+              >
+                <Icon name="bookPlus" size={16} color={ON_ACCENT} />
+              </button>
+            </div>
+          )}
+
+          {/* Section list */}
+          <div className="navsb" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarMode === 'open' ? '0 8px 0 17px' : '0 10px', width: sidebarMode === 'open' ? 236 : 64 }}>
             {SECTIONS.map((sec) => {
               const on = sec.id === section;
               const hue = SECHUE[sec.id] || acc;
               const hasKids = !!sec.kids;
               const open = hasKids && openKids[sec.id] !== false && openKids[sec.id] !== undefined;
               const badge = sec.id === 'tasks' && taskCount > 0 ? String(taskCount) : sec.badge ?? '';
+
+              if (sidebarMode === 'compact') {
+                return (
+                  <div key={sec.id} className="compact-tab-wrap">
+                    <button
+                      onClick={() => go(sec.id)}
+                      onPointerDown={() => prefetchSection(sec.id)}
+                      aria-label={sec.name}
+                      className={on ? 'k-squish' : 'hov k-squish'}
+                      style={{
+                        width: 44, height: 44, borderRadius: 12, display: 'grid', placeItems: 'center',
+                        background: on ? `color-mix(in srgb, ${hue} 20%, transparent)` : 'transparent',
+                        border: on ? `1px solid color-mix(in srgb, ${hue} 35%, transparent)` : '1px solid transparent',
+                        color: on ? hueTx(hue) : 'var(--tx2)', position: 'relative', margin: '0 auto',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Icon name={sec.ic} size={18} color={on ? hueTx(hue) : 'var(--tx2)'} />
+                      {badge && (
+                        <span style={{
+                          position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%',
+                          background: hue, border: '1.5px solid var(--bg)',
+                        }} />
+                      )}
+                    </button>
+                    <div className="compact-tooltip">
+                      {sec.name}{badge ? ` (${badge})` : ''}
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={sec.id}>
                   <div className="hov" style={{
@@ -462,9 +556,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       background: hue, opacity: on ? 1 : 0, transform: on ? 'scaleY(1)' : 'scaleY(.3)',
                       transition: 'opacity .3s cubic-bezier(.22,1,.36,1), transform .3s cubic-bezier(.22,1,.36,1)',
                     }} />
-                    {/* pointerdown, not click: the fetch starts while the
-                        finger is still down, so the round trip overlaps the
-                        page transition instead of following it. */}
                     <button onClick={() => go(sec.id)} onPointerDown={() => prefetchSection(sec.id)} style={{
                       display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
                       padding: '7px 4px 7px 8px', borderRadius: 8, fontSize: 12.5, fontWeight: on ? 700 : 500,
@@ -477,8 +568,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     </button>
                     <button
                       onClick={() => setOpenKids((k) => ({ ...k, [sec.id]: !open }))}
-                      // Twelve identical "Show or hide sub-items" in a row tells
-                      // a screen-reader user nothing about which one they are on.
                       aria-label={`${open ? 'Hide' : 'Show'} items under ${sec.name}`}
                       aria-expanded={open}
                       title="Show or hide sub-items"
@@ -497,9 +586,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       paddingLeft: 9, borderLeft: '1px solid var(--line2)',
                     }}>
                       {sec.kids.map((k) => (
-                        // The sub-item carries its own name as a filter so the
-                        // page can open focused on it, rather than three rows
-                        // that all land in the same place.
                         <button key={k.n} onClick={() => goFiltered(sec.id, k.n)} className="hov" style={{
                           display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 8px',
                           borderRadius: 6, fontSize: 11.5, fontWeight: 500, color: 'var(--tx2)',
@@ -516,158 +602,108 @@ export function Shell({ children }: { children: React.ReactNode }) {
             })}
           </div>
 
-          <div style={{ padding: '8px 8px 4px', borderTop: '1px solid var(--line)' }}>
-            <button onClick={() => setSideMore((v) => !v)} className="hov" style={{
-              display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '7px 8px',
-              borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
-            }}>
-              <Icon name="chev" size={13} color="var(--tx3)"
-                style={{ transform: sideMore ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .28s cubic-bezier(0.16,1,0.3,1)' }} />
-              <span style={{ flex: 1, textAlign: 'left' }}>More</span>
-            </button>
-            {sideMore && (
-              <div className="lens" style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 2px 15px', paddingLeft: 9, borderLeft: '1px solid var(--line2)' }}>
-                <button onClick={() => update({ theme: dark ? 'light' : 'dark' })} className="hov"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="moon" size={13} color="var(--tx3)" />{dark ? 'Light mode' : 'Dark mode'}
+          {sidebarMode === 'open' ? (
+            /* Open Mode Footer */
+            <>
+              <div style={{ padding: '8px 8px 4px', borderTop: '1px solid var(--line)', minWidth: 236 }}>
+                <button onClick={() => setSideMore((v) => !v)} className="hov" style={{
+                  display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '7px 8px',
+                  borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
+                }}>
+                  <Icon name="chev" size={13} color="var(--tx3)"
+                    style={{ transform: sideMore ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .28s cubic-bezier(0.16,1,0.3,1)' }} />
+                  <span style={{ flex: 1, textAlign: 'left' }}>More</span>
                 </button>
-                <button onClick={() => update({ motion: !prefs.motion })} className="hov"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="spark" size={13} color="var(--tx3)" />{prefs.motion ? 'Reduce motion' : 'Enable motion'}
-                </button>
-                <button onClick={() => setSettings(true)} className="hov"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="cog" size={13} color="var(--tx3)" />All settings
-                </button>
+                {sideMore && (
+                  <div className="lens" style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 2px 15px', paddingLeft: 9, borderLeft: '1px solid var(--line2)' }}>
+                    <button onClick={() => setViewMode(viewMode === 'phone' ? 'web' : 'phone')} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name={viewMode === 'phone' ? 'monitor' : 'phone'} size={13} color="var(--tx3)" />{viewMode === 'phone' ? 'Switch to Web View' : 'Dedicated Phone View'}
+                    </button>
+                    <button onClick={() => update({ theme: dark ? 'light' : 'dark' })} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name="moon" size={13} color="var(--tx3)" />{dark ? 'Light mode' : 'Dark mode'}
+                    </button>
+                    <button onClick={() => update({ motion: !prefs.motion })} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name="spark" size={13} color="var(--tx3)" />{prefs.motion ? 'Reduce motion' : 'Enable motion'}
+                    </button>
+                    <button onClick={() => setSettings(true)} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name="cog" size={13} color="var(--tx3)" />All settings
+                    </button>
+                    <button onClick={() => setAccount(true)} className="hov"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
+                      <Icon name="people" size={13} color="var(--tx3)" />Accounts and sign out
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: '8px 10px 4px', borderTop: '1px solid var(--line)', minWidth: 236 }}>
                 <button onClick={() => setAccount(true)} className="hov"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, fontSize: 11.5, color: 'var(--tx2)' }}>
-                  <Icon name="people" size={13} color="var(--tx3)" />Accounts and sign out
+                  aria-haspopup="dialog"
+                  style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 9, minHeight: 42 }}>
+                  <Face name={me.name} photo={me.photo} size={26} />
+                  <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {me.name || 'Your account'}
+                    </span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {spaceName}
+                    </span>
+                  </span>
+                  <Icon name="expand" size={13} color="var(--tx3)" />
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* Who you are, and which space you are in. This used to open an
-              inline menu that held the account switcher, the space list and
-              sign out — and it lived only here, in a sidebar a phone does not
-              have, so on the layout this app is mostly used in there was no way
-              to switch accounts at all. All of it moved to AccountSheet, which
-              opens from your face in the top right on both layouts. */}
-          <div style={{ padding: '8px 10px 4px', borderTop: '1px solid var(--line)' }}>
-            <button onClick={() => setAccount(true)} className="hov"
-              aria-haspopup="dialog"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: 6, borderRadius: 9, minHeight: 42 }}>
-              <Face name={me.name} photo={me.photo} size={26} />
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {me.name || 'Your account'}
-                </span>
-                <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {spaceName}
-                </span>
-              </span>
-              <Icon name="expand" size={13} color="var(--tx3)" />
-            </button>
-          </div>
+            </>
+          ) : (
+            /* Compact Icon-Only Account Avatar */
+            <div style={{ padding: '10px 0 6px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'center', width: 64 }}>
+              <button
+                onClick={() => setAccount(true)}
+                title={me.name || 'Your account'}
+                aria-label={me.name || 'Your account'}
+                className="hov k-squish"
+                style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <Face name={me.name} photo={me.photo} size={28} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* With the sidebar closed, a hover strip down the left edge floats it
-          back — Notion's behaviour, so the nav is never more than a flick away. */}
-      {!phone && !railOpen && (
+      {!phone && sidebarMode === 'hidden' && (
         <button
-          onClick={() => toggleRail(true)}
-          title="Show sidebar (Ctrl+\\)" aria-label="Show sidebar"
-          className="railpeek"
+          onClick={() => setSidebarMode('open')}
+          title="Click to reset sidebar to normal (3/3)"
+          aria-label="Reset sidebar to normal"
+          className="k-squish"
           style={{
-            position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, zIndex: 5,
-            display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 3,
-          }}>
-          <span style={{
-            width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center',
+            position: 'fixed', left: 10, top: 10, zIndex: 30,
+            width: 32, height: 32, borderRadius: 9,
             background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--sh)',
-          }}>
-            <Icon name="expand" size={14} color="var(--tx2)" />
+            display: 'grid', placeItems: 'center', cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontWeight: 900, fontSize: 17, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
+            b
           </span>
         </button>
       )}
 
-      {/* minHeight:0 is load-bearing. A flex item defaults to min-height:auto,
-          which refuses to shrink below its content — so on the phone, where
-          this column is the flex *item*, it grew to fit the page instead of the
-          viewport. That pushed the nav bar past the bottom edge (where
-          overflow:hidden clipped it) and left <main> exactly as tall as its own
-          content, so there was nothing to scroll. minWidth:0 does the same job
-          for the desktop's row direction; both are needed. */}
+      {/* Main viewport */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
-          <div style={{ height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', borderBottom: '1px solid var(--line)' }}>
-            {/* Consolidated Minimalist Command Hub Search Bar */}
-            <button
-              onClick={() => setSearch(true)}
-              className="hov k-squish"
-              title="Search or jump to (⌘K)"
-              aria-label="Search or jump to"
-              style={{
-                height: 34,
-                width: 320,
-                padding: '0 12px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                color: 'var(--tx3)',
-                fontSize: 12.5,
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="search" size={14} color="var(--tx3)" />
-                <span style={{ color: 'var(--tx3)' }}>Quick search or jump to...</span>
-              </div>
-              <kbd
-                style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  fontFamily: 'monospace',
-                  padding: '2px 5px',
-                  borderRadius: 4,
-                  border: '1px solid var(--line)',
-                  background: 'var(--card)',
-                  color: 'var(--tx2)',
-                }}
-              >
-                ⌘K
-              </kbd>
-            </button>
-
-            {/* Quick Capture (+) action */}
-            <button
-              onClick={openCapture}
-              className="hov k-squish"
-              title="Quick Capture"
-              aria-label="Quick Capture"
-              aria-expanded={!!capture}
-              style={{
-                height: 34,
-                padding: '0 11px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--tx)',
-                cursor: 'pointer',
-              }}
-            >
-              <Icon name="plus" size={14} color="var(--accTx)" />
-              <span>Capture</span>
-            </button>
+          <div style={{
+            height: 52, flex: 'none', display: 'flex', alignItems: 'center', gap: 12,
+            padding: sidebarMode === 'hidden' ? '0 20px 0 52px' : '0 20px',
+            borderBottom: '1px solid var(--line)',
+            transition: 'padding-left .28s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
+            {/* Circular Dark Mode Dynamic Search Toolbar */}
+            <ToolbarDynamic onSearch={() => setSearch(true)} placeholder="Search or jump to (⌘K)..." />
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
@@ -745,13 +781,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
 
         {phone && (
-          <div style={{ height: 46, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ height: 48, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', borderBottom: '1px solid var(--line)' }}>
             <button
               onClick={() => router.push('/home/')}
-              style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', textAlign: 'left', background: 'none', border: 'none', padding: 0 }}
+              className="k-squish"
+              style={{
+                fontSize: 19,
+                fontWeight: 900,
+                letterSpacing: '-.04em',
+                color: 'var(--tx)',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
               title="Go to Home"
             >
-              {SECTIONS.find((x) => x.id === section)?.name ?? 'Basedly'}
+              {SECTIONS.find((x) => x.id === section)?.name ?? 'basedly'}
             </button>
             <span style={{ marginLeft: 'auto' }} />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
@@ -18,7 +18,7 @@ import { BOT_NAME } from '@/lib/bot';
 import { toast } from '@/lib/toast';
 import { useLayout } from '@/lib/useLayout';
 import { ago } from '@/lib/scratch';
-import { useSignedUrls } from '@/lib/uploads';
+import { useSignedUrls, uploadTo } from '@/lib/uploads';
 import { useProfiles, displayOf } from '@/lib/people';
 import { useReposts } from '@/lib/reposts';
 import { useBookmarks, toggleBookmark } from '@/lib/bookmarks';
@@ -26,13 +26,17 @@ import { usePostViews, recordPostView } from '@/lib/views';
 import { StoriesTray } from '@/components/stories/StoriesTray';
 import { StoryViewer } from '@/components/stories/StoryViewer';
 import { StoryCreator } from '@/components/stories/StoryCreator';
+import { Casino } from '@/components/casino/Casino';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
-  key, type Filter, type Item, type Sort,
+  key, type Filter, type Item, type Sort, TAGS, MAX_IMAGES,
 } from '@/lib/community';
 import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
 import { useFollows } from '@/lib/follows';
+import { PayRpModal } from '@/components/community/PayRpModal';
+import { BuyItemModal } from '@/components/community/BuyItemModal';
+import { setPostRpConfig, getPostRpConfig, getPostListing, setPostListing, type ListingKind } from '@/lib/rpTransfers';
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'new', label: 'Latest' },
@@ -45,7 +49,7 @@ export default function CommunityPage() {
   const router = useRouter();
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
-  const [tab, setTab] = useState<'feed' | 'messages' | 'challenges'>('feed');
+  const [tab, setTab] = useState<'feed' | 'messages' | 'challenges' | 'casino'>('feed');
   const [subTab, setSubTab] = useState<SubTab>('posts');
   const [me, setMe] = useState('');
   const [sort, setSort] = useState<Sort>('new');
@@ -53,6 +57,8 @@ export default function CommunityPage() {
   const [composing, setComposing] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [sharing, setSharing] = useState<Item | null>(null);
+  const [tippingItem, setTippingItem] = useState<Item | null>(null);
+  const [buyingItem, setBuyingItem] = useState<Item | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +79,7 @@ export default function CommunityPage() {
         if (lower === 'feed') setTab('feed');
         else if (lower === 'messages') setTab('messages');
         else if (lower === 'challenges') setTab('challenges');
+        else if (lower === 'casino') setTab('casino');
       }
     };
 
@@ -85,6 +92,7 @@ export default function CommunityPage() {
         if (lower === 'feed') setTab('feed');
         else if (lower === 'messages') setTab('messages');
         else if (lower === 'challenges') setTab('challenges');
+        else if (lower === 'casino') setTab('casino');
       }
     };
     window.addEventListener('basedly:focus', onCustomFocus);
@@ -234,6 +242,7 @@ export default function CommunityPage() {
               { id: 'feed', label: 'Feed', icon: 'chat' },
               { id: 'messages', label: 'Messages', icon: 'send' },
               { id: 'challenges', label: 'Challenges', icon: 'trophy' },
+              { id: 'casino', label: 'Casino 🐊', icon: 'spark' },
             ]}
             value={tab} onChange={setTab} phone={phone} label="Community sections" />
         </div>
@@ -590,11 +599,17 @@ export default function CommunityPage() {
                 onComment={(body) => { A.comment.mutate({ kind: item.kind, id: item.id, body }); toast('Posted'); }}
                 onEdit={() => setEditing(key(item))}
                 onEditCancel={() => setEditing(null)}
-                onEditSave={(title, body) => { A.edit.mutate({ kind: item.kind, id: item.id, title, body }); setEditing(null); toast('Updated'); }}
+                onEditSave={(title, body, images, tag) => {
+                  A.edit.mutate({ kind: item.kind, id: item.id, title, body, images, tag });
+                  setEditing(null);
+                  toast('Updated');
+                }}
                 onDelete={() => A.remove(item)}
                 onOpen={() => setViewing(key(item))}
                 onShare={() => setSharing(item)}
                 onTagClick={(tag) => { setSearchQuery(tag.replace(/^#/, '')); toast(`Filter: ${tag}`); }}
+                onTip={() => setTippingItem(item)}
+                onBuyItem={() => setBuyingItem(item)}
               />
             ))}
           </div>
@@ -802,8 +817,42 @@ export default function CommunityPage() {
 
       {tab === 'challenges' && <Challenges />}
 
+      {tab === 'casino' && <Casino onExit={() => setTab('feed')} />}
+
       {composing && (
-        <Composer onClose={() => setComposing(false)} onPost={A.post} />
+        <Composer
+          onClose={() => setComposing(false)}
+          onPost={(draft) => {
+            const createdId = A.post(draft);
+            if (draft.accept_rp !== undefined || draft.listing) {
+              setPostRpConfig(createdId, {
+                accept_rp: draft.accept_rp ?? true,
+                suggested_rp: draft.suggested_rp,
+                listing: draft.listing,
+              });
+            }
+          }}
+        />
+      )}
+
+      {tippingItem && (
+        <PayRpModal
+          postId={tippingItem.id}
+          authorId={tippingItem.author_id}
+          authorName={displayOf(profiles, tippingItem.author_id, me).label}
+          postTitle={tippingItem.title || tippingItem.body}
+          onClose={() => setTippingItem(null)}
+        />
+      )}
+
+      {buyingItem && getPostListing(buyingItem.id) && (
+        <BuyItemModal
+          postId={buyingItem.id}
+          sellerId={buyingItem.author_id}
+          sellerName={displayOf(profiles, buyingItem.author_id, me).label}
+          listing={getPostListing(buyingItem.id)!}
+          onClose={() => setBuyingItem(null)}
+        />
       )}
 
       {open_ && (
@@ -845,7 +894,7 @@ export default function CommunityPage() {
 
 function XPostCard({
   item, me, profiles, reactions, reacted, comments, editing, open,
-  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick,
+  onToggleComments, onReact, onComment, onEdit, onEditCancel, onEditSave, onDelete, onOpen, onShare, onTagClick, onTip, onBuyItem,
 }: {
   item: Item;
   me: string;
@@ -860,16 +909,20 @@ function XPostCard({
   onComment: (body: string) => void;
   onEdit: () => void;
   onEditCancel: () => void;
-  onEditSave: (title: string, body: string) => void;
+  onEditSave: (title: string, body: string, images?: string[], tag?: string) => void;
   onDelete: () => void;
   onOpen: () => void;
   onShare: () => void;
   onTagClick?: (tag: string) => void;
+  onTip?: () => void;
+  onBuyItem?: () => void;
 }) {
   const router = useRouter();
   const who = displayOf(profiles, item.author_id, me);
   const isMine = item.author_id === me;
   const targetHandle = profiles[item.author_id]?.handle || item.author_id;
+  const rpConfig = getPostRpConfig(item.id);
+  const listing = getPostListing(item.id);
 
   const views = usePostViews();
   const bookmarks = useBookmarks();
@@ -977,6 +1030,108 @@ function XPostCard({
                 <PostImages paths={item.images} tint={who.hue} alt={item.title || item.body || 'Post image'} onOpen={onOpen} />
               </div>
             )}
+
+            {/* Marketplace / Selling Card */}
+            {listing && listing.is_for_sale && (
+              <div
+                style={{
+                  margin: '8px 0 10px',
+                  padding: '12px 14px',
+                  borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%)',
+                  border: listing.is_sold ? '1px solid var(--line2)' : '1.5px solid rgba(16, 185, 129, 0.45)',
+                  boxShadow: listing.is_sold ? 'none' : '0 4px 18px rgba(16, 185, 129, 0.14)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>
+                      {listing.item_type === 'service' ? '🛠️' : listing.item_type === 'digital' ? '💻' : listing.item_type === 'account' ? '🎮' : '📦'}
+                    </span>
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em',
+                      color: listing.is_sold ? 'var(--tx3)' : '#34D399',
+                    }}>
+                      {listing.item_type} for sale
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                      fontSize: 13.5, fontWeight: 900,
+                      color: listing.is_sold ? 'var(--tx3)' : '#FDE047',
+                      fontFamily: 'monospace',
+                    }}>
+                      💎 {listing.price_rp.toLocaleString()} RP
+                    </span>
+                    {listing.is_sold ? (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '2px 7px', borderRadius: 6,
+                        background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)',
+                      }}>
+                        Sold Out
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                        padding: '2px 7px', borderRadius: 6,
+                        background: 'rgba(16, 185, 129, 0.2)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)',
+                      }}>
+                        Available
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)' }}>
+                      {listing.item_name || item.title || 'Marketplace Item'}
+                    </div>
+                    {listing.delivery_info && (
+                      <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                        📦 {listing.delivery_info}
+                      </div>
+                    )}
+                  </div>
+
+                  {!isMine && !listing.is_sold && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBuyItem?.();
+                      }}
+                      className="k-squish"
+                      style={{
+                        flex: 'none',
+                        padding: '7px 15px',
+                        borderRadius: 9,
+                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                        border: '1px solid #34D399',
+                        color: '#041F14',
+                        fontSize: 11.5,
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
+                      }}
+                    >
+                      Buy with RP 🛍️
+                    </button>
+                  )}
+
+                  {!isMine && listing.is_sold && listing.buyer_id === me && (
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399' }}>
+                      ✓ You purchased this
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1021,6 +1176,50 @@ function XPostCard({
             onReact={onReact}
             size="sm"
           />
+
+          {item.author_id !== me && (
+            <button
+              onClick={onTip}
+              className="hov k-squish"
+              title="Pay / Tip with RP"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 7,
+                background: 'rgba(99, 102, 241, 0.12)',
+                border: '1px solid rgba(129, 140, 248, 0.35)',
+                color: '#818CF8',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              <span>💎</span>
+              <span>Pay RP</span>
+              {rpConfig.total_tipped > 0 && (
+                <span style={{ color: '#A5B4FC', fontSize: 9.5 }}>({rpConfig.total_tipped})</span>
+              )}
+            </button>
+          )}
+
+          {isMine && rpConfig.total_tipped > 0 && (
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 11,
+                fontWeight: 800,
+                color: '#34D399',
+              }}
+              title="Total RP tipped on your post"
+            >
+              <span>💎</span>
+              <span>+{rpConfig.total_tipped} RP</span>
+            </span>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>
             <Icon name="eye" size={14} color="var(--tx3)" />
@@ -1151,6 +1350,7 @@ function Avatar({
 function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: string; alt: string; onOpen: () => void }) {
   const urls = useSignedUrls('bd-feed', paths);
   const [at, setAt] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const wrap = { background: `linear-gradient(140deg, color-mix(in srgb, ${tint} 22%, var(--card2)), var(--card2))` };
 
   if (paths.length === 0) return null;
@@ -1163,9 +1363,33 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
     );
   }
 
+  const scrollNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    const nextAt = Math.min(paths.length - 1, at + 1);
+    scrollRef.current.scrollTo({ left: nextAt * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(nextAt);
+  };
+
+  const scrollPrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    const prevAt = Math.max(0, at - 1);
+    scrollRef.current.scrollTo({ left: prevAt * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(prevAt);
+  };
+
+  const jumpTo = (i: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({ left: i * scrollRef.current.clientWidth, behavior: 'smooth' });
+    setAt(i);
+  };
+
   return (
     <div style={{ ...wrap, position: 'relative' }}>
       <div
+        ref={scrollRef}
         className="hbar"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -1183,23 +1407,94 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
         ))}
       </div>
 
-      <div aria-hidden style={{
+      {/* Floating Prev & Next Navigation Buttons */}
+      {at > 0 && (
+        <button
+          type="button"
+          onClick={scrollPrev}
+          aria-label="Previous photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            left: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.65)',
+            border: '1px solid rgba(255,255,255,0.25)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Icon name="back" size={14} color="#FFFFFF" />
+        </button>
+      )}
+
+      {at < paths.length - 1 && (
+        <button
+          type="button"
+          onClick={scrollNext}
+          aria-label="Next photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.65)',
+            border: '1px solid rgba(255,255,255,0.25)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div style={{ transform: 'rotate(180deg)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="back" size={14} color="#FFFFFF" />
+          </div>
+        </button>
+      )}
+
+      {/* Clickable Pagination Dots */}
+      <div style={{
         position: 'absolute', left: 0, right: 0, bottom: 10,
-        display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none',
+        display: 'flex', justifyContent: 'center', gap: 6, zIndex: 10,
       }}>
         {paths.map((path, i) => (
-          <span key={path} style={{
-            width: i === at ? 16 : 5, height: 5, borderRadius: 3,
-            background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
-            transition: 'width .2s',
-          }} />
+          <button
+            key={path}
+            type="button"
+            onClick={(e) => jumpTo(i, e)}
+            aria-label={`Go to photo ${i + 1}`}
+            style={{
+              padding: 0,
+              border: 'none',
+              cursor: 'pointer',
+              width: i === at ? 18 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
+              transition: 'all .2s ease',
+            }}
+          />
         ))}
       </div>
 
       <span style={{
         position: 'absolute', right: 10, top: 10, padding: '3px 9px', borderRadius: 8,
-        background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 10.5, fontWeight: 800,
-        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', zIndex: 10,
       }}>
         {at + 1}/{paths.length}
       </span>
@@ -1237,29 +1532,373 @@ function BotTag() {
   );
 }
 
-function ItemEdit({ item, onSave, onCancel }: { item: Item; onSave: (t: string, b: string) => void; onCancel: () => void }) {
-  const [t, setT] = useState(item.title);
-  const [b, setB] = useState(item.body);
-  const ok = item.kind === 'photo' ? true : !!t.trim();
+function ItemEdit({
+  item,
+  onSave,
+  onCancel,
+}: {
+  item: Item;
+  onSave: (t: string, b: string, images?: string[], tag?: string) => void;
+  onCancel: () => void;
+}) {
+  const [t, setT] = useState(item.title || '');
+  const [b, setB] = useState(item.body || '');
+  const [tag, setTag] = useState(item.tag || '');
+  const [images, setImages] = useState<{ path: string; url: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const initialUrls = useSignedUrls('bd-feed', item.images);
+
+  const initialListing = getPostListing(item.id);
+  const [isSelling, setIsSelling] = useState<boolean>(initialListing?.is_for_sale ?? false);
+  const [listingType, setListingType] = useState<ListingKind>(initialListing?.item_type ?? 'item');
+  const [priceRp, setPriceRp] = useState<number>(initialListing?.price_rp ?? 50);
+  const [deliveryInfo, setDeliveryInfo] = useState<string>(initialListing?.delivery_info ?? '');
+  const [isSold, setIsSold] = useState<boolean>(initialListing?.is_sold ?? false);
+
+  useEffect(() => {
+    if (item.images.length > 0) {
+      setImages(item.images.map((path, i) => ({ path, url: initialUrls[i] || '' })));
+    }
+  }, [item.images, initialUrls]);
+
+  const attach = async (files: File[]) => {
+    const pics = files.filter((f) => f.type.startsWith('image/'));
+    if (!pics.length) {
+      toast('That is not an image');
+      return;
+    }
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      toast(`${MAX_IMAGES} pictures is the limit`);
+      return;
+    }
+    const taking = pics.slice(0, room);
+    setBusy(true);
+    try {
+      for (const f of taking) {
+        const path = await uploadTo('bd-feed', f);
+        setImages((p) => [...p, { path, url: URL.createObjectURL(f) }]);
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!ready || busy) return;
+    setPostListing(item.id, isSelling ? {
+      is_for_sale: true,
+      price_rp: priceRp,
+      item_name: t.trim() || 'Marketplace Item',
+      item_type: listingType,
+      description: b.trim(),
+      delivery_info: deliveryInfo.trim(),
+      is_sold: isSold,
+    } : null);
+    onSave(t.trim(), b.trim(), images.map((x) => x.path), tag);
+  };
+
+  const ready = !!(t.trim() || b.trim() || images.length > 0);
 
   return (
-    <div className="k-bloom" style={{ padding: '8px 0' }}>
-      {item.kind === 'discussion' && (
-        <input autoFocus value={t} onChange={(e) => setT(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }} aria-label="Title"
-          style={{ width: '100%', minHeight: 36, padding: '6px 0', fontSize: 13.5, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)', borderBottom: '1px solid var(--line2)', background: 'transparent' }} />
+    <div className="k-bloom" style={{
+      padding: '12px 14px',
+      borderRadius: 14,
+      background: 'var(--card2)',
+      border: '1.5px solid var(--acc)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+    }}>
+      {/* Title Input */}
+      <input
+        autoFocus
+        value={t}
+        onChange={(e) => setT(e.target.value)}
+        placeholder={isSelling ? "Item or Service Title" : "Title (optional)"}
+        aria-label="Title"
+        style={{
+          width: '100%',
+          minHeight: 34,
+          padding: '4px 8px',
+          fontSize: 14,
+          fontWeight: 800,
+          letterSpacing: '-.02em',
+          color: 'var(--tx)',
+          borderBottom: '1px solid var(--line2)',
+          background: 'transparent',
+        }}
+      />
+
+      {/* Body / Caption Textarea */}
+      <textarea
+        value={b}
+        onChange={(e) => setB(e.target.value)}
+        rows={3}
+        placeholder={isSelling ? "Describe item condition, service scope, delivery details…" : "Caption or post content…"}
+        aria-label="Body"
+        style={{
+          width: '100%',
+          padding: '8px 10px',
+          borderRadius: 10,
+          border: '1px solid var(--line2)',
+          background: 'var(--card)',
+          fontSize: 12.5,
+          lineHeight: 1.6,
+          color: 'var(--tx)',
+          resize: 'vertical',
+        }}
+      />
+
+      {/* Media Management / Thumbnails */}
+      {images.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6 }}>
+          {images.map((im, i) => (
+            <div
+              key={im.path}
+              style={{
+                position: 'relative',
+                aspectRatio: '1',
+                borderRadius: 10,
+                overflow: 'hidden',
+                background: 'var(--card)',
+                border: '1px solid var(--line2)',
+              }}
+            >
+              {im.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img loading="lazy" decoding="async" src={im.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                  <Icon name="image" size={16} color="var(--tx3)" />
+                </div>
+              )}
+              {i === 0 && (
+                <span style={{
+                  position: 'absolute', left: 4, top: 4, padding: '1px 5px', borderRadius: 4,
+                  background: 'rgba(0,0,0,.7)', color: '#fff', fontSize: 8, fontWeight: 800,
+                }}>
+                  COVER
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setImages((p) => p.filter((x) => x.path !== im.path))}
+                className="hov"
+                aria-label={`Remove photo ${i + 1}`}
+                style={{
+                  position: 'absolute', right: 4, top: 4, width: 22, height: 22, borderRadius: 6,
+                  display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.7)', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Icon name="close" size={10} color="#fff" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
-      <textarea autoFocus={item.kind === 'photo'} value={b} onChange={(e) => setB(e.target.value)} rows={3}
-        placeholder={item.kind === 'photo' ? 'Caption' : 'Detail'} aria-label="Body"
-        style={{ width: '100%', padding: '8px 0', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', resize: 'vertical', background: 'transparent', border: 'none' }} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => ok && onSave(t.trim(), b.trim())} className="acc k-squish"
-          style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, background: 'var(--acc)', color: '#0A0912', fontSize: 11.5, fontWeight: 800, opacity: ok ? 1 : 0.45 }}>
-          Save
-        </button>
-        <button onClick={onCancel} className="hov k-squish"
-          style={{ minHeight: 34, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+
+      {/* Add More Media Button */}
+      {images.length < MAX_IMAGES && (
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '8px 12px',
+            border: '1.5px dashed var(--line2)',
+            borderRadius: 10,
+            cursor: 'pointer',
+            opacity: busy ? 0.5 : 1,
+            background: 'var(--card)',
+          }}
+        >
+          <Icon name="image" size={14} color="var(--tx3)" />
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+            {busy ? 'Uploading…' : images.length ? 'Add more pictures' : 'Add pictures / media'}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void attach(Array.from(e.target.files ?? []));
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
+
+      {/* Marketplace / Selling Controls */}
+      <div
+        style={{
+          padding: '10px 12px',
+          borderRadius: 12,
+          background: isSelling ? 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,78,59,0.2) 100%)' : 'var(--card)',
+          border: isSelling ? '1.5px solid #10B981' : '1px solid var(--line2)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🛍️</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--tx)' }}>
+                Sell Item / Service
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+                Accept RP purchase payments on this post
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSelling(!isSelling)}
+            className="k-squish"
+            style={{
+              padding: '4px 12px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 800,
+              background: isSelling ? '#10B981' : 'transparent',
+              border: isSelling ? '1px solid #34D399' : '1px solid var(--line2)',
+              color: isSelling ? '#041F14' : 'var(--tx2)',
+              cursor: 'pointer',
+            }}
+          >
+            {isSelling ? 'Selling ✓' : 'Enable'}
+          </button>
+        </div>
+
+        {isSelling && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Price:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={priceRp}
+                  onChange={(e) => setPriceRp(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  style={{
+                    width: 85,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    background: 'var(--card2)',
+                    border: '1px solid var(--line2)',
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: '#FDE047',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#FDE047' }}>RP 💎</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSold(!isSold)}
+                className="k-squish"
+                style={{
+                  marginLeft: 'auto',
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  background: isSold ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                  border: isSold ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(16,185,129,0.4)',
+                  color: isSold ? '#F87171' : '#34D399',
+                  cursor: 'pointer',
+                }}
+              >
+                {isSold ? 'Marked as Sold Out' : 'Status: In Stock / Available'}
+              </button>
+            </div>
+
+            <input
+              type="text"
+              value={deliveryInfo}
+              onChange={(e) => setDeliveryInfo(e.target.value)}
+              placeholder="Delivery notes (e.g. Instant code / Discord DM / Campus pickup)"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                borderRadius: 6,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                fontSize: 11.5,
+                color: 'var(--tx)',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Tag Selection Chips */}
+      <div>
+        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>
+          Tag
+        </div>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {(['', ...TAGS] as const).map((t) => {
+            const on = tag === t;
+            return (
+              <button
+                key={t || 'none'}
+                type="button"
+                onClick={() => setTag(t)}
+                aria-pressed={on}
+                className="k-chip"
+                style={{
+                  padding: '3px 10px',
+                  borderRadius: 999,
+                  minHeight: 26,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: on ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
+                  color: on ? 'var(--accTx)' : t ? 'var(--tx2)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t || 'No tag'}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Save / Cancel Controls */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="hov k-squish"
+          style={{
+            minHeight: 34, padding: '0 14px', borderRadius: 9,
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
+          }}
+        >
           Cancel
+        </button>
+        <button
+          type="button"
+          disabled={!ready || busy}
+          onClick={handleSave}
+          className="acc k-squish"
+          style={{
+            minHeight: 34, padding: '0 18px', borderRadius: 9,
+            background: 'var(--acc)', color: '#0A0912', fontSize: 12, fontWeight: 800,
+            opacity: ready && !busy ? 1 : 0.45, cursor: ready && !busy ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Save Changes
         </button>
       </div>
     </div>

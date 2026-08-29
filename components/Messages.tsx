@@ -24,6 +24,17 @@ import {
   type Conversation, type Member, type Message, type Attachment, type DriveFile, type ReportReason,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
+import { MessageRpModal } from './community/MessageRpModal';
+import { PostPickerModal } from './community/PostPickerModal';
+import {
+  parseRpMessage,
+  sendRp,
+  markRequestPaidLocally,
+  isRequestPaidLocally,
+  useClaimReceivedRp,
+  encodePostRefMessage,
+} from '@/lib/rpTransfers';
+import { RANKED } from '@/lib/challenges';
 
 /**
  * Messages.
@@ -38,6 +49,7 @@ import { usePosts, useThreads, type Kind } from '@/lib/community';
  */
 
 export function Messages({ me }: { me: string }) {
+  useClaimReceivedRp(me);
   const { phone } = useLayout();
   const { data: profiles = {} } = useProfiles();
   const { data: convos = [] } = useConversations();
@@ -90,19 +102,19 @@ export function Messages({ me }: { me: string }) {
 
   if (phone) {
     return (
-      <>
+      <div style={{ height: 'calc(100dvh - 160px)', minHeight: 460, display: 'flex', flexDirection: 'column', width: '100%' }}>
         {convo
           ? <Thread key={convo.id} convo={convo} members={members} profiles={profiles} me={me} A={A}
               onBack={() => setOpenId(null)} nameOf={nameOf} />
           : <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{list}</div>}
         {picker}
-      </>
+      </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', gap: 14, height: 'min(72dvh, 720px)' }}>
-      <aside className="navsb" style={{ width: 268, flex: 'none', overflowY: 'auto', minHeight: 0 }}>{list}</aside>
+    <div style={{ display: 'flex', gap: 14, height: 'calc(100dvh - 180px)', minHeight: 520, maxHeight: 880, width: '100%' }}>
+      <aside className="navsb" style={{ width: 280, flex: 'none', overflowY: 'auto', minHeight: 0 }}>{list}</aside>
       {convo ? (
         <Thread key={convo.id} convo={convo} members={members} profiles={profiles} me={me} A={A} nameOf={nameOf} />
       ) : (
@@ -235,11 +247,17 @@ export function Thread({
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [busy, setBusy] = useState(false);
   const [drive, setDrive] = useState(false);
+  const [rpModalOpen, setRpModalOpen] = useState(false);
+  const [postPickerOpen, setPostPickerOpen] = useState(false);
   /** Which message is open in its own editor, and which is being reported. */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [reporting, setReporting] = useState<Message | null>(null);
   const qc = useQueryClient();
   const foot = useRef<HTMLDivElement>(null);
+
+  const other = members.find((m) => m.conversation_id === convo.id && m.user_id !== me);
+  const recipientId = other?.user_id || '';
+  const recipientName = nameOf(recipientId);
 
   // Opening a conversation is reading it; and a new message should not leave
   // you scrolled halfway up your own history.
@@ -279,7 +297,7 @@ export function Thread({
   };
 
   return (
-    <div style={{ ...PANEL, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ ...PANEL, flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderBottom: '1px solid var(--line)', flex: 'none' }}>
         {onBack && (
           <button onClick={onBack} className="hov" aria-label="All chats"
@@ -388,6 +406,46 @@ export function Thread({
             <Icon name="files" size={15} color="var(--tx2)" />
           </button>
 
+          {/* Refer a community post or photo */}
+          <button
+            type="button"
+            onClick={() => setPostPickerOpen(true)}
+            className="hov k-squish"
+            title="Refer a post or image"
+            style={{
+              ...ATTACH_BTN,
+              background: 'rgba(59, 130, 246, 0.14)',
+              border: '1px solid rgba(96, 165, 250, 0.3)',
+              color: '#60A5FA',
+              fontSize: 13,
+            }}
+          >
+            🔗
+          </button>
+
+          {/* Send or Ask RP Currency & Money Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!recipientId) {
+                toast('No recipient found in this chat');
+                return;
+              }
+              setRpModalOpen(true);
+            }}
+            className="hov k-squish"
+            title="Send or Ask RP / Money"
+            style={{
+              ...ATTACH_BTN,
+              background: 'rgba(99, 102, 241, 0.16)',
+              border: '1px solid rgba(129, 140, 248, 0.35)',
+              color: '#818CF8',
+              fontSize: 13,
+            }}
+          >
+            💎
+          </button>
+
           <input value={draft} onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
             placeholder="Write a message…" aria-label="Write a message"
@@ -406,6 +464,28 @@ export function Thread({
           </button>
         </div>
       </div>
+
+      {rpModalOpen && recipientId && (
+        <MessageRpModal
+          recipientId={recipientId}
+          recipientName={recipientName}
+          conversationId={convo.id}
+          onClose={() => setRpModalOpen(false)}
+          onSendMessage={(body) => {
+            A.say(convo.id, body);
+          }}
+        />
+      )}
+
+      {postPickerOpen && (
+        <PostPickerModal
+          me={me}
+          onClose={() => setPostPickerOpen(false)}
+          onPickPost={(kind, id, title, imagePath) => {
+            A.say(convo.id, encodePostRefMessage(id, title, imagePath), { kind, id });
+          }}
+        />
+      )}
 
       {drive && (
         <DrivePicker onClose={() => setDrive(false)}
@@ -450,6 +530,7 @@ function Bubble({
   const [draft, setDraft] = useState(msg.body);
   const mine = msg.author_id === me;
   const who = displayOf(profiles, msg.author_id, me);
+  const rpData = useMemo(() => parseRpMessage(msg.body), [msg.body]);
 
   useEffect(() => { if (editing) setDraft(msg.body); }, [editing, msg.body]);
 
@@ -513,7 +594,14 @@ function Bubble({
             kind={msg.attach_kind ?? 'file'} size={msg.attach_size ?? 0} mine={mine} />
         )}
 
-        {editing ? (
+        {rpData ? (
+          <RpBubbleContent
+            rpData={rpData}
+            msg={msg}
+            me={me}
+            whoName={who.label}
+          />
+        ) : editing ? (
           <span style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 'min(320px, 74vw)' }}>
             <textarea value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus rows={2}
               aria-label="Edit your message"
@@ -540,11 +628,6 @@ function Bubble({
         ) : msg.body ? (
           <span onDoubleClick={() => mine && onRemove()}
             onPointerDown={(e) => {
-              // Long press is the only way in on a touch screen, where there is
-              // no right mouse button.
-              // pointercancel too: a scroll started on a bubble cancels the
-              // pointer and no pointerup ever arrives, so without it the
-              // listeners stayed on window and the menu opened mid-scroll.
               const t = window.setTimeout(() => open(e.clientX, e.clientY), 460);
               const stop = () => {
                 clearTimeout(t);
@@ -587,6 +670,313 @@ function Bubble({
               { label: 'Copy text', icon: 'copy' as const, run: () => void navigator.clipboard?.writeText(msg.body) },
               { label: 'Report', icon: 'flag' as const, danger: true, run: onReport },
             ]} />
+      )}
+    </div>
+  );
+}
+
+function RpBubbleContent({
+  rpData,
+  msg,
+  me,
+  whoName,
+}: {
+  rpData: NonNullable<ReturnType<typeof parseRpMessage>>;
+  msg: Message;
+  me: string;
+  whoName: string;
+}) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const mine = msg.author_id === me;
+  const [isPaid, setIsPaid] = useState<boolean>(
+    rpData.type === 'ask_rp' || rpData.type === 'ask_money' ? rpData.isPaid : true
+  );
+  const [paying, setPaying] = useState<boolean>(false);
+
+  const handlePayRpRequest = async () => {
+    if (rpData.type !== 'ask_rp') return;
+    setPaying(true);
+    try {
+      const ok = await sendRp({
+        toUserId: msg.author_id,
+        amount: rpData.amount,
+        reason: rpData.note || 'RP invoice payment',
+        conversationId: msg.conversation_id,
+      });
+
+      if (ok) {
+        markRequestPaidLocally(rpData.reqId);
+        setIsPaid(true);
+        await qc.invalidateQueries({ queryKey: RANKED });
+        toast(`💎 Paid ${rpData.amount.toLocaleString()} RP to ${whoName}!`);
+      }
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handleMarkMoneyPaid = () => {
+    if (rpData.type !== 'ask_money') return;
+    markRequestPaidLocally(rpData.reqId);
+    setIsPaid(true);
+    toast(`💵 Marked request for $${rpData.amount.toFixed(2)} as settled!`);
+  };
+
+  // 1. Post Reference Card
+  if (rpData.type === 'post_ref') {
+    return (
+      <div
+        onClick={() => {
+          router.push(`/community/#post-${rpData.postId}`);
+        }}
+        role="button"
+        tabIndex={0}
+        className="hov k-squish"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: 250,
+          maxWidth: '82%',
+          borderRadius: 14,
+          overflow: 'hidden',
+          background: 'var(--card2)',
+          border: '1.5px solid var(--acc)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        {rpData.imagePath && <SharedImage path={rpData.imagePath} />}
+        <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 13 }}>🔗</span>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--accTx)' }}>
+              Referenced Post
+            </span>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', lineHeight: 1.4 }}>
+            {rpData.title}
+          </div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', marginTop: 2 }}>
+            Tap to view in Community ›
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. RP Send Card
+  if (rpData.type === 'send_rp') {
+    return (
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: 'linear-gradient(135deg, #064E3B 0%, #022C22 100%)',
+          border: '1.5px solid #10B981',
+          boxShadow: '0 4px 16px rgba(16, 185, 129, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          color: '#F0FDF4',
+          minWidth: 210,
+          maxWidth: 320,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 900, color: '#34D399' }}>
+            <span>💎</span>
+            <span>{mine ? 'You Sent RP' : 'Received RP'}</span>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#6EE7B7', background: 'rgba(16,185,129,0.25)', padding: '2px 7px', borderRadius: 6 }}>
+            Completed ✓
+          </span>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', margin: '2px 0' }}>
+          {rpData.amount.toLocaleString()} RP
+        </div>
+        {rpData.note && (
+          <div style={{ fontSize: 11.5, color: '#A7F3D0', fontStyle: 'italic', background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 6 }}>
+            "{rpData.note}"
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 3. RP Ask / Invoice Card
+  if (rpData.type === 'ask_rp') {
+    return (
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: 'linear-gradient(135deg, #2E1065 0%, #1E1B4B 100%)',
+          border: '1.5px solid #8B5CF6',
+          boxShadow: '0 4px 16px rgba(139, 92, 246, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          color: '#F5F3FF',
+          minWidth: 220,
+          maxWidth: 320,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 900, color: '#C084FC' }}>
+            <span>💎</span>
+            <span>{mine ? 'Your RP Request' : 'Payment Requested'}</span>
+          </div>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: isPaid ? '#34D399' : '#FBBF24',
+              background: isPaid ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)',
+              padding: '2px 7px',
+              borderRadius: 6,
+            }}
+          >
+            {isPaid ? 'Paid ✓' : 'Pending ⏳'}
+          </span>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', margin: '2px 0' }}>
+          {rpData.amount.toLocaleString()} RP
+        </div>
+        {rpData.note && (
+          <div style={{ fontSize: 11.5, color: '#DDD6FE', fontStyle: 'italic', background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 6 }}>
+            "{rpData.note}"
+          </div>
+        )}
+        {!mine && !isPaid && (
+          <button
+            type="button"
+            disabled={paying}
+            onClick={handlePayRpRequest}
+            className="k-squish"
+            style={{
+              marginTop: 4,
+              padding: '8px 14px',
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+              border: '1px solid #34D399',
+              color: '#041F14',
+              fontSize: 12.5,
+              fontWeight: 900,
+              cursor: paying ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)',
+            }}
+          >
+            {paying ? 'Processing Transfer…' : `Pay ${rpData.amount.toLocaleString()} RP 💎`}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // 4. Money Send Card ($)
+  if (rpData.type === 'send_money') {
+    return (
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 14,
+          background: 'linear-gradient(135deg, #064E3B 0%, #0F2E22 100%)',
+          border: '1.5px solid #34D399',
+          boxShadow: '0 4px 16px rgba(52, 211, 153, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          color: '#F0FDF4',
+          minWidth: 210,
+          maxWidth: 320,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 900, color: '#34D399' }}>
+            <span>💵</span>
+            <span>{mine ? 'You Sent Money' : 'Money Transfer Receipt'}</span>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#6EE7B7', background: 'rgba(16,185,129,0.25)', padding: '2px 7px', borderRadius: 6 }}>
+            Sent ✓
+          </span>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', margin: '2px 0' }}>
+          ${rpData.amount.toFixed(2)} <span style={{ fontSize: 13, color: '#A7F3D0' }}>USD</span>
+        </div>
+        {rpData.note && (
+          <div style={{ fontSize: 11.5, color: '#A7F3D0', fontStyle: 'italic', background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 6 }}>
+            "{rpData.note}"
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 5. Money Ask Card ($)
+  return (
+    <div
+      style={{
+        padding: '12px 14px',
+        borderRadius: 14,
+        background: 'linear-gradient(135deg, #451A03 0%, #291504 100%)',
+        border: '1.5px solid #F59E0B',
+        boxShadow: '0 4px 16px rgba(245, 158, 11, 0.25)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        color: '#FFFBEB',
+        minWidth: 220,
+        maxWidth: 320,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 900, color: '#FCD34D' }}>
+          <span>💵</span>
+          <span>{mine ? 'Your Money Request' : 'Asking for Money'}</span>
+        </div>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 800,
+            color: isPaid ? '#34D399' : '#FBBF24',
+            background: isPaid ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)',
+            padding: '2px 7px',
+            borderRadius: 6,
+          }}
+        >
+          {isPaid ? 'Settled ✓' : 'Requested ⏳'}
+        </span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', margin: '2px 0' }}>
+        ${rpData.amount.toFixed(2)} <span style={{ fontSize: 13, color: '#FDE68A' }}>USD</span>
+      </div>
+      {rpData.note && (
+        <div style={{ fontSize: 11.5, color: '#FEF3C7', fontStyle: 'italic', background: 'rgba(0,0,0,0.25)', padding: '4px 8px', borderRadius: 6 }}>
+          "{rpData.note}"
+        </div>
+      )}
+      {!mine && !isPaid && (
+        <button
+          type="button"
+          onClick={handleMarkMoneyPaid}
+          className="k-squish"
+          style={{
+            marginTop: 4,
+            padding: '8px 14px',
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+            border: '1px solid #FCD34D',
+            color: '#1E1002',
+            fontSize: 12.5,
+            fontWeight: 900,
+            cursor: 'pointer',
+            boxShadow: '0 2px 10px rgba(245, 158, 11, 0.4)',
+          }}
+        >
+          Mark as Paid / Settle ${rpData.amount.toFixed(2)} 💵
+        </button>
       )}
     </div>
   );

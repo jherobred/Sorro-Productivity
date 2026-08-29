@@ -99,19 +99,36 @@ function batcher(qc: QueryClient) {
     if (timer) return;
     timer = setTimeout(() => {
       timer = null;
-      // Still writing: the optimistic cache is the truth until the pen stops.
-      // Keep what we heard and ask again after the write settles.
-      if (qc.isMutating() > 0) {
-        timer = setTimeout(() => { timer = null; flush(); }, 400);
-        return;
-      }
       flush();
     }, 120);
 
     function flush() {
       const keys = [...hot];
-      hot.clear();
-      for (const k of keys) void qc.invalidateQueries({ queryKey: [k] });
+      const stillWriting: string[] = [];
+      for (const k of keys) {
+        const mutating = qc.isMutating({
+          predicate: (mutation) => {
+            const mKey = mutation.options.mutationKey;
+            if (!mKey || !Array.isArray(mKey)) return false;
+            const first = String(mKey[0]).toLowerCase();
+            return first.startsWith(k) || first.includes(`.${k}`) || first.startsWith(`${k}.`);
+          },
+        }) > 0;
+
+        if (mutating) {
+          stillWriting.push(k);
+        } else {
+          hot.delete(k);
+          void qc.invalidateQueries({ queryKey: [k] });
+        }
+      }
+
+      if (stillWriting.length > 0) {
+        timer = setTimeout(() => {
+          timer = null;
+          flush();
+        }, 350);
+      }
     }
   };
 }

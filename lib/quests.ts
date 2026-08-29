@@ -84,11 +84,13 @@ export function deriveDailyQuests({
   habits = [],
   ticks = [],
   notesUpdatedToday = 0,
+  eventsCountToday = 0,
 }: {
   tasks?: Task[];
   habits?: Habit[];
   ticks?: Tick[];
   notesUpdatedToday?: number;
+  eventsCountToday?: number;
 }): Quest[] {
   const todayStr = ymd(new Date());
   const claimed = getClaimedQuests(todayStr);
@@ -99,46 +101,54 @@ export function deriveDailyQuests({
   // 2. Tasks completed today
   const tasksDoneToday = tasks.filter((t) => {
     if (!t.done) return false;
-    // completed_at is a UTC ISO string, so slicing it compares the wrong day
-    // either side of local midnight — convert it. due_on is already a local
-    // yyyy-mm-dd and must not go through the same conversion.
     if (t.completed_at) return ymd(new Date(t.completed_at)) === todayStr;
     return t.due_on === todayStr;
   }).length;
 
   const quests: Quest[] = [
     {
-      id: 'habits_3',
-      title: 'Habit Warrior',
-      desc: 'Complete at least 2 habits today',
-      icon: 'habit',
-      current: Math.min(2, todayTicks),
-      target: 2,
-      reward: 20,
-      claimed: claimed.has('habits_3'),
-      completed: todayTicks >= 2,
-    },
-    {
-      id: 'tasks_2',
-      title: 'Task Slayer',
-      desc: 'Complete 2 todo tasks today',
+      id: 'tasks_today',
+      title: 'Action Champion',
+      desc: 'Check off 2 tasks on your to-do list today',
       icon: 'task',
       current: Math.min(2, tasksDoneToday),
       target: 2,
       reward: 25,
-      claimed: claimed.has('tasks_2'),
+      claimed: claimed.has('tasks_today'),
       completed: tasksDoneToday >= 2,
     },
     {
-      id: 'knowledge_1',
-      title: 'Brain Power',
-      desc: 'Capture a quick scratch note or study thought',
+      id: 'habits_today',
+      title: 'Habit Builder',
+      desc: 'Log and complete 2 daily habits or routines',
+      icon: 'habit',
+      current: Math.min(2, todayTicks),
+      target: 2,
+      reward: 20,
+      claimed: claimed.has('habits_today'),
+      completed: todayTicks >= 2,
+    },
+    {
+      id: 'knowledge_note',
+      title: 'Idea Spark',
+      desc: 'Jot down a quick thought in scratchpad or update a note',
       icon: 'book',
       current: Math.min(1, notesUpdatedToday),
       target: 1,
       reward: 15,
-      claimed: claimed.has('knowledge_1'),
+      claimed: claimed.has('knowledge_note'),
       completed: notesUpdatedToday >= 1,
+    },
+    {
+      id: 'daily_focus',
+      title: 'Focus Sprint',
+      desc: 'Complete at least 1 task or start a Pomodoro session',
+      icon: 'clock',
+      current: Math.min(1, tasksDoneToday > 0 ? 1 : 0),
+      target: 1,
+      reward: 20,
+      claimed: claimed.has('daily_focus'),
+      completed: tasksDoneToday >= 1,
     },
   ];
 

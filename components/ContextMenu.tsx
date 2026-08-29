@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { lg } from '@/lib/glass';
 import { PAL } from '@/lib/pal';
+import { useLayout } from '@/lib/useLayout';
 
 /**
  * One row. `run` OR `items` — a row that opens a submenu does not also act,
@@ -51,6 +52,8 @@ export function ContextMenu({
   x: number; y: number; kind: string; label: string;
   items: CtxContent; onClose: () => void; accent: string; dark: boolean;
 }) {
+  const { phone } = useLayout();
+
   useEffect(() => {
     const close = () => onClose();
     // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
@@ -114,6 +117,57 @@ export function ContextMenu({
  * the page, the further off. A portal puts it back on the viewport, which is
  * the only frame a pointer position is ever expressed in.
  */
+  if (phone) {
+    return createPortal(
+      <>
+        <div 
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)', zIndex: 60, animation: 'fadein 0.2s ease-out' }} 
+          onClick={onClose} 
+        />
+        <div ref={ref} className="sheet" role="menu" aria-label={label}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            ...lg({ tint: accent, strength: 0.95, radius: 24, dark }),
+            borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+            position: 'fixed',
+            left: 0, right: 0, bottom: 0,
+            maxHeight: '85dvh', overflowY: 'auto',
+            zIndex: 61, padding: '12px 12px 24px',
+            display: 'flex', flexDirection: 'column', gap: 4,
+          }}>
+          <div style={{ width: 36, height: 5, borderRadius: 3, background: 'var(--tx3)', margin: '0 auto 12px', opacity: 0.5 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 9px 12px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: 2, flex: 'none', background: KIND_DOT[kind] ?? 'var(--acc)' }} />
+            <span style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+              color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {label}
+            </span>
+          </div>
+
+          {groups.map((g, gi) => (
+            <div key={g.label ?? gi} role="group" aria-label={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {gi > 0 && <div aria-hidden style={{ height: 1, background: 'var(--line)', margin: '8px 6px' }} />}
+              {g.label && (
+                <div style={{
+                  fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
+                  color: 'var(--tx3)', padding: '4px 10px 4px',
+                }}>
+                  {g.label}
+                </div>
+              )}
+              {g.items.map((it) => (
+                <Row key={it.label} it={it} onClose={onClose} accent={accent} dark={dark} phone={phone} />
+              ))}
+            </div>
+          ))}
+        </div>
+      </>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div ref={ref} className="pop" role="menu" aria-label={label}
       onPointerDown={(e) => e.stopPropagation()}
@@ -175,8 +229,8 @@ const SUB_W = 200;
  * turn, so a submenu of a submenu behaves the same. It opens to the right of
  * its row and flips left near the edge.
  */
-function Row({ it, onClose, accent, dark }: {
-  it: CtxItem; onClose: () => void; accent: string; dark: boolean;
+function Row({ it, onClose, accent, dark, phone }: {
+  it: CtxItem; onClose: () => void; accent: string; dark: boolean; phone?: boolean;
 }) {
   /** The row's own box, in viewport coordinates. Null while shut. */
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -215,22 +269,22 @@ function Row({ it, onClose, accent, dark }: {
         }}
         className={it.disabled ? undefined : 'hov lensrow'}
         style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px',
-          borderRadius: 9, fontSize: 12.5, fontWeight: 600, textAlign: 'left', minHeight: 36,
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: phone ? '14px 12px' : '9px 10px',
+          borderRadius: phone ? 12 : 9, fontSize: phone ? 14 : 12.5, fontWeight: 600, textAlign: 'left', minHeight: phone ? 44 : 36,
           color: colour, opacity: it.disabled ? 0.45 : 1,
           cursor: it.disabled ? 'default' : 'pointer',
         }}>
-        <Icon name={it.icon} size={14} color={it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx3)'} />
+        <Icon name={it.icon} size={phone ? 18 : 14} color={it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx3)'} />
         <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {it.label}
         </span>
-        {it.checked && <Icon name="check" size={13} color="var(--accTx)" />}
+        {it.checked && <Icon name="check" size={phone ? 16 : 13} color="var(--accTx)" />}
         {it.shortcut && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.03em', flex: 'none' }}>
+          <span style={{ fontSize: phone ? 12 : 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.03em', flex: 'none' }}>
             {it.shortcut}
           </span>
         )}
-        {has && <Icon name="expand" size={12} color="var(--tx3)" />}
+        {has && <Icon name="expand" size={phone ? 14 : 12} color="var(--tx3)" />}
       </button>
 
       {has && anchor && (

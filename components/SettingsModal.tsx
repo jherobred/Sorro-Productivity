@@ -111,7 +111,7 @@ export function SettingsModal({
   initialTab?: SettingsTab;
   onClose: () => void;
 }) {
-  const { phone } = useLayout();
+  const { phone, viewMode, setViewMode } = useLayout();
   const { prefs, update } = usePrefs();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [search, setSearch] = useState('');
@@ -492,6 +492,12 @@ export function SettingsModal({
                   label="Accent Color"
                   sub="Theme tint"
                   previewColor={prefs.accent}
+                  onClick={() => setPhoneSubPage('appearance')}
+                />
+                <PhoneRow
+                  icon="expand"
+                  label="Navigation Panel"
+                  sub={prefs.sidebar === 'compact' ? 'Compact Icons (64px)' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'Hidden (Chevron)' : 'Expanded (236px)')}
                   onClick={() => setPhoneSubPage('appearance')}
                 />
                 <PhoneRow
@@ -904,7 +910,91 @@ export function SettingsModal({
               </div>
             </Field>
 
-            <div style={{ ...SECTION_TITLE, marginTop: 10 }}>Layout & Accessibility</div>
+            <div style={{ ...SECTION_TITLE, marginTop: 10 }}>View Mode & Layout</div>
+            <Field label="Display View Mode" hint="Auto-detects your device, or forces Dedicated Phone View or Web View.">
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { v: 'auto', n: 'Auto-Detect', hint: 'Phone on mobile, Web on desktop' },
+                  { v: 'phone', n: 'Phone View', hint: 'Mobile bottom dock & app layout' },
+                  { v: 'web', n: 'Web View', hint: 'Desktop sidebar & command hub' },
+                ].map((m) => {
+                  const active = viewMode === m.v;
+                  return (
+                    <button
+                      key={m.v}
+                      onClick={() => setViewMode(m.v as 'auto' | 'phone' | 'web')}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '9px 10px',
+                        borderRadius: 10,
+                        background: active ? 'var(--acc)' : 'var(--card2)',
+                        color: active ? '#0C0F16' : 'var(--tx)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: '1px solid var(--line2)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>{m.n}</span>
+                      <span style={{
+                        fontSize: 9.5,
+                        fontWeight: 500,
+                        opacity: active ? 0.85 : 0.6,
+                      }}>
+                        {m.hint}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            <Field label="Navigation Panel Layout (Desktop)">
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { v: 'open', n: 'Expanded', hint: 'Full sidebar (236px)' },
+                  { v: 'compact', n: 'Compact Icons', hint: 'Tab logos only (64px)' },
+                  { v: 'hidden', n: 'Hidden', hint: 'Top-bar chevron trigger' },
+                ].map((s) => {
+                  const active = prefs.sidebar === s.v || (s.v === 'hidden' && prefs.sidebar === 'collapsed');
+                  return (
+                    <button
+                      key={s.v}
+                      onClick={() => setPref('sidebar', s.v as Prefs['sidebar'])}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '9px 10px',
+                        borderRadius: 10,
+                        background: active ? 'var(--acc)' : 'var(--card2)',
+                        color: active ? '#0C0F16' : 'var(--tx)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: '1px solid var(--line2)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>{s.n}</span>
+                      <span style={{
+                        fontSize: 9.5,
+                        fontWeight: 500,
+                        opacity: active ? 0.85 : 0.6,
+                      }}>
+                        {s.hint}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
             <Field label="Density">
               <div style={{ display: 'flex', gap: 8 }}>
                 {[

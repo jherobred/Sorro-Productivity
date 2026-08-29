@@ -1,0 +1,305 @@
+import os
+import subprocess
+
+# 6 High-End Distinct Letter-Only Logomark Directions for "basedly"
+
+LETTER_MARKS = [
+    (
+        "Concept 1: The Modernist Geometric 'b'",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Solid vertical pillar + pure tangent circle counter -->
+            <rect x="14" y="8" width="10" height="48" rx="5" fill="#FBF7EE"/>
+            <path d="M 24 24 C 36 24, 48 31, 48 41 C 48 51, 36 56, 24 56 Z" fill="#D97757"/>
+            <circle cx="33" cy="40" r="6" fill="#0A0912"/>
+        </svg>
+        """,
+        "Geometric architectural mark: Ivory pillar anchor + vibrant terracotta loop with pure circular negative space."
+    ),
+    (
+        "Concept 2: Interlocking 'bd' Monogram",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Left 'b' stem -->
+            <rect x="12" y="10" width="8" height="44" rx="4" fill="#D97757"/>
+            <!-- Center loop shared by b and d -->
+            <path d="M 20 26 C 28 20, 36 20, 44 26 C 50 32, 50 42, 44 48 C 36 54, 28 54, 20 48 Z" fill="none" stroke="#FBF7EE" stroke-width="7" stroke-linejoin="round"/>
+            <!-- Right 'd' ascender -->
+            <rect x="44" y="10" width="8" height="44" rx="4" fill="#D97757"/>
+        </svg>
+        """,
+        "Harmonic dual-letterform monogram: Outer terracotta stems connected by an unbroken ivory geometric loop."
+    ),
+    (
+        "Concept 3: Continuous Möbius Ribbon 'b'",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 18 10 L 18 42 C 18 50, 26 56, 36 56 C 46 56, 52 48, 52 38 C 52 28, 44 22, 34 22 C 24 22, 18 28, 18 36" stroke="#D97757" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 18 10 L 18 26" stroke="#FBF7EE" stroke-width="8" stroke-linecap="round"/>
+        </svg>
+        """,
+        "Fluid infinite ribbon representing continuous thought flow, interconnected knowledge, and momentum."
+    ),
+    (
+        "Concept 4: High-End Editorial Serif 'b'",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Ascender Serif -->
+            <path d="M 14 12 L 24 8 L 24 54 L 14 54 Z" fill="#FBF7EE"/>
+            <!-- Bulbous Bowl -->
+            <path d="M 24 22 C 40 20, 52 28, 52 39 C 52 50, 38 56, 24 54 Z" fill="#D97757"/>
+            <ellipse cx="36" cy="38" rx="6" ry="8" fill="#0A0912"/>
+        </svg>
+        """,
+        "Contemporary editorial craft: Sharp chiseled serif stem paired with a deep terracotta counter-bowl."
+    ),
+    (
+        "Concept 5: The Modular Terminal Block 'b'",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Stem with Chamfer -->
+            <path d="M 14 12 L 26 12 L 26 52 L 14 52 Z" fill="#FBF7EE"/>
+            <!-- Lower Box -->
+            <path d="M 26 26 L 46 26 C 49 26, 50 28, 50 31 L 50 47 C 50 50, 49 52, 46 52 L 26 52 Z" fill="#D97757"/>
+            <!-- Inner Cutout -->
+            <rect x="33" y="33" width="9" height="12" rx="2" fill="#0A0912"/>
+            <!-- Terminal Dot -->
+            <circle cx="20" cy="18" r="2.5" fill="#D97757"/>
+        </svg>
+        """,
+        "Developer terminal & modular aesthetic: Monolithic block geometry with precise chamfers and negative space window."
+    ),
+    (
+        "Concept 6: Kinetic Sliced Pillar 'b'",
+        """
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Upper Ascender Pillar -->
+            <path d="M 16 8 L 26 8 L 26 28 L 16 32 Z" fill="#FBF7EE"/>
+            <!-- Lower Sliced Dynamic Bowl -->
+            <path d="M 16 36 L 26 32 L 48 32 C 52 32, 54 36, 52 42 C 50 48, 44 54, 34 54 L 16 54 Z" fill="#D97757"/>
+            <path d="M 26 38 L 36 38 C 40 38, 42 42, 40 46 C 38 48, 34 48, 30 48 L 26 48 Z" fill="#0A0912"/>
+        </svg>
+        """,
+        "Kinetic speed slice: Crisp diagonal cut conveying momentum, velocity, and sharp discipline."
+    ),
+]
+
+def build_html():
+    cards = []
+    for idx, (title, svg_code, desc) in enumerate(LETTER_MARKS, 1):
+        cards.append(f"""
+        <div class="card">
+            <div class="header">
+                <span class="num">0{idx}</span>
+                <h3>{title}</h3>
+            </div>
+            <div class="preview-row">
+                <!-- Large Glyph Box -->
+                <div class="glyph-box">
+                    <div class="svg-wrap">{svg_code}</div>
+                    <span class="label">Lettermark</span>
+                </div>
+                <!-- App Icon Squircle -->
+                <div class="app-icon-box">
+                    <div class="svg-app">{svg_code}</div>
+                </div>
+                <!-- Wordmark Lockup -->
+                <div class="lockup-box">
+                    <div class="svg-small">{svg_code}</div>
+                    <span class="wordmark">basedly</span>
+                </div>
+            </div>
+            <p class="desc">{desc}</p>
+        </div>
+        """)
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    background: #0A0912;
+    color: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }}
+  .title-area {{
+    text-align: center;
+    margin-bottom: 36px;
+  }}
+  .title-area h1 {{
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+    color: #FBF7EE;
+  }}
+  .title-area p {{
+    font-size: 15px;
+    color: #94A3B8;
+  }}
+  .grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%;
+    max-width: 1150px;
+  }}
+  .card {{
+    background: #14121E;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }}
+  .header {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+  .num {{
+    background: rgba(217, 119, 87, 0.2);
+    color: #D97757;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(217, 119, 87, 0.4);
+  }}
+  .header h3 {{
+    font-size: 17px;
+    font-weight: 700;
+    color: #FBF7EE;
+    letter-spacing: -0.02em;
+  }}
+  .preview-row {{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #0D0B16;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }}
+  .glyph-box {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }}
+  .svg-wrap {{
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .svg-wrap svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .label {{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748B;
+    font-weight: 600;
+  }}
+  .app-icon-box {{
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: #1C1917;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .svg-app {{
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .svg-app svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .lockup-box {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    padding-left: 16px;
+    border-left: 1px solid rgba(255,255,255,0.08);
+  }}
+  .svg-small {{
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .svg-small svg {{
+    width: 100%;
+    height: 100%;
+  }}
+  .wordmark {{
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #FBF7EE;
+  }}
+  .desc {{
+    font-size: 12.5px;
+    color: #94A3B8;
+    line-height: 1.45;
+  }}
+</style>
+</head>
+<body>
+  <div class="title-area">
+    <h1>Letter-Only Brandmark Concepts</h1>
+    <p>Pure typographic & geometric monograms for 'basedly' in Ivory & Anthropic Terracotta</p>
+  </div>
+  <div class="grid">
+    {''.join(cards)}
+  </div>
+</body>
+</html>"""
+    with open("scripts/letter_logos.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("Wrote scripts/letter_logos.html")
+
+def render_png():
+    edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    edge = next((p for p in edge_paths if os.path.exists(p)), None)
+    if not edge:
+        return
+    cwd = os.path.abspath(os.getcwd())
+    cmd = [
+        edge,
+        "--headless",
+        "--disable-gpu",
+        "--hide-scrollbars",
+        "--window-size=1200,1100",
+        f"--screenshot={os.path.join(cwd, 'public', 'letter-logos-showcase.png')}",
+        f"file:///{os.path.join(cwd, 'scripts', 'letter_logos.html')}"
+    ]
+    subprocess.run(cmd, check=False)
+    print("Rendered: public/letter-logos-showcase.png")
+
+if __name__ == "__main__":
+    build_html()
+    render_png()

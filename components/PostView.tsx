@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -11,6 +11,9 @@ import { PAL } from '@/lib/pal';
 import { displayOf, type Person } from '@/lib/people';
 import { useComments, type Item } from '@/lib/community';
 import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
+import { PayRpModal } from '@/components/community/PayRpModal';
+import { BuyItemModal } from '@/components/community/BuyItemModal';
+import { getPostListing } from '@/lib/rpTransfers';
 
 /**
  * A post, opened.
@@ -137,8 +140,11 @@ function Panel({
 }) {
   const { data: list = [], isLoading } = useComments(item.kind, item.id, true);
   const [draft, setDraft] = useState('');
+  const [tipping, setTipping] = useState(false);
+  const [buying, setBuying] = useState(false);
   const who = displayOf(profiles, item.author_id, me);
   const photo = item.kind === 'photo';
+  const listing = getPostListing(item.id);
 
   const send = () => {
     const v = draft.trim();
@@ -189,6 +195,104 @@ function Panel({
           </div>
         )}
 
+        {/* Marketplace / Selling Card in PostView */}
+        {listing && listing.is_for_sale && (
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 14,
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
+              border: listing.is_sold ? '1px solid var(--line2)' : '1.5px solid rgba(16, 185, 129, 0.45)',
+              boxShadow: listing.is_sold ? 'none' : '0 4px 18px rgba(16, 185, 129, 0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13 }}>
+                  {listing.item_type === 'service' ? '🛠️' : listing.item_type === 'digital' ? '💻' : listing.item_type === 'account' ? '🎮' : '📦'}
+                </span>
+                <span style={{
+                  fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em',
+                  color: listing.is_sold ? 'var(--tx3)' : '#34D399',
+                }}>
+                  {listing.item_type} for sale
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  fontSize: 14, fontWeight: 900,
+                  color: listing.is_sold ? 'var(--tx3)' : '#FDE047',
+                  fontFamily: 'monospace',
+                }}>
+                  💎 {listing.price_rp.toLocaleString()} RP
+                </span>
+                {listing.is_sold ? (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                    padding: '2px 7px', borderRadius: 6,
+                    background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)',
+                  }}>
+                    Sold Out
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
+                    padding: '2px 7px', borderRadius: 6,
+                    background: 'rgba(16, 185, 129, 0.2)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)',
+                  }}>
+                    Available
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)' }}>
+                  {listing.item_name || item.title || 'Marketplace Item'}
+                </div>
+                {listing.delivery_info && (
+                  <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                    📦 {listing.delivery_info}
+                  </div>
+                )}
+              </div>
+
+              {item.author_id !== me && !listing.is_sold && (
+                <button
+                  type="button"
+                  onClick={() => setBuying(true)}
+                  className="k-squish"
+                  style={{
+                    flex: 'none',
+                    padding: '7px 15px',
+                    borderRadius: 9,
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    border: '1px solid #34D399',
+                    color: '#041F14',
+                    fontSize: 11.5,
+                    fontWeight: 900,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
+                  }}
+                >
+                  Buy with RP 🛍️
+                </button>
+              )}
+
+              {item.author_id !== me && listing.is_sold && listing.buyer_id === me && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399' }}>
+                  ✓ You purchased this
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {isLoading && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading replies…</div>}
         {!isLoading && list.length === 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No replies yet.</div>
@@ -226,7 +330,52 @@ function Panel({
           <button onClick={onShare} className="tap" aria-label="Share this post" style={{ display: 'flex' }}>
             <Icon name="send" size={18} color="var(--tx2)" />
           </button>
+
+          {item.author_id !== me && (
+            <button
+              onClick={() => setTipping(true)}
+              className="hov k-squish"
+              title="Pay with RP"
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 11px',
+                borderRadius: 8,
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(129, 140, 248, 0.35)',
+                color: '#818CF8',
+                fontSize: 11.5,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              <span>💎</span>
+              <span>Pay RP</span>
+            </button>
+          )}
         </div>
+
+        {tipping && (
+          <PayRpModal
+            postId={item.id}
+            authorId={item.author_id}
+            authorName={who.label}
+            postTitle={item.title || item.body}
+            onClose={() => setTipping(false)}
+          />
+        )}
+
+        {buying && listing && (
+          <BuyItemModal
+            postId={item.id}
+            sellerId={item.author_id}
+            sellerName={who.label}
+            listing={listing}
+            onClose={() => setBuying(false)}
+          />
+        )}
 
         <div style={{ padding: '0 15px 9px', fontSize: 12, fontWeight: 800 }}>
           {reactions} {photo ? (reactions === 1 ? 'like' : 'likes') : (reactions === 1 ? 'upvote' : 'upvotes')}
@@ -264,6 +413,37 @@ function Panel({
 function Photos({ paths, alt }: { paths: string[]; alt: string }) {
   const urls = useSignedUrls('bd-feed', paths);
   const [at, setAt] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const scrollNext = () => {
+    if (!containerRef.current) return;
+    const nextAt = Math.min(paths.length - 1, at + 1);
+    containerRef.current.scrollTo({ left: nextAt * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(nextAt);
+  };
+
+  const scrollPrev = () => {
+    if (!containerRef.current) return;
+    const prevAt = Math.max(0, at - 1);
+    containerRef.current.scrollTo({ left: prevAt * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(prevAt);
+  };
+
+  const jumpTo = (i: number) => {
+    if (!containerRef.current) return;
+    containerRef.current.scrollTo({ left: i * containerRef.current.clientWidth, behavior: 'smooth' });
+    setAt(i);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') scrollNext();
+      else if (e.key === 'ArrowLeft') scrollPrev();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at, paths.length]);
 
   if (paths.length === 1) {
     const url = urls[0];
@@ -282,6 +462,7 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
+        ref={containerRef}
         className="hbar"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -305,10 +486,94 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
         ))}
       </div>
 
+      {/* Floating Prev & Next Navigation Buttons */}
+      {at > 0 && (
+        <button
+          type="button"
+          onClick={scrollPrev}
+          aria-label="Previous photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            left: 14,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 20,
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <Icon name="back" size={16} color="#FFFFFF" />
+        </button>
+      )}
+
+      {at < paths.length - 1 && (
+        <button
+          type="button"
+          onClick={scrollNext}
+          aria-label="Next photo"
+          className="hov k-squish"
+          style={{
+            position: 'absolute',
+            right: 14,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: '#FFFFFF',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            zIndex: 20,
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <div style={{ transform: 'rotate(180deg)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="back" size={16} color="#FFFFFF" />
+          </div>
+        </button>
+      )}
+
+      {/* Clickable Pagination Dots */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, bottom: 14,
+        display: 'flex', justifyContent: 'center', gap: 6, zIndex: 20,
+      }}>
+        {paths.map((path, i) => (
+          <button
+            key={path}
+            type="button"
+            onClick={() => jumpTo(i)}
+            aria-label={`Go to photo ${i + 1}`}
+            style={{
+              padding: 0,
+              border: 'none',
+              cursor: 'pointer',
+              width: i === at ? 20 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: i === at ? '#fff' : 'rgba(255,255,255,.5)',
+              transition: 'all .2s ease',
+            }}
+          />
+        ))}
+      </div>
+
       <span style={{
         position: 'absolute', right: 12, top: 12, padding: '4px 10px', borderRadius: 8,
-        background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontWeight: 800,
-        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 11, fontWeight: 800,
+        fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', zIndex: 20,
       }}>
         {at + 1}/{paths.length}
       </span>

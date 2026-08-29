@@ -19,7 +19,7 @@ import { useOverlayBack } from '@/lib/nav';
  * upward and one on Sunday opens leftward.
  */
 export function CalPopover({
-  x, y, onClose, label, children, width = 300,
+  x, y, onClose, label, children, width = 340,
 }: {
   x: number; y: number;
   onClose: () => void;
@@ -63,17 +63,6 @@ export function CalPopover({
     setPos({ left, top });
   }, [x, y, width]);
 
-
-/**
- * Rendered into <body>, not where it is written.
- *
- * `main` carries a `zoom` (the font-scale/density preference) and a page-entry
- * transform. Either makes it the containing block for `position: fixed`
- * descendants, so a menu asking for viewport coordinates got the main element's
- * coordinates instead and opened a long way from the pointer — the further down
- * the page, the further off. A portal puts it back on the viewport, which is
- * the only frame a pointer position is ever expressed in.
- */
   return createPortal(
     <>
       {/* Click-away. Transparent, because a scrim would say "modal" and this
@@ -93,9 +82,9 @@ export function CalPopover({
           zIndex: 89,
           background: 'var(--card)',
           border: '1px solid var(--line2)',
-          borderRadius: 14,
-          boxShadow: 'var(--shl)',
-          padding: 14,
+          borderRadius: 20,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+          padding: '16px 20px 18px',
           visibility: pos ? 'visible' : 'hidden',
         }}>
         {children}
@@ -108,12 +97,12 @@ export function CalPopover({
 /** The row of icon buttons along the top of a popover. */
 export function PopoverActions({ children, onClose }: { children?: React.ReactNode; onClose: () => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
       <span style={{ flex: 1 }} />
       {children}
       <button onClick={onClose} className="hov k-squish" aria-label="Close" title="Close"
-        style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
-        <Icon name="close" size={14} color="var(--tx2)" />
+        style={{ width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+        <Icon name="close" size={15} color="var(--tx2)" />
       </button>
     </div>
   );
