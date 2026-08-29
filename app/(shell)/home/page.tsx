@@ -11,7 +11,7 @@ import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
 import { Buddy } from '@/components/Buddy';
-import { DailyQuests } from '@/components/DailyQuests';
+import { BuddyCompanion } from '@/components/BuddyCompanion';
 import { UpcomingTasksCarousel } from '@/components/UpcomingTasksCarousel';
 import { FocusHub } from '@/components/FocusHub';
 import { playTick } from '@/lib/audio';
@@ -443,16 +443,11 @@ export default function HomePage() {
         <Announcements phone={phone} />
 
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
-          {/* Combined Study Buddy & Daily Quests Hub */}
+          {/* Study Buddy Hub */}
           <div data-tour="home-quests" style={{ gridColumn: phone ? 'span 1' : 'span 3' }}>
-            <DailyQuests
-              tasks={tasks}
-              habits={habits}
-              ticks={ticks}
-              notesCount={recent.length}
-              eventsCount={todays.length}
-              daysSinceDone={daysSinceDone}
-              streakDays={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
+            <BuddyCompanion
+              daysSince={daysSinceDone}
+              streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
               xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
               onStartFocus={() => setFocusOpen(true)}
             />

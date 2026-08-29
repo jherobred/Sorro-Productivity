@@ -8,7 +8,7 @@ import { toast } from '@/lib/toast';
 import { useLayout } from '@/lib/useLayout';
 import { uploadTo } from '@/lib/uploads';
 import { TAGS, MAX_IMAGES } from '@/lib/community';
-import type { ListingKind, PostListing } from '@/lib/rpTransfers';
+import type { PostListing } from '@/lib/rpTransfers';
 
 export type Draft = {
   title: string;
@@ -20,14 +20,6 @@ export type Draft = {
   listing?: PostListing | null;
 };
 
-const LISTING_TYPES: { id: ListingKind; label: string; icon: string }[] = [
-  { id: 'item', label: 'Item / Merch', icon: '📦' },
-  { id: 'service', label: 'Service / Help', icon: '🛠️' },
-  { id: 'digital', label: 'Digital / Code', icon: '💻' },
-  { id: 'account', label: 'Account / Asset', icon: '🎮' },
-  { id: 'other', label: 'Other', icon: '✨' },
-];
-
 export function Composer({ onClose, onPost }: {
   onClose: () => void;
   onPost: (v: Draft) => void;
@@ -38,11 +30,6 @@ export function Composer({ onClose, onPost }: {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [tag, setTag] = useState('');
-  const [acceptRp, setAcceptRp] = useState<boolean>(true);
-  const [isSelling, setIsSelling] = useState<boolean>(false);
-  const [listingType, setListingType] = useState<ListingKind>('item');
-  const [priceRp, setPriceRp] = useState<number>(50);
-  const [deliveryInfo, setDeliveryInfo] = useState<string>('');
   const [images, setImages] = useState<{ path: string; url: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const first = useRef<HTMLInputElement>(null);
@@ -79,23 +66,11 @@ export function Composer({ onClose, onPost }: {
     const ready = title.trim() || body.trim() || images.length;
     if (!ready || busy) return;
 
-    const listingObj: PostListing | null = isSelling ? {
-      is_for_sale: true,
-      price_rp: Number(priceRp) || 10,
-      item_name: title.trim() || 'Marketplace Item',
-      item_type: listingType,
-      description: body.trim(),
-      delivery_info: deliveryInfo.trim(),
-      is_sold: false,
-    } : null;
-
     onPost({
       title: title.trim(),
       body: body.trim(),
       tag,
       images: images.map((x) => x.path),
-      accept_rp: acceptRp || isSelling,
-      listing: listingObj,
     });
     onClose();
   };
@@ -103,8 +78,6 @@ export function Composer({ onClose, onPost }: {
   const ready = !!(title.trim() || body.trim() || images.length);
   const hint = !ready
     ? 'Add a title, a few words, or a picture'
-    : isSelling
-    ? `Selling for ${priceRp.toLocaleString()} RP 💎`
     : images.length
     ? `${images.length} of ${MAX_IMAGES} pictures`
     : 'Ready';
@@ -137,7 +110,7 @@ export function Composer({ onClose, onPost }: {
           padding: '14px 18px', borderBottom: '1px solid var(--line)',
         }}>
           <h2 style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-.02em', color: 'var(--tx)', margin: 0 }}>
-            {isSelling ? '🛍️ Sell an Item or Service' : 'New Post'}
+            New Post
           </h2>
           <button onClick={onClose} aria-label="Close" className="hov"
             style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
@@ -147,12 +120,12 @@ export function Composer({ onClose, onPost }: {
 
         <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input ref={first} value={title} onChange={(e) => setTitle(e.target.value)}
-            placeholder={isSelling ? "Item or Service Title" : "Title (optional)"} aria-label="Title"
+            placeholder="Title (optional)" aria-label="Title"
             style={{ width: '100%', minHeight: 42, fontSize: 16, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)' }} />
 
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={images.length ? 3 : 4}
             aria-label="Body"
-            placeholder={isSelling ? "Describe what you're selling, specifications, condition, etc…" : "Say more (optional)"}
+            placeholder="Say more (optional)"
             style={{
               width: '100%', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)',
               background: 'var(--card2)', fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx)', resize: 'vertical',
@@ -221,208 +194,6 @@ export function Composer({ onClose, onPost }: {
               })}
             </div>
           </div>
-
-          {/* Marketplace / Selling Section */}
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 14,
-              background: isSelling ? 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(6,78,59,0.2) 100%)' : 'var(--card2)',
-              border: isSelling ? '1.5px solid #10B981' : '1px solid var(--line2)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-              transition: 'all .2s ease',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 20 }}>🛍️</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)' }}>
-                    Sell Item / Service / Digital Good
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
-                    Accept RP payments directly on this post
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsSelling(!isSelling)}
-                className="k-squish"
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  fontSize: 11.5,
-                  fontWeight: 800,
-                  background: isSelling ? '#10B981' : 'var(--card)',
-                  border: isSelling ? '1px solid #34D399' : '1px solid var(--line)',
-                  color: isSelling ? '#041F14' : 'var(--tx2)',
-                  cursor: 'pointer',
-                }}
-              >
-                {isSelling ? 'Active ✓' : 'Enable Selling'}
-              </button>
-            </div>
-
-            {isSelling && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-                {/* Type Selection */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 5 }}>
-                    Listing Category
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {LISTING_TYPES.map((lt) => {
-                      const on = listingType === lt.id;
-                      return (
-                        <button
-                          key={lt.id}
-                          type="button"
-                          onClick={() => setListingType(lt.id)}
-                          className="k-squish"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            padding: '4px 10px',
-                            borderRadius: 8,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: on ? '#10B981' : 'var(--card)',
-                            border: on ? '1px solid #34D399' : '1px solid var(--line2)',
-                            color: on ? '#041F14' : 'var(--tx2)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span>{lt.icon}</span>
-                          <span>{lt.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Price in RP */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 5 }}>
-                    Price in RP 💎
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      type="number"
-                      min={1}
-                      value={priceRp}
-                      onChange={(e) => setPriceRp(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      style={{
-                        width: 110,
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        background: 'var(--card)',
-                        border: '1px solid var(--line2)',
-                        fontSize: 14,
-                        fontWeight: 900,
-                        color: '#FDE047',
-                        fontFamily: 'monospace',
-                      }}
-                    />
-                    {[25, 50, 100, 250, 500, 1000].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setPriceRp(preset)}
-                        className="k-squish"
-                        style={{
-                          padding: '4px 8px',
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: priceRp === preset ? 'rgba(16,185,129,0.2)' : 'var(--card)',
-                          border: priceRp === preset ? '1px solid #10B981' : '1px solid var(--line2)',
-                          color: priceRp === preset ? '#34D399' : 'var(--tx3)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {preset} RP
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Delivery / Instructions */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Delivery / Order Instructions (Optional)
-                  </div>
-                  <input
-                    type="text"
-                    value={deliveryInfo}
-                    onChange={(e) => setDeliveryInfo(e.target.value)}
-                    placeholder="e.g. DM me for key code / Instant download / Physical pickup at library"
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: 8,
-                      background: 'var(--card)',
-                      border: '1px solid var(--line2)',
-                      fontSize: 12,
-                      color: 'var(--tx)',
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RP Currency Acceptance Card (if not selling) */}
-          {!isSelling && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: 14,
-                background: acceptRp ? 'rgba(99, 102, 241, 0.12)' : 'var(--card2)',
-                border: acceptRp ? '1.5px solid rgba(129, 140, 248, 0.4)' : '1px solid var(--line2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                transition: 'all .2s ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 20 }}>💎</span>
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)' }}>
-                    Accept RP Tips & Rewards
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
-                    Allow readers to reward you with RP
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setAcceptRp(!acceptRp)}
-                aria-pressed={acceptRp}
-                className="k-squish"
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  fontSize: 11.5,
-                  fontWeight: 800,
-                  background: acceptRp ? '#6366F1' : 'var(--card)',
-                  border: acceptRp ? '1px solid #818CF8' : '1px solid var(--line)',
-                  color: acceptRp ? '#FFFFFF' : 'var(--tx2)',
-                  cursor: 'pointer',
-                }}
-              >
-                {acceptRp ? 'Tips On ✓' : 'Disabled'}
-              </button>
-            </div>
-          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderTop: '1px solid var(--line)' }}>
@@ -430,11 +201,11 @@ export function Composer({ onClose, onPost }: {
           <button onClick={send} disabled={!ready || busy} className="acc k-squish"
             style={{
               minHeight: 38, padding: '0 20px', borderRadius: 11, flex: 'none',
-              background: isSelling ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : 'var(--acc)',
-              color: isSelling ? '#041F14' : '#0A0912', fontSize: 12.5, fontWeight: 800,
+              background: 'var(--acc)',
+              color: '#0A0912', fontSize: 12.5, fontWeight: 800,
               opacity: ready && !busy ? 1 : 0.45,
             }}>
-            {isSelling ? 'List for Sale 🛍️' : 'Post'}
+            Post
           </button>
         </div>
       </div>

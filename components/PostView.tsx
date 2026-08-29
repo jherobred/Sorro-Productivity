@@ -11,9 +11,6 @@ import { PAL } from '@/lib/pal';
 import { displayOf, type Person } from '@/lib/people';
 import { useComments, type Item } from '@/lib/community';
 import { FacebookReactionButton, type ReactionType } from '@/components/FacebookReactions';
-import { PayRpModal } from '@/components/community/PayRpModal';
-import { BuyItemModal } from '@/components/community/BuyItemModal';
-import { getPostListing } from '@/lib/rpTransfers';
 
 /**
  * A post, opened.
@@ -140,11 +137,8 @@ function Panel({
 }) {
   const { data: list = [], isLoading } = useComments(item.kind, item.id, true);
   const [draft, setDraft] = useState('');
-  const [tipping, setTipping] = useState(false);
-  const [buying, setBuying] = useState(false);
   const who = displayOf(profiles, item.author_id, me);
   const photo = item.kind === 'photo';
-  const listing = getPostListing(item.id);
 
   const send = () => {
     const v = draft.trim();
@@ -195,104 +189,6 @@ function Panel({
           </div>
         )}
 
-        {/* Marketplace / Selling Card in PostView */}
-        {listing && listing.is_for_sale && (
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 14,
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
-              border: listing.is_sold ? '1px solid var(--line2)' : '1.5px solid rgba(16, 185, 129, 0.45)',
-              boxShadow: listing.is_sold ? 'none' : '0 4px 18px rgba(16, 185, 129, 0.15)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 13 }}>
-                  {listing.item_type === 'service' ? '🛠️' : listing.item_type === 'digital' ? '💻' : listing.item_type === 'account' ? '🎮' : '📦'}
-                </span>
-                <span style={{
-                  fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em',
-                  color: listing.is_sold ? 'var(--tx3)' : '#34D399',
-                }}>
-                  {listing.item_type} for sale
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{
-                  fontSize: 14, fontWeight: 900,
-                  color: listing.is_sold ? 'var(--tx3)' : '#FDE047',
-                  fontFamily: 'monospace',
-                }}>
-                  💎 {listing.price_rp.toLocaleString()} RP
-                </span>
-                {listing.is_sold ? (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
-                    padding: '2px 7px', borderRadius: 6,
-                    background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)',
-                  }}>
-                    Sold Out
-                  </span>
-                ) : (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase',
-                    padding: '2px 7px', borderRadius: 6,
-                    background: 'rgba(16, 185, 129, 0.2)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)',
-                  }}>
-                    Available
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)' }}>
-                  {listing.item_name || item.title || 'Marketplace Item'}
-                </div>
-                {listing.delivery_info && (
-                  <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-                    📦 {listing.delivery_info}
-                  </div>
-                )}
-              </div>
-
-              {item.author_id !== me && !listing.is_sold && (
-                <button
-                  type="button"
-                  onClick={() => setBuying(true)}
-                  className="k-squish"
-                  style={{
-                    flex: 'none',
-                    padding: '7px 15px',
-                    borderRadius: 9,
-                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                    border: '1px solid #34D399',
-                    color: '#041F14',
-                    fontSize: 11.5,
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
-                  }}
-                >
-                  Buy with RP 🛍️
-                </button>
-              )}
-
-              {item.author_id !== me && listing.is_sold && listing.buyer_id === me && (
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#34D399' }}>
-                  ✓ You purchased this
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
         {isLoading && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading replies…</div>}
         {!isLoading && list.length === 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No replies yet.</div>
@@ -330,52 +226,7 @@ function Panel({
           <button onClick={onShare} className="tap" aria-label="Share this post" style={{ display: 'flex' }}>
             <Icon name="send" size={18} color="var(--tx2)" />
           </button>
-
-          {item.author_id !== me && (
-            <button
-              onClick={() => setTipping(true)}
-              className="hov k-squish"
-              title="Pay with RP"
-              style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 11px',
-                borderRadius: 8,
-                background: 'rgba(99, 102, 241, 0.15)',
-                border: '1px solid rgba(129, 140, 248, 0.35)',
-                color: '#818CF8',
-                fontSize: 11.5,
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              <span>💎</span>
-              <span>Pay RP</span>
-            </button>
-          )}
         </div>
-
-        {tipping && (
-          <PayRpModal
-            postId={item.id}
-            authorId={item.author_id}
-            authorName={who.label}
-            postTitle={item.title || item.body}
-            onClose={() => setTipping(false)}
-          />
-        )}
-
-        {buying && listing && (
-          <BuyItemModal
-            postId={item.id}
-            sellerId={item.author_id}
-            sellerName={who.label}
-            listing={listing}
-            onClose={() => setBuying(false)}
-          />
-        )}
 
         <div style={{ padding: '0 15px 9px', fontSize: 12, fontWeight: 800 }}>
           {reactions} {photo ? (reactions === 1 ? 'like' : 'likes') : (reactions === 1 ? 'upvote' : 'upvotes')}

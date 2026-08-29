@@ -16,7 +16,7 @@ import { useScratch, useScratchActions, TAG_COLOR, ago } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
 import { useEvents, type Ev, hhmm, hoursOf } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
-import { DailyQuests } from './DailyQuests';
+import { BuddyCompanion } from './BuddyCompanion';
 import { UpcomingTasksCarousel } from './UpcomingTasksCarousel';
 import { FocusHub } from './FocusHub';
 import { playTick } from '@/lib/audio';
@@ -602,15 +602,10 @@ export function PhoneHome({ name }: { name: string }) {
         style={{ width: '100%', minHeight: 165, marginTop: 10 }}
       />
 
-      {/* Combined Companion (level & mascot) & Daily Quests on right */}
+      {/* Companion (level & mascot) on mobile home */}
       <div style={{ marginTop: 10 }}>
-        <DailyQuests
-          tasks={tasks}
-          habits={habits}
-          ticks={ticks}
-          notesCount={scratch.length}
-          eventsCount={todaysEvents.length}
-          streakDays={bestStreak}
+        <BuddyCompanion
+          streak={bestStreak}
           xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
           onStartFocus={() => setFocusOpen(true)}
         />

@@ -44,7 +44,6 @@ import { toast } from '@/lib/toast';
 import { useTabOnboarding } from '@/lib/useTabOnboarding';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
-import { ShopModal } from './ShopModal';
 import { BirdMascot } from './BasedlyLogo';
 import { ToolbarDynamic } from './ToolbarDynamic';
 
@@ -68,7 +67,7 @@ const SECTIONS: Section[] = [
   { id: 'body', name: 'Body', ic: 'heart', kids: [{ n: 'Health', c: PAL.pink }, { n: 'Food', c: PAL.amber }, { n: 'Gym', c: PAL.mint }] },
   { id: 'money', name: 'Money', ic: 'money', lock: true },
   { id: 'profile', name: 'Profile', ic: 'focus' },
-  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }, { n: 'Casino', c: PAL.mint }] },
+  { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
   { id: 'files', name: 'Files', ic: 'files' },
   { id: 'people', name: 'People', ic: 'people' },
 ];
@@ -121,7 +120,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [sideMore, setSideMore] = useState(false);
   const [settings, setSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
-  const [shopOpen, setShopOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
   const { data: tasks = [] } = useTasks();
   const { data: ranked } = useRanked();
@@ -135,7 +133,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (tabParam === 'challenges') return 'community_challenges';
       if (tabParam === 'messages') return 'community_messages';
-      if (tabParam === 'casino') return 'community_casino';
       return 'community_feed';
     }
     return sec;
@@ -732,35 +729,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   }}
                 >
                   <Icon name="spark" size={13} color="var(--pal-amber)" />
-                  <span>Tour (+15 RP)</span>
+                  <span>Tour</span>
                 </button>
               )}
 
               <NotificationBell />
-
-              {/* Currency / Sparks Emporium Button beside profile */}
-              <button
-                onClick={() => setShopOpen(true)}
-                className="hov k-squish"
-                title="Sparks Emporium (Reward Shop)"
-                aria-label="Sparks Emporium"
-                style={{
-                  height: 32,
-                  padding: '0 11px',
-                  borderRadius: 8,
-                  border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
-                  background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                <Icon name="spark" size={13} color="var(--pal-amber)" />
-                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
-                  {ranked?.rp ?? 0} RP
-                </span>
-              </button>
 
               {/* Centralized profile & settings entry point on top right */}
               <button
@@ -864,31 +837,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
             <NotificationBell compact />
 
-            {/* Mobile Currency / Shop Button */}
-            <button
-              onClick={() => setShopOpen(true)}
-              className="hov k-squish"
-              title="Sparks Emporium"
-              aria-label="Sparks Emporium"
-              style={{
-                height: 32,
-                padding: '0 9px',
-                flex: 'none',
-                borderRadius: 8,
-                border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
-                background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                cursor: 'pointer',
-              }}
-            >
-              <Icon name="spark" size={12} color="var(--pal-amber)" />
-              <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--pal-amber)', fontVariantNumeric: 'tabular-nums' }}>
-                {ranked?.rp ?? 0}
-              </span>
-            </button>
-
             {/* Centralized profile & settings entry point on mobile */}
             <button
               onClick={() => {
@@ -942,7 +890,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {search && <SearchPalette onClose={() => setSearch(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {settings && <SettingsModal initialTab={settingsTab} onClose={() => setSettings(false)} />}
-      {shopOpen && <ShopModal onClose={() => setShopOpen(false)} />}
       {activeTour && (
         <SpotlightOverlay
           config={activeTour}

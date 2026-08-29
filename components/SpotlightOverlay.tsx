@@ -99,7 +99,7 @@ export function SpotlightOverlay({
       }
     }
 
-    setTaskFeedback('+5 RP Earned!');
+    setTaskFeedback('Step Completed!');
     playTick();
 
     setTimeout(() => {
@@ -450,7 +450,7 @@ export function SpotlightOverlay({
               {isLast ? (
                 <>
                   <Icon name="trophy" size={13} color="#0A0912" />
-                  Finish & Claim +15 RP
+                  Finish Tour
                 </>
               ) : (
                 <>

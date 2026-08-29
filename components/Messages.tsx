@@ -24,7 +24,6 @@ import {
   type Conversation, type Member, type Message, type Attachment, type DriveFile, type ReportReason,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
-import { MessageRpModal } from './community/MessageRpModal';
 import { PostPickerModal } from './community/PostPickerModal';
 import {
   parseRpMessage,
@@ -247,7 +246,6 @@ export function Thread({
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [busy, setBusy] = useState(false);
   const [drive, setDrive] = useState(false);
-  const [rpModalOpen, setRpModalOpen] = useState(false);
   const [postPickerOpen, setPostPickerOpen] = useState(false);
   /** Which message is open in its own editor, and which is being reported. */
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -423,29 +421,6 @@ export function Thread({
             🔗
           </button>
 
-          {/* Send or Ask RP Currency & Money Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!recipientId) {
-                toast('No recipient found in this chat');
-                return;
-              }
-              setRpModalOpen(true);
-            }}
-            className="hov k-squish"
-            title="Send or Ask RP / Money"
-            style={{
-              ...ATTACH_BTN,
-              background: 'rgba(99, 102, 241, 0.16)',
-              border: '1px solid rgba(129, 140, 248, 0.35)',
-              color: '#818CF8',
-              fontSize: 13,
-            }}
-          >
-            💎
-          </button>
-
           <input value={draft} onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
             placeholder="Write a message…" aria-label="Write a message"
@@ -464,18 +439,6 @@ export function Thread({
           </button>
         </div>
       </div>
-
-      {rpModalOpen && recipientId && (
-        <MessageRpModal
-          recipientId={recipientId}
-          recipientName={recipientName}
-          conversationId={convo.id}
-          onClose={() => setRpModalOpen(false)}
-          onSendMessage={(body) => {
-            A.say(convo.id, body);
-          }}
-        />
-      )}
 
       {postPickerOpen && (
         <PostPickerModal
