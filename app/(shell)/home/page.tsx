@@ -87,7 +87,6 @@ export default function HomePage() {
     return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
   });
   const [greetSeq, setGreetSeq] = useState(0);
-  const [quote, setQuote] = useState(0);
   const [, tick] = useState(0);
 
   const ws = weekStart(new Date());
@@ -128,11 +127,6 @@ export default function HomePage() {
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 15000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setQuote((q) => (q + 1) % QUOTES.length), 7000);
     return () => clearInterval(t);
   }, []);
 
@@ -569,15 +563,7 @@ export default function HomePage() {
               {accounts.map((a) => <span key={a.id}>{a.name} {peso(balances.get(a.id) ?? 0)}</span>)}
             </div>
             {/* Rotating motivational line on the tloop keyframe. */}
-            <div style={{ marginTop: 10, minHeight: 30, overflow: 'hidden' }}>
-              <div key={quote} style={{
-                fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx3)', textWrap: 'pretty',
-                animation: 'tloop 7s cubic-bezier(.22,1,.36,1) both',
-                animationPlayState: 'var(--anim, running)' as React.CSSProperties['animationPlayState'],
-              }}>
-                {QUOTES[quote]}
-              </div>
-            </div>
+            <RotatingQuote />
           </div>
 
           {/* Deadlines */}
@@ -1187,5 +1173,29 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                         <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: ongoing ? PAL.mint : color, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
                       </div>
     </>
+  );
+}
+
+/**
+ * The rotating line, with its own timer. Cycling it in HomePage re-rendered
+ * the whole page every seven seconds to swap one string.
+ */
+function RotatingQuote() {
+  const [quote, setQuote] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setQuote((q) => (q + 1) % QUOTES.length), 7000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div style={{ marginTop: 10, minHeight: 30, overflow: 'hidden' }}>
+      <div key={quote} style={{
+        fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx3)', textWrap: 'pretty',
+        animation: 'tloop 7s cubic-bezier(.22,1,.36,1) both',
+        animationPlayState: 'var(--anim, running)' as React.CSSProperties['animationPlayState'],
+      }}>
+        {QUOTES[quote]}
+      </div>
+    </div>
   );
 }
