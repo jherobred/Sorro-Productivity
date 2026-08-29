@@ -145,11 +145,12 @@ export default function HomePage() {
     .map((t) => Math.round((Date.now() - new Date(t.due_on! + 'T00:00:00').getTime()) / 86_400_000))
     .sort((a, b) => b - a)[0];
 
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Coarse. `upNext` only has to change when an event ends, and the kicker
+  // below only has to flip when one starts — the 15s tick above re-renders
+  // this page often enough for both. The seconds live in UpNextCountdown,
+  // which owns its own timer so moving three digits does not re-render every
+  // task row, event row, note and habit on the page once a second.
+  const now = Date.now();
 
   const todays = events
     .filter((e) => new Date(e.starts_at).toDateString() === new Date().toDateString())
@@ -160,14 +161,6 @@ export default function HomePage() {
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
 
   const isOngoing = upNext ? new Date(upNext.starts_at).getTime() <= now : false;
-  const targetTime = upNext ? (isOngoing ? new Date(upNext.ends_at).getTime() : new Date(upNext.starts_at).getTime()) : 0;
-  const diffMs = upNext ? Math.max(0, targetTime - now) : 0;
-  const totalSecs = Math.floor(diffMs / 1000);
-  const hrsUntil = Math.floor(totalSecs / 3600);
-  const minsUntil = Math.floor((totalSecs % 3600) / 60);
-  const secsUntil = totalSecs % 60;
-  const totalMinsLeft = Math.round(diffMs / 60_000);
-  const untilPct = Math.max(4, Math.min(100, Math.round(((120 - Math.min(120, totalMinsLeft)) / 120) * 100)));
 
   // Money tile: spend this calendar month against the summed monthly budgets.
   const month = new Date().toISOString().slice(0, 7);
@@ -320,51 +313,7 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  {/* Highly Visible Seconds Countdown Box */}
-                  <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
-                    background: `color-mix(in srgb, ${INDIGO} 18%, var(--card2))`,
-                    border: `1.5px solid color-mix(in srgb, ${INDIGO} 45%, transparent)`,
-                    boxShadow: `0 3px 12px color-mix(in srgb, ${INDIGO} 18%, transparent)`,
-                  }}>
-                    {/* Middle Aligned "Ends In" / "Starts In" Badge */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
-                      color: INDIGO, textAlign: 'center', width: '100%',
-                    }}>
-                      <Icon name="clock" size={12} color={INDIGO} />
-                      <span>{isOngoing ? 'Ends in' : 'Starts in'}</span>
-                    </div>
-
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      fontSize: 25, fontWeight: 800, color: 'var(--tx)',
-                      fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                      padding: '4px 0 2px',
-                    }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span>{String(hrsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
-                      </div>
-                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span>{String(minsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
-                      </div>
-                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ color: INDIGO }}>{String(secsUntil).padStart(2, '0')}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, color: INDIGO, letterSpacing: '.06em' }}>SEC</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
-                    <div style={{ width: `${untilPct}%`, height: '100%', borderRadius: 2, background: isOngoing ? PAL.mint : PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
-                  </div>
+                  <UpNextCountdown startsAt={upNext.starts_at} endsAt={upNext.ends_at} />
                 </>
               ) : (
                 <div style={{ margin: 'auto 0', textAlign: 'center' }}>
@@ -857,5 +806,79 @@ function Announcements({ phone }: { phone: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The seconds countdown, with its own timer.
+ *
+ * This used to be `setNow(Date.now())` on a 1s interval in HomePage, which
+ * re-rendered the entire page — every task row, event row, note, habit and
+ * project card — once a second in order to move three digits. Nothing else
+ * on the page needs second precision, so the timer belongs to the digits.
+ */
+function UpNextCountdown({ startsAt, endsAt }: { startsAt: string; endsAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const ongoing = new Date(startsAt).getTime() <= now;
+  const target = ongoing ? new Date(endsAt).getTime() : new Date(startsAt).getTime();
+  const total = Math.floor(Math.max(0, target - now) / 1000);
+  const hrs = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const pct = Math.max(4, Math.min(100, Math.round(((120 - Math.min(120, Math.round(total / 60))) / 120) * 100)));
+
+  return (
+    <>
+                  {/* Highly Visible Seconds Countdown Box */}
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
+                    background: `color-mix(in srgb, ${INDIGO} 18%, var(--card2))`,
+                    border: `1.5px solid color-mix(in srgb, ${INDIGO} 45%, transparent)`,
+                    boxShadow: `0 3px 12px color-mix(in srgb, ${INDIGO} 18%, transparent)`,
+                  }}>
+                    {/* Middle Aligned "Ends In" / "Starts In" Badge */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                      color: INDIGO, textAlign: 'center', width: '100%',
+                    }}>
+                      <Icon name="clock" size={12} color={INDIGO} />
+                      <span>{ongoing ? 'Ends in' : 'Starts in'}</span>
+                    </div>
+
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      fontSize: 25, fontWeight: 800, color: 'var(--tx)',
+                      fontVariantNumeric: 'tabular-nums', letterSpacing: '-.02em',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      padding: '4px 0 2px',
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span>{String(hrs).padStart(2, '0')}</span>
+                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>HRS</span>
+                      </div>
+                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span>{String(mins).padStart(2, '0')}</span>
+                        <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.06em' }}>MIN</span>
+                      </div>
+                      <span style={{ color: INDIGO, marginTop: -10 }}>:</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ color: INDIGO }}>{String(secs).padStart(2, '0')}</span>
+                        <span style={{ fontSize: 8.5, fontWeight: 700, color: INDIGO, letterSpacing: '.06em' }}>SEC</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${INDIGO} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
+                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: ongoing ? PAL.mint : PAL.indigo, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                  </div>
+    </>
   );
 }

@@ -84,9 +84,14 @@ export function PhoneHome({ name }: { name: string }) {
   const spent = txns.filter((t) => t.occurred_at.startsWith(month)).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
   const budget = budgets.reduce((s, b) => s + b.amount_centavos, 0);
 
+  // 15s, not 1s. `next` only has to change when an event ends, and the kicker
+  // only has to flip when one starts. The seconds are rendered by
+  // PhoneCountdown, which owns its own timer — ticking here once a second
+  // re-rendered the whole phone home screen, every task and event row on it,
+  // to move two digits.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -98,12 +103,6 @@ export function PhoneHome({ name }: { name: string }) {
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0] ?? null;
 
   const isNextOngoing = next ? new Date(next.starts_at).getTime() <= now : false;
-  const nextTargetTime = next ? (isNextOngoing ? new Date(next.ends_at).getTime() : new Date(next.starts_at).getTime()) : 0;
-  const nextDiffMs = next ? Math.max(0, nextTargetTime - now) : 0;
-  const nextTotalSecs = Math.floor(nextDiffMs / 1000);
-  const nextHrs = Math.floor(nextTotalSecs / 3600);
-  const nextMins = Math.floor((nextTotalSecs % 3600) / 60);
-  const nextSecs = nextTotalSecs % 60;
 
   // Eight rings: habits first, then the standing money/tasks dials.
   type Ring = { n: string; c: string; pct: number; ic: IconName; go: () => void };
@@ -211,9 +210,7 @@ export function PhoneHome({ name }: { name: string }) {
                   fontSize: 12, fontWeight: 800, color: 'var(--tx)', fontVariantNumeric: 'tabular-nums',
                 }}>
                   <Icon name="clock" size={11} color={next.color || PAL.sky} style={{ marginRight: 2 }} />
-                  {nextHrs > 0 && <span>{nextHrs}h </span>}
-                  <span>{String(nextMins).padStart(2, '0')}m </span>
-                  <span style={{ color: next.color || PAL.sky }}>{String(nextSecs).padStart(2, '0')}s</span>
+                  <PhoneCountdown startsAt={next.starts_at} endsAt={next.ends_at} color={next.color || PAL.sky} />
                 </div>
               )}
             </div>
@@ -575,4 +572,30 @@ function groupByDay(events: Ev[]): [string, Ev[]][] {
     map.set(day, [...(map.get(day) ?? []), e]);
   }
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/**
+ * The phone home countdown digits, with their own timer. Lifted out of
+ * PhoneHome so a per-second tick re-renders three spans instead of the whole
+ * screen.
+ */
+function PhoneCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt: string; color: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const ongoing = new Date(startsAt).getTime() <= now;
+  const target = ongoing ? new Date(endsAt).getTime() : new Date(startsAt).getTime();
+  const total = Math.floor(Math.max(0, target - now) / 1000);
+  const hrs = Math.floor(total / 3600);
+
+  return (
+    <>
+      {hrs > 0 && <span>{hrs}h </span>}
+      <span>{String(Math.floor((total % 3600) / 60)).padStart(2, '0')}m </span>
+      <span style={{ color }}>{String(total % 60).padStart(2, '0')}s</span>
+    </>
+  );
 }

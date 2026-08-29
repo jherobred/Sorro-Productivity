@@ -2,10 +2,44 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import katex from 'katex';
+import dynamic from 'next/dynamic';
 import { Icon, type IconName } from '../Icon';
-import { MathEquationEditor } from './MathEquationEditor';
-import { MathSketchpad } from './MathSketchpad';
+
+/**
+ * KaTeX and the two maths modals are loaded on demand.
+ *
+ * KaTeX is 260KB of JavaScript — the single heaviest thing in the app. It
+ * made /notebooks 139KB of route JS against 10-20KB for every other route,
+ * and every visit paid it whether or not a single note contained maths.
+ * Nothing here can import it at module scope or it lands back in the route
+ * chunk, which is also why these two modals are dynamic: both pull KaTeX in,
+ * and a static import of either would drag it along.
+ */
+const MathEquationEditor = dynamic(
+  () => import('./MathEquationEditor').then((m) => m.MathEquationEditor),
+  { ssr: false },
+);
+const MathSketchpad = dynamic(
+  () => import('./MathSketchpad').then((m) => m.MathSketchpad),
+  { ssr: false },
+);
+
+type Katex = (typeof import('katex'))['default'];
+let katexMod: Katex | null = null;
+let katexLoad: Promise<void> | null = null;
+
+/** Resolves to KaTeX once a note that actually contains maths is rendered. */
+function useKatex(needed: boolean): Katex | null {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!needed || katexMod) return;
+    let alive = true;
+    katexLoad ??= import('katex').then((m) => { katexMod = m.default; });
+    void katexLoad.then(() => { if (alive) bump((n) => n + 1); });
+    return () => { alive = false; };
+  }, [needed]);
+  return katexMod;
+}
 import { PAL } from '@/lib/pal';
 import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
@@ -468,6 +502,14 @@ function ReadView({
   onLink: (name: string) => void;
   known: (name: string) => boolean;
 }) {
+  // A '$' anywhere is a cheap superset of "this note might have maths": it
+  // can over-fetch, it cannot miss, and a miss would render source text.
+  const hasMath = useMemo(
+    () => lines.some((l) => l.kind === 'math' || l.text.includes('$')),
+    [lines],
+  );
+  const katex = useKatex(hasMath);
+
   const inline = (text: string) => spans(text).map((s, i) => {
     if (s.s === 'link') {
       return (
@@ -489,6 +531,8 @@ function ReadView({
       </code>
     );
     if (s.s === 'math') {
+      // Still fetching KaTeX: show the source, same as a parse failure does.
+      if (!katex) return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
       try {
         const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
         return <span key={i} dangerouslySetInnerHTML={{ __html: mathHtml }} style={{ padding: '0 2px' }} />;
@@ -512,6 +556,9 @@ function ReadView({
         if (l.kind === 'blank') return <div key={i} style={{ height: 12 }} />;
         if (l.kind === 'divider') return <hr key={i} style={{ border: 0, borderTop: '1px solid var(--line)', margin: '18px 0' }} />;
         if (l.kind === 'math') {
+          if (!katex) return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--tx3)', borderRadius: 8 }}>{`$$
+${l.text}
+$$`}</pre>;
           try {
             const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
             return (
