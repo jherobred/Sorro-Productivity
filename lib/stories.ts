@@ -261,9 +261,13 @@ function writeHighlightsStorage(items: Highlight[]) {
 // HOOKS
 // ----------------------------------------------------
 
-export function useAllStories(): StorySlide[] {
-  return useSyncExternalStore(
-    (onStoreChange) => {
+
+/**
+ * Hoisted, not inline arrows. useSyncExternalStore re-subscribes whenever
+ * subscribe changes identity, so arrows at the call sites made every render
+ * of every consumer drop the listener, re-add it and re-read the snapshot.
+ */
+const subscribeStories = (onStoreChange: () => void) => {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key === STORIES_LS_KEY) {
@@ -276,9 +280,30 @@ export function useAllStories(): StorySlide[] {
         listeners.delete(onStoreChange);
         window.removeEventListener('storage', onStorage);
       };
-    },
+};
+const storiesServer = () => DEFAULT_STORIES;
+
+const subscribeHighlights = (onStoreChange: () => void) => {
+      listeners.add(onStoreChange);
+      const onStorage = (e: StorageEvent) => {
+        if (e.key === HIGHLIGHTS_LS_KEY) {
+          cachedHighlightsRaw = undefined;
+          onStoreChange();
+        }
+      };
+      window.addEventListener('storage', onStorage);
+      return () => {
+        listeners.delete(onStoreChange);
+        window.removeEventListener('storage', onStorage);
+      };
+};
+const highlightsServer = () => DEFAULT_HIGHLIGHTS;
+
+export function useAllStories(): StorySlide[] {
+  return useSyncExternalStore(
+    subscribeStories,
     readStoriesStorage,
-    () => DEFAULT_STORIES
+    storiesServer
   );
 }
 
@@ -298,22 +323,9 @@ export function useUserStoryArchive(userId: string): StorySlide[] {
 
 export function useHighlights(userId?: string): Highlight[] {
   const all = useSyncExternalStore(
-    (onStoreChange) => {
-      listeners.add(onStoreChange);
-      const onStorage = (e: StorageEvent) => {
-        if (e.key === HIGHLIGHTS_LS_KEY) {
-          cachedHighlightsRaw = undefined;
-          onStoreChange();
-        }
-      };
-      window.addEventListener('storage', onStorage);
-      return () => {
-        listeners.delete(onStoreChange);
-        window.removeEventListener('storage', onStorage);
-      };
-    },
+    subscribeHighlights,
     readHighlightsStorage,
-    () => DEFAULT_HIGHLIGHTS
+    highlightsServer
   );
 
   return userId ? all.filter((h) => h.userId === userId) : all;

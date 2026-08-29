@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
 import { fromYmd } from './days';
 import { defineMutation, queryClient } from './offline';
@@ -98,17 +98,30 @@ if (typeof window !== 'undefined') {
   logsCache = loadLogs();
 }
 
-export function useHabitLogs(habitId?: string) {
-  const allLogs = useSyncExternalStore(
-    (onStoreChange) => {
-      logsListeners.add(onStoreChange);
-      return () => logsListeners.delete(onStoreChange);
-    },
-    () => logsCache,
-    () => []
-  );
 
-  return habitId ? allLogs.filter((l) => l.habit_id === habitId) : allLogs;
+/**
+ * Hoisted, not an inline arrow. useSyncExternalStore re-subscribes whenever
+ * subscribe changes identity, so an arrow at the call site made every render
+ * of every consumer drop its listener, re-add it and re-read the snapshot.
+ */
+const subscribeLogs = (onStoreChange: () => void) => {
+  logsListeners.add(onStoreChange);
+  return () => { logsListeners.delete(onStoreChange); };
+};
+const logsSnapshot = () => logsCache;
+
+/** One shared empty array — `() => []` handed React a new one every call. */
+const NO_LOGS: HabitLog[] = [];
+const noLogs = () => NO_LOGS;
+
+export function useHabitLogs(habitId?: string) {
+  const allLogs = useSyncExternalStore(subscribeLogs, logsSnapshot, noLogs);
+  // filter() allocates, so without this every render of a caller produced a
+  // new array and defeated any memoisation downstream of it.
+  return useMemo(
+    () => (habitId ? allLogs.filter((l) => l.habit_id === habitId) : allLogs),
+    [allLogs, habitId],
+  );
 }
 
 export function logHabitEntry(log: HabitLog) {

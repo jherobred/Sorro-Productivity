@@ -40,9 +40,14 @@ function writeStorage(views: Record<string, number>) {
   }
 }
 
-export function usePostViews(): Record<string, number> {
-  return useSyncExternalStore(
-    (onStoreChange) => {
+
+/**
+ * Hoisted, not an inline arrow. useSyncExternalStore re-subscribes whenever
+ * the subscribe function changes identity, so an arrow written at the call
+ * site made every render of every consumer remove its listener, add it back
+ * and re-read the snapshot.
+ */
+const subscribe = (onStoreChange: () => void) => {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key === LS_KEY) {
@@ -55,10 +60,12 @@ export function usePostViews(): Record<string, number> {
         listeners.delete(onStoreChange);
         window.removeEventListener('storage', onStorage);
       };
-    },
-    readStorage,
-    () => EMPTY_VIEWS
-  );
+};
+
+const serverSnapshot = () => EMPTY_VIEWS;
+
+export function usePostViews(): Record<string, number> {
+  return useSyncExternalStore(subscribe, readStorage, serverSnapshot);
 }
 
 export function recordPostView(itemId: string) {

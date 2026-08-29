@@ -28,13 +28,18 @@ export function dismiss(id: number) {
   if (toasts.length !== before) emit();
 }
 
+
+/**
+ * Hoisted, not an inline arrow. useSyncExternalStore re-subscribes whenever
+ * subscribe changes identity, so an arrow at the call site made every render
+ * of every consumer drop its listener, re-add it and re-read the snapshot.
+ */
+const subscribe = (cb: () => void) => {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+};
+const snapshot = () => toasts;
+
 export function useToasts(): Toast[] {
-  return useSyncExternalStore(
-    (cb) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    () => toasts,
-    () => toasts
-  );
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }

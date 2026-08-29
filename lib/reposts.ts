@@ -51,9 +51,14 @@ function writeStorage(items: RepostItem[]) {
   }
 }
 
-export function useReposts(): RepostItem[] {
-  return useSyncExternalStore(
-    (onStoreChange) => {
+
+/**
+ * Hoisted, not an inline arrow. useSyncExternalStore re-subscribes whenever
+ * the subscribe function changes identity, so an arrow written at the call
+ * site made every render of every consumer remove its listener, add it back
+ * and re-read the snapshot.
+ */
+const subscribe = (onStoreChange: () => void) => {
       listeners.add(onStoreChange);
       const onStorage = (e: StorageEvent) => {
         if (e.key === LS_KEY) {
@@ -66,10 +71,12 @@ export function useReposts(): RepostItem[] {
         listeners.delete(onStoreChange);
         window.removeEventListener('storage', onStorage);
       };
-    },
-    readStorage,
-    () => EMPTY_REPOSTS
-  );
+};
+
+const serverSnapshot = () => EMPTY_REPOSTS;
+
+export function useReposts(): RepostItem[] {
+  return useSyncExternalStore(subscribe, readStorage, serverSnapshot);
 }
 
 export function repostPost(args: {
