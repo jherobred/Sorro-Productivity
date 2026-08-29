@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
@@ -20,7 +21,14 @@ import { CaptureSheet, type CaptureKind } from './CaptureSheet';
 import { SearchPalette } from './SearchPalette';
 import { ShortcutsModal } from './ShortcutsModal';
 import { NotificationBell } from './NotificationBell';
-import { SettingsModal, type SettingsTab } from './SettingsModal';
+import type { SettingsTab } from './SettingsModal';
+/**
+ * SettingsModal is 1,400 lines and it was imported at module scope here, so
+ * it sat in the shared chunk every route pays for, to render a panel that is
+ * only on screen when someone opens settings. `type SettingsTab` stays a
+ * static type import - types erase, so it pulls nothing.
+ */
+const SettingsModal = dynamic(() => import('./SettingsModal').then((m) => m.SettingsModal), { ssr: false });
 import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';

@@ -186,8 +186,16 @@ function readStoriesStorage(): StorySlide[] {
     if (raw === cachedStoriesRaw) return cachedStoriesSnapshot;
     cachedStoriesRaw = raw;
     if (!raw) {
+      // Seed, and cache the string that was seeded — not the null that was
+      // read. This is a getSnapshot: React calls it repeatedly and requires
+      // the same reference back each time. Caching null meant the very next
+      // call read back the JSON just written here, missed the cache, and
+      // parsed a brand new array, so the snapshot changed identity under
+      // React and it warned about an infinite loop.
+      const seeded = JSON.stringify(DEFAULT_STORIES);
+      localStorage.setItem(STORIES_LS_KEY, seeded);
+      cachedStoriesRaw = seeded;
       cachedStoriesSnapshot = DEFAULT_STORIES;
-      localStorage.setItem(STORIES_LS_KEY, JSON.stringify(DEFAULT_STORIES));
       return cachedStoriesSnapshot;
     }
     cachedStoriesSnapshot = JSON.parse(raw);
@@ -217,8 +225,16 @@ function readHighlightsStorage(): Highlight[] {
     if (raw === cachedHighlightsRaw) return cachedHighlightsSnapshot;
     cachedHighlightsRaw = raw;
     if (!raw) {
+      // Seed, and cache the string that was seeded — not the null that was
+      // read. This is a getSnapshot: React calls it repeatedly and requires
+      // the same reference back each time. Caching null meant the very next
+      // call read back the JSON just written here, missed the cache, and
+      // parsed a brand new array, so the snapshot changed identity under
+      // React and it warned about an infinite loop.
+      const seeded = JSON.stringify(DEFAULT_HIGHLIGHTS);
+      localStorage.setItem(HIGHLIGHTS_LS_KEY, seeded);
+      cachedHighlightsRaw = seeded;
       cachedHighlightsSnapshot = DEFAULT_HIGHLIGHTS;
-      localStorage.setItem(HIGHLIGHTS_LS_KEY, JSON.stringify(DEFAULT_HIGHLIGHTS));
       return cachedHighlightsSnapshot;
     }
     cachedHighlightsSnapshot = JSON.parse(raw);

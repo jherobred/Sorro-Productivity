@@ -142,7 +142,22 @@ function read(): Prefs {
   }
 }
 
-let state: Prefs = DEFAULT_PREFS;
+/**
+ * Read once, at module load, not inside subscribe().
+ *
+ * subscribe() used to do `state = read()` on the first subscriber. React runs
+ * it between the first getSnapshot() and the check it makes straight after
+ * subscribing, so the snapshot changed identity underneath React on every
+ * mount: it warned "The result of getSnapshot should be cached to avoid an
+ * infinite loop" and re-rendered every usePrefs consumer an extra time, which
+ * on this app is the Shell and most of the routes under it.
+ *
+ * Reading here is safe for the static export because getServerSnapshot still
+ * returns DEFAULT_PREFS, so hydration matches the prerendered HTML and React
+ * swaps to the stored prefs on the render after. applyPrefs stays in
+ * subscribe, where a DOM write belongs — getSnapshot must stay pure.
+ */
+let state: Prefs = typeof window === 'undefined' ? DEFAULT_PREFS : read();
 let hydrated = false;
 const listeners = new Set<() => void>();
 
@@ -153,7 +168,6 @@ function subscribe(l: () => void) {
   // module scope keeps the server render deterministic.
   if (!hydrated) {
     hydrated = true;
-    state = read();
     applyPrefs(state);
     void hydrateFromServer();
   }

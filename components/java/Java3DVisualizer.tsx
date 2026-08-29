@@ -558,15 +558,34 @@ export function Java3DVisualizer({
     ctx.restore();
   }, [yaw, pitch, zoom, effectiveMode, frames, heap, series, activeLine]);
 
+  /**
+   * Draw when something changed, not sixty times a second forever.
+   *
+   * This was a bare requestAnimationFrame loop calling renderScene() on every
+   * frame for the life of the component, redrawing an identical static scene
+   * — a full isometric reprojection of every frame, heap cell and series
+   * point — at 60fps on a phone. It also depended on `renderScene`, whose
+   * useCallback lists the `frames`/`heap`/`series` props, and those are new
+   * identities on every render, so the effect tore down and re-registered
+   * constantly on top of it.
+   *
+   * The loop existed for one real reason: renderScene re-measures its parent
+   * each call, so polling was how a container resize got picked up. A
+   * ResizeObserver reports that directly, which leaves the draw to run only
+   * when its inputs actually change.
+   */
+  const renderRef = useRef(renderScene);
+  useEffect(() => { renderRef.current = renderScene; });
+
+  useEffect(() => { renderScene(); }, [renderScene]);
+
   useEffect(() => {
-    let animId: number;
-    const loop = () => {
-      renderScene();
-      animId = requestAnimationFrame(loop);
-    };
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [renderScene]);
+    const parent = canvasRef.current?.parentElement;
+    if (!parent) return;
+    const ro = new ResizeObserver(() => renderRef.current());
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div
