@@ -209,7 +209,7 @@ function StoryUserAvatar({
   const p = profiles[userId];
 
   if (p?.photo_url) {
-    return <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />;
+    return <img loading="lazy" decoding="async" src={p.photo_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />;
   }
 
   return (

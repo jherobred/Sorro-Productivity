@@ -145,7 +145,7 @@ export function Composer({ onClose, onPost }: {
                 <div key={im.path} style={{
                   position: 'relative', aspectRatio: '1', borderRadius: 12, overflow: 'hidden', background: 'var(--card2)',
                 }}>
-                  <img src={im.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <img loading="lazy" decoding="async" src={im.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   {/* The first one is the cover: it is the picture the feed
                       card shows and the only one a notification can carry. */}
                   {i === 0 && images.length > 1 && (

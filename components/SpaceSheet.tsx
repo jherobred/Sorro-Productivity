@@ -150,7 +150,7 @@ export function SpaceSheet({ space, me, onClose }: {
                     }}>
                       {who.photo
                         // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={who.photo} alt="" style={{
+                        ? <img loading="lazy" decoding="async" src={who.photo} alt="" style={{
                           width: '100%', height: '100%', objectFit: 'cover',
                           objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})`,
                         }} />

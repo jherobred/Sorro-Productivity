@@ -543,7 +543,7 @@ function ReadView({
     if (s.s === 'image') {
       return (
         <span key={i} style={{ display: 'block', margin: '14px 0', textAlign: 'center' }}>
-          <img src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
+          <img loading="lazy" decoding="async" src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
         </span>
       );
     }
@@ -586,7 +586,7 @@ $$`}</pre>;
         if (l.kind === 'sketch') {
           return (
             <div key={i} style={{ margin: '16px 0', textAlign: 'center' }}>
-              <img src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
+              <img loading="lazy" decoding="async" src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
             </div>
           );
         }

@@ -114,7 +114,7 @@ export function MealSheet({
         </div>
 
         {preview ? (
-          <img src={preview} alt="" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 13, marginBottom: 12 }} />
+          <img loading="lazy" decoding="async" src={preview} alt="" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 13, marginBottom: 12 }} />
         ) : (
           <label style={{
             display: 'grid', placeItems: 'center', gap: 7, padding: '26px 16px', marginBottom: 12,

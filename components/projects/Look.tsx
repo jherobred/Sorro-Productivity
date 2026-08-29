@@ -89,7 +89,7 @@ export function FolderIcon({
         {emoji && <span style={{ fontSize: Math.round(size * 0.32), lineHeight: 1 }}>{emoji}</span>}
         {path && url && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img loading="lazy" decoding="async" src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         )}
         {!name && !emoji && !path && count > 0 && (
           <span style={{ fontSize: 10, fontWeight: 800, color: '#0C0F16', opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
@@ -117,7 +117,7 @@ export function Cover({ cover, color, children }: { cover?: string; color: strin
     }}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img loading="lazy" decoding="async" src={url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       )}
       {/* The header sits on top, so the bottom has to stay dark enough to read
           white text on any picture somebody uploads. */}

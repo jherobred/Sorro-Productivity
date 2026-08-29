@@ -254,7 +254,7 @@ export default function Onboarding() {
           }}>
             {photo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photo} alt="" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
+              <img loading="lazy" decoding="async" src={photo} alt="" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
             ) : (
               <span style={{ flex: 'none' }}>
                 {animal && <Mascot id="me" animal={animal} mood="blazing" hue={hue} size={52} />}

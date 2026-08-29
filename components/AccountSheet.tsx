@@ -257,7 +257,7 @@ function Kicker({ children }: { children: React.ReactNode }) {
 export function Face({ name, photo, size }: { name: string; photo: string | null; size: number }) {
   if (photo) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={photo} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />;
+    return <img loading="lazy" decoding="async" src={photo} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />;
   }
   const initials = (name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return (

@@ -241,7 +241,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
           {stage === 'scanning' && (
             <div style={{ display: 'grid', placeItems: 'center', gap: 14, padding: '46px 20px', textAlign: 'center' }}>
               {preview && (
-                <img src={preview} alt="" style={{ maxWidth: 260, maxHeight: 180, borderRadius: 12, opacity: 0.5 }} />
+                <img loading="lazy" decoding="async" src={preview} alt="" style={{ maxWidth: 260, maxHeight: 180, borderRadius: 12, opacity: 0.5 }} />
               )}
               <div className="k-pulse" style={{ fontSize: 13, fontWeight: 700 }}>Reading it…</div>
               <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>

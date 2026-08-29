@@ -252,7 +252,7 @@ export function HighlightEditorModal({
                 placeItems: 'center',
               }}>
                 {coverUrl ? (
-                  <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img loading="lazy" decoding="async" src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <span style={{ fontSize: 32 }}>✨</span>
                 )}

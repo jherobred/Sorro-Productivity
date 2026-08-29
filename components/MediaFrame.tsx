@@ -44,11 +44,11 @@ export function MediaFrame({
       {src ? (
         <>
           {/* Blurred fill behind, so the bars read as part of the picture. */}
-          <img aria-hidden src={src} alt="" style={{
+          <img decoding="async" aria-hidden src={src} alt="" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', filter: 'blur(28px) saturate(1.5)', transform: 'scale(1.15)', opacity: 0.55,
           }} />
-          <img src={src} alt={alt} className="fade" style={{
+          <img decoding="async" src={src} alt={alt} className="fade" style={{
             position: 'relative', width: '100%', height: '100%',
             objectFit: 'contain', display: 'block',
           }} />
@@ -231,7 +231,7 @@ export function Lightbox({
             touchAction: 'none', cursor: z.k > 1 ? (drag.current ? 'grabbing' : 'grab') : 'zoom-in',
           }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.src} alt={item.alt} className="k-zoomfade" draggable={false}
+          <img decoding="async" src={item.src} alt={item.alt} className="k-zoomfade" draggable={false}
             style={{
               maxWidth: '100%', maxHeight: '82dvh', objectFit: 'contain', display: 'block',
               transform: `translate(${z.x}px, ${z.y}px) scale(${z.k})`,

@@ -274,7 +274,7 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
     }
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={alt} className="k-zoomfade"
+      <img loading="lazy" decoding="async" src={url} alt={alt} className="k-zoomfade"
         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
     );
   }
@@ -296,7 +296,7 @@ function Photos({ paths, alt }: { paths: string[]; alt: string }) {
           <div key={path} style={{ scrollSnapAlign: 'center', display: 'grid', placeItems: 'center', minWidth: 0 }}>
             {urls[i] ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={urls[i] as string} alt={i === 0 ? alt : `${alt} (${i + 1} of ${paths.length})`}
+              <img loading="lazy" decoding="async" src={urls[i] as string} alt={i === 0 ? alt : `${alt} (${i + 1} of ${paths.length})`}
                 style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
             ) : (
               <Icon name="image" size={26} color="var(--tx3)" />
@@ -320,7 +320,7 @@ function Face({ id, profiles, me, size }: { id: string; profiles: Record<string,
   const who = displayOf(profiles, id, me);
   if (who.photo) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
+    return <img loading="lazy" decoding="async" src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{

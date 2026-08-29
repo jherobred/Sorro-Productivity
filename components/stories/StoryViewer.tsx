@@ -455,7 +455,7 @@ export function StoryViewer({
               fontSize: 16,
             }}>
               {profiles[activeUserId]?.photo_url ? (
-                <img src={profiles[activeUserId].photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img loading="lazy" decoding="async" src={profiles[activeUserId].photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 who.animal || '🦝'
               )}
@@ -886,7 +886,7 @@ export function StoryViewer({
                     background: '#222',
                   }}>
                     {hl.coverUrl ? (
-                      <img src={hl.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img loading="lazy" decoding="async" src={hl.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 20 }}>
                         ✨

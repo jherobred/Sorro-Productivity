@@ -676,7 +676,7 @@ export default function CommunityPage() {
                           style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', minWidth: 0, flex: 1 }}
                         >
                           {s.photo ? (
-                            <img src={s.photo} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+                            <img loading="lazy" decoding="async" src={s.photo} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
                           ) : (
                             <span style={{
                               width: 38, height: 38, borderRadius: '50%', background: 'var(--card2)',
@@ -1136,7 +1136,7 @@ function Avatar({
 }: { id: string; profiles: Record<string, import('@/lib/people').Person>; me: string; size: number }) {
   const who = displayOf(profiles, id, me);
   if (who.photo) {
-    return <img src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
+    return <img loading="lazy" decoding="async" src={who.photo} alt="" style={{ width: size, height: size, flex: 'none', borderRadius: '50%', objectFit: 'cover', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{

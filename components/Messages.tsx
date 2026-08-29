@@ -134,7 +134,7 @@ export function Avatar({ who, size, ring }: { who: Display; size: number; ring?:
   };
   if (who.photo) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={who.photo} alt="" style={{ ...common, objectFit: 'cover', display: 'block', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
+    return <img loading="lazy" decoding="async" src={who.photo} alt="" style={{ ...common, objectFit: 'cover', display: 'block', objectPosition: `${who.fit.x}% ${who.fit.y}%`, transform: `scale(${who.fit.zoom})` }} />;
   }
   return (
     <span aria-hidden style={{
@@ -738,7 +738,7 @@ function SharedImage({ path }: { path: string }) {
     <span style={{ display: 'block', aspectRatio: '4 / 3', background: 'var(--card)' }}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" onClick={(e) => { e.stopPropagation(); setZoom(true); }}
+        <img loading="lazy" decoding="async" src={url} alt="" onClick={(e) => { e.stopPropagation(); setZoom(true); }}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }} />
       )}
       {zoom && (
@@ -782,7 +782,7 @@ function AttachedFile({
           style={{ display: 'block', maxWidth: '78%', borderRadius: 14, overflow: 'hidden', background: 'var(--card2)', cursor: 'zoom-in' }}>
           {url && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt={name} style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />
+            <img loading="lazy" decoding="async" src={url} alt={name} style={{ display: 'block', width: '100%', maxHeight: 260, objectFit: 'cover' }} />
           )}
         </button>
         {zoom && (
