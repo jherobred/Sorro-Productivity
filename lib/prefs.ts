@@ -12,6 +12,8 @@ export type Prefs = {
   motion: boolean;
   navPicks: string[];
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
+  /** How the Tasks page lays its rows out. See app/(shell)/tasks/page.tsx. */
+  taskView: 'groups' | 'list' | 'table' | 'board';
   sidebar: 'open' | 'compact' | 'hidden' | 'collapsed';
   /** Which of the five shells draws the chrome. See lib/shellLayouts.ts. */
   shellLayout: ShellLayout;
@@ -61,6 +63,7 @@ export const DEFAULT_PREFS: Prefs = {
   motion: true,
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
   calView: 'week',
+  taskView: 'groups',
   sidebar: 'open',
   shellLayout: DEFAULT_SHELL,
   workspace: null,

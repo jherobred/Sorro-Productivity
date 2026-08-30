@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/Icon';
@@ -10,6 +10,8 @@ import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useRegisterSidePanel } from '@/lib/sidePanel';
+import { TabRail } from '@/components/TabRail';
+import { TaskTable } from '@/components/tasks/TaskTable';
 import { useLayout } from '@/lib/useLayout';
 import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task, type List } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
@@ -63,7 +65,7 @@ function dueInfo(due: string | null): { late: number; label: string } {
 
 export default function TasksPage() {
   const { phone } = useLayout();
-  const { prefs } = usePrefs();
+  const { prefs, update } = usePrefs();
   const { data: lists = [] } = useLists();
   const { data: tasks = [], isPending } = useTasks();
   const A = useTaskActions();
@@ -90,6 +92,7 @@ export default function TasksPage() {
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
   const [order, setOrder] = useState<'Due' | 'Priority' | 'Stars' | 'Title'>('Due');
+  const view = prefs.taskView ?? 'groups';
   const [showCompleted, setShowCompleted] = useState(false);
 
   // Google Tasks Date Picker Modal state
@@ -129,11 +132,40 @@ export default function TasksPage() {
       : order === 'Title' ? a.task.title.localeCompare(b.task.title)
       : (a.task.due_on ?? '9999').localeCompare(b.task.due_on ?? '9999'));
 
-  const groups = [
-    { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}`, empty: 'Nothing late.' },
-    { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight', empty: 'Nothing due today.' },
-    { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week', empty: 'Nothing scheduled yet.' },
-  ];
+  /**
+   * Which buckets the rows fall into is the view. Groups asks "when", board
+   * asks "where", list asks nothing and just sorts — and all three render with
+   * the same row, so a swipe or an inline edit behaves identically in each.
+   * Only the table needs its own markup, and it says why in its own file.
+   */
+  type Group = { n: string; items: Row[]; tint: string; note: string; empty: string };
+  const groups: Group[] = useMemo(() => {
+    if (view === 'list') {
+      return [{
+        n: 'All open', items: ordered(rows), tint: PAL.indigo,
+        note: `By ${order.toLowerCase()}`, empty: 'Nothing open.',
+      }];
+    }
+    if (view === 'board') {
+      const cols = lists.map((l) => ({
+        n: l.name, tint: l.color || PAL.indigo,
+        items: ordered(rows.filter((r) => r.task.list_id === l.id)),
+        note: `By ${order.toLowerCase()}`, empty: 'Empty.',
+      }));
+      const loose = ordered(rows.filter((r) => !r.task.list_id));
+      // Tasks with no list still have to be somewhere, or the board quietly
+      // shows fewer tasks than the count above it claims.
+      if (loose.length) cols.unshift({ n: 'Inbox', tint: PAL.indigo, items: loose, note: `By ${order.toLowerCase()}`, empty: 'Empty.' });
+      return cols;
+    }
+    return [
+      { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}`, empty: 'Nothing late.' },
+      { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight', empty: 'Nothing due today.' },
+      { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week', empty: 'Nothing scheduled yet.' },
+    ];
+    // `ordered` closes over `order`, which is in the dep list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, rows, order, lists]);
 
   const complete = (r: Row) => {
     if (leaving.has(r.task.id)) return;
@@ -149,10 +181,20 @@ export default function TasksPage() {
   return (
     <Page
       name="My Tasks"
-      width="list"
+      width={view === 'table' || view === 'board' ? 'wide' : 'list'}
       meta={`${rows.length} open across every list`}
       actions={
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <TabRail
+            label="Task view"
+            tabs={[
+              { id: 'groups', label: 'Groups', icon: 'layers' },
+              { id: 'list', label: 'List', icon: 'list' },
+              { id: 'table', label: 'Table', icon: 'grid' },
+              { id: 'board', label: 'Board', icon: 'proj' },
+            ] as const}
+            value={view}
+            onChange={(v) => void update({ taskView: v })} />
           <button
             className="hov k-squish"
             title={`Sorted by ${order.toLowerCase()} — click to change`}
@@ -179,13 +221,32 @@ export default function TasksPage() {
       {/* Loading Skeleton */}
       {isPending && <TasksSkeleton tints={[PAL.coral, PAL.amber, PAL.mint]} />}
 
-      {/* Task Groups */}
-      <div data-tour="tasks-columns">
-        {!isPending && groups.map((g) => (
+      {/* The table is the one view that is not a stack of buckets. */}
+      {!isPending && view === 'table' && (
+        <TaskTable
+          rows={rows} phone={phone}
+          onOpen={(t) => setDetail(t.id)}
+          onCheck={(t) => A.complete.mutate({ id: t.id, done: true })} />
+      )}
+
+      {/* Task Groups. Board is the same buckets turned on their side, so the
+          columns scroll sideways and each one keeps its own height. */}
+      <div data-tour="tasks-columns" className={view === 'board' ? 'hbar' : undefined}
+        style={view === 'board' ? {
+          display: 'flex', gap: 12, alignItems: 'flex-start',
+          overflowX: 'auto', overflowY: 'hidden', paddingBottom: 6,
+        } : undefined}>
+        {!isPending && view !== 'table' && groups.map((g) => (
           <div key={g.n}
             style={{
               background: 'var(--card, #1E1F22)', borderRadius: 20, padding: '14px 14px 6px', marginTop: 14,
               boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 30%, transparent)`,
+              ...(view === 'board'
+                // 300px left the title about 120px once the row had reserved
+                // its checkbox, stars and due chip, and "problem set 4" wrapped
+                // one character at a time. The row needs ~200px to read.
+                ? { flex: '0 0 360px', width: 360, marginTop: 14, alignSelf: 'stretch' }
+                : null),
             }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, padding: '0 4px' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: g.tint }} />
