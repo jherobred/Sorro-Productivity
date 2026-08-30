@@ -518,9 +518,15 @@ body {
 .k-squish:active {
   transform: scale(0.96);
 }
-.nomo .k-squish,
+/* These were one rule: `.nomo .k-squish,` followed by an @media. A selector
+   list cannot be terminated by an at-rule, so the parser dropped the lot and
+   neither half ever applied. */
+.nomo .k-squish {
+  transition: none !important;
+  transform: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
-  .k-squish {
+  :root:not([data-motion='on']) .k-squish {
     transition: none !important;
     transform: none !important;
   }

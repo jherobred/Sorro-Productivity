@@ -421,12 +421,21 @@
 .nomo :is(.mc-dust, .mc-zoom) { opacity: .3; }
 .nomo :is(.tr-walk, .tr-fill) { transition: none; }
 
+/* Every rule here is guarded on data-motion="on", the same way globals.css
+   guards its block and for the same reason: the OS hint decides the *default*,
+   and the product setting overrides it. Unguarded, the `*` rule below squashed
+   every animation in the app to 0.01ms on any machine whose OS asks for reduced
+   motion — which on Windows is a common default — so the in-app motion toggle
+   did nothing and the mascots rendered frozen at 30% opacity. `.nomo` still
+   covers the case where the user has actually turned motion off. */
 @media (prefers-reduced-motion: reduce) {
-  :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom) { animation: none !important; }
-  .mc.race { transform: rotate(7deg) !important; }
-  :is(.mc-dust, .mc-zoom) { opacity: .3 !important; }
-  :is(.tr-walk, .tr-fill) { transition: none !important; }
-  *, *::before, *::after {
+  :root:not([data-motion='on']) :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom) { animation: none !important; }
+  :root:not([data-motion='on']) .mc.race { transform: rotate(7deg) !important; }
+  :root:not([data-motion='on']) :is(.mc-dust, .mc-zoom) { opacity: .3 !important; }
+  :root:not([data-motion='on']) :is(.tr-walk, .tr-fill) { transition: none !important; }
+  :root:not([data-motion='on']) *,
+  :root:not([data-motion='on']) *::before,
+  :root:not([data-motion='on']) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
