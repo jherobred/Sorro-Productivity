@@ -41,6 +41,8 @@ export function HabitCreatorModal({
 
   const [tab, setTab] = useState<'preset' | 'custom'>(initial ? 'custom' : 'preset');
   const [name, setName] = useState(initial?.name ?? '');
+  const [shortName, setShortName] = useState(initial?.short_name ?? '');
+  const [showInHome, setShowInHome] = useState(initial?.show_in_home ?? true);
   const [category, setCategory] = useState<HabitCategory>(initial?.category ?? 'health');
   const [color, setColor] = useState(initial?.color ?? '#7C6CFF');
   const [icon, setIcon] = useState(initial?.icon ?? 'check');
@@ -53,6 +55,8 @@ export function HabitCreatorModal({
 
   const applyPreset = (p: HabitPreset) => {
     setName(p.name);
+    setShortName(p.name.split(' ')[0]);
+    setShowInHome(true);
     setCategory(p.category);
     setColor(p.color);
     setIcon(p.icon);
@@ -69,6 +73,8 @@ export function HabitCreatorModal({
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
       name: name.trim(),
+      short_name: shortName.trim() || name.trim().split(' ')[0],
+      show_in_home: showInHome,
       color,
       kind,
       target: kind === 'bin' ? 1 : target,
@@ -249,7 +255,12 @@ export function HabitCreatorModal({
               </label>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (!shortName || shortName === name.split(' ')[0]) {
+                    setShortName(e.target.value.split(' ')[0] || '');
+                  }
+                }}
                 placeholder="e.g. Read 20 Pages, Drink 2L Water, 100 Pushups..."
                 autoFocus
                 style={{
@@ -263,6 +274,65 @@ export function HabitCreatorModal({
                   color: 'var(--tx)',
                 }}
               />
+            </div>
+
+            {/* Home View Display Settings */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.2fr 1fr',
+                gap: 10,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                borderRadius: 12,
+                padding: '10px 12px',
+              }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 4 }}>
+                  SHORTEST 1-WORD NAME (HOME)
+                </label>
+                <input
+                  value={shortName}
+                  onChange={(e) => setShortName(e.target.value.trim().split(' ')[0] || '')}
+                  placeholder="e.g. Water, Gym, Read"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: 9,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card)',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: 'var(--tx)',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 6 }}>
+                  HOME PHONE VIEW
+                </label>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--tx)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showInHome}
+                    onChange={(e) => setShowInHome(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: color, cursor: 'pointer' }}
+                  />
+                  Show in Home
+                </label>
+              </div>
             </div>
 
             {/* Category selection */}

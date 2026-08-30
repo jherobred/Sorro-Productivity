@@ -23,6 +23,8 @@ export * from './habitTypes';
 export type Habit = {
   id: string;
   name: string;
+  short_name?: string;
+  show_in_home?: boolean;
   color: string;
   kind: HabitKind;
   target: number | null;
@@ -222,6 +224,8 @@ export function useHabits() {
         const extra = meta[h.id] || {};
         return {
           ...h,
+          short_name: extra.short_name ?? '',
+          show_in_home: extra.show_in_home ?? true,
           category: extra.category ?? 'health',
           frequency: extra.frequency ?? 'daily',
           custom_days: extra.custom_days,
@@ -409,6 +413,8 @@ const TICK = defineMutation('habit.tick', async (v: { habitId: string; date: str
 const CREATE = defineMutation('habit.create', async (v: {
   id: string;
   name: string;
+  short_name?: string;
+  show_in_home?: boolean;
   color: string;
   kind?: HabitKind;
   target?: number | null;
@@ -432,6 +438,8 @@ const CREATE = defineMutation('habit.create', async (v: {
 
   const meta = getLocalMeta();
   meta[v.id] = {
+    short_name: v.short_name,
+    show_in_home: v.show_in_home ?? true,
     category: v.category ?? 'health',
     frequency: v.frequency ?? 'daily',
     time_of_day: v.time_of_day ?? 'anytime',

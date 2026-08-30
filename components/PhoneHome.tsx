@@ -168,6 +168,8 @@ export function PhoneHome({ name }: { name: string }) {
 
   const displayedTasks = tasksExpanded ? open : open.slice(0, 4);
 
+  const homeHabits = habits.filter((h) => !h.archived_at && h.show_in_home !== false);
+
   if (isPending) {
     return (
       <div style={{ padding: '6px 14px 26px' }}>
@@ -177,250 +179,23 @@ export function PhoneHome({ name }: { name: string }) {
   }
 
   return (
-    <div style={{ padding: '6px 14px 26px' }}>
-      {/* Top Header */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-        <button
-          onClick={() => router.push('/habits/')}
-          className="glowring"
-          title="Habit rings"
-          style={{
-            position: 'relative',
-            width: 38,
-            height: 38,
-            borderRadius: '50%',
-            flex: 'none',
-            display: 'grid',
-            placeItems: 'center',
-            background: `color-mix(in srgb, ${prefs.accent} 18%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${prefs.accent} 40%, transparent)`,
-          }}
-        >
-          <span
-            className="glowspin"
-            aria-hidden
-            style={{
-              position: 'absolute',
-              inset: -3,
-              borderRadius: '50%',
-              background: `conic-gradient(from 0deg, transparent, ${prefs.accent}, transparent)`,
-              opacity: 0.5,
-              pointerEvents: 'none',
-            }}
-          />
-          <Icon name="habit" size={16} color="var(--accTx)" />
-        </button>
-
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.04em' }}>basedly</div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
-            {greeting()}{name ? `, ${name.split(' ')[0]}` : ''}
-          </div>
+    <div style={{ padding: '6px 14px 28px' }}>
+      {/* Top Header without side icon buttons */}
+      <div style={{ textAlign: 'center', margin: '6px 0 14px' }}>
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.04em', color: 'var(--tx)' }}>basedly</div>
+        <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
+          {greeting()}{name ? `, ${name.split(' ')[0]}` : ''}
         </div>
-
-        <button
-          onClick={() => setFocusOpen(true)}
-          className="k-squish"
-          title="Focus Station"
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: '50%',
-            flex: 'none',
-            display: 'grid',
-            placeItems: 'center',
-            background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--acc) 35%, transparent)',
-            color: 'var(--accTx)',
-          }}
-        >
-          <Icon name="clock" size={16} color="var(--accTx)" />
-        </button>
       </div>
 
-      {/* Expandable Today's Rings Widget (Replaces TabRail) */}
-      <div
-        style={{
-          ...CARD,
-          marginBottom: 12,
-          padding: '12px 14px 6px',
-          background: 'var(--card)',
-          border: '1px solid var(--line2)',
-        }}
-      >
-        <AnimatePresence initial={false}>
-          {!ringsExpanded ? (
-            /* Collapsed Grid of Rings */
-            <motion.div
-              key="collapsed-rings"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))',
-                gap: '8px 4px',
-                paddingBottom: 4,
-              }}
-            >
-              {rings.map((r) => {
-                const circ = 2 * Math.PI * 26;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={r.go}
-                    title={r.n}
-                    className="k-squish"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 2,
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'relative',
-                        width: 50,
-                        height: 50,
-                        display: 'grid',
-                        placeItems: 'center',
-                      }}
-                    >
-                      <svg
-                        viewBox="0 0 64 64"
-                        style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}
-                      >
-                        <circle
-                          cx="32"
-                          cy="32"
-                          r="26"
-                          fill="none"
-                          stroke="rgba(150,165,200,.14)"
-                          strokeWidth="5"
-                        />
-                        <circle
-                          cx="32"
-                          cy="32"
-                          r="26"
-                          fill="none"
-                          stroke={r.c}
-                          strokeWidth="5"
-                          strokeLinecap="round"
-                          strokeDasharray={circ}
-                          strokeDashoffset={circ * (1 - r.pct)}
-                          style={{ transition: 'stroke-dashoffset .5s cubic-bezier(.22,1,.36,1)' }}
-                        />
-                      </svg>
-                      <Icon name={r.ic} size={15} color={r.c} />
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 8.5,
-                        fontWeight: 700,
-                        color: 'var(--tx3)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      {r.n}
-                    </span>
-                  </button>
-                );
-              })}
-            </motion.div>
-          ) : (
-            /* Expanded Vertical Layout with Progress Bars & Details */
-            <motion.div
-              key="expanded-rings"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 9, paddingBottom: 6 }}
-            >
-              {rings.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={r.go}
-                  className="hov k-squish"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '8px 10px',
-                    borderRadius: 12,
-                    background: 'var(--card2)',
-                    border: '1px solid var(--line)',
-                    textAlign: 'left',
-                    width: '100%',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: `color-mix(in srgb, ${r.c} 18%, transparent)`,
-                      display: 'grid',
-                      placeItems: 'center',
-                      flex: 'none',
-                    }}
-                  >
-                    <Icon name={r.ic} size={16} color={r.c} />
-                  </span>
+      {/* 1. Upcoming Tasks Sliding Carousel */}
+      <UpcomingTasksCarousel
+        tasks={tasks}
+        todayISO={today}
+        style={{ width: '100%', minHeight: 165, marginBottom: 12 }}
+      />
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)' }}>{r.n}</span>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: r.pct >= 1 ? PAL.mint : 'var(--tx3)' }}>
-                        {r.pct >= 1 ? '100%' : `${Math.round(r.pct * 100)}%`}
-                      </span>
-                    </div>
-
-                    <div style={{ marginTop: 5 }}>
-                      <AsciiBar value={Math.min(100, Math.round(r.pct * 100))} cells={22} size={11}
-                        hue={r.c} showValue={false} label={r.n} />
-                    </div>
-
-                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>{r.detail}</div>
-                  </div>
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Wide partially invisible chevron button at the bottom */}
-        <button
-          type="button"
-          onClick={() => setRingsExpanded(!ringsExpanded)}
-          aria-label={ringsExpanded ? 'Collapse rings' : 'Expand rings'}
-          className="k-squish"
-          style={{
-            width: '100%',
-            height: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'transparent',
-            border: 'none',
-            opacity: 0.5,
-            cursor: 'pointer',
-            marginTop: 2,
-          }}
-        >
-          {ringsExpanded ? <ChevronUp size={14} color="var(--tx3)" /> : <ChevronDown size={14} color="var(--tx3)" />}
-        </button>
-      </div>
-
-      {/* Up Next Card */}
+      {/* 2. Happening now / Up next Card */}
       <div
         style={{
           ...CARD,
@@ -429,6 +204,7 @@ export function PhoneHome({ name }: { name: string }) {
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
+          marginBottom: 10,
           padding: '13px 15px',
           border: `1.5px solid color-mix(in srgb, ${next?.color || PAL.sky} 35%, var(--line2))`,
         }}
@@ -641,12 +417,12 @@ export function PhoneHome({ name }: { name: string }) {
         </div>
       </div>
 
-      {/* Rest of the day: Vertical 3h preview with 5h expand chevron */}
+      {/* 3. Today's Schedule: Vertical 3h preview with 5h expand chevron */}
       {todaysEvents.length > 0 && (
         <div
           style={{
             ...CARD,
-            marginTop: 8,
+            marginBottom: 14,
             padding: '12px 14px',
             background: 'color-mix(in srgb, var(--panel) 62%, transparent)',
             border: '1px solid var(--line)',
@@ -657,7 +433,9 @@ export function PhoneHome({ name }: { name: string }) {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={KICKER}>Today's Schedule</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>{todaysEvents.length} event{todaysEvents.length === 1 ? '' : 's'}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>
+              {todaysEvents.length} event{todaysEvents.length === 1 ? '' : 's'}
+            </span>
           </div>
 
           {/* Vertical hour preview */}
@@ -768,149 +546,126 @@ export function PhoneHome({ name }: { name: string }) {
         </div>
       )}
 
-      {/* Upcoming Tasks Sliding Carousel */}
-      <UpcomingTasksCarousel
-        tasks={tasks}
-        todayISO={today}
-        style={{ width: '100%', minHeight: 165, marginTop: 10 }}
-      />
-
-      {/* Tasks List (No Titles, Auto adjust to fit 4 with Show More) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-        {displayedTasks.map((t) => (
-          <div key={t.id} className={leaving.has(t.id) ? 'leaving' : ''} style={{ borderRadius: 14, overflow: 'hidden' }}>
-            <SwipeableRow
-              onSwipeRight={() => complete(t)}
-              onSwipeLeft={() => TA.removeWithUndo(t)}
-              rightActionIcon="check"
-              rightActionColor="var(--pal-mint)"
-              leftActionIcon="trash"
-              leftActionColor="var(--pal-coral)"
-            >
-              <div
-                className="lensrow"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '11px 13px',
-                  background: 'var(--card)',
-                  boxShadow: 'var(--sh)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 14,
-                }}
-              >
-                <button
-                  onClick={() => router.push('/tasks/')}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    textAlign: 'left',
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      color: 'var(--tx)',
-                    }}
-                  >
-                    {t.title}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
-                    {[1, 2, 3, 4, 5].map((v) => (
-                      <span
-                        key={v}
-                        style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: 3,
-                          background: v <= (t.stars || 0) ? 'var(--accTx)' : 'var(--line2)',
-                        }}
-                      />
-                    ))}
-                  </div>
-                </button>
-                <button
-                  onClick={() => complete(t)}
-                  title="Complete"
-                  className="k-squish"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    flex: 'none',
-                    borderRadius: '50%',
-                    border: '1.6px solid var(--line2)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                  }}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'transparent' }} />
-                </button>
-              </div>
-            </SwipeableRow>
-          </div>
-        ))}
-
-        {open.length > 4 && (
+      {/* 4. Habits: 2 Columns of Square Buttons */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingInline: 2 }}>
+          <span style={KICKER}>Habits</span>
           <button
-            type="button"
-            onClick={() => setTasksExpanded(!tasksExpanded)}
+            onClick={() => router.push('/habits/')}
+            style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: 'var(--tx3)', cursor: 'pointer' }}
+          >
+            View all →
+          </button>
+        </div>
+
+        {homeHabits.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {homeHabits.map((h) => {
+              const isDone = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
+              const displayName = h.short_name?.trim() || h.name.split(' ')[0] || h.name;
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => {
+                    playTick();
+                    HA.tick.mutate({ habitId: h.id, date: today });
+                  }}
+                  className="hov k-squish"
+                  style={{
+                    aspectRatio: '1 / 1',
+                    borderRadius: 18,
+                    border: `1.5px solid ${isDone ? h.color : 'color-mix(in srgb, ' + h.color + ' 30%, var(--line2))'}`,
+                    background: isDone
+                      ? `color-mix(in srgb, ${h.color} 22%, var(--card))`
+                      : 'var(--card)',
+                    boxShadow: isDone
+                      ? `0 0 20px color-mix(in srgb, ${h.color} 30%, transparent), var(--sh)`
+                      : 'var(--sh)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                    padding: 12,
+                    position: 'relative',
+                    transition: 'all 0.25s ease',
+                  }}
+                >
+                  {isDone ? (
+                    <motion.div
+                      key="checked"
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 22 }}
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: '50%',
+                        background: h.color,
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: '#0C0F16',
+                        boxShadow: `0 3px 14px color-mix(in srgb, ${h.color} 45%, transparent)`,
+                      }}
+                    >
+                      <Icon name="check" size={28} color="#0C0F16" />
+                    </motion.div>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 13,
+                          background: `color-mix(in srgb, ${h.color} 18%, transparent)`,
+                          display: 'grid',
+                          placeItems: 'center',
+                        }}
+                      >
+                        <Icon name={(h.icon as IconName) || 'spark'} size={20} color={h.color} />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          letterSpacing: '-.02em',
+                          color: 'var(--tx)',
+                          textAlign: 'center',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {displayName}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <button
+            onClick={() => router.push('/habits/')}
             className="hov k-squish"
             style={{
-              padding: '7px 12px',
-              borderRadius: 10,
+              width: '100%',
+              padding: '16px',
+              borderRadius: 16,
               background: 'var(--card2)',
-              border: '1px solid var(--line2)',
-              color: 'var(--tx2)',
-              fontSize: 11.5,
+              border: '1px dashed var(--line2)',
+              textAlign: 'center',
+              color: 'var(--tx3)',
+              fontSize: 12,
               fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
               cursor: 'pointer',
             }}
           >
-            <span>{tasksExpanded ? 'Show Less' : `Show More (${open.length - 4})`}</span>
-            {tasksExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            + Add or configure habits for Home
           </button>
         )}
-
-        {open.length === 0 && <Empty>Nothing on your plate.</Empty>}
-      </div>
-
-      {/* Note Journal Shortcut in Home Phone View using MorphingPopover & MorphingDialog */}
-      <div style={{ marginTop: 12 }}>
-        <PhoneJournalShortcut
-          scratch={scratch}
-          onSave={(text, title, photo_url) => {
-            SA.add.mutate({
-              id: crypto.randomUUID(),
-              title: title || undefined,
-              text,
-              photo_url,
-              tag: 'Journal',
-              color: TAG_COLOR.Journal,
-            });
-            toast('Note saved to Journal ✨');
-          }}
-          onDelete={(id) => {
-            const item = scratch.find((s) => s.id === id);
-            if (item) {
-              SA.removeWithUndo(item);
-              toast('Journal entry removed');
-            }
-          }}
-        />
       </div>
 
       {/* Focus Hub Modal */}
