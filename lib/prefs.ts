@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
-import { DEFAULT_ACCENT } from './pal';
+import { DEFAULT_ACCENT, RETIRED_ACCENT } from './pal';
 import { EMPTY_PLAN } from './lift';
 
 export type Prefs = {
@@ -136,7 +136,11 @@ export function applyPrefs(p: Prefs) {
 function read(): Prefs {
   if (typeof window === 'undefined') return DEFAULT_PREFS;
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') };
+    const stored = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } as Prefs;
+    // Everyone who never picked an accent has the old default written to disk,
+    // so shipping a new one without this would change nothing for them.
+    if (stored.accent === RETIRED_ACCENT) stored.accent = DEFAULT_ACCENT;
+    return stored;
   } catch {
     return DEFAULT_PREFS;
   }

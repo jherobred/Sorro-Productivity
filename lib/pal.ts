@@ -30,7 +30,9 @@ export const SECHUE: Record<string, string> = {
   // community intentionally absent — it tints to the user's accent.
 };
 
-export const DEFAULT_ACCENT = '#7C6CFF';
+/** Retired in favour of RETIRED_ACCENT's replacement; see prefs.read(). */
+export const RETIRED_ACCENT = '#7C6CFF';
+export const DEFAULT_ACCENT = '#8B7CFF';
 
 /** Interaction constants — README.md "Interaction constants". These are tuned; reuse them. */
 export const K = {

@@ -2,7 +2,6 @@
    Lifted verbatim from Basedly.dc.html <helmet>. Every number here is a spec
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import 'katex/dist/katex.min.css';
 
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
@@ -25,19 +24,19 @@
 /* ---- Theme tokens (Pure Dark Obsidian & Clean Modern Light) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
-  --bg: #0A0912;
-  --panel: #0E0D18;
-  --card: #17161F;
-  --card2: #211F2C;
-  --line: rgba(170, 166, 210, .11);
-  --line2: rgba(170, 166, 210, .19);
+  --bg: #0B0A13;
+  --panel: #100F1A;
+  --card: #16151F;
+  --card2: #1F1D2A;
+  --line: rgba(170, 166, 210, .14);
+  --line2: rgba(170, 166, 210, .26);
   --tx: #EFEDF5;
-  --tx2: #A6A2BE;
-  --tx3: #9894B6;
+  --tx2: #A29EBB;
+  --tx3: #78748F;
   --hov: rgba(170, 166, 210, .075);
   --sh: 0 6px 22px rgba(0, 0, 0, .46);
   --shl: 0 18px 48px rgba(0, 0, 0, .6);
-  --ink: #0A0912;
+  --ink: #0B0A13;
   --sk1: rgba(170, 166, 210, .06);
   --sk2: rgba(170, 166, 210, .13);
   
@@ -53,15 +52,15 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #F6F5F9;
-  --panel: #F0EEF5;
+  --bg: #F3F2F7;
+  --panel: #ECEAF2;
   --card: #FFFFFF;
-  --card2: #F7F5FA;
-  --line: rgba(38, 32, 54, .11);
-  --line2: rgba(38, 32, 54, .19);
+  --card2: #F6F5FA;
+  --line: rgba(38, 32, 54, .12);
+  --line2: rgba(38, 32, 54, .22);
   --tx: #1C1A26;
-  --tx2: #5D5875;
-  --tx3: #5A556E;
+  --tx2: #57526E;
+  --tx3: #7C7793;
   --hov: rgba(38, 32, 54, .05);
   --sh: 0 3px 12px rgba(40, 34, 60, .13);
   --shl: 0 14px 38px rgba(40, 34, 60, .2);
@@ -82,13 +81,36 @@
 
 /* Accent is user-settable; --accTx is the accent tuned for text on panels. */
 :root {
-  --acc: #7C6CFF;
+  --acc: #8B7CFF;
   --acc2: #38D6F2;
-  --accTx: color-mix(in srgb, #7C6CFF 82%, #FFFFFF);
-  --gl2: color-mix(in srgb, #7C6CFF 35%, transparent);
+  --accTx: color-mix(in srgb, #8B7CFF 82%, #FFFFFF);
+  --gl2: color-mix(in srgb, #8B7CFF 35%, transparent);
   --anim: running;
   --cols: repeat(3, 1fr);
 }
+
+/* ---- Typefaces ----------------------------------------------------------
+   Three roles, self-hosted by next/font so the APK needs no network:
+   Familjen Grotesk carries headings, IBM Plex Sans the running text, and
+   IBM Plex Mono every label and every number that lines up in a column. */
+:root {
+  --font-heading: var(--f-display), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: var(--f-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--f-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading-weight: 700;
+}
+
+/* ---- Type scale, lifted from the layout render --------------------------
+   `--h` is the owning section's hue. On a dark ground the hue reads straight;
+   on paper it needs weight behind it or it turns to pastel. */
+.kicker {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--tx3);
+}
+.metaline { font-size: 11.5px; color: var(--tx3); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.hx { color: var(--h, var(--accTx)); }
+html[data-theme='light'] .hx { color: color-mix(in srgb, var(--h, var(--acc)) 62%, #241F33 38%); }
 
 /* Category palette (PAL) - Clean Spot Tints */
 :root {
@@ -109,9 +131,9 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg, #0A0912);
+  background: var(--bg, #0B0A13);
   color: var(--tx, #EFEDF5);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -121,7 +143,7 @@ html, body {
    prototype — no need to restate it here. */
 /* :root IS <html>, so it has to select itself here — `:root html` matches nothing. */
 html[data-theme='light'],
-html[data-theme='light'] body { background: var(--bg, #F6F5F9); color: var(--tx, #1C1A26); }
+html[data-theme='light'] body { background: var(--bg, #F3F2F7); color: var(--tx, #1C1A26); }
 
 * { box-sizing: border-box; }
 h1, h2, h3, h4, h5, h6 { margin: 0; font-size: inherit; line-height: inherit; letter-spacing: inherit; color: var(--tx); }
@@ -130,7 +152,7 @@ a { color: var(--accTx, #8B7CFF); text-decoration: none; }
 a:hover { color: var(--acc2, #38D6F2); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 input, textarea { font: inherit; color: inherit; background: none; border: 0; outline: none; }
-::selection { background: rgba(124, 108, 255, .3); }
+::selection { background: rgba(139, 124, 255, .3); }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 ::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
