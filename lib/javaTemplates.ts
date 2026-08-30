@@ -394,6 +394,80 @@ export const JAVA_TEMPLATES: JavaTemplate[] = [
 }`,
   },
   {
+    id: 'two-sum',
+    name: 'TwoSum2D.java',
+    category: 'Algorithms',
+    description: 'Find two indices whose values add up to a target with pair comparison',
+    src: `public class TwoSum2D {
+    public static void main(String[] args) {
+        int[] a = { 55, 25, 23, 35, 92, 10, 89, 22 };
+        int target = 58;
+
+        System.out.println("Finding two indices whose values add to " + target + ":");
+        printArray(a);
+
+        int[] result = findTwoSum(a, target);
+        if (result != null) {
+            System.out.println("FOUND PAIR: a[" + result[0] + "] (" + a[result[0]] + ") + a[" + result[1] + "] (" + a[result[1]] + ") = " + target);
+        } else {
+            System.out.println("No matching pair found.");
+        }
+    }
+
+    static int[] findTwoSum(int[] a, int target) {
+        int n = a.length;
+        int comparisons = 0;
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                comparisons++;
+                int sum = a[i] + a[j];
+                System.out.println("Comparison #" + comparisons + ": checking a[" + i + "] (" + a[i] + ") + a[" + j + "] (" + a[j] + ") = " + sum);
+
+                if (sum == target) {
+                    System.out.println(">> Target matched: " + a[i] + " + " + a[j] + " == " + target);
+                    return new int[]{ i, j };
+                }
+            }
+        }
+        return null;
+    }
+
+    static void printArray(int[] arr) {
+        for (int i = 0; i < arr.length; i++) {
+            System.out.print(arr[i] + (i < arr.length - 1 ? ", " : ""));
+        }
+        System.out.println();
+    }
+}`,
+  },
+  {
+    id: 'stack-queue',
+    name: 'StackVsQueue.java',
+    category: 'Data Structures',
+    description: 'Side-by-side LIFO Stack vs FIFO Queue data structure comparison',
+    src: `public class StackVsQueue {
+    public static void main(String[] args) {
+        System.out.println("STACK (LIFO) vs QUEUE (FIFO) Comparison:");
+
+        String[] elements = { "A", "B", "C", "D" };
+
+        System.out.println("1. Pushing elements to Stack and Queue:");
+        for (int i = 0; i < elements.length; i++) {
+            System.out.println("   Push / Enqueue: " + elements[i]);
+        }
+
+        System.out.println("2. Stack PEEK (LIFO - Last In First Out):");
+        System.out.println("   Stack Peek Top: " + elements[3] + " (Time: O(1), Space: O(1))");
+
+        System.out.println("3. Queue PEEK (FIFO - First In First Out):");
+        System.out.println("   Queue Peek Front: " + elements[0] + " (Time: O(1), Space: O(1))");
+
+        System.out.println("Result: Same contents. Different answer.");
+    }
+}`,
+  },
+  {
     id: 'binary-search',
     name: 'BinarySearch3D.java',
     category: 'Algorithms',

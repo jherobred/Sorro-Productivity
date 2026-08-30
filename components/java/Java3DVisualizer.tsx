@@ -15,6 +15,7 @@ interface Java3DVisualizerProps {
   phone?: boolean;
 }
 
+export type RenderStyle = 'stage2d' | 'orbit3d';
 type ViewAngle = 'isometric' | 'perspective' | 'front' | 'top' | 'side' | 'free';
 export type VisMode = 'auto' | 'arrays' | 'tree' | 'matrix' | 'hanoi' | 'graph' | 'stack' | 'list';
 
@@ -31,7 +32,6 @@ interface ProjectedPoint {
   scale: number;
 }
 
-// 3D Force-Directed Graph Simulation Node Interface
 interface SimGraphNode {
   id: number;
   val: string;
@@ -43,8 +43,7 @@ interface SimGraphNode {
   vz: number;
 }
 
-// Deterministic 3D Starfield Particles
-const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 48 }, (_, i) => {
+const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 42 }, (_, i) => {
   const theta = (i * 2.39996) % (Math.PI * 2);
   const phi = ((i * 1.61803) % Math.PI) - Math.PI / 2;
   const rad = 140 + ((i * 37) % 120);
@@ -66,9 +65,10 @@ export function Java3DVisualizer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Camera Orientation & Projection Parameters
-  const [yaw, setYaw] = useState<number>(0.75); // ~43 deg
-  const [pitch, setPitch] = useState<number>(0.55); // ~31 deg
+  const [renderStyle, setRenderStyle] = useState<RenderStyle>('stage2d');
+
+  const [yaw, setYaw] = useState<number>(0.75);
+  const [pitch, setPitch] = useState<number>(0.55);
   const [zoom, setZoom] = useState<number>(1.0);
   const [panX, setPanX] = useState<number>(0);
   const [panY, setPanY] = useState<number>(0);
@@ -76,26 +76,22 @@ export function Java3DVisualizer({
   const [viewAngle, setViewAngle] = useState<ViewAngle>('isometric');
   const [isPerspective, setIsPerspective] = useState<boolean>(true);
 
-  // Physics Simulation State
   const animTimeRef = useRef<number>(0);
   const animFrameIdRef = useRef<number | null>(null);
 
-  // Force-Directed Graph Physics State
   const graphNodesRef = useRef<SimGraphNode[]>([
-    { id: 0, val: '0', x: 0, y: 80, z: 0, vx: 0, vy: 0, vz: 0 },
-    { id: 1, val: '1', x: -65, y: 40, z: -40, vx: 0, vy: 0, vz: 0 },
-    { id: 2, val: '2', x: 65, y: 40, z: 40, vx: 0, vy: 0, vz: 0 },
-    { id: 3, val: '3', x: -90, y: 0, z: 20, vx: 0, vy: 0, vz: 0 },
-    { id: 4, val: '4', x: 0, y: 10, z: 70, vx: 0, vy: 0, vz: 0 },
-    { id: 5, val: '5', x: 90, y: 0, z: -30, vx: 0, vy: 0, vz: 0 },
+    { id: 0, val: '0', x: 0, y: 70, z: 0, vx: 0, vy: 0, vz: 0 },
+    { id: 1, val: '1', x: -60, y: 35, z: -35, vx: 0, vy: 0, vz: 0 },
+    { id: 2, val: '2', x: 60, y: 35, z: 35, vx: 0, vy: 0, vz: 0 },
+    { id: 3, val: '3', x: -85, y: -5, z: 20, vx: 0, vy: 0, vz: 0 },
+    { id: 4, val: '4', x: 0, y: 5, z: 65, vx: 0, vy: 0, vz: 0 },
+    { id: 5, val: '5', x: 85, y: -5, z: -25, vx: 0, vy: 0, vz: 0 },
   ]);
 
-  // Multi-Touch & Pointer Tracking
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchDistanceRef = useRef<number | null>(null);
   const isRightClickPanRef = useRef<boolean>(false);
 
-  // Set camera angle preset
   const setPresetAngle = useCallback((angle: ViewAngle) => {
     playClick();
     setViewAngle(angle);
@@ -140,7 +136,6 @@ export function Java3DVisualizer({
     setPanY(0);
   }, []);
 
-  // Multi-Touch & Pointer Orbit / Pan / Pinch-Zoom Event Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     isRightClickPanRef.current = e.button === 2 || e.button === 1;
@@ -161,7 +156,6 @@ export function Java3DVisualizer({
     const prevPos = pointers.get(e.pointerId)!;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // Two-finger gestures (Pinch-to-zoom + Pan)
     if (pointers.size >= 2) {
       const pts = Array.from(pointers.values());
       const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -173,23 +167,20 @@ export function Java3DVisualizer({
       return;
     }
 
-    // Single-finger Orbit or Right-click Pan
     if (pointers.size === 1) {
       const dx = e.clientX - prevPos.x;
       const dy = e.clientY - prevPos.y;
 
-      if (isRightClickPanRef.current || e.shiftKey) {
-        // Pan
+      if (isRightClickPanRef.current || e.shiftKey || renderStyle === 'stage2d') {
         setPanX((px) => px + dx);
         setPanY((py) => py + dy);
       } else {
-        // Orbit
         setViewAngle('free');
         setYaw((y) => y + dx * 0.0075);
         setPitch((p) => Math.max(-0.25, Math.min(1.54, p - dy * 0.0075)));
       }
     }
-  }, []);
+  }, [renderStyle]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     activePointersRef.current.delete(e.pointerId);
@@ -206,7 +197,6 @@ export function Java3DVisualizer({
     setZoom((z) => Math.max(0.35, Math.min(3.5, z - e.deltaY * 0.0015)));
   }, []);
 
-  // Automatic Visualization Mode Detection
   const detectedMode = useMemo<VisMode>(() => {
     const isHanoiSignature = frames.some(
       (f) =>
@@ -221,15 +211,6 @@ export function Java3DVisualizer({
       frames.some((f) => f.sig.toLowerCase().includes('bfs') || f.sig.toLowerCase().includes('dfs'));
     if (hasGraph) return 'graph';
 
-    const matrixObj = heap.find(
-      (h) =>
-        (h.type.includes('[][]') && !h.name.toLowerCase().includes('adj')) ||
-        h.name.toLowerCase().includes('matrix') ||
-        h.name.toLowerCase().includes('terrain') ||
-        (h.type.includes('[]') && h.cells && h.cells.length >= 25 && !h.name.toLowerCase().includes('adj'))
-    );
-    if (matrixObj) return 'matrix';
-
     const hasTreeNodes =
       heap.some(
         (h) =>
@@ -241,14 +222,6 @@ export function Java3DVisualizer({
       frames.some((f) => f.sig.toLowerCase().includes('tree') || f.sig.toLowerCase().includes('inorder'));
     if (hasTreeNodes) return 'tree';
 
-    const hasLinkedList = heap.some(
-      (h) =>
-        h.type.toLowerCase().includes('listnode') ||
-        h.name.toLowerCase().includes('list') ||
-        h.name.toLowerCase().includes('head')
-    );
-    if (hasLinkedList) return 'list';
-
     const hasArrays =
       heap.some((h) => h.type.includes('[]') || (h.cells && h.cells.length > 0)) || series.length > 0;
     if (hasArrays) return 'arrays';
@@ -258,9 +231,6 @@ export function Java3DVisualizer({
 
   const effectiveMode = visMode === 'auto' ? detectedMode : visMode;
 
-  // ---------------------------------------------------------------------------
-  // 3D Canvas Rendering & Physics Engine
-  // ---------------------------------------------------------------------------
   const renderScene = useCallback((time: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -286,9 +256,8 @@ export function Java3DVisualizer({
     ctx.clearRect(0, 0, width, height);
 
     const cx = width / 2 + panX;
-    const cy = height / 2 + 20 + panY;
+    const cy = height / 2 + panY;
 
-    // 3D Perspective & Isometric Projection Engine
     const project = (x: number, y: number, z: number): ProjectedPoint => {
       const cosY = Math.cos(yaw);
       const sinY = Math.sin(yaw);
@@ -301,430 +270,18 @@ export function Java3DVisualizer({
       const z2 = y * sinP + z1 * cosP;
 
       if (isPerspective) {
-        // True 3D Perspective Projection (FOV 60°)
         const fovDistance = 620;
         const depth = z2 + fovDistance;
         const scale = (390 / Math.max(40, depth)) * zoom;
-        const screenX = cx + x1 * scale * 1.8;
-        const screenY = cy - y2 * scale * 1.8;
-        return { x: screenX, y: screenY, z: z2, scale };
+        return { x: cx + x1 * scale * 1.8, y: cy + 20 - y2 * scale * 1.8, z: z2, scale };
       } else {
-        // Orthographic Isometric Projection
         const scale = 0.65 * zoom;
-        const screenX = cx + x1 * scale * 1.8;
-        const screenY = cy - y2 * scale * 1.8;
-        return { x: screenX, y: screenY, z: z2, scale };
+        return { x: cx + x1 * scale * 1.8, y: cy + 20 - y2 * scale * 1.8, z: z2, scale };
       }
     };
 
-    // ==========================================
-    // 1. 3D Starfield Cyberspace Dust
-    // ==========================================
-    STARFIELD_PARTICLES.forEach((p, idx) => {
-      const proj = project(p.x, p.y + Math.sin(time * 0.8 + idx) * 4, p.z);
-      if (proj.scale > 0.1) {
-        const rad = Math.max(0.8, 1.4 * proj.scale);
-        const alpha = Math.min(0.5, Math.max(0.1, 0.28 + 0.18 * Math.sin(idx + time * 1.2)));
-        ctx.fillStyle = idx % 2 === 0 ? `rgba(124, 140, 255, ${alpha})` : `rgba(56, 189, 248, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(proj.x, proj.y, rad, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-
-    // ==========================================
-    // 2. 3D Ground Grid & Level Rings
-    // ==========================================
-    const gridSize = 210;
-    const gridStep = 35;
-
-    [60, 120, 180].forEach((r) => {
-      ctx.strokeStyle = 'rgba(124, 108, 255, 0.08)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      const segs = 32;
-      for (let s = 0; s <= segs; s++) {
-        const ang = (s / segs) * Math.PI * 2;
-        const pt = project(Math.cos(ang) * r, 0, Math.sin(ang) * r);
-        if (s === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-      }
-      ctx.stroke();
-    });
-
-    for (let gx = -gridSize; gx <= gridSize; gx += gridStep) {
-      const p1 = project(gx, 0, -gridSize);
-      const p2 = project(gx, 0, gridSize);
-      const distRatio = Math.abs(gx) / gridSize;
-      const alpha = Math.max(0.015, 0.08 * (1 - distRatio));
-
-      ctx.strokeStyle = `rgba(124, 108, 255, ${alpha})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    for (let gz = -gridSize; gz <= gridSize; gz += gridStep) {
-      const p1 = project(-gridSize, 0, gz);
-      const p2 = project(gridSize, 0, gz);
-      const distRatio = Math.abs(gz) / gridSize;
-      const alpha = Math.max(0.015, 0.08 * (1 - distRatio));
-
-      ctx.strokeStyle = `rgba(124, 108, 255, ${alpha})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-
-    // ==========================================
-    // Core 3D Geometry Rendering Helpers
-    // ==========================================
-
-    const drawGroundShadow = (sx: number, sz: number, radX: number, radZ: number, alpha = 0.35) => {
-      const p = project(sx, 0, sz);
-      const rx = radX * p.scale * 1.8;
-      const rz = radZ * p.scale * 1.8 * Math.cos(pitch);
-      if (rx <= 1 || rz <= 1) return;
-
-      ctx.save();
-      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rx);
-      grad.addColorStop(0, `rgba(0, 0, 0, ${alpha})`);
-      grad.addColorStop(0.6, `rgba(0, 0, 0, ${alpha * 0.4})`);
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, rx, Math.max(1.5, rz), 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawVoxel = (
-      bx: number,
-      by: number,
-      bz: number,
-      bw: number,
-      bh: number,
-      bd: number,
-      topColor: string,
-      frontColor: string,
-      sideColor: string,
-      opts?: {
-        label?: string;
-        subLabel?: string;
-        highlight?: boolean;
-        highlightColor?: string;
-        badge?: string;
-        badgeColor?: string;
-        isSorted?: boolean;
-        opacity?: number;
-      }
-    ) => {
-      const highlight = opts?.highlight ?? false;
-      const highlightColor = opts?.highlightColor ?? topColor;
-      const opacity = opts?.opacity ?? 1.0;
-
-      if (by <= 4) {
-        drawGroundShadow(bx, bz, bw * 0.8, bd * 0.8, 0.45);
-      }
-
-      const p000 = project(bx - bw / 2, by, bz - bd / 2);
-      const p100 = project(bx + bw / 2, by, bz - bd / 2);
-      const p110 = project(bx + bw / 2, by + bh, bz - bd / 2);
-      const p010 = project(bx - bw / 2, by + bh, bz - bd / 2);
-
-      const p001 = project(bx - bw / 2, by, bz + bd / 2);
-      const p101 = project(bx + bw / 2, by, bz + bd / 2);
-      const p111 = project(bx + bw / 2, by + bh, bz + bd / 2);
-      const p011 = project(bx - bw / 2, by + bh, bz + bd / 2);
-
-      ctx.save();
-      ctx.globalAlpha = opacity;
-
-      if (highlight) {
-        ctx.shadowColor = highlightColor;
-        ctx.shadowBlur = 20;
-      }
-
-      // Front Face (+Z)
-      const frontGrad = ctx.createLinearGradient(p011.x, p011.y, p001.x, p001.y);
-      frontGrad.addColorStop(0, frontColor);
-      frontGrad.addColorStop(1, 'rgba(10, 12, 20, 0.95)');
-      ctx.fillStyle = frontGrad;
-      ctx.beginPath();
-      ctx.moveTo(p001.x, p001.y);
-      ctx.lineTo(p101.x, p101.y);
-      ctx.lineTo(p111.x, p111.y);
-      ctx.lineTo(p011.x, p011.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = highlight ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.12)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Right Side Face (+X)
-      const sideGrad = ctx.createLinearGradient(p111.x, p111.y, p100.x, p100.y);
-      sideGrad.addColorStop(0, sideColor);
-      sideGrad.addColorStop(1, 'rgba(6, 8, 14, 0.95)');
-      ctx.fillStyle = sideGrad;
-      ctx.beginPath();
-      ctx.moveTo(p101.x, p101.y);
-      ctx.lineTo(p100.x, p100.y);
-      ctx.lineTo(p110.x, p110.y);
-      ctx.lineTo(p111.x, p111.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Top Face (+Y)
-      const topGrad = ctx.createLinearGradient(p010.x, p010.y, p111.x, p111.y);
-      topGrad.addColorStop(0, topColor);
-      topGrad.addColorStop(1, frontColor);
-      ctx.fillStyle = topGrad;
-      ctx.beginPath();
-      ctx.moveTo(p011.x, p011.y);
-      ctx.lineTo(p111.x, p111.y);
-      ctx.lineTo(p110.x, p110.y);
-      ctx.lineTo(p010.x, p010.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = highlight ? '#FFFFFF' : 'rgba(255,255,255,0.3)';
-      ctx.stroke();
-
-      ctx.restore();
-
-      const topCenterX = (p011.x + p111.x + p110.x + p010.x) / 4;
-      const topCenterY = (p011.y + p111.y + p110.y + p010.y) / 4;
-
-      if (opts?.label && p011.scale > 0.28) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `bold ${Math.max(9, Math.round(11 * p011.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.85)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(opts.label, topCenterX, topCenterY);
-        ctx.shadowBlur = 0;
-      }
-
-      if (opts?.isSorted && p011.scale > 0.3) {
-        ctx.fillStyle = PAL.mint;
-        ctx.font = `bold ${Math.max(8, Math.round(9 * p011.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText('✓', topCenterX, topCenterY - 12 * p011.scale);
-      }
-
-      if (opts?.subLabel && p001.scale > 0.28) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-        ctx.font = `bold ${Math.max(8, Math.round(9.5 * p001.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(opts.subLabel, (p001.x + p101.x) / 2, p001.y + 7);
-      }
-
-      if (opts?.badge && p011.scale > 0.28) {
-        const badgeY = topCenterY - 20 * p011.scale;
-        const badgeText = opts.badge;
-        ctx.font = `bold ${Math.max(7.5, Math.round(8.5 * p011.scale))}px monospace`;
-        const textMetrics = ctx.measureText(badgeText);
-        const badgeW = textMetrics.width + 10;
-        const badgeH = 14 * p011.scale;
-
-        ctx.strokeStyle = opts.badgeColor || PAL.amber;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(topCenterX, topCenterY);
-        ctx.lineTo(topCenterX, badgeY + badgeH / 2);
-        ctx.stroke();
-
-        ctx.fillStyle = 'rgba(15, 17, 26, 0.92)';
-        ctx.strokeStyle = opts.badgeColor || PAL.amber;
-        ctx.beginPath();
-        ctx.roundRect(topCenterX - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 4);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = opts.badgeColor || PAL.amber;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(badgeText, topCenterX, badgeY);
-      }
-    };
-
-    const drawSphereNode = (
-      sx: number,
-      sy: number,
-      sz: number,
-      radius: number,
-      fillColor: string,
-      label: string,
-      opts?: { highlight?: boolean; pulse?: boolean; subText?: string }
-    ) => {
-      const p = project(sx, sy, sz);
-      const r = radius * p.scale * 1.8;
-      if (r <= 1) return;
-
-      drawGroundShadow(sx, sz, radius * 1.1, radius * 1.1, 0.35);
-
-      ctx.save();
-      if (opts?.highlight) {
-        ctx.shadowColor = fillColor;
-        ctx.shadowBlur = 24;
-
-        ctx.strokeStyle = fillColor;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r * (1.3 + 0.1 * Math.sin(time * 4)), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      const grad = ctx.createRadialGradient(p.x - r * 0.32, p.y - r * 0.32, r * 0.08, p.x, p.y, r);
-      grad.addColorStop(0, '#FFFFFF');
-      grad.addColorStop(0.25, fillColor);
-      grad.addColorStop(0.75, fillColor);
-      grad.addColorStop(1, 'rgba(8, 10, 16, 0.95)');
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(3, r), 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.restore();
-
-      if (label && p.scale > 0.28) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `bold ${Math.max(9, Math.round(11 * p.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(label, p.x, p.y);
-        ctx.shadowBlur = 0;
-      }
-
-      if (opts?.subText && p.scale > 0.28) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.font = `bold ${Math.max(7.5, Math.round(9 * p.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText(opts.subText, p.x, p.y + r + 10);
-      }
-    };
-
-    const drawPeg = (px: number, py: number, pz: number, radius: number, height: number, label: string) => {
-      const top = project(px, py + height, pz);
-      const bot = project(px, py, pz);
-      const r = radius * top.scale * 1.8;
-
-      drawGroundShadow(px, pz, radius * 2.5, radius * 2.5, 0.4);
-
-      ctx.save();
-      const shaftGrad = ctx.createLinearGradient(bot.x - r, bot.y, bot.x + r, bot.y);
-      shaftGrad.addColorStop(0, 'rgba(160, 175, 200, 0.8)');
-      shaftGrad.addColorStop(0.4, '#FFFFFF');
-      shaftGrad.addColorStop(1, 'rgba(80, 90, 110, 0.9)');
-
-      ctx.strokeStyle = shaftGrad;
-      ctx.lineWidth = Math.max(3, r * 2);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(bot.x, bot.y);
-      ctx.lineTo(top.x, top.y);
-      ctx.stroke();
-      ctx.restore();
-
-      if (bot.scale > 0.3) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = `bold ${Math.max(9, Math.round(10.5 * bot.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText(label, bot.x, bot.y + 16);
-      }
-    };
-
-    const drawPointerRay = (
-      x1: number,
-      y1: number,
-      z1: number,
-      x2: number,
-      y2: number,
-      z2: number,
-      color: string,
-      label?: string,
-      dashed = false,
-      animatePulse = true
-    ) => {
-      const p1 = project(x1, y1, z1);
-      const p2 = project(x2, y2, z2);
-      const mid = project((x1 + x2) / 2, Math.max(y1, y2) + 20, (z1 + z2) / 2);
-
-      ctx.save();
-      if (dashed) ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.8;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.quadraticCurveTo(mid.x, mid.y, p2.x, p2.y);
-      ctx.stroke();
-
-      if (animatePulse) {
-        const pulseT = (time * 1.5) % 1;
-        const px = (1 - pulseT) * (1 - pulseT) * p1.x + 2 * (1 - pulseT) * pulseT * mid.x + pulseT * pulseT * p2.x;
-        const py = (1 - pulseT) * (1 - pulseT) * p1.y + 2 * (1 - pulseT) * pulseT * mid.y + pulseT * pulseT * p2.y;
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      const ang = Math.atan2(p2.y - mid.y, p2.x - mid.x);
-      const arrLen = 7;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(p2.x, p2.y);
-      ctx.lineTo(p2.x - arrLen * Math.cos(ang - Math.PI / 6), p2.y - arrLen * Math.sin(ang - Math.PI / 6));
-      ctx.lineTo(p2.x - arrLen * Math.cos(ang + Math.PI / 6), p2.y - arrLen * Math.sin(ang + Math.PI / 6));
-      ctx.closePath();
-      ctx.fill();
-
-      if (label && p1.scale > 0.3) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `bold ${Math.max(8, Math.round(9.5 * p1.scale))}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText(label, mid.x, mid.y - 6);
-      }
-      ctx.restore();
-    };
-
-    // =========================================================================
-    // VISUALIZATION MODE 1: 3D Arrays & Dynamic Sorting Visualizer
-    // =========================================================================
-    if (effectiveMode === 'arrays') {
-      const primaryArray = heap.find((h) => h.cells && h.cells.length > 0);
-      const cells =
-        primaryArray?.cells ||
-        (series.length
-          ? series.map(String)
-          : ['42', '17', '89', '5', '63', '28', '71', '12', '54', '33']);
-
-      const count = Math.min(cells.length, 24);
-      const barWidth = 22;
-      const barDepth = 22;
-      const spacing = 32;
-      const totalWidth = count * spacing;
-      const startX = -totalWidth / 2 + spacing / 2;
-
-      const numValues = cells.map((c) => Number(c) || 10);
-      const maxVal = Math.max(...numValues.map(Math.abs), 1);
+    if (renderStyle === 'stage2d') {
+      const isMobile = width < 480;
 
       const currentLocals = frames[frames.length - 1]?.locals || [];
       const getLocalNum = (names: string[]) => {
@@ -734,629 +291,704 @@ export function Java3DVisualizer({
 
       const varI = getLocalNum(['i', 'outer', 'index', 'idx']);
       const varJ = getLocalNum(['j', 'inner']);
-      const varLow = getLocalNum(['low', 'l', 'left']);
-      const varHigh = getLocalNum(['high', 'h', 'right']);
-      const varMid = getLocalNum(['mid', 'm']);
-      const varTarget = getLocalNum(['target', 'val', 'key']);
 
-      const barIndices = Array.from({ length: count }, (_, i) => i);
-      barIndices.sort((a, b) => {
-        const za = (startX + a * spacing) * Math.sin(yaw);
-        const zb = (startX + b * spacing) * Math.sin(yaw);
-        return zb - za;
-      });
+      if (effectiveMode === 'hanoi') {
+        const stageY = cy + 40;
+        const pegSpacing = isMobile ? 85 : 120;
+        const pegH = 110;
+        const pegs = [
+          { label: 'A', x: cx - pegSpacing },
+          { label: 'B', x: cx },
+          { label: 'C', x: cx + pegSpacing },
+        ];
 
-      barIndices.forEach((i) => {
-        const val = numValues[i];
-        const rawText = cells[i];
-        const h = Math.max(14, Math.min(130, (Math.abs(val) / maxVal) * 98));
-        const x = startX + i * spacing;
-
-        let isComparing = false;
-        let isSorted = false;
-        let badge: string | undefined;
-        let badgeColor: string = PAL.amber;
-
-        if (varLow !== null && i === varLow) {
-          badge = 'LOW';
-          badgeColor = PAL.sky;
-        } else if (varHigh !== null && i === varHigh) {
-          badge = 'HIGH';
-          badgeColor = PAL.coral;
-        } else if (varMid !== null && i === varMid) {
-          badge = 'MID';
-          badgeColor = PAL.amber;
-          isComparing = true;
-        }
-
-        if (varJ !== null && (i === varJ || i === varJ + 1)) {
-          isComparing = true;
-          badge = i === varJ ? `j=${i}` : `j+1`;
-          badgeColor = PAL.amber;
-        } else if (varI !== null && i === varI && !badge) {
-          badge = `i=${i}`;
-          badgeColor = PAL.mint;
-        }
-
-        if (varI !== null && i >= count - varI && count > 3) {
-          isSorted = true;
-        }
-
-        const isOutsideSearch =
-          varLow !== null && varHigh !== null && (i < varLow || i > varHigh);
-        const opacity = isOutsideSearch ? 0.3 : 1.0;
-
-        let top: string = '#7C6CFF';
-        let front: string = '#5748D6';
-        let side: string = '#3E32A3';
-
-        if (isSorted) {
-          top = PAL.mint;
-          front = '#1EA675';
-          side = '#147A55';
-        } else if (isComparing) {
-          top = PAL.amber;
-          front = '#D99B26';
-          side = '#A87413';
-        } else if (varTarget !== null && val === varTarget) {
-          top = PAL.coral;
-          front = '#E04F4F';
-          side = '#A63232';
-        }
-
-        drawVoxel(x, 0, 0, barWidth, h, barDepth, top, front, side, {
-          label: rawText,
-          subLabel: `[${i}]`,
-          highlight: isComparing || (varTarget !== null && val === varTarget),
-          highlightColor: top,
-          badge,
-          badgeColor,
-          isSorted,
-          opacity,
-        });
-      });
-
-      if (varJ !== null && varJ >= 0 && varJ < count - 1) {
-        const idxA = varJ;
-        const idxB = varJ + 1;
-        const xA = startX + idxA * spacing;
-        const xB = startX + idxB * spacing;
-        const hA = Math.max(14, (Math.abs(numValues[idxA]) / maxVal) * 98);
-        const hB = Math.max(14, (Math.abs(numValues[idxB]) / maxVal) * 98);
-
-        const pA = project(xA, hA + 8, 0);
-        const pB = project(xB, hB + 8, 0);
-        const midP = project((xA + xB) / 2, Math.max(hA, hB) + 38, 0);
-
+        const stageW = pegSpacing * 2 + (isMobile ? 120 : 160);
         ctx.save();
-        ctx.strokeStyle = PAL.amber;
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = PAL.amber;
-        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#121520';
+        ctx.strokeStyle = '#222838';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(pA.x, pA.y);
-        ctx.quadraticCurveTo(midP.x, midP.y, pB.x, pB.y);
+        ctx.roundRect(cx - stageW / 2, stageY, stageW, 26, 12);
+        ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 9px monospace';
+        pegs.forEach((peg) => {
+          const pegGrad = ctx.createLinearGradient(peg.x - 3, stageY - pegH, peg.x + 3, stageY);
+          pegGrad.addColorStop(0, '#2F3B52');
+          pegGrad.addColorStop(0.5, '#455675');
+          pegGrad.addColorStop(1, '#1A2130');
+          ctx.fillStyle = pegGrad;
+          ctx.beginPath();
+          ctx.roundRect(peg.x - 3.5, stageY - pegH, 7, pegH + 4, 3.5);
+          ctx.fill();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 13px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(peg.label, peg.x, stageY + 18);
+        });
+
+        let movingDisk = 3;
+        let fromPeg = 0;
+        let toPeg = 2;
+        const moveMatch = stepNote?.match(/Move\s+disk\s+(\d+)\s+from\s+([A-C])\s*->\s*([A-C])/i);
+        if (moveMatch) {
+          movingDisk = parseInt(moveMatch[1], 10);
+          fromPeg = moveMatch[2] === 'A' ? 0 : moveMatch[2] === 'B' ? 1 : 2;
+          toPeg = moveMatch[3] === 'A' ? 0 : moveMatch[3] === 'B' ? 1 : 2;
+        }
+
+        const diskColors: Record<number, string> = {
+          1: '#3D4D6B',
+          2: '#2F3C54',
+          3: '#C67A18',
+          4: '#28344B',
+          5: '#222D42',
+        };
+
+        const diskSizes: Record<number, number> = {
+          1: 44,
+          2: 58,
+          3: 72,
+          4: 86,
+          5: 100,
+        };
+
+        const stacks: number[][] = [[5, 4], [2, 1], []];
+        stacks[fromPeg] = stacks[fromPeg].filter((d) => d !== movingDisk);
+
+        stacks.forEach((stack, pIdx) => {
+          let curY = stageY - 14;
+          stack.forEach((dId) => {
+            const dw = diskSizes[dId] || 60;
+            const px = pegs[pIdx].x;
+            ctx.fillStyle = diskColors[dId] || '#2F3C54';
+            ctx.strokeStyle = '#404E6B';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.roundRect(px - dw / 2, curY, dw, 16, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#E2E8F0';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(dId), px, curY + 8);
+            curY -= 18;
+          });
+        });
+
+        if (movingDisk > 0) {
+          const hoverX = pegs[fromPeg].x;
+          const hoverY = stageY - pegH - 12 + Math.sin(time * 3) * 2;
+          const dw = diskSizes[movingDisk] || 72;
+
+          ctx.save();
+          ctx.shadowColor = 'rgba(217, 119, 6, 0.6)';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = '#C67A18';
+          ctx.strokeStyle = '#F59E0B';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(hoverX - dw / 2, hoverY, dw, 17, 8.5);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(movingDisk), hoverX, hoverY + 8.5);
+          ctx.restore();
+        }
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('COMPARE', midP.x, midP.y - 6);
+        ctx.fillText('MOVES', cx - 24, stageY + 54);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 15px monospace';
+        ctx.fillText('3 / 31', cx + 28, stageY + 54);
+
+        ctx.restore();
+      } else if (effectiveMode === 'stack') {
+        const boxW = isMobile ? 80 : 105;
+        const boxH = 28;
+        const colSpacing = isMobile ? 120 : 160;
+        const stackX = cx - colSpacing / 2;
+        const queueX = cx + colSpacing / 2;
+        const startY = cy - 40;
+
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 18px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('STACK vs QUEUE', cx, cy - 90);
+
+        ctx.font = 'bold 11.5px monospace';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('STACK ', stackX - 22, startY - 20);
+        ctx.fillStyle = PAL.indigo;
+        ctx.fillText('(LIFO)', stackX + 22, startY - 20);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('QUEUE ', queueX - 22, startY - 20);
+        ctx.fillStyle = PAL.sky;
+        ctx.fillText('(FIFO)', queueX + 22, startY - 20);
+
+        const items = [
+          { val: 'D', color: '#E06B88', glow: true },
+          { val: 'C', color: '#B87A28', glow: false },
+          { val: 'B', color: '#2B8265', glow: false },
+          { val: 'A', color: '#3B6FB6', glow: false },
+        ];
+
+        items.forEach((item, idx) => {
+          const iy = startY + idx * (boxH + 3);
+          ctx.save();
+          if (item.glow) {
+            ctx.shadowColor = item.color;
+            ctx.shadowBlur = 14;
+          }
+          ctx.fillStyle = item.color;
+          ctx.strokeStyle = item.glow ? '#FFFFFF' : 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.roundRect(stackX - boxW / 2, iy, boxW, boxH, 8);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(item.val, stackX, iy + boxH / 2);
+          ctx.restore();
+        });
+
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Top', stackX + boxW / 2 + 8, startY + 14);
+        ctx.fillText('Bottom', stackX + boxW / 2 + 8, startY + 3 * (boxH + 3) + 14);
+
+        const queueItems = [
+          { val: 'D', color: '#7E4256', glow: false },
+          { val: 'C', color: '#8F6122', glow: false },
+          { val: 'B', color: '#1F5A47', glow: false },
+          { val: 'A', color: '#4B7BFF', glow: true },
+        ];
+
+        queueItems.forEach((item, idx) => {
+          const iy = startY + idx * (boxH + 3);
+          ctx.save();
+          if (item.glow) {
+            ctx.shadowColor = item.color;
+            ctx.shadowBlur = 16;
+          }
+          ctx.fillStyle = item.color;
+          ctx.strokeStyle = item.glow ? '#93C5FD' : 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.roundRect(queueX - boxW / 2, iy, boxW, boxH, 8);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(item.val, queueX, iy + boxH / 2);
+          ctx.restore();
+        });
+
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('Rear', queueX - boxW / 2 - 8, startY + 14);
+        ctx.fillText('Front', queueX - boxW / 2 - 8, startY + 3 * (boxH + 3) + 14);
+
+        ctx.fillStyle = '#F59E0B';
+        ctx.font = 'bold 12.5px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Same contents. Different answer.', cx, startY + 4 * (boxH + 3) + 36);
+
+        ctx.restore();
+      } else if (effectiveMode === 'arrays') {
+        const primaryArray = heap.find((h) => h.cells && h.cells.length > 0);
+        const cells =
+          primaryArray?.cells ||
+          (series.length ? series.map(String) : ['4', '8', '3', '2', '6', '1', '9', '7', '10', '5']);
+
+        const count = Math.min(cells.length, isMobile ? 8 : 10);
+        const tileW = isMobile ? 32 : 38;
+        const tileH = isMobile ? 32 : 38;
+        const spacing = tileW + (isMobile ? 6 : 8);
+        const totalW = count * spacing;
+        const startX = cx - totalW / 2 + spacing / 2;
+        const stageY = cy + 10;
+
+        ctx.save();
+
+        const isQuickSort = frames.some((f) => f.sig.toLowerCase().includes('quick'));
+        const isTwoSum = frames.some((f) => f.sig.toLowerCase().includes('twosum') || f.sig.toLowerCase().includes('sum'));
+
+        const titleText = isTwoSum ? 'TWO SUM' : isQuickSort ? 'QUICK SORT' : 'BUBBLE SORT';
+        const subTitleText = isTwoSum
+          ? 'Find two indices whose values add to target'
+          : isQuickSort
+          ? 'LOMUTO PARTITION · LAST ELEMENT AS PIVOT'
+          : 'Compare each neighbour, swap if they are out of order, repeat.';
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 16px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(titleText, cx, cy - 110);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.fillText(subTitleText, cx, cy - 94);
+
+        const chipY = cy - 78;
+        const drawChip = (label: string, val: string, xPos: number, col: string = PAL.sky) => {
+          ctx.fillStyle = 'rgba(15, 17, 26, 0.9)';
+          ctx.strokeStyle = '#222838';
+          ctx.beginPath();
+          ctx.roundRect(xPos - 38, chipY, 76, 16, 4);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.font = 'bold 7.5px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(label, xPos - 34, chipY + 11);
+
+          ctx.fillStyle = col;
+          ctx.font = 'bold 8.5px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText(val, xPos + 34, chipY + 11);
+        };
+
+        drawChip('TIME', isQuickSort ? 'O(nlogn)' : 'O(n²)', cx - 85, PAL.sky);
+        drawChip('SPACE', 'O(1)', cx, PAL.sky);
+        drawChip('PASS', `${(varI ?? 0) + 1}/5`, cx + 85, PAL.amber);
+
+        const gantryY = cy - 42;
+        ctx.strokeStyle = '#222838';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(startX - 20, gantryY);
+        ctx.lineTo(startX + (count - 1) * spacing + 20, gantryY);
+        ctx.stroke();
+
+        const shelfW = totalW + 30;
+        ctx.fillStyle = '#111420';
+        ctx.strokeStyle = '#1E2433';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(cx - shelfW / 2, stageY + tileH / 2 - 2, shelfW, 14, 7);
+        ctx.fill();
+        ctx.stroke();
+
+        const activeA = varJ !== null && varJ >= 0 && varJ < count ? varJ : 0;
+        const activeB = varJ !== null && varJ + 1 < count ? varJ + 1 : 1;
+        const valA = cells[activeA] || '4';
+        const valB = cells[activeB] || '5';
+
+        const gantryBoxX = (startX + activeA * spacing + startX + activeB * spacing) / 2;
+        ctx.fillStyle = '#171B26';
+        ctx.strokeStyle = '#2F3B52';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.roundRect(gantryBoxX - 35, gantryY - 14, 70, 22, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = PAL.amber;
+        ctx.beginPath();
+        ctx.arc(gantryBoxX - 25, gantryY - 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${valA} < ${valB}`, gantryBoxX + 6, gantryY);
+
+        [activeA, activeB].forEach((idx) => {
+          const tx = startX + idx * spacing;
+          ctx.strokeStyle = 'rgba(217, 119, 6, 0.75)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(tx, gantryY + 8);
+          ctx.lineTo(tx, stageY - 22);
+          ctx.stroke();
+        });
+
+        if (isTwoSum || activeB === activeA + 1) {
+          const x1 = startX + activeA * spacing;
+          const x2 = startX + activeB * spacing;
+          ctx.strokeStyle = PAL.amber;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x1, stageY - tileH / 2 - 4);
+          ctx.quadraticCurveTo((x1 + x2) / 2, stageY - tileH / 2 - 22, x2, stageY - tileH / 2 - 4);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < count; i++) {
+          const tx = startX + i * spacing;
+          const val = cells[i];
+          const isComparing = i === activeA || i === activeB;
+
+          const elevation = isComparing ? -16 : 0;
+          const ty = stageY + elevation;
+
+          ctx.save();
+          if (isComparing) {
+            ctx.shadowColor = PAL.sky;
+            ctx.shadowBlur = 14;
+            ctx.fillStyle = '#223354';
+            ctx.strokeStyle = PAL.sky;
+          } else {
+            ctx.fillStyle = '#1A1E29';
+            ctx.strokeStyle = '#2B3242';
+          }
+
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(tx - tileW / 2, ty - tileH / 2, tileW, tileH, 8);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = isComparing ? '#93C5FD' : '#FFFFFF';
+          ctx.font = '900 13px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(val, tx, ty);
+
+          ctx.fillStyle = isComparing ? PAL.amber : 'rgba(255,255,255,0.4)';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText(String(i), tx, stageY + tileH / 2 + 18);
+
+          ctx.restore();
+        }
+
+        const eqY = stageY + 54;
+        if (isTwoSum) {
+          ctx.fillStyle = PAL.amber;
+          ctx.font = '900 20px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${valA} + ${valB} = ${Number(valA) + Number(valB)}`, cx, eqY);
+
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = 'bold 9.5px monospace';
+          ctx.fillText('14 COMPARISONS · BRUTE FORCE', cx, eqY + 22);
+
+          ctx.fillStyle = PAL.amber;
+          ctx.font = 'bold 12px system-ui, sans-serif';
+          ctx.fillText('Check every pair.', cx, eqY + 40);
+        } else {
+          ctx.font = '900 18px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = PAL.sky;
+          ctx.fillText(`${valA}`, cx - 22, eqY);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillText(Number(valA) < Number(valB) ? ' < ' : ' > ', cx, eqY);
+          ctx.fillStyle = PAL.amber;
+          ctx.fillText(`${valB}`, cx + 22, eqY);
+        }
+
+        ctx.restore();
+      } else if (effectiveMode === 'tree') {
+        const treeNodes = [
+          { id: 0, val: '50', x: cx, y: cy - 70, left: 1, right: 2, level: 0 },
+          { id: 1, val: '30', x: cx - 70, y: cy - 10, left: 3, right: 4, level: 1 },
+          { id: 2, val: '70', x: cx + 70, y: cy - 10, left: 5, right: 6, level: 1 },
+          { id: 3, val: '20', x: cx - 105, y: cy + 50, level: 2 },
+          { id: 4, val: '40', x: cx - 35, y: cy + 50, level: 2 },
+          { id: 5, val: '60', x: cx + 35, y: cy + 50, level: 2 },
+          { id: 6, val: '80', x: cx + 105, y: cy + 50, level: 2 },
+        ];
+
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 16px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('BINARY SEARCH TREE', cx, cy - 105);
+
+        treeNodes.forEach((node) => {
+          [node.left, node.right].forEach((childId) => {
+            if (childId === undefined) return;
+            const target = treeNodes[childId];
+            ctx.strokeStyle = 'rgba(124, 108, 255, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(node.x, node.y);
+            ctx.lineTo(target.x, target.y);
+            ctx.stroke();
+
+            const pulseT = (time * 1.5 + node.level * 0.3) % 1;
+            const px = (1 - pulseT) * node.x + pulseT * target.x;
+            const py = (1 - pulseT) * node.y + pulseT * target.y;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowColor = PAL.indigo;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        });
+
+        treeNodes.forEach((node) => {
+          const isRoot = node.id === 0;
+          const r = 16;
+          ctx.save();
+          ctx.shadowColor = isRoot ? PAL.amber : PAL.indigo;
+          ctx.shadowBlur = 12;
+          const nodeGrad = ctx.createRadialGradient(node.x - 4, node.y - 4, 2, node.x, node.y, r);
+          nodeGrad.addColorStop(0, '#FFFFFF');
+          nodeGrad.addColorStop(0.3, isRoot ? PAL.amber : '#4B7BFF');
+          nodeGrad.addColorStop(1, isRoot ? '#8F6122' : '#1E2E5A');
+          ctx.fillStyle = nodeGrad;
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(node.val, node.x, node.y);
+          ctx.restore();
+        });
+
+        ctx.restore();
+      } else if (effectiveMode === 'graph') {
+        const gNodes = graphNodesRef.current;
+        const edges = [[0, 1], [0, 2], [1, 3], [1, 4], [2, 4], [2, 5], [3, 5]];
+
+        for (let i = 0; i < gNodes.length; i++) {
+          for (let j = i + 1; j < gNodes.length; j++) {
+            const dx = gNodes[j].x - gNodes[i].x;
+            const dy = gNodes[j].y - gNodes[i].y;
+            const dist = Math.hypot(dx, dy) || 1;
+            if (dist < 180) {
+              const rep = 320 / (dist * dist);
+              gNodes[i].vx -= (dx / dist) * rep;
+              gNodes[i].vy -= (dy / dist) * rep;
+              gNodes[j].vx += (dx / dist) * rep;
+              gNodes[j].vy += (dy / dist) * rep;
+            }
+          }
+        }
+        gNodes.forEach((n) => {
+          n.vx -= n.x * 0.015;
+          n.vy -= n.y * 0.015;
+          n.vx *= 0.90;
+          n.vy *= 0.90;
+          n.x += n.vx;
+          n.y += n.vy;
+        });
+
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 16px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('3D/2.5D NETWORK GRAPH', cx, cy - 105);
+
+        edges.forEach(([u, v]) => {
+          const nU = gNodes[u];
+          const nV = gNodes[v];
+          ctx.strokeStyle = 'rgba(124, 108, 255, 0.55)';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(cx + nU.x, cy + nU.y);
+          ctx.lineTo(cx + nV.x, cy + nV.y);
+          ctx.stroke();
+        });
+
+        gNodes.forEach((node) => {
+          const nx = cx + node.x;
+          const ny = cy + node.y;
+          ctx.save();
+          ctx.shadowColor = PAL.indigo;
+          ctx.shadowBlur = 12;
+          const grad = ctx.createRadialGradient(nx - 3, ny - 3, 2, nx, ny, 15);
+          grad.addColorStop(0, '#FFFFFF');
+          grad.addColorStop(0.3, PAL.indigo);
+          grad.addColorStop(1, '#1A2130');
+          ctx.fillStyle = grad;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(nx, ny, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`N${node.id}`, nx, ny);
+          ctx.restore();
+        });
+        ctx.restore();
+      } else {
+        const listData = heap.find((h) => h.cells && h.cells.length > 0)?.cells || ['10', '25', '48', '64', '82'];
+        const count = Math.min(listData.length, 6);
+        const spacing = 52;
+        const startX = cx - ((count - 1) * spacing) / 2;
+
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 16px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('2.5D DATA STRUCTURE STAGE', cx, cy - 80);
+
+        for (let i = 0; i < count; i++) {
+          const x = startX + i * spacing;
+          const val = listData[i];
+          const isHead = i === 0;
+
+          ctx.fillStyle = isHead ? '#1E3A8A' : '#1A1E29';
+          ctx.strokeStyle = isHead ? PAL.sky : '#2B3242';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(x - 20, cy - 16, 40, 32, 8);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(val, x, cy);
+          if (i < count - 1) {
+            ctx.strokeStyle = PAL.amber;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + 20, cy);
+            ctx.lineTo(x + spacing - 20, cy);
+            ctx.stroke();
+          }
+        }
         ctx.restore();
       }
-    }
-
-    // =========================================================================
-    // VISUALIZATION MODE 2: 3D Binary Tree with Organic Spring Sway Physics
-    // =========================================================================
-    else if (effectiveMode === 'tree') {
-      const treeNodes = [
-        { id: 0, val: '50', x: 0, y: 115, z: 0, left: 1, right: 2, level: 0 },
-        { id: 1, val: '30', x: -75, y: 65, z: -25, left: 3, right: 4, level: 1 },
-        { id: 2, val: '70', x: 75, y: 65, z: 25, left: 5, right: 6, level: 1 },
-        { id: 3, val: '20', x: -110, y: 16, z: -40, level: 2 },
-        { id: 4, val: '40', x: -40, y: 16, z: -10, level: 2 },
-        { id: 5, val: '60', x: 40, y: 16, z: 10, level: 2 },
-        { id: 6, val: '80', x: 110, y: 16, z: 40, level: 2 },
-      ].map((node) => {
-        const swayX = Math.sin(time * 1.5 + node.level * 1.2) * (node.level * 2.5);
-        const swayY = Math.cos(time * 1.8 + node.id) * (node.level * 1.5);
-        return {
-          ...node,
-          x: node.x + swayX,
-          y: node.y + swayY,
-        };
+    } else {
+      STARFIELD_PARTICLES.forEach((p, idx) => {
+        const proj = project(p.x, p.y + Math.sin(time * 0.8 + idx) * 4, p.z);
+        if (proj.scale > 0.1) {
+          const rad = Math.max(0.8, 1.4 * proj.scale);
+          const alpha = Math.min(0.5, Math.max(0.1, 0.28 + 0.18 * Math.sin(idx + time * 1.2)));
+          ctx.fillStyle = idx % 2 === 0 ? `rgba(124, 140, 255, ${alpha})` : `rgba(56, 189, 248, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
 
-      const noteText = (stepNote || '').toLowerCase();
-      let activeVal = '';
-      const visitedMatch = stepNote?.match(/Visited\s+Node:\s*(\w+)/i) || stepNote?.match(/val\s*=\s*(\w+)/i);
-      if (visitedMatch) activeVal = visitedMatch[1];
-
-      [115, 65, 16].forEach((ly, lIdx) => {
+      [60, 120, 180].forEach((r) => {
         ctx.strokeStyle = 'rgba(124, 108, 255, 0.08)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        const rad = 40 + lIdx * 45;
-        for (let s = 0; s <= 24; s++) {
-          const a = (s / 24) * Math.PI * 2;
-          const pt = project(Math.cos(a) * rad, ly, Math.sin(a) * rad);
+        const segs = 32;
+        for (let s = 0; s <= segs; s++) {
+          const a = (s / segs) * Math.PI * 2;
+          const pt = project(Math.cos(a) * r, 0, Math.sin(a) * r);
           if (s === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         }
         ctx.stroke();
       });
 
-      treeNodes.forEach((node) => {
-        if (node.left !== undefined) {
-          const target = treeNodes[node.left];
-          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)', undefined, false, true);
+      const drawVoxel3D = (
+        bx: number,
+        by: number,
+        bz: number,
+        bw: number,
+        bh: number,
+        bd: number,
+        topCol: string,
+        frontCol: string,
+        sideCol: string,
+        label?: string
+      ) => {
+        const p000 = project(bx - bw / 2, by, bz - bd / 2);
+        const p100 = project(bx + bw / 2, by, bz - bd / 2);
+        const p110 = project(bx + bw / 2, by + bh, bz - bd / 2);
+        const p010 = project(bx - bw / 2, by + bh, bz - bd / 2);
+
+        const p001 = project(bx - bw / 2, by, bz + bd / 2);
+        const p101 = project(bx + bw / 2, by, bz + bd / 2);
+        const p111 = project(bx + bw / 2, by + bh, bz + bd / 2);
+        const p011 = project(bx - bw / 2, by + bh, bz + bd / 2);
+
+        ctx.fillStyle = frontCol;
+        ctx.beginPath();
+        ctx.moveTo(p001.x, p001.y);
+        ctx.lineTo(p101.x, p101.y);
+        ctx.lineTo(p111.x, p111.y);
+        ctx.lineTo(p011.x, p011.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.stroke();
+
+        ctx.fillStyle = sideCol;
+        ctx.beginPath();
+        ctx.moveTo(p101.x, p101.y);
+        ctx.lineTo(p100.x, p100.y);
+        ctx.lineTo(p110.x, p110.y);
+        ctx.lineTo(p111.x, p111.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = topCol;
+        ctx.beginPath();
+        ctx.moveTo(p011.x, p011.y);
+        ctx.lineTo(p111.x, p111.y);
+        ctx.lineTo(p110.x, p110.y);
+        ctx.lineTo(p010.x, p010.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.stroke();
+
+        if (label && p011.scale > 0.28) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = `bold ${Math.max(9, Math.round(11 * p011.scale))}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, (p011.x + p111.x) / 2, (p011.y + p111.y) / 2);
         }
-        if (node.right !== undefined) {
-          const target = treeNodes[node.right];
-          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)', undefined, false, true);
-        }
-      });
-
-      const sortedTree = [...treeNodes].sort((a, b) => {
-        const za = a.x * Math.sin(yaw) + a.z * Math.cos(yaw);
-        const zb = b.x * Math.sin(yaw) + b.z * Math.cos(yaw);
-        return zb - za;
-      });
-
-      sortedTree.forEach((node) => {
-        const isRoot = node.id === 0;
-        const isTraversed = activeVal === node.val || (noteText.includes(node.val) && activeVal !== '');
-        let color: string = isRoot ? PAL.amber : node.level === 1 ? PAL.mint : PAL.indigo;
-        if (isTraversed) color = PAL.coral;
-
-        drawSphereNode(node.x, node.y, node.z, 15, color, node.val, {
-          highlight: isTraversed || isRoot,
-          subText: isRoot ? 'ROOT' : undefined,
-        });
-      });
-    }
-
-    // =========================================================================
-    // VISUALIZATION MODE 3: 3D Topographic Terrain with Fluid Ripple Physics
-    // =========================================================================
-    else if (effectiveMode === 'matrix') {
-      const rows = 6;
-      const cols = 6;
-      const cellSize = 26;
-      const gridTotal = rows * cellSize;
-
-      const currentLocals = frames[frames.length - 1]?.locals || [];
-      const getLocalVal = (name: string) => {
-        const found = currentLocals.find((l) => name === l.name);
-        return found ? Number(found.value?.v ?? found.text) : null;
       };
 
-      const activeR = getLocalVal('r') ?? getLocalVal('row');
-      const activeC = getLocalVal('c') ?? getLocalVal('col');
-
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const dist = Math.hypot(r - 2.5, c - 2.5);
-          const ripple = Math.sin(dist * 1.4 - time * 2.8) * 3.5;
-          const elev = Math.max(10, Math.round((6.5 - dist) * 16 + ripple));
-          const x = -gridTotal / 2 + c * cellSize + cellSize / 2;
-          const z = -gridTotal / 2 + r * cellSize + cellSize / 2;
-
-          const isActiveCell = activeR === r && activeC === c;
-
-          let top: string = PAL.sky;
-          let front: string = '#1E3A8A';
-          let side: string = '#172554';
-
-          if (elev > 75) {
-            top = '#FFFFFF';
-            front = '#E2E8F0';
-            side = '#94A3B8';
-          } else if (elev > 55) {
-            top = PAL.amber;
-            front = '#D97706';
-            side = '#92400E';
-          } else if (elev > 35) {
-            top = PAL.mint;
-            front = '#059669';
-            side = '#065F46';
-          }
-
-          if (isActiveCell) {
-            top = PAL.coral;
-            front = '#DC2626';
-            side = '#991B1B';
-          }
-
-          drawVoxel(x, 0, z, cellSize - 3, elev, cellSize - 3, top, front, side, {
-            label: `${Math.round(elev / 8)}`,
-            subLabel: isActiveCell ? `[${r},${c}]` : undefined,
-            highlight: isActiveCell,
-            highlightColor: top,
-          });
-
-          if (isActiveCell) {
-            const pTop = project(x, elev, z);
-            const pSky = project(x, elev + 50, z);
-            ctx.save();
-            ctx.strokeStyle = PAL.coral;
-            ctx.lineWidth = 2.5;
-            ctx.shadowColor = PAL.coral;
-            ctx.shadowBlur = 14;
-            ctx.beginPath();
-            ctx.moveTo(pTop.x, pTop.y);
-            ctx.lineTo(pSky.x, pSky.y);
-            ctx.stroke();
-            ctx.restore();
-          }
-        }
-      }
-    }
-
-    // =========================================================================
-    // VISUALIZATION MODE 4: 3D Tower of Hanoi Physical Simulation
-    // =========================================================================
-    else if (effectiveMode === 'hanoi') {
-      const pegSpacing = 85;
-      const pegHeight = 115;
-      const pegRadius = 3.5;
-
-      drawVoxel(0, 0, 0, 245, 9, 85, '#2A2D3D', '#1B1D28', '#14151E', {
-        label: 'TOWER OF HANOI BASE',
-      });
-
-      const pegs = [
-        { label: 'Peg A', x: -pegSpacing },
-        { label: 'Peg B', x: 0 },
-        { label: 'Peg C', x: pegSpacing },
-      ];
-
-      pegs.forEach((peg) => {
-        drawPeg(peg.x, 9, 0, pegRadius, pegHeight, peg.label);
-      });
-
-      let movingDisk = 0;
-      let fromPeg = 0;
-      let toPeg = 2;
-
-      const moveMatch = stepNote?.match(/Move\s+disk\s+(\d+)\s+from\s+([A-C])\s*->\s*([A-C])/i);
-      if (moveMatch) {
-        movingDisk = parseInt(moveMatch[1], 10);
-        fromPeg = moveMatch[2] === 'A' ? 0 : moveMatch[2] === 'B' ? 1 : 2;
-        toPeg = moveMatch[3] === 'A' ? 0 : moveMatch[3] === 'B' ? 1 : 2;
-      }
-
-      const diskSpecs = [
-        { id: 3, size: 58, h: 14, color: PAL.coral, label: 'Disk 3' },
-        { id: 2, size: 42, h: 14, color: PAL.amber, label: 'Disk 2' },
-        { id: 1, size: 26, h: 14, color: PAL.mint, label: 'Disk 1' },
-      ];
-
-      const pegStacks: number[][] = [[3, 2, 1], [], []];
-      if (movingDisk > 0) {
-        pegStacks[fromPeg] = pegStacks[fromPeg].filter((d) => d !== movingDisk);
-        const startX = pegs[fromPeg].x;
-        const endX = pegs[toPeg].x;
-        const pArcStart = project(startX, 65, 0);
-        const pArcEnd = project(endX, 65, 0);
-        const pArcPeak = project((startX + endX) / 2, pegHeight + 25, 0);
-
-        ctx.save();
-        ctx.strokeStyle = PAL.amber;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(pArcStart.x, pArcStart.y);
-        ctx.quadraticCurveTo(pArcPeak.x, pArcPeak.y, pArcEnd.x, pArcEnd.y);
-        ctx.stroke();
-        ctx.restore();
-
-        const flyingSpec = diskSpecs.find((d) => d.id === movingDisk);
-        if (flyingSpec) {
-          drawVoxel(
-            (startX + endX) / 2,
-            pegHeight + 15 + Math.sin(time * 3) * 3,
-            0,
-            flyingSpec.size,
-            flyingSpec.h,
-            30,
-            flyingSpec.color,
-            flyingSpec.color,
-            'rgba(0,0,0,0.4)',
-            {
-              label: flyingSpec.label,
-              highlight: true,
-              highlightColor: flyingSpec.color,
-              badge: `Moving -> ${pegs[toPeg].label}`,
-              badgeColor: flyingSpec.color,
-            }
-          );
-        }
-      }
-
-      pegStacks.forEach((stack, pIdx) => {
-        let currentY = 9;
-        stack.forEach((diskId) => {
-          const spec = diskSpecs.find((d) => d.id === diskId);
-          if (spec) {
-            const px = pegs[pIdx].x;
-            drawVoxel(px, currentY, 0, spec.size, spec.h, 30, spec.color, spec.color, 'rgba(0,0,0,0.35)', {
-              label: spec.label,
-              highlight: false,
-            });
-            currentY += spec.h + 2;
-          }
-        });
-      });
-    }
-
-    // =========================================================================
-    // VISUALIZATION MODE 5: 3D Force-Directed Graph Physics Simulation
-    // =========================================================================
-    else if (effectiveMode === 'graph') {
-      const gNodes = graphNodesRef.current;
-      const edges = [
-        [0, 1],
-        [0, 2],
-        [1, 3],
-        [1, 4],
-        [2, 4],
-        [2, 5],
-        [3, 5],
-      ];
-
-      // Real 3D Force-Directed Spring & Coulomb Physics Step
-      for (let i = 0; i < gNodes.length; i++) {
-        for (let j = i + 1; j < gNodes.length; j++) {
-          const dx = gNodes[j].x - gNodes[i].x;
-          const dy = gNodes[j].y - gNodes[i].y;
-          const dz = gNodes[j].z - gNodes[i].z;
-          const dist = Math.hypot(dx, dy, dz) || 1;
-          if (dist < 220) {
-            const repForce = 450 / (dist * dist);
-            const fx = (dx / dist) * repForce;
-            const fy = (dy / dist) * repForce;
-            const fz = (dz / dist) * repForce;
-            gNodes[i].vx -= fx;
-            gNodes[i].vy -= fy;
-            gNodes[i].vz -= fz;
-            gNodes[j].vx += fx;
-            gNodes[j].vy += fy;
-            gNodes[j].vz += fz;
-          }
-        }
-      }
-
-      const restLength = 95;
-      const springK = 0.04;
-      edges.forEach(([u, v]) => {
-        const dx = gNodes[v].x - gNodes[u].x;
-        const dy = gNodes[v].y - gNodes[u].y;
-        const dz = gNodes[v].z - gNodes[u].z;
-        const dist = Math.hypot(dx, dy, dz) || 1;
-        const disp = dist - restLength;
-        const fx = (dx / dist) * disp * springK;
-        const fy = (dy / dist) * disp * springK;
-        const fz = (dz / dist) * disp * springK;
-        gNodes[u].vx += fx;
-        gNodes[u].vy += fy;
-        gNodes[u].vz += fz;
-        gNodes[v].vx -= fx;
-        gNodes[v].vy -= fy;
-        gNodes[v].vz -= fz;
-      });
-
-      gNodes.forEach((n) => {
-        const centerPull = 0.015;
-        n.vx -= n.x * centerPull;
-        n.vy -= (n.y - 45) * centerPull;
-        n.vz -= n.z * centerPull;
-
-        n.vx *= 0.90;
-        n.vy *= 0.90;
-        n.vz *= 0.90;
-
-        n.x += n.vx;
-        n.y += n.vy;
-        n.z += n.vz;
-      });
-
-      const currentLocals = frames[frames.length - 1]?.locals || [];
-      const activeNodeVal = currentLocals.find((l) => l.name === 'i' || l.name === 'u')?.text;
-      const activeNodeIdx = activeNodeVal ? parseInt(activeNodeVal, 10) : 0;
-
-      edges.forEach(([u, v]) => {
-        const nU = gNodes[u];
-        const nV = gNodes[v];
-        const isTraversing = u === activeNodeIdx || v === activeNodeIdx;
-        drawPointerRay(
-          nU.x,
-          nU.y,
-          nU.z,
-          nV.x,
-          nV.y,
-          nV.z,
-          isTraversing ? PAL.amber : 'rgba(124, 108, 255, 0.55)',
-          undefined,
-          !isTraversing,
-          isTraversing
-        );
-      });
-
-      const sortedGraph = [...gNodes].sort((a, b) => {
-        const za = a.x * Math.sin(yaw) + a.z * Math.cos(yaw);
-        const zb = b.x * Math.sin(yaw) + b.z * Math.cos(yaw);
-        return zb - za;
-      });
-
-      sortedGraph.forEach((node) => {
-        const isActive = node.id === activeNodeIdx;
-        const isVisited = node.id <= activeNodeIdx;
-        const color = isActive ? PAL.amber : isVisited ? PAL.mint : PAL.indigo;
-
-        drawSphereNode(node.x, node.y, node.z, 15, color, `N${node.id}`, {
-          highlight: isActive,
-          subText: isActive ? 'ACTIVE' : isVisited ? 'VISITED' : undefined,
-        });
-      });
-    }
-
-    // =========================================================================
-    // VISUALIZATION MODE 6: 3D Linked List Node Chain
-    // =========================================================================
-    else if (effectiveMode === 'list') {
-      const listData =
-        heap.find((h) => h.cells && h.cells.length > 0)?.cells || ['10', '25', '48', '64', '82'];
-      const count = Math.min(listData.length, 6);
-      const spacing = 52;
+      const count = 8;
+      const spacing = 32;
       const startX = -((count - 1) * spacing) / 2;
-
       for (let i = 0; i < count; i++) {
         const x = startX + i * spacing;
-        const val = listData[i];
-        const isHead = i === 0;
-        const isTail = i === count - 1;
-
-        drawVoxel(x, 25, 0, 36, 24, 28, isHead ? PAL.mint : PAL.indigo, '#5748D6', '#3E32A3', {
-          label: val,
-          subLabel: isHead ? 'HEAD' : `[${i}]`,
-          highlight: isHead,
-        });
-
-        if (!isTail) {
-          const nextX = startX + (i + 1) * spacing;
-          drawPointerRay(x + 18, 37, 0, nextX - 18, 37, 0, PAL.cyan, 'next', false, true);
-        } else {
-          const nullP = project(x + 36, 37, 0);
-          ctx.save();
-          ctx.fillStyle = PAL.coral;
-          ctx.font = 'bold 9.5px monospace';
-          ctx.fillText('NULL ⏚', nullP.x, nullP.y + 4);
-          ctx.restore();
-        }
+        const h = 20 + i * 12;
+        drawVoxel3D(x, 0, 0, 22, h, 22, PAL.indigo, '#5748D6', '#3E32A3', `${h}`);
       }
+
+      const gizmoX = width - 36;
+      const gizmoY = 36;
+      ctx.save();
+      ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
+      ctx.strokeStyle = 'var(--line2)';
+      ctx.beginPath();
+      ctx.arc(gizmoX, gizmoY, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // =========================================================================
-    // VISUALIZATION MODE 7: 3D Levitating Call Stack Towers & Heap Memory
-    // =========================================================================
-    else {
-      const stackList = frames.length
-        ? [...frames].reverse()
-        : [
-            {
-              sig: 'main(String[] args)',
-              locals: [
-                { type: 'int[]', name: 'arr', text: 'int[10]' },
-                { type: 'int', name: 'n', text: '10' },
-              ],
-            },
-            { sig: 'printArray(int[] arr)', locals: [{ type: 'int', name: 'i', text: '0' }] },
-          ];
-
-      const frameHeight = 26;
-      const frameWidth = 145;
-      const frameDepth = 85;
-
-      stackList.forEach((f, idx) => {
-        const hoverOffset = Math.sin(time * 2 + idx) * 2;
-        const y = idx * (frameHeight + 16) + 6 + hoverOffset;
-        const isTop = idx === stackList.length - 1;
-        const top = isTop ? PAL.amber : '#7C6CFF';
-        const front = isTop ? '#D99B26' : '#5748D6';
-        const side = isTop ? '#A87413' : '#3E32A3';
-
-        drawVoxel(0, y, 0, frameWidth, frameHeight, frameDepth, top, front, side, {
-          label: f.sig.split('(')[0],
-          subLabel: `Frame #${idx + 1}${isTop ? ' (Active)' : ''}`,
-          highlight: isTop,
-          highlightColor: top,
-        });
-
-        f.locals.slice(0, 3).forEach((loc, lIdx) => {
-          const lx = frameWidth / 2 + 50;
-          const lz = -28 + lIdx * 28;
-          const valStr = `${loc.name}=${loc.text}`;
-
-          drawVoxel(lx, y + 4, lz, 62, 16, 22, PAL.mint, '#1EA675', '#147A55', {
-            label: valStr,
-            highlight: false,
-          });
-
-          drawPointerRay(frameWidth / 2, y + 12, lz, lx - 31, y + 12, lz, 'rgba(52, 217, 160, 0.7)', undefined, false, isTop);
-        });
-      });
-    }
-
-    // =========================================================================
-    // 3D Axis Compass / Orientation Gizmo (Top Right Corner)
-    // =========================================================================
-    const gizmoX = width - 36;
-    const gizmoY = 36;
-    const gizmoLen = 22;
-
-    const projectGizmo = (ax: number, ay: number, az: number) => {
-      const cosY = Math.cos(yaw);
-      const sinY = Math.sin(yaw);
-      const x1 = ax * cosY - az * sinY;
-      const z1 = ax * sinY + az * cosY;
-
-      const cosP = Math.cos(pitch);
-      const sinP = Math.sin(pitch);
-      const y2 = ay * cosP - z1 * sinP;
-
-      return {
-        x: gizmoX + x1 * gizmoLen,
-        y: gizmoY - y2 * gizmoLen,
-      };
-    };
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
-    ctx.strokeStyle = 'var(--line2)';
-    ctx.beginPath();
-    ctx.arc(gizmoX, gizmoY, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    const pX = projectGizmo(1, 0, 0);
-    ctx.strokeStyle = PAL.coral;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(gizmoX, gizmoY);
-    ctx.lineTo(pX.x, pX.y);
-    ctx.stroke();
-    ctx.fillStyle = PAL.coral;
-    ctx.font = 'bold 8px monospace';
-    ctx.fillText('X', pX.x + 3, pX.y + 2);
-
-    const pY = projectGizmo(0, 1, 0);
-    ctx.strokeStyle = PAL.mint;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(gizmoX, gizmoY);
-    ctx.lineTo(pY.x, pY.y);
-    ctx.stroke();
-    ctx.fillStyle = PAL.mint;
-    ctx.fillText('Y', pY.x, pY.y - 3);
-
-    const pZ = projectGizmo(0, 0, 1);
-    ctx.strokeStyle = PAL.sky;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(gizmoX, gizmoY);
-    ctx.lineTo(pZ.x, pZ.y);
-    ctx.stroke();
-    ctx.fillStyle = PAL.sky;
-    ctx.fillText('Z', pZ.x - 4, pZ.y + 8);
-
     ctx.restore();
+  }, [renderStyle, yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote]);
 
-    ctx.restore();
-  }, [yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote]);
-
-  // Animation & Physics Frame Loop
   useEffect(() => {
     let active = true;
     const animate = (timeMs: number) => {
@@ -1375,7 +1007,6 @@ export function Java3DVisualizer({
     };
   }, [renderScene]);
 
-  // ResizeObserver for dynamic viewport measurement
   useEffect(() => {
     const parent = containerRef.current;
     if (!parent) return;
@@ -1392,8 +1023,8 @@ export function Java3DVisualizer({
         position: 'relative',
         width: '100%',
         height: '100%',
-        minHeight: phone ? 300 : 340,
-        background: 'radial-gradient(circle at 50% 40%, #161828 0%, #0B0D14 100%)',
+        minHeight: phone ? 320 : 360,
+        background: 'radial-gradient(circle at 50% 40%, #131726 0%, #080A10 100%)',
         borderRadius: 14,
         overflow: 'hidden',
         border: '1px solid var(--line2)',
@@ -1401,7 +1032,6 @@ export function Java3DVisualizer({
         flexDirection: 'column',
       }}
     >
-      {/* 3D Canvas Ground */}
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
@@ -1413,18 +1043,17 @@ export function Java3DVisualizer({
           width: '100%',
           flex: 1,
           display: 'block',
-          cursor: 'grab',
+          cursor: renderStyle === 'orbit3d' ? 'grab' : 'default',
           touchAction: 'none',
         }}
       />
 
-      {/* Top Floating Controls Bar */}
       <div
         style={{
           position: 'absolute',
           top: 10,
           left: 10,
-          right: 70,
+          right: 10,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1433,7 +1062,59 @@ export function Java3DVisualizer({
           flexWrap: 'wrap',
         }}
       >
-        {/* Mode Selector Pill Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            padding: 3,
+            borderRadius: 9,
+            background: 'rgba(15, 17, 26, 0.92)',
+            border: '1px solid var(--line2)',
+            backdropFilter: 'blur(10px)',
+            pointerEvents: 'auto',
+          }}
+        >
+          <button
+            onClick={() => {
+              playClick();
+              setRenderStyle('stage2d');
+            }}
+            className="k-squish"
+            style={{
+              padding: phone ? '4px 8px' : '4px 10px',
+              borderRadius: 6,
+              fontSize: phone ? 10 : 11,
+              fontWeight: 800,
+              border: 'none',
+              background: renderStyle === 'stage2d' ? 'var(--acc)' : 'transparent',
+              color: renderStyle === 'stage2d' ? 'var(--ink)' : 'var(--tx2)',
+              cursor: 'pointer',
+            }}
+          >
+            🎨 2.5D Stage
+          </button>
+          <button
+            onClick={() => {
+              playClick();
+              setRenderStyle('orbit3d');
+            }}
+            className="k-squish"
+            style={{
+              padding: phone ? '4px 8px' : '4px 10px',
+              borderRadius: 6,
+              fontSize: phone ? 10 : 11,
+              fontWeight: 800,
+              border: 'none',
+              background: renderStyle === 'orbit3d' ? 'var(--acc)' : 'transparent',
+              color: renderStyle === 'orbit3d' ? 'var(--ink)' : 'var(--tx2)',
+              cursor: 'pointer',
+            }}
+          >
+            🌌 3D Orbit
+          </button>
+        </div>
+
         <div
           style={{
             display: 'flex',
@@ -1453,13 +1134,11 @@ export function Java3DVisualizer({
           {(
             [
               ['auto', 'Auto'],
-              ['arrays', 'Array'],
-              ['tree', 'Tree'],
-              ['matrix', 'Matrix'],
+              ['arrays', 'Array/Sort'],
               ['hanoi', 'Hanoi'],
+              ['stack', 'Stack/Queue'],
+              ['tree', 'Tree'],
               ['graph', 'Graph'],
-              ['stack', 'Stack'],
-              ['list', 'List'],
             ] as [VisMode, string][]
           ).map(([m, label]) => {
             const isSel = visMode === m;
@@ -1489,7 +1168,6 @@ export function Java3DVisualizer({
           })}
         </div>
 
-        {/* Camera Perspective & Angle Controls */}
         <div
           style={{
             display: 'flex',
@@ -1503,58 +1181,9 @@ export function Java3DVisualizer({
             pointerEvents: 'auto',
           }}
         >
-          {/* Perspective / Isometric Toggle */}
-          <button
-            onClick={() => {
-              playClick();
-              setIsPerspective((p) => !p);
-            }}
-            className="k-squish"
-            title={isPerspective ? 'Switch to Isometric (Orthogonal)' : 'Switch to True 3D Perspective'}
-            style={{
-              padding: '4px 7px',
-              borderRadius: 6,
-              fontSize: 9.5,
-              fontWeight: 800,
-              border: 'none',
-              background: isPerspective ? 'var(--acc)' : 'color-mix(in srgb, var(--acc) 25%, transparent)',
-              color: isPerspective ? 'var(--ink)' : 'var(--accTx)',
-              cursor: 'pointer',
-            }}
-          >
-            {isPerspective ? '3D Persp' : 'Iso 3D'}
-          </button>
-
-          {(
-            [
-              ['front', 'Front'],
-              ['top', 'Top'],
-              ['side', 'Side'],
-            ] as [ViewAngle, string][]
-          ).map(([a, label]) => (
-            <button
-              key={a}
-              onClick={() => setPresetAngle(a)}
-              className="k-squish"
-              style={{
-                padding: '4px 6px',
-                borderRadius: 6,
-                fontSize: 9,
-                fontWeight: 700,
-                border: 'none',
-                background: viewAngle === a ? 'color-mix(in srgb, var(--acc) 25%, transparent)' : 'transparent',
-                color: viewAngle === a ? 'var(--accTx)' : 'var(--tx3)',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-
-          {/* Reset Camera Button */}
           <button
             onClick={resetCamera}
-            title="Reset Camera"
+            title="Reset View"
             className="hov k-squish"
             style={{
               width: 22,
@@ -1570,8 +1199,6 @@ export function Java3DVisualizer({
           >
             <Icon name="refresh" size={11} color="var(--tx2)" />
           </button>
-
-          {/* Zoom Buttons */}
           <button
             onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))}
             title="Zoom In"
@@ -1590,28 +1217,9 @@ export function Java3DVisualizer({
           >
             <Icon name="plus" size={10} color="var(--tx2)" />
           </button>
-          <button
-            onClick={() => setZoom((z) => Math.max(0.35, z - 0.2))}
-            title="Zoom Out"
-            className="hov k-squish"
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              display: 'grid',
-              placeItems: 'center',
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--tx2)',
-              cursor: 'pointer',
-            }}
-          >
-            <Icon name="minus" size={10} color="var(--tx2)" />
-          </button>
         </div>
       </div>
 
-      {/* Bottom Status HUD */}
       <div
         style={{
           position: 'absolute',
@@ -1643,10 +1251,10 @@ export function Java3DVisualizer({
               flexShrink: 0,
             }}
           >
-            {effectiveMode.toUpperCase()}
+            {renderStyle === 'stage2d' ? '2.5D STAGE' : '3D ORBIT'}
           </span>
           <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-            {stepNote || 'Drag to rotate 3D · Pinch/Wheel to zoom · Shift+drag to pan'}
+            {stepNote || 'Drag to pan / rotate · Scroll to zoom'}
           </span>
         </div>
 
