@@ -15,7 +15,7 @@ interface Java3DVisualizerProps {
   phone?: boolean;
 }
 
-type ViewAngle = 'isometric' | 'front' | 'top' | 'free';
+type ViewAngle = 'isometric' | 'perspective' | 'front' | 'top' | 'side' | 'free';
 export type VisMode = 'auto' | 'arrays' | 'tree' | 'matrix' | 'hanoi' | 'graph' | 'stack' | 'list';
 
 interface Point3D {
@@ -31,11 +31,23 @@ interface ProjectedPoint {
   scale: number;
 }
 
-// Pseudo-random deterministic starfield dust in 3D space
-const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 42 }, (_, i) => {
+// 3D Force-Directed Graph Simulation Node Interface
+interface SimGraphNode {
+  id: number;
+  val: string;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
+// Deterministic 3D Starfield Particles
+const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 48 }, (_, i) => {
   const theta = (i * 2.39996) % (Math.PI * 2);
   const phi = ((i * 1.61803) % Math.PI) - Math.PI / 2;
-  const rad = 130 + ((i * 37) % 110);
+  const rad = 140 + ((i * 37) % 120);
   return {
     x: Math.cos(phi) * Math.cos(theta) * rad,
     y: Math.sin(phi) * rad * 0.7 + 30,
@@ -54,46 +66,84 @@ export function Java3DVisualizer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Camera Orientation & Projection Parameters
   const [yaw, setYaw] = useState<number>(0.75); // ~43 deg
   const [pitch, setPitch] = useState<number>(0.55); // ~31 deg
   const [zoom, setZoom] = useState<number>(1.0);
+  const [panX, setPanX] = useState<number>(0);
+  const [panY, setPanY] = useState<number>(0);
   const [visMode, setVisMode] = useState<VisMode>('auto');
   const [viewAngle, setViewAngle] = useState<ViewAngle>('isometric');
+  const [isPerspective, setIsPerspective] = useState<boolean>(true);
 
-  // Multi-touch & pointer gesture tracking
+  // Physics Simulation State
+  const animTimeRef = useRef<number>(0);
+  const animFrameIdRef = useRef<number | null>(null);
+
+  // Force-Directed Graph Physics State
+  const graphNodesRef = useRef<SimGraphNode[]>([
+    { id: 0, val: '0', x: 0, y: 80, z: 0, vx: 0, vy: 0, vz: 0 },
+    { id: 1, val: '1', x: -65, y: 40, z: -40, vx: 0, vy: 0, vz: 0 },
+    { id: 2, val: '2', x: 65, y: 40, z: 40, vx: 0, vy: 0, vz: 0 },
+    { id: 3, val: '3', x: -90, y: 0, z: 20, vx: 0, vy: 0, vz: 0 },
+    { id: 4, val: '4', x: 0, y: 10, z: 70, vx: 0, vy: 0, vz: 0 },
+    { id: 5, val: '5', x: 90, y: 0, z: -30, vx: 0, vy: 0, vz: 0 },
+  ]);
+
+  // Multi-Touch & Pointer Tracking
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchDistanceRef = useRef<number | null>(null);
+  const isRightClickPanRef = useRef<boolean>(false);
 
-  // Set camera preset angle
+  // Set camera angle preset
   const setPresetAngle = useCallback((angle: ViewAngle) => {
     playClick();
     setViewAngle(angle);
+    setPanX(0);
+    setPanY(0);
     if (angle === 'isometric') {
+      setIsPerspective(false);
       setYaw(0.75);
       setPitch(0.55);
       setZoom(1.0);
+    } else if (angle === 'perspective') {
+      setIsPerspective(true);
+      setYaw(0.65);
+      setPitch(0.48);
+      setZoom(1.0);
     } else if (angle === 'front') {
+      setIsPerspective(false);
       setYaw(0);
-      setPitch(0.05);
+      setPitch(0.02);
       setZoom(1.0);
     } else if (angle === 'top') {
+      setIsPerspective(false);
       setYaw(0);
       setPitch(1.52);
       setZoom(0.95);
+    } else if (angle === 'side') {
+      setIsPerspective(false);
+      setYaw(Math.PI / 2);
+      setPitch(0.05);
+      setZoom(1.0);
     }
   }, []);
 
   const resetCamera = useCallback(() => {
     playClick();
-    setViewAngle('isometric');
-    setYaw(0.75);
-    setPitch(0.55);
+    setViewAngle('perspective');
+    setIsPerspective(true);
+    setYaw(0.65);
+    setPitch(0.48);
     setZoom(1.0);
+    setPanX(0);
+    setPanY(0);
   }, []);
 
-  // Multi-Touch & Pointer Orbit / Pinch-Zoom Event Handlers
+  // Multi-Touch & Pointer Orbit / Pan / Pinch-Zoom Event Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    isRightClickPanRef.current = e.button === 2 || e.button === 1;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {}
@@ -111,25 +161,33 @@ export function Java3DVisualizer({
     const prevPos = pointers.get(e.pointerId)!;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // Two-finger pinch zoom
+    // Two-finger gestures (Pinch-to-zoom + Pan)
     if (pointers.size >= 2) {
       const pts = Array.from(pointers.values());
       const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       if (pinchDistanceRef.current !== null && pinchDistanceRef.current > 0) {
         const deltaDist = currentDist - pinchDistanceRef.current;
-        setZoom((z) => Math.max(0.4, Math.min(3.0, z + deltaDist * 0.005)));
+        setZoom((z) => Math.max(0.35, Math.min(3.5, z + deltaDist * 0.005)));
       }
       pinchDistanceRef.current = currentDist;
       return;
     }
 
-    // Single-finger / mouse orbit rotation
+    // Single-finger Orbit or Right-click Pan
     if (pointers.size === 1) {
       const dx = e.clientX - prevPos.x;
       const dy = e.clientY - prevPos.y;
-      setViewAngle('free');
-      setYaw((y) => y + dx * 0.0075);
-      setPitch((p) => Math.max(-0.1, Math.min(1.54, p - dy * 0.0075)));
+
+      if (isRightClickPanRef.current || e.shiftKey) {
+        // Pan
+        setPanX((px) => px + dx);
+        setPanY((py) => py + dy);
+      } else {
+        // Orbit
+        setViewAngle('free');
+        setYaw((y) => y + dx * 0.0075);
+        setPitch((p) => Math.max(-0.25, Math.min(1.54, p - dy * 0.0075)));
+      }
     }
   }, []);
 
@@ -145,10 +203,10 @@ export function Java3DVisualizer({
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(3.0, z - e.deltaY * 0.0015)));
+    setZoom((z) => Math.max(0.35, Math.min(3.5, z - e.deltaY * 0.0015)));
   }, []);
 
-  // Intelligent Automatic Visualization Mode Detection
+  // Automatic Visualization Mode Detection
   const detectedMode = useMemo<VisMode>(() => {
     const isHanoiSignature = frames.some(
       (f) =>
@@ -200,8 +258,10 @@ export function Java3DVisualizer({
 
   const effectiveMode = visMode === 'auto' ? detectedMode : visMode;
 
-  // 3D Canvas Rendering Engine
-  const renderScene = useCallback(() => {
+  // ---------------------------------------------------------------------------
+  // 3D Canvas Rendering & Physics Engine
+  // ---------------------------------------------------------------------------
+  const renderScene = useCallback((time: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -223,13 +283,12 @@ export function Java3DVisualizer({
     const width = clientW;
     const height = clientH;
 
-    // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    const cx = width / 2;
-    const cy = height / 2 + 20;
+    const cx = width / 2 + panX;
+    const cy = height / 2 + 20 + panY;
 
-    // 3D Projection Math Matrix Helper
+    // 3D Perspective & Isometric Projection Engine
     const project = (x: number, y: number, z: number): ProjectedPoint => {
       const cosY = Math.cos(yaw);
       const sinY = Math.sin(yaw);
@@ -241,22 +300,31 @@ export function Java3DVisualizer({
       const y2 = y * cosP - z1 * sinP;
       const z2 = y * sinP + z1 * cosP;
 
-      const cameraDistance = 640;
-      const scale = (370 / (z2 + cameraDistance)) * zoom;
-      const screenX = cx + x1 * scale * 1.8;
-      const screenY = cy - y2 * scale * 1.8;
-
-      return { x: screenX, y: screenY, z: z2, scale };
+      if (isPerspective) {
+        // True 3D Perspective Projection (FOV 60°)
+        const fovDistance = 620;
+        const depth = z2 + fovDistance;
+        const scale = (390 / Math.max(40, depth)) * zoom;
+        const screenX = cx + x1 * scale * 1.8;
+        const screenY = cy - y2 * scale * 1.8;
+        return { x: screenX, y: screenY, z: z2, scale };
+      } else {
+        // Orthographic Isometric Projection
+        const scale = 0.65 * zoom;
+        const screenX = cx + x1 * scale * 1.8;
+        const screenY = cy - y2 * scale * 1.8;
+        return { x: screenX, y: screenY, z: z2, scale };
+      }
     };
 
     // ==========================================
-    // 3D Starfield / Cyberspace Ambient Particles
+    // 1. 3D Starfield Cyberspace Dust
     // ==========================================
     STARFIELD_PARTICLES.forEach((p, idx) => {
-      const proj = project(p.x, p.y, p.z);
+      const proj = project(p.x, p.y + Math.sin(time * 0.8 + idx) * 4, p.z);
       if (proj.scale > 0.1) {
-        const rad = Math.max(0.7, 1.4 * proj.scale);
-        const alpha = Math.min(0.55, Math.max(0.12, 0.35 + 0.2 * Math.sin(idx + yaw)));
+        const rad = Math.max(0.8, 1.4 * proj.scale);
+        const alpha = Math.min(0.5, Math.max(0.1, 0.28 + 0.18 * Math.sin(idx + time * 1.2)));
         ctx.fillStyle = idx % 2 === 0 ? `rgba(124, 140, 255, ${alpha})` : `rgba(56, 189, 248, ${alpha})`;
         ctx.beginPath();
         ctx.arc(proj.x, proj.y, rad, 0, Math.PI * 2);
@@ -265,17 +333,16 @@ export function Java3DVisualizer({
     });
 
     // ==========================================
-    // 3D Ground Grid with Radial Atmospheric Fade
+    // 2. 3D Ground Grid & Level Rings
     // ==========================================
     const gridSize = 210;
     const gridStep = 35;
 
-    // Ground Radial Concentric Rings
     [60, 120, 180].forEach((r) => {
-      ctx.strokeStyle = 'rgba(124, 108, 255, 0.07)';
+      ctx.strokeStyle = 'rgba(124, 108, 255, 0.08)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      const segs = 28;
+      const segs = 32;
       for (let s = 0; s <= segs; s++) {
         const ang = (s / segs) * Math.PI * 2;
         const pt = project(Math.cos(ang) * r, 0, Math.sin(ang) * r);
@@ -285,12 +352,11 @@ export function Java3DVisualizer({
       ctx.stroke();
     });
 
-    // Ground Linear Grid Lines with Distance Fade
     for (let gx = -gridSize; gx <= gridSize; gx += gridStep) {
       const p1 = project(gx, 0, -gridSize);
       const p2 = project(gx, 0, gridSize);
       const distRatio = Math.abs(gx) / gridSize;
-      const alpha = Math.max(0.015, 0.09 * (1 - distRatio));
+      const alpha = Math.max(0.015, 0.08 * (1 - distRatio));
 
       ctx.strokeStyle = `rgba(124, 108, 255, ${alpha})`;
       ctx.lineWidth = 1;
@@ -299,12 +365,11 @@ export function Java3DVisualizer({
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
     }
-
     for (let gz = -gridSize; gz <= gridSize; gz += gridStep) {
       const p1 = project(-gridSize, 0, gz);
       const p2 = project(gridSize, 0, gz);
       const distRatio = Math.abs(gz) / gridSize;
-      const alpha = Math.max(0.015, 0.09 * (1 - distRatio));
+      const alpha = Math.max(0.015, 0.08 * (1 - distRatio));
 
       ctx.strokeStyle = `rgba(124, 108, 255, ${alpha})`;
       ctx.lineWidth = 1;
@@ -315,10 +380,9 @@ export function Java3DVisualizer({
     }
 
     // ==========================================
-    // Core 3D Geometry Rendering Primitives
+    // Core 3D Geometry Rendering Helpers
     // ==========================================
 
-    // Helper: Draw Ground Drop Shadow under 3D Object
     const drawGroundShadow = (sx: number, sz: number, radX: number, radZ: number, alpha = 0.35) => {
       const p = project(sx, 0, sz);
       const rx = radX * p.scale * 1.8;
@@ -337,7 +401,6 @@ export function Java3DVisualizer({
       ctx.restore();
     };
 
-    // Helper: Draw Volumetric 3D Shaded Voxel Block
     const drawVoxel = (
       bx: number,
       by: number,
@@ -363,7 +426,6 @@ export function Java3DVisualizer({
       const highlightColor = opts?.highlightColor ?? topColor;
       const opacity = opts?.opacity ?? 1.0;
 
-      // Draw Floor Contact Shadow
       if (by <= 4) {
         drawGroundShadow(bx, bz, bw * 0.8, bd * 0.8, 0.45);
       }
@@ -381,16 +443,15 @@ export function Java3DVisualizer({
       ctx.save();
       ctx.globalAlpha = opacity;
 
-      // Glow Aura if Active
       if (highlight) {
         ctx.shadowColor = highlightColor;
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 20;
       }
 
-      // Draw Front Face (+Z)
+      // Front Face (+Z)
       const frontGrad = ctx.createLinearGradient(p011.x, p011.y, p001.x, p001.y);
       frontGrad.addColorStop(0, frontColor);
-      frontGrad.addColorStop(1, 'rgba(12, 14, 22, 0.95)');
+      frontGrad.addColorStop(1, 'rgba(10, 12, 20, 0.95)');
       ctx.fillStyle = frontGrad;
       ctx.beginPath();
       ctx.moveTo(p001.x, p001.y);
@@ -403,10 +464,10 @@ export function Java3DVisualizer({
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Draw Right Side Face (+X)
+      // Right Side Face (+X)
       const sideGrad = ctx.createLinearGradient(p111.x, p111.y, p100.x, p100.y);
       sideGrad.addColorStop(0, sideColor);
-      sideGrad.addColorStop(1, 'rgba(8, 10, 16, 0.95)');
+      sideGrad.addColorStop(1, 'rgba(6, 8, 14, 0.95)');
       ctx.fillStyle = sideGrad;
       ctx.beginPath();
       ctx.moveTo(p101.x, p101.y);
@@ -417,7 +478,7 @@ export function Java3DVisualizer({
       ctx.fill();
       ctx.stroke();
 
-      // Draw Top Face (+Y) with Ambient Highlight
+      // Top Face (+Y)
       const topGrad = ctx.createLinearGradient(p010.x, p010.y, p111.x, p111.y);
       topGrad.addColorStop(0, topColor);
       topGrad.addColorStop(1, frontColor);
@@ -437,7 +498,6 @@ export function Java3DVisualizer({
       const topCenterX = (p011.x + p111.x + p110.x + p010.x) / 4;
       const topCenterY = (p011.y + p111.y + p110.y + p010.y) / 4;
 
-      // Top Value Label
       if (opts?.label && p011.scale > 0.28) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${Math.max(9, Math.round(11 * p011.scale))}px monospace`;
@@ -449,7 +509,6 @@ export function Java3DVisualizer({
         ctx.shadowBlur = 0;
       }
 
-      // Sorted Element Check Indicator
       if (opts?.isSorted && p011.scale > 0.3) {
         ctx.fillStyle = PAL.mint;
         ctx.font = `bold ${Math.max(8, Math.round(9 * p011.scale))}px monospace`;
@@ -457,7 +516,6 @@ export function Java3DVisualizer({
         ctx.fillText('✓', topCenterX, topCenterY - 12 * p011.scale);
       }
 
-      // Sub-Label / Array Index Tag [i] on Base
       if (opts?.subLabel && p001.scale > 0.28) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         ctx.font = `bold ${Math.max(8, Math.round(9.5 * p001.scale))}px monospace`;
@@ -466,7 +524,6 @@ export function Java3DVisualizer({
         ctx.fillText(opts.subLabel, (p001.x + p101.x) / 2, p001.y + 7);
       }
 
-      // Floating Badge Indicator (e.g. [LOW], [MID], [HIGH], [TARGET])
       if (opts?.badge && p011.scale > 0.28) {
         const badgeY = topCenterY - 20 * p011.scale;
         const badgeText = opts.badge;
@@ -475,7 +532,6 @@ export function Java3DVisualizer({
         const badgeW = textMetrics.width + 10;
         const badgeH = 14 * p011.scale;
 
-        // Pointer Line
         ctx.strokeStyle = opts.badgeColor || PAL.amber;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -483,7 +539,6 @@ export function Java3DVisualizer({
         ctx.lineTo(topCenterX, badgeY + badgeH / 2);
         ctx.stroke();
 
-        // Badge Pill
         ctx.fillStyle = 'rgba(15, 17, 26, 0.92)';
         ctx.strokeStyle = opts.badgeColor || PAL.amber;
         ctx.beginPath();
@@ -498,7 +553,6 @@ export function Java3DVisualizer({
       }
     };
 
-    // Helper: Draw 3D Spherical Node with Specular Highlight
     const drawSphereNode = (
       sx: number,
       sy: number,
@@ -512,23 +566,20 @@ export function Java3DVisualizer({
       const r = radius * p.scale * 1.8;
       if (r <= 1) return;
 
-      // Contact Ground Shadow
       drawGroundShadow(sx, sz, radius * 1.1, radius * 1.1, 0.35);
 
       ctx.save();
       if (opts?.highlight) {
         ctx.shadowColor = fillColor;
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = 24;
 
-        // Outer Aura Ring
         ctx.strokeStyle = fillColor;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r * 1.35, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, r * (1.3 + 0.1 * Math.sin(time * 4)), 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      // Radial Specular 3D Gradient
       const grad = ctx.createRadialGradient(p.x - r * 0.32, p.y - r * 0.32, r * 0.08, p.x, p.y, r);
       grad.addColorStop(0, '#FFFFFF');
       grad.addColorStop(0.25, fillColor);
@@ -545,7 +596,6 @@ export function Java3DVisualizer({
       ctx.stroke();
       ctx.restore();
 
-      // Node Value Text
       if (label && p.scale > 0.28) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${Math.max(9, Math.round(11 * p.scale))}px monospace`;
@@ -557,7 +607,6 @@ export function Java3DVisualizer({
         ctx.shadowBlur = 0;
       }
 
-      // Sub-label below Node
       if (opts?.subText && p.scale > 0.28) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.font = `bold ${Math.max(7.5, Math.round(9 * p.scale))}px monospace`;
@@ -566,16 +615,13 @@ export function Java3DVisualizer({
       }
     };
 
-    // Helper: Draw 3D Cylinder / Hanoi Peg
     const drawPeg = (px: number, py: number, pz: number, radius: number, height: number, label: string) => {
       const top = project(px, py + height, pz);
       const bot = project(px, py, pz);
       const r = radius * top.scale * 1.8;
 
-      // Base Peg Footing Ring
       drawGroundShadow(px, pz, radius * 2.5, radius * 2.5, 0.4);
 
-      // Peg Shaft Gradient
       ctx.save();
       const shaftGrad = ctx.createLinearGradient(bot.x - r, bot.y, bot.x + r, bot.y);
       shaftGrad.addColorStop(0, 'rgba(160, 175, 200, 0.8)');
@@ -591,7 +637,6 @@ export function Java3DVisualizer({
       ctx.stroke();
       ctx.restore();
 
-      // Peg Base Label
       if (bot.scale > 0.3) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = `bold ${Math.max(9, Math.round(10.5 * bot.scale))}px monospace`;
@@ -600,7 +645,6 @@ export function Java3DVisualizer({
       }
     };
 
-    // Helper: Draw 3D Curved / Laser Pointer Ray
     const drawPointerRay = (
       x1: number,
       y1: number,
@@ -610,7 +654,8 @@ export function Java3DVisualizer({
       z2: number,
       color: string,
       label?: string,
-      dashed = false
+      dashed = false,
+      animatePulse = true
     ) => {
       const p1 = project(x1, y1, z1);
       const p2 = project(x2, y2, z2);
@@ -628,7 +673,19 @@ export function Java3DVisualizer({
       ctx.quadraticCurveTo(mid.x, mid.y, p2.x, p2.y);
       ctx.stroke();
 
-      // Arrowhead at destination
+      if (animatePulse) {
+        const pulseT = (time * 1.5) % 1;
+        const px = (1 - pulseT) * (1 - pulseT) * p1.x + 2 * (1 - pulseT) * pulseT * mid.x + pulseT * pulseT * p2.x;
+        const py = (1 - pulseT) * (1 - pulseT) * p1.y + 2 * (1 - pulseT) * pulseT * mid.y + pulseT * pulseT * p2.y;
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       const ang = Math.atan2(p2.y - mid.y, p2.x - mid.x);
       const arrLen = 7;
       ctx.fillStyle = color;
@@ -669,7 +726,6 @@ export function Java3DVisualizer({
       const numValues = cells.map((c) => Number(c) || 10);
       const maxVal = Math.max(...numValues.map(Math.abs), 1);
 
-      // Extract Active Loop Variables from Current Call Frame
       const currentLocals = frames[frames.length - 1]?.locals || [];
       const getLocalNum = (names: string[]) => {
         const found = currentLocals.find((l) => names.includes(l.name));
@@ -683,7 +739,6 @@ export function Java3DVisualizer({
       const varMid = getLocalNum(['mid', 'm']);
       const varTarget = getLocalNum(['target', 'val', 'key']);
 
-      // Depth Sort Bars Back-to-Front
       const barIndices = Array.from({ length: count }, (_, i) => i);
       barIndices.sort((a, b) => {
         const za = (startX + a * spacing) * Math.sin(yaw);
@@ -702,7 +757,6 @@ export function Java3DVisualizer({
         let badge: string | undefined;
         let badgeColor: string = PAL.amber;
 
-        // Binary Search Pointers Detection
         if (varLow !== null && i === varLow) {
           badge = 'LOW';
           badgeColor = PAL.sky;
@@ -715,7 +769,6 @@ export function Java3DVisualizer({
           isComparing = true;
         }
 
-        // Sorting Loop Variables Detection
         if (varJ !== null && (i === varJ || i === varJ + 1)) {
           isComparing = true;
           badge = i === varJ ? `j=${i}` : `j+1`;
@@ -725,12 +778,10 @@ export function Java3DVisualizer({
           badgeColor = PAL.mint;
         }
 
-        // Bubble Sort in-place sorted items detection
         if (varI !== null && i >= count - varI && count > 3) {
           isSorted = true;
         }
 
-        // Dim elements outside search window [low, high]
         const isOutsideSearch =
           varLow !== null && varHigh !== null && (i < varLow || i > varHigh);
         const opacity = isOutsideSearch ? 0.3 : 1.0;
@@ -765,7 +816,6 @@ export function Java3DVisualizer({
         });
       });
 
-      // Draw Dynamic 3D Parabolic Swap / Comparison Arc
       if (varJ !== null && varJ >= 0 && varJ < count - 1) {
         const idxA = varJ;
         const idxB = varJ + 1;
@@ -788,7 +838,6 @@ export function Java3DVisualizer({
         ctx.quadraticCurveTo(midP.x, midP.y, pB.x, pB.y);
         ctx.stroke();
 
-        // Floating compare swap tag
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'center';
@@ -798,7 +847,7 @@ export function Java3DVisualizer({
     }
 
     // =========================================================================
-    // VISUALIZATION MODE 2: 3D Binary Tree & Hierarchical Graph
+    // VISUALIZATION MODE 2: 3D Binary Tree with Organic Spring Sway Physics
     // =========================================================================
     else if (effectiveMode === 'tree') {
       const treeNodes = [
@@ -809,15 +858,21 @@ export function Java3DVisualizer({
         { id: 4, val: '40', x: -40, y: 16, z: -10, level: 2 },
         { id: 5, val: '60', x: 40, y: 16, z: 10, level: 2 },
         { id: 6, val: '80', x: 110, y: 16, z: 40, level: 2 },
-      ];
+      ].map((node) => {
+        const swayX = Math.sin(time * 1.5 + node.level * 1.2) * (node.level * 2.5);
+        const swayY = Math.cos(time * 1.8 + node.id) * (node.level * 1.5);
+        return {
+          ...node,
+          x: node.x + swayX,
+          y: node.y + swayY,
+        };
+      });
 
-      // Extract Active Visited Node from Step Note / Frames
       const noteText = (stepNote || '').toLowerCase();
       let activeVal = '';
       const visitedMatch = stepNote?.match(/Visited\s+Node:\s*(\w+)/i) || stepNote?.match(/val\s*=\s*(\w+)/i);
       if (visitedMatch) activeVal = visitedMatch[1];
 
-      // Draw Tree Level Horizon Rings
       [115, 65, 16].forEach((ly, lIdx) => {
         ctx.strokeStyle = 'rgba(124, 108, 255, 0.08)';
         ctx.lineWidth = 1;
@@ -832,19 +887,17 @@ export function Java3DVisualizer({
         ctx.stroke();
       });
 
-      // Draw 3D Tree Curved Connector Branches
       treeNodes.forEach((node) => {
         if (node.left !== undefined) {
           const target = treeNodes[node.left];
-          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)');
+          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)', undefined, false, true);
         }
         if (node.right !== undefined) {
           const target = treeNodes[node.right];
-          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)');
+          drawPointerRay(node.x, node.y, node.z, target.x, target.y, target.z, 'rgba(124, 108, 255, 0.65)', undefined, false, true);
         }
       });
 
-      // Depth Sort Tree Nodes Back-to-Front
       const sortedTree = [...treeNodes].sort((a, b) => {
         const za = a.x * Math.sin(yaw) + a.z * Math.cos(yaw);
         const zb = b.x * Math.sin(yaw) + b.z * Math.cos(yaw);
@@ -865,7 +918,7 @@ export function Java3DVisualizer({
     }
 
     // =========================================================================
-    // VISUALIZATION MODE 3: 3D Topographic Terrain & Matrix Heightmap
+    // VISUALIZATION MODE 3: 3D Topographic Terrain with Fluid Ripple Physics
     // =========================================================================
     else if (effectiveMode === 'matrix') {
       const rows = 6;
@@ -875,25 +928,23 @@ export function Java3DVisualizer({
 
       const currentLocals = frames[frames.length - 1]?.locals || [];
       const getLocalVal = (name: string) => {
-        const found = currentLocals.find((l) => l.name === name);
+        const found = currentLocals.find((l) => name === l.name);
         return found ? Number(found.value?.v ?? found.text) : null;
       };
 
       const activeR = getLocalVal('r') ?? getLocalVal('row');
       const activeC = getLocalVal('c') ?? getLocalVal('col');
 
-      // Generate Elevation Matrix Cells
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const dist = Math.abs(r - 2.5) + Math.abs(c - 2.5);
-          const elev = Math.max(10, Math.round((6.5 - dist) * 17));
+          const dist = Math.hypot(r - 2.5, c - 2.5);
+          const ripple = Math.sin(dist * 1.4 - time * 2.8) * 3.5;
+          const elev = Math.max(10, Math.round((6.5 - dist) * 16 + ripple));
           const x = -gridTotal / 2 + c * cellSize + cellSize / 2;
           const z = -gridTotal / 2 + r * cellSize + cellSize / 2;
 
           const isActiveCell = activeR === r && activeC === c;
 
-          // Multi-stage Elevation Color Gradient Ramp:
-          // Blue Ocean (Low) -> Emerald (Mid) -> Amber (High) -> Snow Peak (Top)
           let top: string = PAL.sky;
           let front: string = '#1E3A8A';
           let side: string = '#172554';
@@ -925,15 +976,14 @@ export function Java3DVisualizer({
             highlightColor: top,
           });
 
-          // Active Laser Beacon Rising from Active Cell
           if (isActiveCell) {
             const pTop = project(x, elev, z);
-            const pSky = project(x, elev + 45, z);
+            const pSky = project(x, elev + 50, z);
             ctx.save();
             ctx.strokeStyle = PAL.coral;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2.5;
             ctx.shadowColor = PAL.coral;
-            ctx.shadowBlur = 12;
+            ctx.shadowBlur = 14;
             ctx.beginPath();
             ctx.moveTo(pTop.x, pTop.y);
             ctx.lineTo(pSky.x, pSky.y);
@@ -950,14 +1000,12 @@ export function Java3DVisualizer({
     else if (effectiveMode === 'hanoi') {
       const pegSpacing = 85;
       const pegHeight = 115;
-      const pegRadius = 3;
+      const pegRadius = 3.5;
 
-      // Heavy Chamfered Base Platform
       drawVoxel(0, 0, 0, 245, 9, 85, '#2A2D3D', '#1B1D28', '#14151E', {
         label: 'TOWER OF HANOI BASE',
       });
 
-      // 3 Metallic Pegs
       const pegs = [
         { label: 'Peg A', x: -pegSpacing },
         { label: 'Peg B', x: 0 },
@@ -968,7 +1016,6 @@ export function Java3DVisualizer({
         drawPeg(peg.x, 9, 0, pegRadius, pegHeight, peg.label);
       });
 
-      // Parse Active Move from Step Note / Frames
       let movingDisk = 0;
       let fromPeg = 0;
       let toPeg = 2;
@@ -980,18 +1027,15 @@ export function Java3DVisualizer({
         toPeg = moveMatch[3] === 'A' ? 0 : moveMatch[3] === 'B' ? 1 : 2;
       }
 
-      // Hanoi Disks Graduated Sizes & Colors
       const diskSpecs = [
         { id: 3, size: 58, h: 14, color: PAL.coral, label: 'Disk 3' },
         { id: 2, size: 42, h: 14, color: PAL.amber, label: 'Disk 2' },
         { id: 1, size: 26, h: 14, color: PAL.mint, label: 'Disk 1' },
       ];
 
-      // Peg State Stacks Simulation
       const pegStacks: number[][] = [[3, 2, 1], [], []];
       if (movingDisk > 0) {
         pegStacks[fromPeg] = pegStacks[fromPeg].filter((d) => d !== movingDisk);
-        // Active in-flight parabolic arc trajectory
         const startX = pegs[fromPeg].x;
         const endX = pegs[toPeg].x;
         const pArcStart = project(startX, 65, 0);
@@ -1008,12 +1052,11 @@ export function Java3DVisualizer({
         ctx.stroke();
         ctx.restore();
 
-        // Render In-Flight Suspended Disk
         const flyingSpec = diskSpecs.find((d) => d.id === movingDisk);
         if (flyingSpec) {
           drawVoxel(
             (startX + endX) / 2,
-            pegHeight + 15,
+            pegHeight + 15 + Math.sin(time * 3) * 3,
             0,
             flyingSpec.size,
             flyingSpec.h,
@@ -1032,7 +1075,6 @@ export function Java3DVisualizer({
         }
       }
 
-      // Render Static Disks on Pegs
       pegStacks.forEach((stack, pIdx) => {
         let currentY = 9;
         stack.forEach((diskId) => {
@@ -1050,24 +1092,10 @@ export function Java3DVisualizer({
     }
 
     // =========================================================================
-    // VISUALIZATION MODE 5: 3D Orbital Graph & BFS Network
+    // VISUALIZATION MODE 5: 3D Force-Directed Graph Physics Simulation
     // =========================================================================
     else if (effectiveMode === 'graph') {
-      const nodeCount = 6;
-      const radius = 95;
-
-      const graphNodes = Array.from({ length: nodeCount }, (_, i) => {
-        const angle = (i / nodeCount) * Math.PI * 2;
-        const yOffset = Math.sin(i * 1.5) * 25 + 50;
-        return {
-          id: i,
-          val: `${i}`,
-          x: Math.cos(angle) * radius,
-          y: yOffset,
-          z: Math.sin(angle) * radius,
-        };
-      });
-
+      const gNodes = graphNodesRef.current;
       const edges = [
         [0, 1],
         [0, 2],
@@ -1078,16 +1106,70 @@ export function Java3DVisualizer({
         [3, 5],
       ];
 
-      // Extract Active Visited Node from Locals
+      // Real 3D Force-Directed Spring & Coulomb Physics Step
+      for (let i = 0; i < gNodes.length; i++) {
+        for (let j = i + 1; j < gNodes.length; j++) {
+          const dx = gNodes[j].x - gNodes[i].x;
+          const dy = gNodes[j].y - gNodes[i].y;
+          const dz = gNodes[j].z - gNodes[i].z;
+          const dist = Math.hypot(dx, dy, dz) || 1;
+          if (dist < 220) {
+            const repForce = 450 / (dist * dist);
+            const fx = (dx / dist) * repForce;
+            const fy = (dy / dist) * repForce;
+            const fz = (dz / dist) * repForce;
+            gNodes[i].vx -= fx;
+            gNodes[i].vy -= fy;
+            gNodes[i].vz -= fz;
+            gNodes[j].vx += fx;
+            gNodes[j].vy += fy;
+            gNodes[j].vz += fz;
+          }
+        }
+      }
+
+      const restLength = 95;
+      const springK = 0.04;
+      edges.forEach(([u, v]) => {
+        const dx = gNodes[v].x - gNodes[u].x;
+        const dy = gNodes[v].y - gNodes[u].y;
+        const dz = gNodes[v].z - gNodes[u].z;
+        const dist = Math.hypot(dx, dy, dz) || 1;
+        const disp = dist - restLength;
+        const fx = (dx / dist) * disp * springK;
+        const fy = (dy / dist) * disp * springK;
+        const fz = (dz / dist) * disp * springK;
+        gNodes[u].vx += fx;
+        gNodes[u].vy += fy;
+        gNodes[u].vz += fz;
+        gNodes[v].vx -= fx;
+        gNodes[v].vy -= fy;
+        gNodes[v].vz -= fz;
+      });
+
+      gNodes.forEach((n) => {
+        const centerPull = 0.015;
+        n.vx -= n.x * centerPull;
+        n.vy -= (n.y - 45) * centerPull;
+        n.vz -= n.z * centerPull;
+
+        n.vx *= 0.90;
+        n.vy *= 0.90;
+        n.vz *= 0.90;
+
+        n.x += n.vx;
+        n.y += n.vy;
+        n.z += n.vz;
+      });
+
       const currentLocals = frames[frames.length - 1]?.locals || [];
       const activeNodeVal = currentLocals.find((l) => l.name === 'i' || l.name === 'u')?.text;
       const activeNodeIdx = activeNodeVal ? parseInt(activeNodeVal, 10) : 0;
 
-      // Draw Glowing Directed Edges
       edges.forEach(([u, v]) => {
-        const nU = graphNodes[u];
-        const nV = graphNodes[v];
-        const isTraversing = (u === activeNodeIdx || v === activeNodeIdx);
+        const nU = gNodes[u];
+        const nV = gNodes[v];
+        const isTraversing = u === activeNodeIdx || v === activeNodeIdx;
         drawPointerRay(
           nU.x,
           nU.y,
@@ -1097,12 +1179,12 @@ export function Java3DVisualizer({
           nV.z,
           isTraversing ? PAL.amber : 'rgba(124, 108, 255, 0.55)',
           undefined,
-          !isTraversing
+          !isTraversing,
+          isTraversing
         );
       });
 
-      // Depth Sort Graph Nodes
-      const sortedGraph = [...graphNodes].sort((a, b) => {
+      const sortedGraph = [...gNodes].sort((a, b) => {
         const za = a.x * Math.sin(yaw) + a.z * Math.cos(yaw);
         const zb = b.x * Math.sin(yaw) + b.z * Math.cos(yaw);
         return zb - za;
@@ -1113,7 +1195,7 @@ export function Java3DVisualizer({
         const isVisited = node.id <= activeNodeIdx;
         const color = isActive ? PAL.amber : isVisited ? PAL.mint : PAL.indigo;
 
-        drawSphereNode(node.x, node.y, node.z, 14, color, `N${node.id}`, {
+        drawSphereNode(node.x, node.y, node.z, 15, color, `N${node.id}`, {
           highlight: isActive,
           subText: isActive ? 'ACTIVE' : isVisited ? 'VISITED' : undefined,
         });
@@ -1136,19 +1218,16 @@ export function Java3DVisualizer({
         const isHead = i === 0;
         const isTail = i === count - 1;
 
-        // Dual Cell Node: [ val | •-> ]
         drawVoxel(x, 25, 0, 36, 24, 28, isHead ? PAL.mint : PAL.indigo, '#5748D6', '#3E32A3', {
           label: val,
           subLabel: isHead ? 'HEAD' : `[${i}]`,
           highlight: isHead,
         });
 
-        // Pointer Ray connecting to Next Node
         if (!isTail) {
           const nextX = startX + (i + 1) * spacing;
-          drawPointerRay(x + 18, 37, 0, nextX - 18, 37, 0, PAL.cyan, 'next');
+          drawPointerRay(x + 18, 37, 0, nextX - 18, 37, 0, PAL.cyan, 'next', false, true);
         } else {
-          // NULL Ground Terminator
           const nullP = project(x + 36, 37, 0);
           ctx.save();
           ctx.fillStyle = PAL.coral;
@@ -1160,7 +1239,7 @@ export function Java3DVisualizer({
     }
 
     // =========================================================================
-    // VISUALIZATION MODE 7: 3D Call Stack Towers & Heap Memory
+    // VISUALIZATION MODE 7: 3D Levitating Call Stack Towers & Heap Memory
     // =========================================================================
     else {
       const stackList = frames.length
@@ -1181,7 +1260,8 @@ export function Java3DVisualizer({
       const frameDepth = 85;
 
       stackList.forEach((f, idx) => {
-        const y = idx * (frameHeight + 16) + 6;
+        const hoverOffset = Math.sin(time * 2 + idx) * 2;
+        const y = idx * (frameHeight + 16) + 6 + hoverOffset;
         const isTop = idx === stackList.length - 1;
         const top = isTop ? PAL.amber : '#7C6CFF';
         const front = isTop ? '#D99B26' : '#5748D6';
@@ -1194,7 +1274,6 @@ export function Java3DVisualizer({
           highlightColor: top,
         });
 
-        // Local Variable Capsule Chips beside Frame
         f.locals.slice(0, 3).forEach((loc, lIdx) => {
           const lx = frameWidth / 2 + 50;
           const lz = -28 + lIdx * 28;
@@ -1205,37 +1284,110 @@ export function Java3DVisualizer({
             highlight: false,
           });
 
-          // Pointer Ray connecting Stack Frame to Local Chip
-          drawPointerRay(frameWidth / 2, y + 12, lz, lx - 31, y + 12, lz, 'rgba(52, 217, 160, 0.7)');
+          drawPointerRay(frameWidth / 2, y + 12, lz, lx - 31, y + 12, lz, 'rgba(52, 217, 160, 0.7)', undefined, false, isTop);
         });
       });
     }
 
+    // =========================================================================
+    // 3D Axis Compass / Orientation Gizmo (Top Right Corner)
+    // =========================================================================
+    const gizmoX = width - 36;
+    const gizmoY = 36;
+    const gizmoLen = 22;
+
+    const projectGizmo = (ax: number, ay: number, az: number) => {
+      const cosY = Math.cos(yaw);
+      const sinY = Math.sin(yaw);
+      const x1 = ax * cosY - az * sinY;
+      const z1 = ax * sinY + az * cosY;
+
+      const cosP = Math.cos(pitch);
+      const sinP = Math.sin(pitch);
+      const y2 = ay * cosP - z1 * sinP;
+
+      return {
+        x: gizmoX + x1 * gizmoLen,
+        y: gizmoY - y2 * gizmoLen,
+      };
+    };
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
+    ctx.strokeStyle = 'var(--line2)';
+    ctx.beginPath();
+    ctx.arc(gizmoX, gizmoY, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const pX = projectGizmo(1, 0, 0);
+    ctx.strokeStyle = PAL.coral;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gizmoX, gizmoY);
+    ctx.lineTo(pX.x, pX.y);
+    ctx.stroke();
+    ctx.fillStyle = PAL.coral;
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText('X', pX.x + 3, pX.y + 2);
+
+    const pY = projectGizmo(0, 1, 0);
+    ctx.strokeStyle = PAL.mint;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gizmoX, gizmoY);
+    ctx.lineTo(pY.x, pY.y);
+    ctx.stroke();
+    ctx.fillStyle = PAL.mint;
+    ctx.fillText('Y', pY.x, pY.y - 3);
+
+    const pZ = projectGizmo(0, 0, 1);
+    ctx.strokeStyle = PAL.sky;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gizmoX, gizmoY);
+    ctx.lineTo(pZ.x, pZ.y);
+    ctx.stroke();
+    ctx.fillStyle = PAL.sky;
+    ctx.fillText('Z', pZ.x - 4, pZ.y + 8);
+
     ctx.restore();
-  }, [yaw, pitch, zoom, effectiveMode, frames, heap, series, activeLine, stepNote]);
 
-  // Intelligent Rendering Trigger: Redraw on Step / Camera Change
-  const renderRef = useRef(renderScene);
-  useEffect(() => {
-    renderRef.current = renderScene;
-  });
+    ctx.restore();
+  }, [yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote]);
 
+  // Animation & Physics Frame Loop
   useEffect(() => {
-    renderScene();
+    let active = true;
+    const animate = (timeMs: number) => {
+      if (!active) return;
+      animTimeRef.current = timeMs * 0.001;
+      renderScene(animTimeRef.current);
+      animFrameIdRef.current = requestAnimationFrame(animate);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(animate);
+    return () => {
+      active = false;
+      if (animFrameIdRef.current !== null) {
+        cancelAnimationFrame(animFrameIdRef.current);
+      }
+    };
   }, [renderScene]);
 
-  // ResizeObserver for zero-idle-cost dynamic viewport adaptation
+  // ResizeObserver for dynamic viewport measurement
   useEffect(() => {
     const parent = containerRef.current;
     if (!parent) return;
-    const ro = new ResizeObserver(() => renderRef.current());
+    const ro = new ResizeObserver(() => renderScene(animTimeRef.current));
     ro.observe(parent);
     return () => ro.disconnect();
-  }, []);
+  }, [renderScene]);
 
   return (
     <div
       ref={containerRef}
+      onContextMenu={(e) => e.preventDefault()}
       style={{
         position: 'relative',
         width: '100%',
@@ -1272,7 +1424,7 @@ export function Java3DVisualizer({
           position: 'absolute',
           top: 10,
           left: 10,
-          right: 10,
+          right: 70,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1337,7 +1489,7 @@ export function Java3DVisualizer({
           })}
         </div>
 
-        {/* Camera Angles & Zoom Controls */}
+        {/* Camera Perspective & Angle Controls */}
         <div
           style={{
             display: 'flex',
@@ -1351,11 +1503,33 @@ export function Java3DVisualizer({
             pointerEvents: 'auto',
           }}
         >
+          {/* Perspective / Isometric Toggle */}
+          <button
+            onClick={() => {
+              playClick();
+              setIsPerspective((p) => !p);
+            }}
+            className="k-squish"
+            title={isPerspective ? 'Switch to Isometric (Orthogonal)' : 'Switch to True 3D Perspective'}
+            style={{
+              padding: '4px 7px',
+              borderRadius: 6,
+              fontSize: 9.5,
+              fontWeight: 800,
+              border: 'none',
+              background: isPerspective ? 'var(--acc)' : 'color-mix(in srgb, var(--acc) 25%, transparent)',
+              color: isPerspective ? 'var(--ink)' : 'var(--accTx)',
+              cursor: 'pointer',
+            }}
+          >
+            {isPerspective ? '3D Persp' : 'Iso 3D'}
+          </button>
+
           {(
             [
-              ['isometric', '3D Orbit'],
               ['front', 'Front'],
               ['top', 'Top'],
+              ['side', 'Side'],
             ] as [ViewAngle, string][]
           ).map(([a, label]) => (
             <button
@@ -1363,9 +1537,9 @@ export function Java3DVisualizer({
               onClick={() => setPresetAngle(a)}
               className="k-squish"
               style={{
-                padding: '4px 7px',
+                padding: '4px 6px',
                 borderRadius: 6,
-                fontSize: 9.5,
+                fontSize: 9,
                 fontWeight: 700,
                 border: 'none',
                 background: viewAngle === a ? 'color-mix(in srgb, var(--acc) 25%, transparent)' : 'transparent',
@@ -1399,7 +1573,7 @@ export function Java3DVisualizer({
 
           {/* Zoom Buttons */}
           <button
-            onClick={() => setZoom((z) => Math.min(3.0, z + 0.2))}
+            onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))}
             title="Zoom In"
             className="hov k-squish"
             style={{
@@ -1417,7 +1591,7 @@ export function Java3DVisualizer({
             <Icon name="plus" size={10} color="var(--tx2)" />
           </button>
           <button
-            onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
+            onClick={() => setZoom((z) => Math.max(0.35, z - 0.2))}
             title="Zoom Out"
             className="hov k-squish"
             style={{
@@ -1472,7 +1646,7 @@ export function Java3DVisualizer({
             {effectiveMode.toUpperCase()}
           </span>
           <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-            {stepNote || 'Drag to rotate 3D · Pinch / Scroll to zoom'}
+            {stepNote || 'Drag to rotate 3D · Pinch/Wheel to zoom · Shift+drag to pan'}
           </span>
         </div>
 

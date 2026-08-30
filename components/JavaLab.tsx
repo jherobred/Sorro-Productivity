@@ -89,7 +89,6 @@ export function JavaLab() {
   const { phone } = useLayout();
   const [selId, setSelId] = useState<string | null>(null);
   const [src, setSrc] = useState('');
-  const [editing, setEditing] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [at, setAt] = useState<number | null>(null); // scrubber position; null = final state
   const [playing, setPlaying] = useState(false);
@@ -681,36 +680,6 @@ export function JavaLab() {
               <span>Run (⌘↵)</span>
             </button>
 
-            {/* View / Edit Mode Button */}
-            {(!phone || mobileTab === 'code') && (
-              <button
-                onClick={() => {
-                  playClick();
-                  setEditing((v) => !v);
-                }}
-                className="hov k-squish"
-                title={editing ? 'Switch to Highlighted Code View' : 'Edit Source Code'}
-                aria-label={editing ? 'Switch to Code View' : 'Edit Source Code'}
-                style={{
-                  minHeight: 38,
-                  padding: '0 11px',
-                  borderRadius: 8,
-                  background: 'var(--card2)',
-                  border: '1px solid var(--line2)',
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: 'var(--tx2)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <Icon name={editing ? 'eye' : 'edit'} size={12} color="var(--tx2)" />
-                <span>{editing ? 'View' : 'Edit'}</span>
-              </button>
-            )}
-
             {/* Desktop Layout Mode Switcher */}
             {!phone && (
               <div
@@ -787,46 +756,13 @@ export function JavaLab() {
           /* Mobile Single Pane View (Full Comfort Height, No Long Scrolling) */
           <div style={{ flex: 1, minHeight: 'calc(100dvh - 240px)', display: 'flex', flexDirection: 'column' }}>
             {mobileTab === 'code' && (
-              <div style={{ ...CARD, padding: '12px 14px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 'calc(100dvh - 240px)' }}>
-                {editing ? (
-                  <textarea
-                    value={src}
-                    onChange={(e) => setSrc(e.target.value)}
-                    spellCheck={false}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Tab') return;
-                      e.preventDefault();
-                      const el = e.currentTarget;
-                      const { selectionStart: a, selectionEnd: b } = el;
-                      const next = `${src.slice(0, a)}    ${src.slice(b)}`;
-                      setSrc(next);
-                      requestAnimationFrame(() => el.setSelectionRange(a + 4, a + 4));
-                    }}
-                    aria-label="Java source"
-                    style={{
-                      width: '100%',
-                      flex: 1,
-                      minHeight: 380,
-                      resize: 'none',
-                      padding: 12,
-                      borderRadius: 10,
-                      background: 'var(--card2)',
-                      border: '1px solid var(--line2)',
-                      fontFamily: MONO,
-                      fontSize: 12.5,
-                      lineHeight: 1.65,
-                      color: 'var(--tx)',
-                      outline: 'none',
-                    }}
-                  />
-                ) : (
-                  <CodeView
-                    src={src}
-                    activeLine={activeLine}
-                    errorLine={result?.error?.line ?? null}
-                    onEdit={() => setEditing(true)}
-                  />
-                )}
+              <div style={{ ...CARD, padding: '10px 12px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 'calc(100dvh - 240px)' }}>
+                <LiveCodeEditor
+                  src={src}
+                  onChange={setSrc}
+                  activeLine={activeLine}
+                  errorLine={result?.error?.line ?? null}
+                />
               </div>
             )}
 
@@ -880,48 +816,15 @@ export function JavaLab() {
               flex: 1,
             }}
           >
-            {/* Left Desktop Pane: Code Editor */}
+            {/* Left Desktop Pane: VS Code Style Live Code Editor */}
             {(layoutMode === 'split' || layoutMode === 'code-full') && (
-              <div style={{ ...CARD, padding: '12px 14px', display: 'flex', flexDirection: 'column', minHeight: 380, flex: 1 }}>
-                {editing ? (
-                  <textarea
-                    value={src}
-                    onChange={(e) => setSrc(e.target.value)}
-                    spellCheck={false}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Tab') return;
-                      e.preventDefault();
-                      const el = e.currentTarget;
-                      const { selectionStart: a, selectionEnd: b } = el;
-                      const next = `${src.slice(0, a)}    ${src.slice(b)}`;
-                      setSrc(next);
-                      requestAnimationFrame(() => el.setSelectionRange(a + 4, a + 4));
-                    }}
-                    aria-label="Java source"
-                    style={{
-                      width: '100%',
-                      flex: 1,
-                      minHeight: 360,
-                      resize: 'none',
-                      padding: 12,
-                      borderRadius: 10,
-                      background: 'var(--card2)',
-                      border: '1px solid var(--line2)',
-                      fontFamily: MONO,
-                      fontSize: 12.5,
-                      lineHeight: 1.65,
-                      color: 'var(--tx)',
-                      outline: 'none',
-                    }}
-                  />
-                ) : (
-                  <CodeView
-                    src={src}
-                    activeLine={activeLine}
-                    errorLine={result?.error?.line ?? null}
-                    onEdit={() => setEditing(true)}
-                  />
-                )}
+              <div style={{ ...CARD, padding: '10px 12px', display: 'flex', flexDirection: 'column', minHeight: 380, flex: 1 }}>
+                <LiveCodeEditor
+                  src={src}
+                  onChange={setSrc}
+                  activeLine={activeLine}
+                  errorLine={result?.error?.line ?? null}
+                />
               </div>
             )}
 
@@ -1404,19 +1307,143 @@ function MemoryInspector({
   );
 }
 
-/** Read-only line-numbered code viewer with active line auto-scrolling */
-function CodeView({
+/** VS Code Style Live Syntax-Highlighting Code Editor */
+function LiveCodeEditor({
   src,
+  onChange,
   activeLine,
   errorLine,
-  onEdit,
 }: {
   src: string;
+  onChange: (val: string) => void;
   activeLine: number | null;
   errorLine: number | null;
-  onEdit: () => void;
 }) {
-  const lines = useMemo(() => {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const syntaxRef = useRef<HTMLDivElement | null>(null);
+  const lineNumbersRef = useRef<HTMLDivElement | null>(null);
+  const [cursorLine, setCursorLine] = useState<number>(1);
+
+  // Synchronize scroll between textarea, syntax highlight backdrop, and line numbers
+  const handleScroll = () => {
+    if (!textareaRef.current) return;
+    const { scrollTop, scrollLeft } = textareaRef.current;
+    if (syntaxRef.current) {
+      syntaxRef.current.scrollTop = scrollTop;
+      syntaxRef.current.scrollLeft = scrollLeft;
+    }
+    if (lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = scrollTop;
+    }
+  };
+
+  // Track cursor position line
+  const updateCursorLine = () => {
+    if (!textareaRef.current) return;
+    const pos = textareaRef.current.selectionStart;
+    const textBefore = src.slice(0, pos);
+    const line = textBefore.split('\n').length;
+    setCursorLine(line);
+  };
+
+  // Smart IDE Keyboard Handlers (Tab, Auto-Indent on Enter, Auto-Brackets)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const { selectionStart: a, selectionEnd: b, value } = el;
+
+    // 1. Tab & Shift+Tab handling
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (!e.shiftKey) {
+        // Tab -> Insert 4 spaces
+        const next = `${value.slice(0, a)}    ${value.slice(b)}`;
+        onChange(next);
+        requestAnimationFrame(() => {
+          el.setSelectionRange(a + 4, a + 4);
+          updateCursorLine();
+        });
+      } else {
+        // Shift+Tab -> Unindent 4 spaces
+        const lastNewline = value.lastIndexOf('\n', a - 1);
+        const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+        const linePrefix = value.slice(lineStart, lineStart + 4);
+        const spaces = linePrefix.match(/^ +/)?.[0].length || 0;
+        if (spaces > 0) {
+          const count = Math.min(spaces, 4);
+          const next = value.slice(0, lineStart) + value.slice(lineStart + count);
+          onChange(next);
+          requestAnimationFrame(() => {
+            const newPos = Math.max(lineStart, a - count);
+            el.setSelectionRange(newPos, newPos);
+            updateCursorLine();
+          });
+        }
+      }
+      return;
+    }
+
+    // 2. Enter -> Auto-indent to match previous line (plus 4 spaces if opening bracket)
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const lastNewline = value.lastIndexOf('\n', a - 1);
+      const curLine = value.slice(lastNewline + 1, a);
+      const matchIndent = curLine.match(/^(\s*)/);
+      let indent = matchIndent ? matchIndent[1] : '';
+      const trimmed = curLine.trim();
+      const opensBrace = trimmed.endsWith('{') || trimmed.endsWith('(') || trimmed.endsWith('[');
+      if (opensBrace) {
+        indent += '    ';
+      }
+      const next = `${value.slice(0, a)}\n${indent}${value.slice(b)}`;
+      onChange(next);
+      requestAnimationFrame(() => {
+        const newPos = a + 1 + indent.length;
+        el.setSelectionRange(newPos, newPos);
+        updateCursorLine();
+      });
+      return;
+    }
+
+    // 3. Auto-closing pairs: { } ( ) [ ] " " ' '
+    const PAIRS: Record<string, string> = {
+      '{': '}',
+      '(': ')',
+      '[': ']',
+      '"': '"',
+      "'": "'",
+    };
+    if (PAIRS[e.key]) {
+      const open = e.key;
+      const close = PAIRS[open];
+      // If typing closing quote right before existing closing quote, step over
+      if ((open === '"' || open === "'") && value[a] === open && a === b) {
+        e.preventDefault();
+        el.setSelectionRange(a + 1, a + 1);
+        updateCursorLine();
+        return;
+      }
+      e.preventDefault();
+      const selected = value.slice(a, b);
+      const next = `${value.slice(0, a)}${open}${selected}${close}${value.slice(b)}`;
+      onChange(next);
+      requestAnimationFrame(() => {
+        el.setSelectionRange(a + 1, a + 1 + selected.length);
+        updateCursorLine();
+      });
+      return;
+    }
+
+    // 4. Skip closing bracket if typed directly before it
+    if (['}', ')', ']'].includes(e.key) && value[a] === e.key && a === b) {
+      e.preventDefault();
+      el.setSelectionRange(a + 1, a + 1);
+      updateCursorLine();
+      return;
+    }
+  };
+
+  // Syntax highlighting tokenization
+  const highlightedRows = useMemo(() => {
     const rows: { text: string; cls: string }[][] = [[]];
     for (const piece of highlight(src)) {
       const parts = piece.text.split('\n');
@@ -1428,76 +1455,189 @@ function CodeView({
     return rows;
   }, [src]);
 
-  const scroller = useRef<HTMLDivElement>(null);
+  const lineCount = Math.max(src.split('\n').length, 1);
+
+  // Auto-scroll to active execution line during trace scrubbing
   useEffect(() => {
-    if (activeLine === null) return;
-    scroller.current?.querySelector(`[data-line="${activeLine}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (activeLine === null || !textareaRef.current) return;
+    const lineTop = (activeLine - 1) * 21;
+    textareaRef.current.scrollTo({ top: Math.max(0, lineTop - 80), behavior: 'smooth' });
   }, [activeLine]);
 
   return (
     <div
-      ref={scroller}
-      onDoubleClick={onEdit}
-      title="Double-click to edit source code"
-      className="navsb"
       style={{
+        position: 'relative',
+        display: 'flex',
         flex: 1,
-        minHeight: 320,
-        overflow: 'auto',
-        borderRadius: 10,
-        padding: '10px 0',
+        minHeight: 340,
+        height: '100%',
         background: 'var(--card2)',
+        borderRadius: 10,
         border: '1px solid var(--line2)',
-        fontFamily: MONO,
-        fontSize: 12.5,
-        lineHeight: 1.65,
+        overflow: 'hidden',
       }}
     >
-      {lines.map((row, i) => {
-        const n = i + 1;
-        const on = n === activeLine;
-        const bad = n === errorLine;
-        return (
-          <div
-            key={n}
-            data-line={n}
-            style={{
-              display: 'flex',
-              gap: 12,
-              padding: '0 12px',
-              background: bad
-                ? 'color-mix(in srgb, var(--pal-coral) 20%, transparent)'
-                : on
-                ? 'color-mix(in srgb, var(--acc) 22%, transparent)'
-                : undefined,
-              transition: 'background .15s ease',
-            }}
-          >
-            <span
-              aria-hidden
+      {/* Line Numbers & Execution Gutter */}
+      <div
+        ref={lineNumbersRef}
+        style={{
+          width: 44,
+          flex: 'none',
+          padding: '12px 0',
+          background: 'color-mix(in srgb, var(--card) 60%, var(--card2))',
+          borderRight: '1px solid var(--line)',
+          userSelect: 'none',
+          fontFamily: MONO,
+          fontSize: 12,
+          lineHeight: '21px',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {Array.from({ length: lineCount }, (_, i) => {
+          const lineNum = i + 1;
+          const isExec = lineNum === activeLine;
+          const isErr = lineNum === errorLine;
+          const isCur = lineNum === cursorLine;
+
+          return (
+            <div
+              key={lineNum}
+              data-line={lineNum}
               style={{
-                width: 24,
-                flex: 'none',
-                textAlign: 'right',
-                color: on ? 'var(--accTx)' : 'var(--tx3)',
-                fontWeight: on ? 800 : 400,
-                opacity: on ? 1 : 0.6,
+                height: 21,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                paddingRight: 8,
+                fontSize: 11,
                 fontVariantNumeric: 'tabular-nums',
-                userSelect: 'none',
+                color: isErr
+                  ? PAL.coral
+                  : isExec
+                  ? 'var(--accTx)'
+                  : isCur
+                  ? 'var(--tx)'
+                  : 'var(--tx3)',
+                fontWeight: isExec || isErr || isCur ? 800 : 500,
+                background: isErr
+                  ? 'color-mix(in srgb, var(--pal-coral) 25%, transparent)'
+                  : isExec
+                  ? 'color-mix(in srgb, var(--acc) 25%, transparent)'
+                  : undefined,
+                transition: 'background .15s, color .15s',
               }}
             >
-              {n}
-            </span>
-            <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {row.length === 0 ? ' ' : row.map((p, j) => (
-                <span key={j} style={{ color: HUE[p.cls] ?? 'var(--tx)' }}>
-                  {p.text}
-                </span>
-              ))}
-            </code>
-          </div>
-        );
-      })}
+              {lineNum}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Editor Surface: Transparent Textarea over Live Syntax Highlight Backdrop */}
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          minWidth: 0,
+          height: '100%',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Background Syntax Highlighted Render Layer */}
+        <div
+          ref={syntaxRef}
+          aria-hidden
+          className="navsb"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            padding: '12px 14px',
+            fontFamily: MONO,
+            fontSize: 12.5,
+            lineHeight: '21px',
+            tabSize: 4,
+            whiteSpace: 'pre',
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          {highlightedRows.map((row, i) => {
+            const lineNum = i + 1;
+            const isExec = lineNum === activeLine;
+            const isErr = lineNum === errorLine;
+
+            return (
+              <div
+                key={lineNum}
+                style={{
+                  height: 21,
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: isErr
+                    ? 'color-mix(in srgb, var(--pal-coral) 18%, transparent)'
+                    : isExec
+                    ? 'color-mix(in srgb, var(--acc) 18%, transparent)'
+                    : undefined,
+                  borderRadius: 4,
+                }}
+              >
+                {row.length === 0 ? (
+                  <span> </span>
+                ) : (
+                  row.map((p, j) => (
+                    <span key={j} style={{ color: HUE[p.cls] ?? 'var(--tx)' }}>
+                      {p.text}
+                    </span>
+                  ))
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Foreground Editable Transparent Textarea (VS Code Mode) */}
+        <textarea
+          ref={textareaRef}
+          value={src}
+          onChange={(e) => {
+            onChange(e.target.value);
+            updateCursorLine();
+          }}
+          onKeyDown={handleKeyDown}
+          onKeyUp={updateCursorLine}
+          onClick={updateCursorLine}
+          onScroll={handleScroll}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          aria-label="Java Code Editor"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            padding: '12px 14px',
+            fontFamily: MONO,
+            fontSize: 12.5,
+            lineHeight: '21px',
+            tabSize: 4,
+            whiteSpace: 'pre',
+            color: 'transparent',
+            caretColor: 'var(--acc)',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            resize: 'none',
+            overflow: 'auto',
+          }}
+          className="navsb"
+        />
+      </div>
     </div>
   );
 }
