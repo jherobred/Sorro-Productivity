@@ -445,8 +445,38 @@
   -webkit-text-fill-color: currentColor !important;
 }
 
+/* Running Man Stride & Wind Speed Lines */
+@keyframes runner-stride {
+  0% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-4px) rotate(6deg) scaleX(1.05); }
+  100% { transform: translateY(1px) rotate(-3deg); }
+}
+
+@keyframes wind-gust {
+  0% { opacity: 0.2; transform: translateX(4px) scale(0.75); }
+  50% { opacity: 0.9; transform: translateX(-3px) scale(1.08); }
+  100% { opacity: 0.1; transform: translateX(-10px) scale(0.8); }
+}
+
+.runner-man {
+  display: inline-block;
+  animation: runner-stride 0.32s ease-in-out infinite alternate;
+  animation-play-state: var(--anim, running);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.runner-wind {
+  display: inline-block;
+  animation: wind-gust 0.42s ease-out infinite;
+  animation-play-state: var(--anim, running);
+}
+
+.nomo :is(.runner-man, .runner-wind) {
+  animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion='on']) :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom, .ascii-fill-shimmer) { animation: none !important; }
+  :root:not([data-motion='on']) :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom, .ascii-fill-shimmer, .runner-man, .runner-wind) { animation: none !important; }
   :root:not([data-motion='on']) .ascii-fill-shimmer { -webkit-text-fill-color: currentColor !important; }
   :root:not([data-motion='on']) .mc.race { transform: rotate(7deg) !important; }
   :root:not([data-motion='on']) :is(.mc-dust, .mc-zoom) { opacity: .3 !important; }
@@ -458,4 +488,5 @@
     animation-iteration-count: 1 !important;
   }
 }
+
 

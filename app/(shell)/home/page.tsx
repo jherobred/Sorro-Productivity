@@ -1146,7 +1146,7 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                       {/* Seconds Countdown Box */}
                       <div style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                        padding: '10px 14px', borderRadius: 12, margin: '8px 0 10px',
+                        padding: '10px 14px', borderRadius: 12, margin: '8px 0 4px',
                         background: `color-mix(in srgb, ${color} 18%, var(--card2))`,
                         border: `1.5px solid color-mix(in srgb, ${color} 45%, transparent)`,
                         boxShadow: `0 3px 12px color-mix(in srgb, ${color} 18%, transparent)`,
@@ -1184,8 +1184,26 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                         </div>
                       </div>
 
+                      {/* Animated Running Man Runner Track with Wind Trail */}
+                      <div style={{ position: 'relative', width: '100%', height: 22, margin: '2px 0 0', overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: `clamp(0px, calc(${pct}% - 14px), calc(100% - 38px))`,
+                            transition: 'left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          <span className="runner-wind" style={{ fontSize: 13, lineHeight: 1 }} aria-hidden="true">💨</span>
+                          <span className="runner-man" style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">🏃</span>
+                        </div>
+                      </div>
+
                       <div style={{ marginBottom: 12 }}>
-                        <AsciiBar value={pct} cells={30} hue={ongoing ? PAL.mint : color} showValue={false}
+                        <AsciiBar value={pct} cells={28} hue={ongoing ? PAL.mint : color} showValue={false}
                           label={ongoing ? 'Time elapsed' : 'Time until it starts'} />
                       </div>
     </>
