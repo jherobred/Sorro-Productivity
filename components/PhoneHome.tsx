@@ -61,7 +61,24 @@ export function PhoneHome({ name }: { name: string }) {
   const [focusOpen, setFocusOpen] = useState(false);
   const [ringsExpanded, setRingsExpanded] = useState(false);
   const [tasksExpanded, setTasksExpanded] = useState(false);
-  const [restExpanded, setRestExpanded] = useState(false);
+  const [restExpanded, setRestExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('bd_today_schedule_expanded') === 'true';
+      } catch {}
+    }
+    return false;
+  });
+
+  const toggleRestExpanded = () => {
+    setRestExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('bd_today_schedule_expanded', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useOverlayBack(focusOpen, () => setFocusOpen(false));
 
@@ -449,8 +466,12 @@ export function PhoneHome({ name }: { name: string }) {
                 const hourEvents = todaysEvents.filter((e) => {
                   const startHour = hoursOf(e.starts_at);
                   const endHour = hoursOf(e.ends_at);
-                  return startHour < h + 1 && endHour > h;
-                });
+                  const startsInHour = startHour >= h && startHour < h + 1;
+                  const endsInHour = endHour > h && endHour <= h + 1;
+                  const spansHour = startHour <= h && endHour >= h + 1;
+                  const overlapsHour = startHour < h + 1 && endHour > h;
+                  return startsInHour || endsInHour || spansHour || overlapsHour;
+                }).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
                 return (
                   <div
@@ -518,7 +539,7 @@ export function PhoneHome({ name }: { name: string }) {
           {/* Expand/Collapse Chevron Button */}
           <button
             type="button"
-            onClick={() => setRestExpanded(!restExpanded)}
+            onClick={toggleRestExpanded}
             className="hov k-squish"
             style={{
               display: 'flex',
@@ -541,6 +562,136 @@ export function PhoneHome({ name }: { name: string }) {
           </button>
         </div>
       )}
+
+      {/* 3b. The Rest of Today Horizontal Timeline Bar */}
+      <div
+        style={{
+          ...CARD,
+          marginBottom: 14,
+          padding: '12px 14px',
+          background: 'color-mix(in srgb, var(--panel) 62%, transparent)',
+          border: '1px solid var(--line)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={KICKER}>The rest of today</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>
+            {todaysEvents.length} event{todaysEvents.length === 1 ? '' : 's'} scheduled
+          </span>
+        </div>
+
+        <div style={{ position: 'relative', height: 36, marginBlock: 4 }}>
+          {/* 24h Background Line */}
+          <div style={{ position: 'absolute', top: 17, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
+
+          {/* 24 Vertical Hour Ticks */}
+          {Array.from({ length: 25 }, (_, h) => {
+            const isMajor = h % 3 === 0;
+            return (
+              <div
+                key={h}
+                style={{
+                  position: 'absolute',
+                  left: `${(h / 24) * 100}%`,
+                  top: isMajor ? 10 : 14,
+                  width: isMajor ? 1.5 : 1,
+                  height: isMajor ? 14 : 7,
+                  background: isMajor ? 'var(--tx3)' : 'var(--line2)',
+                  transform: 'translateX(-50%)',
+                  opacity: isMajor ? 0.75 : 0.45,
+                  zIndex: 1,
+                }}
+              />
+            );
+          })}
+
+          {/* All 24h Event Blocks */}
+          {todaysEvents.map((e) => {
+            const s = hoursOf(e.starts_at);
+            let len = hoursOf(e.ends_at) - s;
+            if (len <= 0) len = 0.5;
+            const leftPct = (s / 24) * 100;
+            const widthPct = Math.max(2.5, (len / 24) * 100);
+            return (
+              <div
+                key={e.id}
+                title={`${e.title} (${hhmm(hoursOf(e.starts_at))} - ${hhmm(hoursOf(e.ends_at))})`}
+                onClick={() => router.push('/calendar/')}
+                style={{
+                  position: 'absolute',
+                  top: 7,
+                  left: `${Math.max(0, Math.min(100 - widthPct, leftPct))}%`,
+                  width: `${Math.min(100, widthPct)}%`,
+                  height: 20,
+                  borderRadius: 5,
+                  background: e.color || PAL.sky,
+                  display: 'flex',
+                  alignItems: 'center',
+                  overflow: 'hidden',
+                  padding: '0 4px',
+                  boxShadow: `0 2px 8px color-mix(in srgb, ${e.color || PAL.sky} 30%, transparent)`,
+                  cursor: 'pointer',
+                  zIndex: 2,
+                }}
+              >
+                <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {e.title}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* Current Time Cursor Marker */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 3,
+              left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60) / 24) * 100))}%`,
+              width: 2.5,
+              height: 28,
+              background: 'var(--acc)',
+              boxShadow: '0 0 8px var(--acc)',
+              zIndex: 4,
+              transform: 'translateX(-50%)',
+              borderRadius: 2,
+            }}
+          />
+        </div>
+
+        {/* 24h Time Labels */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', paddingInline: 2 }}>
+          <span>12A</span><span>3A</span><span>6A</span><span>9A</span><span>12P</span><span>3P</span><span>6P</span><span>9P</span><span>12A</span>
+        </div>
+
+        {/* Event Labels List */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 }}>
+          {todaysEvents.slice(0, 3).map((e) => (
+            <span
+              key={e.id}
+              onClick={() => router.push('/calendar/')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                background: 'var(--card2)', border: '1px solid var(--line)',
+                color: 'var(--tx2)', cursor: 'pointer',
+              }}
+            >
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: e.color || PAL.sky, flex: 'none' }} />
+              <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+              <span style={{ fontSize: 9, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
+            </span>
+          ))}
+          {todaysEvents.length > 3 && (
+            <span style={{ fontSize: 9.5, color: 'var(--tx3)', alignSelf: 'center' }}>+{todaysEvents.length - 3} more</span>
+          )}
+          {todaysEvents.length === 0 && (
+            <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>No events scheduled for today</span>
+          )}
+        </div>
+      </div>
 
       {/* 4. Habits: 2 Columns of Square Buttons */}
       <div style={{ marginBottom: 16 }}>
@@ -589,24 +740,41 @@ export function PhoneHome({ name }: { name: string }) {
                   }}
                 >
                   {isDone ? (
-                    <motion.div
-                      key="checked"
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: 'spring', stiffness: 450, damping: 22 }}
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: '50%',
-                        background: h.color,
-                        display: 'grid',
-                        placeItems: 'center',
-                        color: '#0C0F16',
-                        boxShadow: `0 3px 14px color-mix(in srgb, ${h.color} 45%, transparent)`,
-                      }}
-                    >
-                      <Icon name="check" size={28} color="#0C0F16" />
-                    </motion.div>
+                    <>
+                      <motion.div
+                        key="checked"
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 450, damping: 22 }}
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          background: h.color,
+                          display: 'grid',
+                          placeItems: 'center',
+                          color: '#0C0F16',
+                          boxShadow: `0 3px 14px color-mix(in srgb, ${h.color} 45%, transparent)`,
+                        }}
+                      >
+                        <Icon name="check" size={24} color="#0C0F16" />
+                      </motion.div>
+                      <span
+                        style={{
+                          fontSize: 14.5,
+                          fontWeight: 800,
+                          letterSpacing: '-.02em',
+                          color: 'var(--tx)',
+                          textAlign: 'center',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {displayName}
+                      </span>
+                    </>
                   ) : (
                     <>
                       <div
@@ -623,7 +791,7 @@ export function PhoneHome({ name }: { name: string }) {
                       </div>
                       <span
                         style={{
-                          fontSize: 15,
+                          fontSize: 14.5,
                           fontWeight: 800,
                           letterSpacing: '-.02em',
                           color: 'var(--tx)',
@@ -1012,7 +1180,11 @@ function startOfToday(): Date {
 }
 
 function sameDay(a: string, b: string): boolean {
-  return a.slice(0, 10) === b.slice(0, 10);
+  const da = new Date(a);
+  const db = new Date(b.includes('T') ? b : `${b}T00:00:00`);
+  return da.getFullYear() === db.getFullYear() &&
+         da.getMonth() === db.getMonth() &&
+         da.getDate() === db.getDate();
 }
 
 /**
@@ -1031,12 +1203,18 @@ function PhoneCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt:
   const target = ongoing ? new Date(endsAt).getTime() : new Date(startsAt).getTime();
   const total = Math.floor(Math.max(0, target - now) / 1000);
   const hrs = Math.floor(total / 3600);
+  const prefix = ongoing ? 'ENDS IN:' : 'STARTS IN:';
 
   return (
-    <>
-      {hrs > 0 && <span>{hrs}h </span>}
-      <span>{String(Math.floor((total % 3600) / 60)).padStart(2, '0')}m </span>
-      <span style={{ color }}>{String(total % 60).padStart(2, '0')}s</span>
-    </>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: '.06em', opacity: 0.95 }}>
+        {prefix}
+      </span>
+      <span>
+        {hrs > 0 && <span>{hrs}h </span>}
+        <span>{String(Math.floor((total % 3600) / 60)).padStart(2, '0')}m </span>
+        <span style={{ color }}>{String(total % 60).padStart(2, '0')}s</span>
+      </span>
+    </span>
   );
 }

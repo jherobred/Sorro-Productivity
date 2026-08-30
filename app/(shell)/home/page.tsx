@@ -87,7 +87,24 @@ export default function HomePage() {
     return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
   });
   const [greetSeq, setGreetSeq] = useState(0);
-  const [restExpanded, setRestExpanded] = useState(false);
+  const [restExpanded, setRestExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('bd_today_schedule_expanded') === 'true';
+      } catch {}
+    }
+    return false;
+  });
+
+  const toggleRestExpanded = () => {
+    setRestExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('bd_today_schedule_expanded', String(next));
+      } catch {}
+      return next;
+    });
+  };
   const [, tick] = useState(0);
 
   const ws = weekStart(new Date());
@@ -394,8 +411,12 @@ export default function HomePage() {
                       const hourEvents = todays.filter((e) => {
                         const startHour = hoursOf(e.starts_at);
                         const endHour = hoursOf(e.ends_at);
-                        return startHour < h + 1 && endHour > h;
-                      });
+                        const startsInHour = startHour >= h && startHour < h + 1;
+                        const endsInHour = endHour > h && endHour <= h + 1;
+                        const spansHour = startHour <= h && endHour >= h + 1;
+                        const overlapsHour = startHour < h + 1 && endHour > h;
+                        return startsInHour || endsInHour || spansHour || overlapsHour;
+                      }).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
                       return (
                         <div
@@ -439,7 +460,7 @@ export default function HomePage() {
                                      }}
                                    >
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color, flex: 'none' }} />
+                                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color || PAL.sky, flex: 'none' }} />
                                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                          {ev.title}
                                        </span>
@@ -464,7 +485,7 @@ export default function HomePage() {
 
                 {/* Chevron Expand/Collapse Toggle Button */}
                 <button
-                  onClick={() => setRestExpanded(!restExpanded)}
+                  onClick={toggleRestExpanded}
                   className="hov k-squish"
                   style={{
                     display: 'flex',
@@ -496,41 +517,91 @@ export default function HomePage() {
                 <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
                   <div style={KICKER}>The rest of today</div>
                   <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
-                    {todays.length} event{todays.length === 1 ? '' : 's'} to 10 PM
+                    {todays.length} event{todays.length === 1 ? '' : 's'} scheduled
                   </div>
                 </div>
 
-                <div style={{ position: 'relative', height: 34, marginBottom: 8 }}>
-                  <div style={{ position: 'absolute', top: 15, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
+                <div style={{ position: 'relative', height: 38, marginBottom: 8 }}>
+                  {/* 24h Background Line */}
+                  <div style={{ position: 'absolute', top: 18, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
+
+                  {/* 24 Vertical Hour Ticks */}
+                  {Array.from({ length: 25 }, (_, h) => {
+                    const isMajor = h % 3 === 0;
+                    return (
+                      <div
+                        key={h}
+                        style={{
+                          position: 'absolute',
+                          left: `${(h / 24) * 100}%`,
+                          top: isMajor ? 11 : 15,
+                          width: isMajor ? 1.5 : 1,
+                          height: isMajor ? 14 : 7,
+                          background: isMajor ? 'var(--tx3)' : 'var(--line2)',
+                          transform: 'translateX(-50%)',
+                          opacity: isMajor ? 0.75 : 0.45,
+                          zIndex: 1,
+                        }}
+                      />
+                    );
+                  })}
+
+                  {/* All 24h Event Blocks */}
                   {todays.map((e) => {
                     const s = hoursOf(e.starts_at);
-                    const len = hoursOf(e.ends_at) - s;
-                    const left = ((s - 9) / 13) * 100;
-                    if (left < -5 || left > 100) return null;
+                    let len = hoursOf(e.ends_at) - s;
+                    if (len <= 0) len = 0.5;
+                    const leftPct = (s / 24) * 100;
+                    const widthPct = Math.max(1.8, (len / 24) * 100);
                     return (
                       <div
                         key={e.id}
                         title={`${e.title} (${hhmm(hoursOf(e.starts_at))} - ${hhmm(hoursOf(e.ends_at))})`}
                         onClick={() => router.push('/calendar/')}
                         style={{
-                          position: 'absolute', top: 6, left: `${Math.max(0, left)}%`,
-                          width: `${Math.max(4, (len / 13) * 100)}%`, height: 20, borderRadius: 6, background: e.color,
-                          display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '0 4px',
-                          boxShadow: `0 2px 8px color-mix(in srgb, ${e.color} 30%, transparent)`,
+                          position: 'absolute',
+                          top: 7,
+                          left: `${Math.max(0, Math.min(100 - widthPct, leftPct))}%`,
+                          width: `${Math.min(100, widthPct)}%`,
+                          height: 22,
+                          borderRadius: 6,
+                          background: e.color || PAL.sky,
+                          display: 'flex',
+                          alignItems: 'center',
+                          overflow: 'hidden',
+                          padding: '0 5px',
+                          boxShadow: `0 2px 8px color-mix(in srgb, ${e.color || PAL.sky} 30%, transparent)`,
                           cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       >
-                        <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {e.title}
                         </span>
                       </div>
                     );
                   })}
-                  <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)', zIndex: 2 }} />
+
+                  {/* Current Time Cursor Marker */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60) / 24) * 100))}%`,
+                      width: 2.5,
+                      height: 30,
+                      background: 'var(--acc)',
+                      boxShadow: '0 0 8px var(--acc)',
+                      zIndex: 4,
+                      transform: 'translateX(-50%)',
+                      borderRadius: 2,
+                    }}
+                  />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
-                  <span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
+                {/* 24h Time Labels */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', marginBottom: 8, paddingInline: 2 }}>
+                  <span>12A</span><span>3A</span><span>6A</span><span>9A</span><span>12P</span><span>3P</span><span>6P</span><span>9P</span><span>12A</span>
                 </div>
 
                 {/* Event Labels List */}
@@ -546,7 +617,7 @@ export default function HomePage() {
                         color: 'var(--tx2)', cursor: 'pointer',
                       }}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color, flex: 'none' }} />
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color || PAL.sky, flex: 'none' }} />
                       <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
                       <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
                     </span>
@@ -555,7 +626,7 @@ export default function HomePage() {
                     <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 4} more</span>
                   )}
                   {todays.length === 0 && (
-                    <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for the rest of today</span>
+                    <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for today</span>
                   )}
                 </div>
               </div>

@@ -45,18 +45,22 @@ function extractTags(title: string, notes: string): string[] {
 /**
  * Serious emergency siren/alarm asset for <= 24 hours left tasks.
  */
-function SeriousAlarmBeacon({ size = 20 }: { size?: number }) {
+function SeriousAlarmBeacon({ size = 16 }: { size?: number }) {
   return (
     <div
       style={{
-        display: 'inline-flex',
+        display: 'flex',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 5,
-        padding: '3px 7px',
-        borderRadius: 6,
+        padding: '4px 6px',
+        borderRadius: 7,
         background: 'rgba(255, 59, 48, 0.18)',
-        border: '1.5px solid rgba(255, 59, 48, 0.55)',
+        border: '1.5px solid rgba(255, 59, 48, 0.65)',
         animation: 'serious-alarm-pulse 0.9s infinite ease-in-out',
+        width: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
       title="Urgent: Less than 24 hours remaining!"
     >
@@ -66,7 +70,8 @@ function SeriousAlarmBeacon({ size = 20 }: { size?: number }) {
         viewBox="0 0 24 24"
         fill="none"
         style={{
-          filter: 'drop-shadow(0 0 6px #FF3B30)',
+          flex: 'none',
+          filter: 'drop-shadow(0 0 4px #FF3B30)',
         }}
       >
         {/* Siren Dome */}
@@ -85,7 +90,7 @@ function SeriousAlarmBeacon({ size = 20 }: { size?: number }) {
         <line x1="4.5" y1="4.5" x2="6" y2="6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
         <line x1="19.5" y1="4.5" x2="18" y2="6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
       </svg>
-      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#FF4D4D', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#FF4D4D', letterSpacing: '.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
         URGENT ALARM
       </span>
     </div>
@@ -461,7 +466,7 @@ export function UpcomingTasksCarousel({
                 style={{
                   width: '100%',
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(95px, 1fr) 2.8fr',
+                  gridTemplateColumns: phone ? 'minmax(116px, 1fr) 2.2fr' : 'minmax(120px, 1fr) 2.6fr',
                   gap: 12,
                   alignItems: 'stretch',
                 }}

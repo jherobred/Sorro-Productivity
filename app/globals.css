@@ -627,12 +627,12 @@ body {
 
 @keyframes serious-alarm-pulse {
   0%, 100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 6px #FF3B30);
+    box-shadow: 0 0 6px rgba(255, 59, 48, 0.45), inset 0 0 4px rgba(255, 59, 48, 0.2);
+    border-color: rgba(255, 59, 48, 0.65);
   }
   50% {
-    transform: scale(1.18);
-    filter: drop-shadow(0 0 16px #FF3B30) drop-shadow(0 0 24px rgba(255, 59, 48, 0.8));
+    box-shadow: 0 0 14px rgba(255, 59, 48, 0.85), inset 0 0 8px rgba(255, 59, 48, 0.35);
+    border-color: #FF3B30;
   }
 }
 
