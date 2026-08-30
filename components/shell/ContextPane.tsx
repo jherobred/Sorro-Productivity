@@ -42,15 +42,18 @@ function Chip({ label, hue, on, onClick }: { label: string; hue: string; on?: bo
 }
 
 export function ContextPane({
-  width = 264, section, sectionName, hue, kids, go, goFiltered,
+  width = 264, section, sectionName, hue, kids, focus, go, goFiltered, onNew,
 }: {
   width?: number;
   section: string;
   sectionName: string;
   hue: string;
   kids?: Kid[];
+  /** The sub-item currently selected, so the chips can show which. */
+  focus?: string;
   go: (id: string) => void;
   goFiltered: (id: string, focus: string) => void;
+  onNew?: () => void;
 }) {
   const t = useToday();
   const { data: tasks = [] } = useTasks();
@@ -157,6 +160,36 @@ export function ContextPane({
         ))}
       </>
     );
+  } else if (section === 'notebooks') {
+    // Two levels, as the render has it: the notebooks, then the pages of the
+    // one you are in. The second list is what the collapsed chevron never
+    // showed at all.
+    listing = (
+      <>
+        {head(focus ? focus : 'All notebooks')}
+        {(kids ?? []).map((k) => (
+          <button key={k.n} onClick={() => goFiltered(section, k.n)} className="hov" style={{
+            ...ROW, background: focus === k.n ? 'var(--hov)' : undefined,
+          }}>
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: 3, background: k.c, flex: 'none' }} />
+            <span style={{
+              flex: 1, fontWeight: focus === k.n ? 700 : 500,
+              color: focus === k.n ? 'var(--tx)' : 'var(--tx2)',
+            }}>{k.n}</span>
+            {k.m && <span className="num" style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{k.m}</span>}
+          </button>
+        ))}
+        {head('Recently edited')}
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 1,
+          paddingLeft: 9, borderLeft: '1px solid var(--line2)', marginLeft: 6,
+        }}>
+          <div className="metaline" style={{ padding: '4px 8px' }}>
+            Open a notebook to list its pages here.
+          </div>
+        </div>
+      </>
+    );
   } else if (section === 'money') {
     listing = (
       <>
@@ -183,19 +216,29 @@ export function ContextPane({
     }}>
       <div style={{ padding: '14px 12px 10px', flex: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: kids?.length ? 11 : 0 }}>
-          <Icon name={'chev' as IconName} size={0} color="transparent" />
           <span style={{
             flex: 1, fontFamily: 'var(--font-heading)', fontSize: 17, fontWeight: 700,
-            letterSpacing: '-.02em', color: 'var(--tx)', marginLeft: -8,
+            letterSpacing: '-.02em', color: 'var(--tx)', minWidth: 0,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{sectionName}</span>
+          {onNew && (
+            <button onClick={onNew} className="hov k-squish"
+              title={`New in ${sectionName}`} aria-label={`New in ${sectionName}`} style={{
+                width: 28, height: 28, flex: 'none', borderRadius: 8, display: 'grid', placeItems: 'center',
+                border: '1px solid var(--line2)', background: 'var(--card2)',
+              }}>
+              <Icon name={'plus' as IconName} size={14} color="var(--tx2)" />
+            </button>
+          )}
         </div>
 
         {/* P4: the sub-items, drawn rather than hidden behind a disclosure. */}
         {!!kids?.length && (
           <div className="hbar" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-            <Chip label="All" hue={hue} on onClick={() => go(section)} />
+            <Chip label="All" hue={hue} on={!focus} onClick={() => go(section)} />
             {kids.map((k) => (
-              <Chip key={k.n} label={k.n} hue={k.c} onClick={() => goFiltered(section, k.n)} />
+              <Chip key={k.n} label={k.n} hue={k.c} on={focus === k.n}
+                onClick={() => goFiltered(section, k.n)} />
             ))}
           </div>
         )}

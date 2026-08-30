@@ -165,8 +165,13 @@ export function HubBoard({ go, phone }: { go: (id: string) => void; phone: boole
   return (
     <div style={{
       display: 'grid', gap: phone ? 10 : 14, padding: phone ? '12px 14px 20px' : '20px 22px 24px',
-      gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(268px, 1fr))',
-      alignContent: 'start',
+      // Twelve cards over four columns is three equal rows that fill the frame.
+      // `auto-fill` reflowed them into ragged rows the moment the window moved,
+      // which is the one thing a board is supposed not to do.
+      gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
+      gridAutoRows: phone ? undefined : 'minmax(0, 1fr)',
+      minHeight: phone ? undefined : '100%',
+      alignContent: 'stretch',
     }}>
       {cards.map((c) => (
         <button key={c.id} onClick={() => go(c.id)} className="hov k-squish"

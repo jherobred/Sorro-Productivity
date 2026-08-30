@@ -23,6 +23,11 @@ import { SECHUE } from '@/lib/pal';
 const PX_PER_HOUR = 46;
 const TICK_MS = 60_000;
 
+/** Which week of the month the date falls in, counting the 1st as week 1. */
+function weekOfMonth(d: Date): number {
+  return Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7);
+}
+
 function hourOf(iso: string): number {
   const d = new Date(iso);
   return d.getHours() + d.getMinutes() / 60;
@@ -49,9 +54,9 @@ export function DayColumn({ width = 320, go }: { width?: number; go: (id: string
   const hours = Array.from({ length: Math.max(1, to - from + 1) }, (_, i) => from + i);
 
   const today = ymd(now);
-  const tray = tasks
-    .filter((t2) => !t2.done && !t2.deleted_at && t2.due_on === today && !t2.due_at)
-    .slice(0, 6);
+  const undated = tasks.filter((t2) => !t2.done && !t2.deleted_at && t2.due_on === today && !t2.due_at);
+  const tray = undated.slice(0, 4);
+  const trayMore = undated.length - tray.length;
 
   const top = (h: number) => (h - from) * PX_PER_HOUR;
 
@@ -69,14 +74,16 @@ export function DayColumn({ width = 320, go }: { width?: number; go: (id: string
             {now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric' })}
           </div>
           <div className="metaline">
-            {now.toLocaleDateString(undefined, { month: 'long' })} · {t.events.length} today
+            {now.toLocaleDateString(undefined, { month: 'long' })} · week {weekOfMonth(now)}
           </div>
         </div>
-        <button onClick={() => go('calendar')} className="hov k-squish" style={{
-          marginLeft: 'auto', height: 26, padding: '0 10px', borderRadius: 999, flex: 'none',
-          border: '1px solid var(--line2)', background: 'var(--card2)',
-          fontSize: 11, fontWeight: 700, color: 'var(--tx2)',
-        }}>Open</button>
+        <button onClick={() => go('calendar')} className="hov k-squish"
+          title="Open the calendar" style={{
+            marginLeft: 'auto', height: 26, padding: '0 10px', borderRadius: 999, flex: 'none',
+            border: '1px solid color-mix(in srgb, var(--acc) 42%, var(--line2))',
+            background: 'color-mix(in srgb, var(--acc) 13%, var(--card2))',
+            fontSize: 11, fontWeight: 700, color: 'var(--accTx)',
+          }}>Today</button>
       </div>
 
       <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 12px 8px' }}>
@@ -155,6 +162,7 @@ export function DayColumn({ width = 320, go }: { width?: number; go: (id: string
               }}>{task.title}</button>
             ))}
           </div>
+          {trayMore > 0 && <span className="metaline num" style={{ flex: 'none' }}>+{trayMore}</span>}
           <Icon name="chev" size={12} color="var(--tx3)" />
         </div>
       )}

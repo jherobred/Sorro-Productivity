@@ -51,7 +51,24 @@ import { DayColumn } from './shell/DayColumn';
 import { HubBoard } from './shell/HubBoard';
 import { ContextPane } from './shell/ContextPane';
 import { ShellDock } from './shell/ShellDock';
+import { SectionChips } from './shell/SectionChips';
+import { useSidePanelWidth } from '@/lib/sidePanel';
 
+
+/** The ⌘K affordance for the layouts with no sidebar to hold one. */
+function JumpPill({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="hov" title="Search or jump to (⌘K)" style={{
+      flex: 'none', height: 28, padding: '0 10px', borderRadius: 999,
+      border: '1px solid var(--line2)', background: 'var(--card2)',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)',
+    }}>
+      <Icon name="search" size={13} color="var(--tx3)" />
+      Jump to<span className="num" style={{ color: 'var(--tx3)' }}>⌘K</span>
+    </button>
+  );
+}
 
 /**
  * Shell ported from Basedly.dc.html — markup 190–312, computed styles 4337–4372
@@ -112,6 +129,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [search, setSearch] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({ community: true });
+  /** The sub-item the breadcrumb's last crumb names, or '' for the whole section. */
+  const [focusLabel, setFocusLabel] = useState('');
+  /**
+   * L5 insets the column by an open panel instead of letting it be covered.
+   * Read here, above the `guard` early return — below it the hook only runs on
+   * the renders that get that far, which is a changing hook count.
+   */
+  const panelW = useSidePanelWidth();
   /** The combined you/accounts/space sheet, opened from your face. */
   const [account, setAccount] = useState(false);
   /** Messages, full screen, on a phone. The desktop has the dock instead. */
@@ -355,6 +380,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // The sidebar badge reads the tasks already in cache. It used to fire a
   // count query against Supabase on every single navigation — a network round
   // trip per page change, for a number the app was holding all along.
+  useEffect(() => {
+    const read = () => {
+      try {
+        return new URLSearchParams(window.location.search).get('focus') ?? '';
+      } catch { return ''; }
+    };
+    setFocusLabel(read());
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ section: string; focus: string }>).detail;
+      if (d?.section === section) setFocusLabel(d.focus ?? '');
+    };
+    window.addEventListener('basedly:focus', on);
+    return () => window.removeEventListener('basedly:focus', on);
+  }, [section, pathname]);
+
   const taskCount = tasks.filter((t) => !t.done && !t.deleted_at).length;
 
   if (guard === 'checking') return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
@@ -741,7 +781,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* L1's second column: the width the rail gave up, filled by the section. */}
       {!phone && layout === 'L1' && (
         <ContextPane section={section} sectionName={activeSection?.name ?? 'Basedly'}
-          hue={SECHUE[section] || acc} kids={activeSection?.kids} go={go} goFiltered={goFiltered} />
+          hue={SECHUE[section] || acc} kids={activeSection?.kids} focus={focusLabel}
+          go={go} goFiltered={goFiltered}
+          onNew={() => setSheet(section === 'tasks' ? 'task' : section === 'money' ? 'money' : 'note')} />
       )}
 
       {/* L4's frame: today is always on the left, and sections render beside it. */}
@@ -758,22 +800,68 @@ export function Shell({ children }: { children: React.ReactNode }) {
           }}>
             {/* L2, L4 and L5 have no sidebar to carry the wordmark, so it sits
                 here; L3 spends the same room on the Today spine instead. */}
-            {!hasSidebar && (
+            {!hasSidebar && layout !== 'L5' && (
               <button onClick={() => go('home')} className="k-squish" title="Home" style={{
                 fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 19,
                 letterSpacing: '-.04em', color: 'var(--tx)', flex: 'none',
               }}>basedly</button>
             )}
 
+            {/* L1 replaces the page title with where you are, since the two
+                context columns to the left already say it in full. */}
+            {layout === 'L1' && (
+              <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                <button onClick={() => go(section)} className="metaline hov"
+                  style={{ padding: '2px 4px', borderRadius: 5 }}>
+                  {activeSection?.name ?? 'Basedly'}
+                </button>
+                <Icon name="chev" size={12} color="var(--tx3)" />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}>
+                  {focusLabel || 'All'}
+                </span>
+              </nav>
+            )}
+
             {layout === 'L3' && <TodaySpine go={go} />}
 
             {layout === 'L5' && (
-              <span className="metaline num" style={{ flex: 'none' }}>
-                {activeSection?.name ?? ''}
-              </span>
+              <>
+                <span style={{
+                  flex: 'none', fontFamily: 'var(--font-heading)', fontSize: 17,
+                  fontWeight: 700, letterSpacing: '-.03em', color: 'var(--tx)',
+                }}>{activeSection?.name ?? 'Basedly'}</span>
+                {taskCount > 0 && (
+                  <span className="metaline num" style={{ flex: 'none' }}>{taskCount} open</span>
+                )}
+              </>
             )}
 
+            {/* L2 is a board and a palette: with no sidebar and no chip row,
+                the field is the only way to anything not on a card, so it
+                takes the middle of the bar rather than an icon in the corner. */}
+            {layout === 'L2' && (
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+                <button onClick={() => setSearch(true)} className="hov" style={{
+                  width: 420, maxWidth: '100%', height: 34, borderRadius: 10,
+                  border: '1px solid var(--line2)', background: 'var(--card2)',
+                  display: 'flex', alignItems: 'center', gap: 9, padding: '0 12px',
+                }}>
+                  <Icon name="search" size={15} color="var(--tx3)" />
+                  <span style={{ flex: 1, textAlign: 'left', fontSize: 12.5, color: 'var(--tx3)' }}>
+                    Jump to anything
+                  </span>
+                  <span className="num" style={{
+                    height: 20, padding: '0 7px', borderRadius: 999, fontSize: 10, lineHeight: '20px',
+                    border: '1px solid var(--line2)', color: 'var(--tx3)',
+                  }}>⌘K</span>
+                </button>
+              </div>
+            )}
+
+            {layout === 'L4' && <JumpPill onClick={() => setSearch(true)} />}
+
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {layout === 'L5' && <JumpPill onClick={() => setSearch(true)} />}
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
 
@@ -924,6 +1012,53 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
+        {/* On a phone L4 keeps the day, laid flat above the section instead of
+            beside it — there is no room for a 320px column at 390px wide. */}
+        {phone && layout === 'L4' && (
+          <div style={{ flex: 'none', height: 244, overflow: 'hidden', display: 'flex' }}>
+            <DayColumn width={390} go={go} />
+          </div>
+        )}
+
+        {/* L1's whole claim is that sub-items are drawn, not hidden. The
+            context pane cannot fit beside a phone, so the chips come with it. */}
+        {phone && layout === 'L1' && !!activeSection?.kids?.length && (
+          <div className="hbar" style={{
+            flex: 'none', display: 'flex', gap: 6, padding: '9px 14px',
+            borderBottom: '1px solid var(--line)', overflowX: 'auto',
+          }}>
+            <button onClick={() => go(section)} className="k-squish" style={{
+              height: 26, padding: '0 10px', borderRadius: 8, flex: 'none',
+              fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+              color: !focusLabel ? 'var(--tx)' : 'var(--tx2)',
+              background: !focusLabel
+                ? `color-mix(in srgb, ${SECHUE[section] || acc} 20%, transparent)` : 'var(--card)',
+              border: `1px solid ${!focusLabel
+                ? `color-mix(in srgb, ${SECHUE[section] || acc} 38%, transparent)` : 'var(--line)'}`,
+            }}>All</button>
+            {activeSection.kids.map((k) => (
+              <button key={k.n} onClick={() => goFiltered(section, k.n)} className="k-squish" style={{
+                height: 26, padding: '0 10px', borderRadius: 8, flex: 'none',
+                fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                color: focusLabel === k.n ? 'var(--tx)' : 'var(--tx2)',
+                background: focusLabel === k.n ? `color-mix(in srgb, ${k.c} 20%, transparent)` : 'var(--card)',
+                border: `1px solid ${focusLabel === k.n ? `color-mix(in srgb, ${k.c} 38%, transparent)` : 'var(--line)'}`,
+              }}>{k.n}</button>
+            ))}
+          </div>
+        )}
+
+        {/* L4 gave its left 320px to the day and never gets it back, so the
+            sections run along the top of the right pane instead. */}
+        {layout === 'L4' && (
+          <SectionChips
+            sections={SECTIONS.filter((x) => BUILT.has(x.id)).map((x) => ({
+              id: x.id, name: x.name, ic: x.ic, hue: SECHUE[x.id] || acc,
+              badge: x.id === 'tasks' && taskCount > 0 ? String(taskCount) : undefined,
+            }))}
+            active={section} go={go} onMore={() => go('more')} />
+        )}
+
         {/* Full width, matching the reference screenshots */}
         <main id="bd-main" key={pathname} className="pagein" tabIndex={-1}
           style={{
@@ -931,6 +1066,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             // L5's dock floats over the content rather than reserving a strip,
             // so the column has to clear it from the inside.
             paddingBottom: layout === 'L5' ? 'calc(72px + env(safe-area-inset-bottom))' : undefined,
+            // …and an open panel pushes the column rather than covering it.
+            paddingRight: layout === 'L5' && !phone && panelW ? panelW : undefined,
+            transition: 'padding-right .3s cubic-bezier(0.16, 1, 0.3, 1)',
           }}>
           {layout === 'L2' && section === 'home'
             ? <HubBoard go={go} phone={phone} />

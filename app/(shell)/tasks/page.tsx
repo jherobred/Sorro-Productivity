@@ -9,6 +9,7 @@ import { Page } from '@/components/Page';
 import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
+import { useRegisterSidePanel } from '@/lib/sidePanel';
 import { useLayout } from '@/lib/useLayout';
 import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task, type List } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
@@ -918,6 +919,15 @@ function TaskEditSidepanel({
   onDelete: () => void;
   onComplete: () => void;
 }) {
+  const { prefs } = usePrefs();
+  /**
+   * Under L5 the panel pushes rather than overlays, which is the layout's whole
+   * depth mechanism. Registering the width lets Shell inset the column by it;
+   * without that the panel would still be sitting on top of the rows.
+   */
+  const pushes = prefs.shellLayout === 'L5' && !phone;
+  useRegisterSidePanel(pushes ? 440 : 0);
+
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? '');
   const [newLinkUrl, setNewLinkUrl] = useState('');
@@ -1028,18 +1038,22 @@ function TaskEditSidepanel({
 
   return createPortal((
     <>
-      {/* Backdrop */}
-      <div
-        onClick={handleClose}
-        className="fade"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.44)',
-          backdropFilter: 'blur(2px)',
-          zIndex: 49,
-        }}
-      />
+      {/* Backdrop. A pushed panel has none: the page beside it is still in
+          use, and dimming content the layout deliberately kept visible would
+          say the opposite. */}
+      {!pushes && (
+        <div
+          onClick={handleClose}
+          className="fade"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.44)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 49,
+          }}
+        />
+      )}
 
       {/* Edit Sidepanel on Right */}
       <div
