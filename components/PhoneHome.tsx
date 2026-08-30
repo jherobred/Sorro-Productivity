@@ -179,15 +179,7 @@ export function PhoneHome({ name }: { name: string }) {
   }
 
   return (
-    <div style={{ padding: '6px 14px 28px' }}>
-      {/* Top Header without side icon buttons */}
-      <div style={{ textAlign: 'center', margin: '6px 0 14px' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.04em', color: 'var(--tx)' }}>basedly</div>
-        <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginTop: -1 }}>
-          {greeting()}{name ? `, ${name.split(' ')[0]}` : ''}
-        </div>
-      </div>
-
+    <div style={{ padding: '8px 14px 28px' }}>
       {/* 1. Upcoming Tasks Sliding Carousel */}
       <UpcomingTasksCarousel
         tasks={tasks}
