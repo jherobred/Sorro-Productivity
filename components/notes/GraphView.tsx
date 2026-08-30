@@ -7,10 +7,10 @@ import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { linkGraph, type Note, type Notebook } from '@/lib/notes';
 import {
-  useBoards, useAllNodes, useAllEdges, useCanvasActions,
+  useBoards, useAllNodes, useAllEdges, useCanvasActions, blankNode,
   CANVAS_COLORS, DEFAULT_GRAPH, type Board, type GraphSettings,
 } from '@/lib/canvas';
-import { buildGraph, degrees, neighbours, type GEdge, type GNode } from '@/lib/graph';
+import { buildGraph, degrees, edgeBetween, neighbours, type GEdge, type GNode } from '@/lib/graph';
 import { BoardList, PANEL, BTN, ICON_BTN } from './Canvas';
 
 /**
@@ -86,6 +86,21 @@ export function GraphView({
 
   const graph = boardId ? (graphs.find((b) => b.id === boardId) ?? null) : AUTO;
 
+  /**
+   * Scene draws the cards of every board it is given. Graph boards were left
+   * out of that list, so a node made on one had nowhere to appear. The open
+   * graph goes in — and only the open one, or every saved view's nodes would
+   * pile into every other view.
+   *
+   * Nothing else is needed for "connected to a notebook or a page": a card
+   * carries note_id, buildGraph already reaches from the card to that note and
+   * from the note to its notebook. The link is the data model, not a feature.
+   */
+  const scope = useMemo(
+    () => (graph && graph.id !== 'auto' ? [...canvases, graph] : canvases),
+    [canvases, graph],
+  );
+
   // The shelf picks the view now, so a row deleted from under us goes back to
   // the shelf rather than silently swapping to a different graph.
   useEffect(() => {
@@ -94,7 +109,7 @@ export function GraphView({
 
   const board = graph ? (
     <Scene
-      key={graph.id} graph={graph} boards={canvases} notes={notes} notebooks={notebooks} phone={phone}
+      key={graph.id} graph={graph} boards={scope} notes={notes} notebooks={notebooks} phone={phone}
       accent={prefs.accent}
       onSettings={(patch) => {
         if (graph.id === 'auto') { setAutoSettings((v) => ({ ...v, ...patch })); return; }
@@ -136,6 +151,19 @@ function Scene({
   const dirty = useRef(true);
   const [hover, setHover] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  /**
+   * Editing only means anything on a saved view: the automatic graph is a
+   * picture of what exists, and a node drawn on it would have nothing to be.
+   */
+  const editable = graph.id !== 'auto';
+  const CA = useCanvasActions(editable ? graph.id : null);
+  /** Link mode: pick a node, then pick a second, and the edge is the answer. */
+  const [linking, setLinking] = useState<string | null>(null);
+  const [linkMode, setLinkMode] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const linkRef = useRef<{ mode: boolean; from: string | null }>({ mode: false, from: null });
+  linkRef.current = { mode: linkMode, from: linking };
 
   const s: GraphSettings = { ...DEFAULT_GRAPH, ...graph.settings };
 
@@ -341,8 +369,26 @@ function Scene({
     };
   };
 
-  const hit = (wx: number, wy: number) =>
-    particles.current.find((p) => Math.hypot(p.x - wx, p.y - wy) <= p.r + 8) ?? null;
+  /** The cards this graph owns — the only things an edge on it can join. */
+  const ownCards = useMemo(
+    () => new Set(cards.filter((c) => c.canvas_id === graph.id).map((c) => `card:${c.id}`)),
+    [cards, graph.id],
+  );
+  const ownRef = useRef(ownCards);
+  ownRef.current = ownCards;
+
+  /**
+   * In link mode only this graph's own cards answer a click. Everything else on
+   * screen — board hubs, notes, cards from other boards — is drawn because it
+   * is connected to something here, not because it lives here, and an edge to
+   * one would have nowhere to be written. Refusing the click is clearer than
+   * accepting it and explaining afterwards.
+   */
+  const hit = (wx: number, wy: number) => {
+    const near = particles.current.filter((p) => Math.hypot(p.x - wx, p.y - wy) <= p.r + 8);
+    if (linkRef.current.mode) return near.find((p) => ownRef.current.has(p.id)) ?? null;
+    return near[0] ?? null;
+  };
 
   const onDown = (e: React.PointerEvent) => {
     dirty.current = true;
@@ -386,10 +432,39 @@ function Scene({
     if (card) onOpenBoard(card.canvas_id);
   }, [cards, onOpenNote, onOpenBoard]);
 
+  /** A new dot lands where the view is looking, not at the world origin. */
+  const centreOfView = () => {
+    const r = wrap.current?.getBoundingClientRect();
+    const v = view.current;
+    return {
+      x: (((r?.width ?? 600) / 2) - v.x) / v.z,
+      y: (((r?.height ?? 400) / 2) - v.y) / v.z,
+    };
+  };
+
+  const addNode = (text: string, noteId: string | null) => {
+    const c = centreOfView();
+    const n = blankNode(graph.id, noteId ? 'note' : 'text', c.x, c.y,
+      CANVAS_COLORS[Math.floor(Math.random() * CANVAS_COLORS.length)], 0);
+    CA.addNodes.mutate({ nodes: [{ ...n, text, note_id: noteId }] });
+  };
+
+  const joinTo = (targetPid: string) => {
+    const from = linkRef.current.from;
+    if (!from) { setLinking(targetPid); return; }
+    setLinking(null);
+    const edge = edgeBetween(from, targetPid, graph.id, graph.color);
+    if (!edge) return;
+    CA.addEdges.mutate({ edges: [edge] });
+    toast('Linked');
+  };
+
   const onUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (d && d.id && !d.moved) open(d.id);
+    if (!d || !d.id || d.moved) return;
+    if (linkRef.current.mode) { joinTo(d.id); return; }
+    open(d.id);
   };
 
   useEffect(() => {
@@ -444,6 +519,62 @@ function Scene({
           }}>
           <canvas ref={canvas} style={{ display: 'block' }} />
         </div>
+
+        {/* Making things is on the left, looking at things on the right. */}
+        {editable && (
+          <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 5, zIndex: 3 }}>
+            <button
+              onClick={() => void ask('New node', { placeholder: 'What is it called?' })
+                .then((n) => { if (n) addNode(n, null); })}
+              className="hov k-squish" aria-label="Add a node" title="Add a node" style={ICON_BTN}>
+              <Icon name="plus" size={14} color="var(--tx2)" />
+            </button>
+            <button onClick={() => setPicking((v) => !v)} aria-pressed={picking}
+              className="hov k-squish" aria-label="Add a page" title="Add a page to this graph"
+              style={{ ...ICON_BTN, ...(picking ? { borderColor: 'var(--acc)', color: 'var(--accTx)' } : null) }}>
+              <Icon name="book" size={14} color={picking ? 'var(--accTx)' : 'var(--tx2)'} />
+            </button>
+            <button
+              onClick={() => { setLinkMode((v) => !v); setLinking(null); }}
+              aria-pressed={linkMode}
+              className="hov k-squish" aria-label="Link two nodes" title="Link two nodes"
+              style={{ ...ICON_BTN, ...(linkMode ? { borderColor: 'var(--acc)', color: 'var(--accTx)' } : null) }}>
+              <Icon name="link" size={14} color={linkMode ? 'var(--accTx)' : 'var(--tx2)'} />
+            </button>
+            {linkMode && (
+              <span className="kicker" style={{
+                alignSelf: 'center', padding: '0 8px', color: 'var(--accTx)',
+              }}>
+                {linking ? 'Now pick the other one' : 'Pick a node'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Attaching a page is what wires a graph to the rest of the app: the
+            card carries note_id, and buildGraph reaches from there to the note
+            and on to the notebook holding it. */}
+        {editable && picking && (
+          <div className="k-bloom navsb" style={{
+            position: 'absolute', left: 12, top: 52, zIndex: 4, width: 260, maxHeight: 300,
+            overflowY: 'auto', padding: 8, borderRadius: 12,
+            background: 'var(--card2)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)',
+          }}>
+            <div className="kicker" style={{ padding: '4px 6px 8px' }}>Add a page</div>
+            {notes.length === 0 && <div className="metaline" style={{ padding: '4px 6px' }}>No notes yet.</div>}
+            {notes.slice(0, 40).map((n) => (
+              <button key={n.id} className="hov" style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+                padding: '6px 8px', borderRadius: 7, fontSize: 12, color: 'var(--tx2)',
+              }} onClick={() => { addNode(n.title || 'Untitled', n.id); setPicking(false); }}>
+                <Icon name="book" size={12} color="var(--tx3)" />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {n.title || 'Untitled'}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 5, zIndex: 3 }}>
           <button onClick={() => setShowSettings((v) => !v)} className="hov k-squish" aria-pressed={showSettings}

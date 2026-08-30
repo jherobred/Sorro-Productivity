@@ -19,6 +19,8 @@
  *   embeds  — a card that *is* a note, or a card that opens another board
  */
 
+import type { CEdge } from './canvas';
+
 export type GKind = 'canvas' | 'card' | 'note';
 export type EKind = 'holds' | 'links' | 'embeds';
 
@@ -142,4 +144,28 @@ export function neighbours(edges: GEdge[], id: string): Set<string> {
     if (e.to === id) out.add(e.from);
   }
   return out;
+}
+
+/**
+ * The edge two graph dots stand for, or null if they cannot have one.
+ *
+ * Graph node ids are namespaced by buildGraph ("card:<id>", "note:<id>",
+ * "canvas:<id>") because a card and a note can share an id. An edge is a row
+ * between two cards on one board, so anything that is not a card — a board hub,
+ * a note, a card from somewhere else — has no edge to be, and neither does a
+ * dot joined to itself.
+ */
+export function edgeBetween(
+  fromPid: string, toPid: string, canvasId: string, color: string,
+  id: () => string = () => crypto.randomUUID(),
+): CEdge | null {
+  if (!fromPid || !toPid || fromPid === toPid) return null;
+  const card = (pid: string) => (pid.startsWith('card:') ? pid.slice(5) : null);
+  const a = card(fromPid), b = card(toPid);
+  if (!a || !b) return null;
+  return {
+    id: id(), canvas_id: canvasId,
+    from_node: a, to_node: b, from_side: 'right', to_side: 'left',
+    label: '', color,
+  };
 }

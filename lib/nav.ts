@@ -15,6 +15,17 @@ type OverlayEntry = { id: number; close: () => void; pushedHistory: boolean };
 const overlays: OverlayEntry[] = [];
 let nextId = 1;
 let isHandlingPopState = false;
+/**
+ * How many popstate events are this module's own doing.
+ *
+ * Closing an overlay by any route other than a back gesture has to undo the
+ * history entry it pushed, which it does with history.back(). That fires
+ * popstate — indistinguishable, at the handler, from the user pressing back.
+ * The handler then closed the *next* overlay down, so a dialog opened over
+ * anything already registered took both away with it. Counting the pops we
+ * cause ourselves is what tells the two apart.
+ */
+let selfPops = 0;
 
 /**
  * Register an open overlay so back closes it rather than changing section.
@@ -43,9 +54,12 @@ export function pushOverlay(close: () => void): () => void {
     // and NOT because the user already pressed the browser back button (popstate).
     if (!isHandlingPopState && pushedHistory && typeof window !== 'undefined') {
       if (window.history?.state?.bdOverlay === id) {
+        selfPops++;
         try {
           window.history.back();
-        } catch {}
+        } catch {
+          selfPops--;
+        }
       }
     }
   };
@@ -78,6 +92,8 @@ export function useBackGuard() {
 
   useEffect(() => {
     const onPop = (e: PopStateEvent) => {
+      // Our own undo of a pushState, not a gesture. Consume it and stop.
+      if (selfPops > 0) { selfPops--; return; }
       if (overlays.length > 0) {
         const top = overlays[overlays.length - 1];
         if (top) {
