@@ -345,7 +345,7 @@ export default function HomePage() {
 
               if (upNext) {
                 return (
-                  <div className="border-trail-wrap" style={{ flex: '1 1 260px', width: '100%', minWidth: 0, display: 'flex' }}>
+                  <div className="border-trail-wrap" style={{ flex: '1 1 240px', width: '100%', minWidth: 0, display: 'flex' }}>
                     <div
                       className="border-trail-spinner"
                       style={{
@@ -358,7 +358,7 @@ export default function HomePage() {
               }
 
               return (
-                <div style={{ flex: '1 1 260px', width: '100%', minWidth: 0, display: 'flex' }}>
+                <div style={{ flex: '1 1 240px', width: '100%', minWidth: 0, display: 'flex' }}>
                   {cardBody}
                 </div>
               );
@@ -427,28 +427,28 @@ export default function HomePage() {
                             {hourEvents.length > 0 ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {hourEvents.map((ev) => (
-                                  <div
-                                    key={ev.id}
-                                    onClick={() => router.push('/calendar/')}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      gap: 6,
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color, flex: 'none' }} />
-                                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {ev.title}
-                                      </span>
-                                    </div>
-                                    <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
-                                      {hhmm(hoursOf(ev.starts_at))}
-                                    </span>
-                                  </div>
-                                ))}
+                                   <div
+                                     key={ev.id}
+                                     onClick={() => router.push('/calendar/')}
+                                     style={{
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       justifyContent: 'space-between',
+                                       gap: 6,
+                                       cursor: 'pointer',
+                                     }}
+                                   >
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color, flex: 'none' }} />
+                                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                         {ev.title}
+                                       </span>
+                                     </div>
+                                     <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                                       {hhmm(hoursOf(ev.starts_at))}
+                                     </span>
+                                   </div>
+                                 ))}
                               </div>
                             ) : (
                               <span style={{ fontSize: 11, color: 'var(--tx3)', fontStyle: 'italic' }}>
@@ -489,7 +489,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div style={{
-                flex: '1 1 280px', minWidth: 0, borderRadius: 15, padding: '16px 18px', minHeight: 180,
+                flex: '1.6 1 360px', minWidth: 0, borderRadius: 15, padding: '16px 18px', minHeight: 180,
                 background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
               }}>
@@ -535,7 +535,7 @@ export default function HomePage() {
 
                 {/* Event Labels List */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {todays.slice(0, 3).map((e) => (
+                  {todays.slice(0, 4).map((e) => (
                     <span
                       key={e.id}
                       onClick={() => router.push('/calendar/')}
@@ -547,12 +547,12 @@ export default function HomePage() {
                       }}
                     >
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color, flex: 'none' }} />
-                      <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+                      <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
                       <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
                     </span>
                   ))}
-                  {todays.length > 3 && (
-                    <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 3} more</span>
+                  {todays.length > 4 && (
+                    <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 4} more</span>
                   )}
                   {todays.length === 0 && (
                     <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for the rest of today</span>
@@ -562,7 +562,7 @@ export default function HomePage() {
             )}
 
             {/* Upcoming Tasks Sliding Carousel (Replacing Overdue) */}
-            <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} style={{ flex: '1 1 260px', width: '100%', minWidth: 0 }} />
+            <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} style={{ flex: '1 1 240px', width: '100%', minWidth: 0 }} />
           </div>
         </div>
       </div>

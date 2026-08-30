@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { PAL } from '@/lib/pal';
 import { playCelebration } from '@/lib/audio';
 import { toast } from '@/lib/toast';
+import { useLayout } from '@/lib/useLayout';
 
 const KICKER: React.CSSProperties = {
   fontSize: 10,
@@ -103,6 +104,7 @@ export function UpcomingTasksCarousel({
   className?: string;
 }) {
   const router = useRouter();
+  const { phone } = useLayout();
   const A = useTaskActions();
 
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -340,47 +342,95 @@ export function UpcomingTasksCarousel({
               <span style={{ ...KICKER, color: auraTheme.color }}>Upcoming Tasks</span>
             </div>
 
-            {/* Circular Countdown Timer */}
-            {upcomingTasks.length > 1 && (
-              <div
-                title={`${timeLeft}s until next upcoming task`}
-                style={{
-                  position: 'relative',
-                  width: 30,
-                  height: 30,
-                  display: 'grid',
-                  placeItems: 'center',
-                  flex: 'none',
-                }}
-              >
-                <svg width="30" height="30" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
-                  <circle cx="16" cy="16" r="13" fill="var(--card2)" stroke="var(--line2)" strokeWidth="2.5" />
-                  <circle
-                    cx="16"
-                    cy="16"
-                    r="13"
-                    fill="none"
-                    stroke={auraTheme.color}
-                    strokeWidth="2.5"
-                    strokeDasharray={2 * Math.PI * 13}
-                    strokeDashoffset={2 * Math.PI * 13 * (1 - timeLeft / CYCLE_SECONDS)}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 0.9s linear' }}
-                  />
-                </svg>
-                <span
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              {/* Circular Countdown Timer */}
+              {upcomingTasks.length > 1 && (
+                <div
+                  title={`${timeLeft}s until next upcoming task`}
                   style={{
-                    fontSize: 11.5,
-                    fontWeight: 800,
-                    color: 'var(--tx)',
-                    zIndex: 1,
-                    fontVariantNumeric: 'tabular-nums',
+                    position: 'relative',
+                    width: 28,
+                    height: 28,
+                    display: 'grid',
+                    placeItems: 'center',
+                    flex: 'none',
                   }}
                 >
-                  {timeLeft}
-                </span>
-              </div>
-            )}
+                  <svg width="28" height="28" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
+                    <circle cx="16" cy="16" r="13" fill="var(--card2)" stroke="var(--line2)" strokeWidth="2.5" />
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r="13"
+                      fill="none"
+                      stroke={auraTheme.color}
+                      strokeWidth="2.5"
+                      strokeDasharray={2 * Math.PI * 13}
+                      strokeDashoffset={2 * Math.PI * 13 * (1 - timeLeft / CYCLE_SECONDS)}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                    />
+                  </svg>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: 'var(--tx)',
+                      zIndex: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {timeLeft}
+                  </span>
+                </div>
+              )}
+
+              {/* Navigation Arrows on Desktop */}
+              {!phone && upcomingTasks.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    className="hov k-squish"
+                    aria-label="Previous task"
+                    title="Previous task"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      border: '1px solid var(--line2)',
+                      background: 'var(--card2)',
+                      color: 'var(--tx2)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Icon name="chevronLeft" size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    className="hov k-squish"
+                    aria-label="Next task"
+                    title="Next task"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      border: '1px solid var(--line2)',
+                      background: 'var(--card2)',
+                      color: 'var(--tx2)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Icon name="chevronRight" size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Animated Task Content with Visible Swipe to the Left */}
