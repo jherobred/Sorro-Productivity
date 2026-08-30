@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
+import { SHELL_LAYOUTS } from '@/lib/shellLayouts';
 import { usePrefs, type Prefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
@@ -859,6 +860,45 @@ export function SettingsModal({
       case 'appearance':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={SECTION_TITLE}>Shell layout</div>
+            <Field label="How the app is arranged"
+              hint="Each one moves the same twelve sections into a different frame. Switching takes effect immediately.">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {SHELL_LAYOUTS.map((l) => {
+                  const on = (prefs.shellLayout ?? 'L3') === l.id;
+                  return (
+                    <button
+                      key={l.id}
+                      onClick={() => setPref('shellLayout', l.id)}
+                      aria-pressed={on}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 11,
+                        padding: '11px 13px',
+                        borderRadius: 11,
+                        textAlign: 'left',
+                        background: on ? 'color-mix(in srgb, var(--acc) 14%, var(--card2))' : 'var(--card2)',
+                        border: `1px solid ${on ? 'color-mix(in srgb, var(--acc) 42%, var(--line2))' : 'var(--line2)'}`,
+                      }}
+                    >
+                      <span className="num" style={{
+                        flex: 'none', width: 26, height: 22, borderRadius: 6, marginTop: 1,
+                        display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
+                        background: on ? 'var(--acc)' : 'var(--card)',
+                        color: on ? 'var(--ink)' : 'var(--tx3)',
+                        border: on ? 'none' : '1px solid var(--line2)',
+                      }}>{l.id}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{l.name}</span>
+                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{l.blurb}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
             <div style={SECTION_TITLE}>Theme & Color</div>
             <Field label="Theme Mode">
               <div style={{ display: 'flex', gap: 8 }}>

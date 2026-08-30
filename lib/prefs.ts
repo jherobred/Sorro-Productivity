@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
 import { DEFAULT_ACCENT, RETIRED_ACCENT } from './pal';
+import { DEFAULT_SHELL, isShellLayout, type ShellLayout } from './shellLayouts';
 import { EMPTY_PLAN } from './lift';
 
 export type Prefs = {
@@ -12,6 +13,8 @@ export type Prefs = {
   navPicks: string[];
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
   sidebar: 'open' | 'compact' | 'hidden' | 'collapsed';
+  /** Which of the five shells draws the chrome. See lib/shellLayouts.ts. */
+  shellLayout: ShellLayout;
   /** Which shared space you are in. null is Personal, which is not a row. */
   workspace: string | null;
   lockEvents: boolean;
@@ -59,6 +62,7 @@ export const DEFAULT_PREFS: Prefs = {
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
   calView: 'week',
   sidebar: 'open',
+  shellLayout: DEFAULT_SHELL,
   workspace: null,
   lockEvents: false,
   journalMode: null,
@@ -118,6 +122,7 @@ export function applyPrefs(p: Prefs) {
   r.classList.toggle('noglass', !!p.reduceTransparency);
 
   r.classList.toggle('railshut', p.sidebar === 'collapsed');
+  r.setAttribute('data-shell', p.shellLayout ?? 'L3');
 }
 
 /* ------------------------------------------------------------------ store */
@@ -140,6 +145,9 @@ function read(): Prefs {
     // Everyone who never picked an accent has the old default written to disk,
     // so shipping a new one without this would change nothing for them.
     if (stored.accent === RETIRED_ACCENT) stored.accent = DEFAULT_ACCENT;
+    // A value written by an older build, or hand-edited, must not take the
+    // shell down a branch that does not exist.
+    if (!isShellLayout(stored.shellLayout)) stored.shellLayout = DEFAULT_SHELL;
     return stored;
   } catch {
     return DEFAULT_PREFS;

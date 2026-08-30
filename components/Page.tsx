@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayout } from '@/lib/useLayout';
+import { usePrefs } from '@/lib/prefs';
 
 /**
  * The shell every section sits in.
@@ -47,7 +48,16 @@ export function Page({
   children: React.ReactNode;
 }) {
   const { phone } = useLayout();
-  const max = MAX[width];
+  const { prefs } = usePrefs();
+
+  /**
+   * L5's claim is one column at every size, so a page that asked for the wide
+   * grid measure gets the reading measure instead. `full` is left alone: a
+   * board or a canvas at 820px is not a narrower version of itself, it is a
+   * broken one.
+   */
+  const effective: PageWidth = prefs.shellLayout === 'L5' && width === 'wide' ? 'list' : width;
+  const max = MAX[effective];
 
   return (
     <div style={{

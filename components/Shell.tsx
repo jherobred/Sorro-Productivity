@@ -45,6 +45,12 @@ import { useTabOnboarding } from '@/lib/useTabOnboarding';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
 import { BirdMascot } from './BasedlyLogo';
+import { GROUP_HUE, GROUP_ORDER, HAS_SIDEBAR, SECTION_GROUP, type GroupName } from '@/lib/shellLayouts';
+import { TodaySpine } from './shell/TodaySpine';
+import { DayColumn } from './shell/DayColumn';
+import { HubBoard } from './shell/HubBoard';
+import { ContextPane } from './shell/ContextPane';
+import { ShellDock } from './shell/ShellDock';
 
 
 /**
@@ -168,8 +174,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   /**
    * Ctrl/Cmd+\ cycles the sidebar modes: open -> compact -> hidden -> open.
    */
-  const sidebarMode: 'open' | 'compact' | 'hidden' =
+  const layout = prefs.shellLayout ?? 'L3';
+  /** Two of the five have no sidebar at all, and L1's is always the rail. */
+  const hasSidebar = HAS_SIDEBAR[layout];
+
+  const chosenSidebar: 'open' | 'compact' | 'hidden' =
     prefs.sidebar === 'compact' ? 'compact' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'hidden' : 'open');
+
+  // L1 is the rail by definition — its width is what pays for the context
+  // pane, so letting the user open it back to 236px would leave no room for
+  // the third column it exists to create.
+  const sidebarMode: 'open' | 'compact' | 'hidden' =
+    !hasSidebar ? 'hidden' : (layout === 'L1' ? 'compact' : chosenSidebar);
 
   const setSidebarMode = useCallback(
     (mode: 'open' | 'compact' | 'hidden') => void update({ sidebar: mode }),
@@ -177,8 +193,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 
   const cycleSidebarMode = useCallback(() => {
+    if (!hasSidebar || layout === 'L1') return;
     setSidebarMode(sidebarMode === 'open' ? 'compact' : (sidebarMode === 'compact' ? 'hidden' : 'open'));
-  }, [sidebarMode, setSidebarMode]);
+  }, [hasSidebar, layout, sidebarMode, setSidebarMode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -352,6 +369,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
       }
     }
   };
+  /**
+   * SECTIONS interleaved with the four group headers, in GROUP_ORDER. Anything
+   * an edit to SECTIONS adds without a group falls to the end under "More",
+   * rather than silently disappearing from the sidebar.
+   */
+  const groupedSections: (Section | { head: GroupName })[] = (() => {
+    const out: (Section | { head: GroupName })[] = [];
+    const placed = new Set<string>();
+    for (const g of GROUP_ORDER) {
+      const rows = SECTIONS.filter((x) => SECTION_GROUP[x.id] === g);
+      if (!rows.length) continue;
+      out.push({ head: g });
+      for (const r of rows) { out.push(r); placed.add(r.id); }
+    }
+    const rest = SECTIONS.filter((x) => !placed.has(x.id));
+    if (rest.length) { out.push({ head: 'Social' }); out.push(...rest); }
+    return out;
+  })();
+
+  const activeSection = SECTIONS.find((x) => x.id === section);
+
   const hueTx = (hue: string) =>
     dark ? `color-mix(in srgb, ${hue} 84%, #FFFFFF)` : `color-mix(in srgb, ${hue} 62%, #1C1A26)`;
 
@@ -380,7 +418,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         filter: 'blur(46px)', opacity: dark ? 0.85 : 0.6, zIndex: 0,
       }} />
 
-      {!phone && (
+      {!phone && hasSidebar && (
         <div className="bd-rail" style={{
           ...lg({ tint: acc, strength: 1, dark }),
           width: sidebarMode === 'open' ? 236 : (sidebarMode === 'compact' ? 64 : 0),
@@ -502,7 +540,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
           {/* Section list */}
           <div className="navsb" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarMode === 'open' ? '0 8px 0 17px' : '0 10px', width: sidebarMode === 'open' ? 236 : 64 }}>
-            {SECTIONS.map((sec) => {
+            {(layout === 'L3' && sidebarMode === 'open' ? groupedSections : SECTIONS).map((sec) => {
+              // A group header is a row in the same list rather than a wrapper,
+              // so the twelve section rows below are rendered by exactly the
+              // code every other layout uses.
+              if ('head' in sec) {
+                return (
+                  <div key={`h:${sec.head}`} className="kicker hx"
+                    style={{ '--h': GROUP_HUE[sec.head], padding: '13px 8px 5px' } as React.CSSProperties}>
+                    {sec.head}
+                  </div>
+                );
+              }
               const on = sec.id === section;
               const hue = SECHUE[sec.id] || acc;
               const hasKids = !!sec.kids;
@@ -670,7 +719,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {!phone && sidebarMode === 'hidden' && (
+      {!phone && hasSidebar && sidebarMode === 'hidden' && (
         <button
           onClick={() => setSidebarMode('open')}
           title="Click to reset sidebar to normal (3/3)"
@@ -689,6 +738,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
+      {/* L1's second column: the width the rail gave up, filled by the section. */}
+      {!phone && layout === 'L1' && (
+        <ContextPane section={section} sectionName={activeSection?.name ?? 'Basedly'}
+          hue={SECHUE[section] || acc} kids={activeSection?.kids} go={go} goFiltered={goFiltered} />
+      )}
+
+      {/* L4's frame: today is always on the left, and sections render beside it. */}
+      {!phone && layout === 'L4' && <DayColumn go={go} />}
+
       {/* Main viewport */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         {!phone && (
@@ -698,6 +756,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
             borderBottom: '1px solid var(--line)',
             transition: 'padding-left .28s cubic-bezier(0.16, 1, 0.3, 1)',
           }}>
+            {/* L2, L4 and L5 have no sidebar to carry the wordmark, so it sits
+                here; L3 spends the same room on the Today spine instead. */}
+            {!hasSidebar && (
+              <button onClick={() => go('home')} className="k-squish" title="Home" style={{
+                fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 19,
+                letterSpacing: '-.04em', color: 'var(--tx)', flex: 'none',
+              }}>basedly</button>
+            )}
+
+            {layout === 'L3' && <TodaySpine go={go} />}
+
+            {layout === 'L5' && (
+              <span className="metaline num" style={{ flex: 'none' }}>
+                {activeSection?.name ?? ''}
+              </span>
+            )}
+
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
@@ -851,11 +926,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         {/* Full width, matching the reference screenshots */}
         <main id="bd-main" key={pathname} className="pagein" tabIndex={-1}
-          style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
-          {children}
+          style={{
+            flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative',
+            // L5's dock floats over the content rather than reserving a strip,
+            // so the column has to clear it from the inside.
+            paddingBottom: layout === 'L5' ? 'calc(72px + env(safe-area-inset-bottom))' : undefined,
+          }}>
+          {layout === 'L2' && section === 'home'
+            ? <HubBoard go={go} phone={phone} />
+            : children}
         </main>
 
-        {phone && (
+        {/* L5 is one shell at both sizes: the dock replaces the tab bar. */}
+        {layout === 'L5' ? (
+          <ShellDock items={navFor(prefs.navPicks).filter((x) => x.id !== 'more').map((x) => ({
+            id: x.id, name: x.name, ic: x.ic, hue: SECHUE[x.id] || acc,
+          }))} active={section} go={go} onMore={() => go('more')} />
+        ) : phone && (
           <BottomNav section={section} go={go} accent={acc} dark={dark} labels={prefs.alwaysShowLabels}
             items={navFor(prefs.navPicks)} />
         )}
