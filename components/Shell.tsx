@@ -45,7 +45,6 @@ import { useTabOnboarding } from '@/lib/useTabOnboarding';
 import { SpotlightOverlay } from './SpotlightOverlay';
 import { useRanked } from '@/lib/challenges';
 import { BirdMascot } from './BasedlyLogo';
-import { ToolbarDynamic } from './ToolbarDynamic';
 
 
 /**
@@ -699,9 +698,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             borderBottom: '1px solid var(--line)',
             transition: 'padding-left .28s cubic-bezier(0.16, 1, 0.3, 1)',
           }}>
-            {/* Circular Dark Mode Dynamic Search Toolbar */}
-            <ToolbarDynamic onSearch={() => setSearch(true)} placeholder="Search or jump to (⌘K)..." />
-
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
