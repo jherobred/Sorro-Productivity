@@ -10,6 +10,7 @@ import {
   type Habit,
   type Tick,
 } from '@/lib/habits';
+import { AsciiBar } from '../AsciiBar';
 
 const DAYS_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -209,8 +210,8 @@ export function HabitsAnalytics({
                   <span style={{ width: 80, fontSize: 11, fontWeight: 700, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {cat.label.split(' ')[0]}
                   </span>
-                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--card2)', overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: 4, background: cat.color, transition: 'width .4s ease' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <AsciiBar value={pct} cells={22} hue={cat.color} showValue={false} label={cat.label} />
                   </div>
                   <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', width: 28, textAlign: 'right' }}>
                     {count}

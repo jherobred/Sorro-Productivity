@@ -12,6 +12,7 @@ import { currentUserId } from '@/lib/supabase';
 import { hueOf } from '@/lib/people';
 import { moodOf, type Mood, BUDDY_QUOTES } from '@/lib/mascot';
 import { useShop } from '@/lib/shop';
+import { AsciiBar } from './AsciiBar';
 
 export function DailyQuests({
   tasks = [],
@@ -372,21 +373,11 @@ export function DailyQuests({
                     <div
                       style={{
                         flex: 1,
-                        height: 4,
-                        borderRadius: 2,
-                        background: 'var(--line2)',
-                        overflow: 'hidden',
+                        minWidth: 0,
                       }}
                     >
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          borderRadius: 2,
-                          background: q.completed ? 'var(--pal-mint)' : 'var(--acc)',
-                          transition: 'width 0.3s ease',
-                        }}
-                      />
+                      <AsciiBar value={pct} cells={16} size={11} showValue={false}
+                        hue={q.completed ? 'var(--pal-mint)' : 'var(--accTx)'} label={q.title} />
                     </div>
 
                     <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>

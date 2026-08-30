@@ -10,6 +10,7 @@ import { useTasks, useTaskActions, formatTaskCountdown, type Task } from '@/lib/
 import { useHabits, useTicks, useHabitActions, ymd } from '@/lib/habits';
 import { useEvents, weekStart, hhmm, hoursOf } from '@/lib/events';
 import { Icon } from './Icon';
+import { AsciiBar } from './AsciiBar';
 
 export type FocusPreset = 25 | 50 | 5 | 15;
 
@@ -270,8 +271,8 @@ export function FocusHub({
               <div style={{ fontSize: 11, color: 'var(--tx2)', fontWeight: 600 }}>
                 {doneTasks.length}/{tasks.length} Tasks · {completedHabits.length}/{habits.length} Habits
               </div>
-              <div style={{ width: 120, height: 6, borderRadius: 99, background: 'var(--line2)', marginTop: 6, overflow: 'hidden' }}>
-                <div style={{ width: `${focusScore}%`, height: '100%', borderRadius: 99, background: hue, transition: 'width 0.4s ease' }} />
+              <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
+                <AsciiBar value={focusScore} cells={20} hue={hue} showValue={false} label="Focus score" />
               </div>
             </div>
           </div>

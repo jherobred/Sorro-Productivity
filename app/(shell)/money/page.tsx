@@ -18,6 +18,7 @@ import { RunwayGauge, Stacks, Jars, colourOf } from '@/components/money/Instrume
 import { QuickAdd } from '@/components/money/QuickAdd';
 import { burnPerDay, runwayDays, runwayFill, byCategory, monthStart } from '@/lib/runway';
 import { toast } from '@/lib/toast';
+import { AsciiBar } from '@/components/AsciiBar';
 
 /** Ported from Basedly.dc.html markup 2102–2183. */
 
@@ -231,9 +232,8 @@ function Money() {
                     <RowActions label={b.category} onEdit={() => setEditing(`budget:${b.id}`)}
                       onDelete={() => BA.removeWithUndo(b, b.category)} />
                   </div>
-                  <div style={{ height: 7, borderRadius: 5, background: 'var(--line2)', overflow: 'hidden' }}>
-                    <div style={{ width: `${pc}%`, height: '100%', background: over ? PAL.coral : '#F5B33C', transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
-                  </div>
+                  <AsciiBar value={pc} cells={30} hue={over ? PAL.coral : '#F5B33C'} showValue={false}
+                    label={`${b.category} budget used`} />
                 </div>
               );
             })}
@@ -377,9 +377,7 @@ function Money() {
                 <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 11 }}>
                   of {peso(g.target_centavos)}{g.due_on ? ` · by ${new Date(g.due_on).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}` : ''}
                 </div>
-                <div style={{ height: 7, borderRadius: 5, background: 'var(--line2)', overflow: 'hidden' }}>
-                  <div className="k-progress" style={{ width: `${p}%`, height: '100%', background: p >= 70 ? MINT : PAL.indigo }} />
-                </div>
+                <AsciiBar value={p} cells={24} hue={p >= 70 ? MINT : PAL.indigo} label={`${g.name} saved`} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
                   <button onClick={() => GA.edit.mutate({ id: g.id, patch: { saved_centavos: g.saved_centavos + 50000 } })}
                     className="hov k-squish"

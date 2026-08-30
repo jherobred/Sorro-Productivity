@@ -16,6 +16,7 @@ import {
   kindOf, gearOf, workedOf, routineOf, slotFor, progression, setsLine,
   type WorkoutSet, type Routine, type Gear,
 } from '@/lib/lift';
+import { AsciiBar } from '../AsciiBar';
 
 /**
  * Training, wearing openGym — as pieces the Body page lays out itself.
@@ -421,7 +422,8 @@ function Session({
 
       <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 14px 20px' }}>
         <div style={{ maxWidth: 560, marginInline: 'auto' }}>
-          <div className="og-wprog"><i style={{ width: `${planned ? (doneSets / planned) * 100 : 0}%` }} /></div>
+          <AsciiBar value={planned ? (doneSets / planned) * 100 : 0} cells={36} showValue={false}
+            label={`${doneSets} of ${planned} sets done`} />
 
           {!block ? (
             <div style={{ textAlign: 'center', padding: '40px 10px' }}>
@@ -508,7 +510,7 @@ function Session({
             <div className="og-timer">
               <div className="og-head">
                 <span className="og-t">{clock(rest)}</span>
-                <span className="og-bar"><i style={{ width: `${(rest / REST_S) * 100}%` }} /></span>
+                <AsciiBar value={(rest / REST_S) * 100} cells={18} showValue={false} label="Rest remaining" />
               </div>
               <div className="og-acts">
                 <button className="og-btn og-sm" onClick={() => setRest((r) => Math.max(0, (r ?? 0) - 15))}>−15s</button>

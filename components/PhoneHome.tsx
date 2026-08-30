@@ -39,6 +39,7 @@ import {
   MorphingDialogContainer,
 } from '@/components/core/morphing-dialog';
 import { ArrowLeftIcon, ChevronDown, ChevronUp, Plus, Camera, PlusIcon } from 'lucide-react';
+import { AsciiBar } from './AsciiBar';
 
 const CARD: React.CSSProperties = {
   background: 'var(--card)',
@@ -382,16 +383,9 @@ export function PhoneHome({ name }: { name: string }) {
                       </span>
                     </div>
 
-                    <div style={{ height: 4, borderRadius: 2, background: 'var(--line2)', marginTop: 5, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${Math.min(100, Math.round(r.pct * 100))}%`,
-                          background: r.c,
-                          borderRadius: 2,
-                          transition: 'width .4s ease-out',
-                        }}
-                      />
+                    <div style={{ marginTop: 5 }}>
+                      <AsciiBar value={Math.min(100, Math.round(r.pct * 100))} cells={22} size={11}
+                        hue={r.c} showValue={false} label={r.n} />
                     </div>
 
                     <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>{r.detail}</div>

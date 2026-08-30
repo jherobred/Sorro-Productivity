@@ -25,6 +25,7 @@ import { HabitCreatorModal } from '@/components/habits/HabitCreatorModal';
 import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
 import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
 import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';
+import { AsciiBar } from '@/components/AsciiBar';
 
 type ViewMode = 'week' | 'day' | 'year' | 'analytics';
 
@@ -206,17 +207,8 @@ export default function HabitsPage() {
             <span>Rank Progress: Level {gamification.level}</span>
             <span>{gamification.currentLevelXp} / 250 XP to Level {gamification.level + 1}</span>
           </div>
-          <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'var(--card2)', overflow: 'hidden' }}>
-            <div
-              style={{
-                width: `${gamification.levelProgress}%`,
-                height: '100%',
-                borderRadius: 3,
-                background: 'linear-gradient(90deg, var(--acc), #FFC24B)',
-                transition: 'width .4s ease',
-              }}
-            />
-          </div>
+          <AsciiBar value={gamification.levelProgress} cells={40} hue="var(--accTx)" showValue={false}
+            label={`Level ${gamification.level}, ${gamification.currentLevelXp} of 250 XP`} />
         </div>
       </div>
 

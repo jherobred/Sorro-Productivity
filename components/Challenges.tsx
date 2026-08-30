@@ -27,6 +27,7 @@ import {
 } from '@/lib/challenges';
 import { postImage } from '@/lib/community';
 import { useProfiles, displayOf } from '@/lib/people';
+import { AsciiBar } from './AsciiBar';
 
 /**
  * Community → Challenges: accountability as a competitive mode.
@@ -536,11 +537,8 @@ function RankCard({ ranked }: { ranked?: { rp: number; peak_rp: number; wins: nu
         </div>
       </div>
 
-      <div style={{ marginTop: 12, height: 7, borderRadius: 4, background: 'var(--card2)', overflow: 'hidden', position: 'relative' }}>
-        <div className="k-progress" style={{
-          height: '100%', width: `${Math.round(r.progress * 100)}%`, borderRadius: 4,
-          background: `linear-gradient(90deg, color-mix(in srgb, ${r.tier.hue} 60%, transparent), ${r.tier.hue})`,
-        }} />
+      <div style={{ marginTop: 12 }}>
+        <AsciiBar value={Math.round(r.progress * 100)} cells={34} hue={r.tier.hue} label="Progress to the next tier" />
       </div>
 
       {/* the whole ladder, so the next rung is always visible */}

@@ -36,6 +36,7 @@ import {
   MorphingDialogContainer,
 } from '@/components/core/morphing-dialog';
 import { PlusIcon, Camera, Trash2, Pin, CheckSquare } from 'lucide-react';
+import { AsciiBar } from '@/components/AsciiBar';
 
 const AMBER = '#F5B33C';
 const CARD: React.CSSProperties = {
@@ -551,8 +552,8 @@ export default function HomePage() {
             <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--tx3)', marginBottom: 12 }}>
               left of {peso(budgetTotal)} this month
             </div>
-            <div style={{ height: 6, borderRadius: 4, background: 'var(--line2)', overflow: 'hidden', marginBottom: 11 }}>
-              <div style={{ width: `${spentPct}%`, height: '100%', background: AMBER, borderRadius: 4 }} />
+            <div style={{ marginBottom: 11 }}>
+              <AsciiBar value={spentPct} cells={26} hue={AMBER} suffix="% spent" label="Budget used this month" />
             </div>
             <div style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 500, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
               {accounts.map((a) => <span key={a.id}>{a.name} {peso(balances.get(a.id) ?? 0)}</span>)}
@@ -593,9 +594,7 @@ export default function HomePage() {
                     <div style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{p.name}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</div>
                   </div>
-                  <div style={{ height: 4, borderRadius: 2, background: 'var(--line2)', overflow: 'hidden' }}>
-                    <div style={{ width: `${p.progress}%`, height: '100%', background: p.color }} />
-                  </div>
+                  <AsciiBar value={p.progress} cells={28} hue={p.color} showValue={false} label={`${p.name} progress`} />
                 </div>
               ))}
             </div>
@@ -1164,8 +1163,9 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                         </div>
                       </div>
 
-                      <div style={{ width: '100%', height: 4, borderRadius: 2, background: `color-mix(in srgb,${color} 22%,transparent)`, overflow: 'hidden', marginBottom: 12 }}>
-                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: ongoing ? PAL.mint : color, transition: 'width .4s cubic-bezier(0.16,1,0.3,1)' }} />
+                      <div style={{ marginBottom: 12 }}>
+                        <AsciiBar value={pct} cells={30} hue={ongoing ? PAL.mint : color} showValue={false}
+                          label={ongoing ? 'Time elapsed' : 'Time until it starts'} />
                       </div>
     </>
   );
