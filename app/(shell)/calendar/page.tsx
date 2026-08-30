@@ -1134,7 +1134,7 @@ function EventChip({
     <div
       onPointerDown={onPointerDown}
       onClick={onOpen}
-      onContextMenu={(e) => { e.preventDefault(); onOpen(e); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       className={selected ? 'pop' : undefined}
       style={{
         position: 'absolute', left: 3, right: 3, top: `${top}%`, height: `${height}%`,
@@ -1146,6 +1146,9 @@ function EventChip({
         transform: lifted ? 'scale(1.02)' : undefined,
         cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : 1,
         outline: selected ? `1px solid ${ev.color}` : undefined,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
         {locked && <Icon name="lock" size={9} color={ink} />}
@@ -1191,7 +1194,7 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
     <div
       onPointerDown={onPointerDown}
       onClick={(e) => onOpen(e.clientX, e.clientY)}
-      onContextMenu={(e) => { e.preventDefault(); onOpen(e.clientX, e.clientY); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       style={{
         position: 'absolute',
         left: `calc(${(firstDay / days) * 100}% + 3px)`,
@@ -1204,6 +1207,9 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
         boxShadow: lifted ? 'var(--shl)' : 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
         transform: lifted ? 'scale(1.01)' : undefined,
         zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'pan-y',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title?.trim() || '(No title)'}

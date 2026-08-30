@@ -652,22 +652,22 @@ body {
 }
 
 .task-alert-orange {
-  animation: task-flash-orange 1.4s infinite ease-in-out !important;
   border-radius: 10px;
+  border-color: #FF9A3C !important;
+  box-shadow: 0 0 14px rgba(255, 154, 60, 0.3) !important;
 }
 .task-alert-orange .task-alarm-emoji {
   display: inline-block;
-  animation: task-alarm-pulse 1.4s infinite ease-in-out;
   transform-origin: center;
 }
 
 .task-alert-yellow {
-  animation: task-flash-yellow 2.2s infinite ease-in-out !important;
   border-radius: 10px;
+  border-color: #FFC24B !important;
+  box-shadow: 0 0 12px rgba(255, 194, 75, 0.25) !important;
 }
 .task-alert-yellow .task-alarm-emoji {
   display: inline-block;
-  animation: task-alarm-swing 2.2s infinite ease-in-out;
   transform-origin: center;
 }
 

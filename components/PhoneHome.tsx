@@ -233,28 +233,6 @@ export function PhoneHome({ name }: { name: string }) {
               {next ? (isNextOngoing ? 'Happening Now' : 'Up next') : 'Today'}
             </span>
           </div>
-
-          {next && (
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-                padding: '3px 8px',
-                borderRadius: 7,
-                background: `color-mix(in srgb, ${next.color || PAL.sky} 15%, var(--card2))`,
-                border: `1px solid color-mix(in srgb, ${next.color || PAL.sky} 30%, transparent)`,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: 12,
-                fontWeight: 800,
-                color: 'var(--tx)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              <Icon name="clock" size={11} color={next.color || PAL.sky} style={{ marginRight: 2 }} />
-              <PhoneCountdown startsAt={next.starts_at} endsAt={next.ends_at} color={next.color || PAL.sky} />
-            </div>
-          )}
         </div>
 
         <div
@@ -287,7 +265,7 @@ export function PhoneHome({ name }: { name: string }) {
           <Icon name="chev" size={14} color="var(--tx3)" />
         </div>
 
-        {/* Full-Width Animated Progress Bar */}
+        {/* Full-Width Animated Progress Bar with Centered Countdown */}
         {next && (() => {
           const startMs = new Date(next.starts_at).getTime();
           const endMs = new Date(next.ends_at).getTime();
@@ -311,15 +289,15 @@ export function PhoneHome({ name }: { name: string }) {
               aria-valuemax={100}
               style={{
                 width: '100%',
-                height: 12,
-                borderRadius: 4,
-                background: 'color-mix(in srgb, var(--line2) 30%, var(--card2))',
+                height: 24,
+                borderRadius: 6,
+                background: 'color-mix(in srgb, var(--line2) 40%, var(--card2))',
                 border: '1px solid var(--line2)',
                 position: 'relative',
                 overflow: 'hidden',
                 display: 'flex',
                 alignItems: 'center',
-                margin: '2px 0 2px',
+                margin: '3px 0 2px',
               }}
             >
               <div
@@ -336,8 +314,8 @@ export function PhoneHome({ name }: { name: string }) {
                   height: '100%',
                   width: `${pct}%`,
                   background: `linear-gradient(90deg, color-mix(in srgb, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 80%, transparent) 0%, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 100%)`,
-                  boxShadow: `0 0 10px color-mix(in srgb, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 50%, transparent)`,
-                  borderRadius: pct >= 99 ? 3 : '3px 0 0 3px',
+                  boxShadow: `0 0 12px color-mix(in srgb, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 50%, transparent)`,
+                  borderRadius: pct >= 99 ? 5 : '5px 0 0 5px',
                   transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
                   position: 'relative',
                   zIndex: 1,
@@ -352,6 +330,32 @@ export function PhoneHome({ name }: { name: string }) {
                     backgroundSize: '200% 100%',
                   }}
                 />
+              </div>
+
+              {/* Centered Live Countdown Badge */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                  zIndex: 3,
+                  pointerEvents: 'none',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  color: 'var(--tx)',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <Icon name="clock" size={12} color="var(--tx)" />
+                <PhoneCountdown startsAt={next.starts_at} endsAt={next.ends_at} color="var(--tx)" />
+                <span style={{ fontSize: 10, opacity: 0.9, fontWeight: 700, marginLeft: 2 }}>
+                  ({Math.round(pct)}%)
+                </span>
               </div>
             </div>
           );

@@ -393,7 +393,8 @@ export function useEventActions(ws: Date) {
    * row unreachable by drag.
    */
   const moveTo = (ev: Ev, day: number, hour: number) => {
-    const len = hoursOf(ev.ends_at) - hoursOf(ev.starts_at);
+    const rawLen = hoursOf(ev.ends_at) - hoursOf(ev.starts_at);
+    const len = rawLen > 0 ? rawLen : 1;
     const h = Math.max(GRID_START, Math.min(GRID_END - len, hour));
     const prevStart = ev.starts_at;
     const prevEnd = ev.ends_at;

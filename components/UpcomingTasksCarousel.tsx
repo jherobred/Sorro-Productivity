@@ -333,98 +333,54 @@ export function UpcomingTasksCarousel({
     >
       {t ? (
         <>
-          {/* Header with Title, Circular Timer & Directional Arrows */}
+          {/* Header with Title & Circular Timer */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="check" size={14} color={auraTheme.color} />
               <span style={{ ...KICKER, color: auraTheme.color }}>Upcoming Tasks</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              {/* Circular Countdown Timer */}
-              {upcomingTasks.length > 1 && (
-                <div
-                  title={`${timeLeft}s until next upcoming task`}
+            {/* Circular Countdown Timer */}
+            {upcomingTasks.length > 1 && (
+              <div
+                title={`${timeLeft}s until next upcoming task`}
+                style={{
+                  position: 'relative',
+                  width: 30,
+                  height: 30,
+                  display: 'grid',
+                  placeItems: 'center',
+                  flex: 'none',
+                }}
+              >
+                <svg width="30" height="30" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
+                  <circle cx="16" cy="16" r="13" fill="var(--card2)" stroke="var(--line2)" strokeWidth="2.5" />
+                  <circle
+                    cx="16"
+                    cy="16"
+                    r="13"
+                    fill="none"
+                    stroke={auraTheme.color}
+                    strokeWidth="2.5"
+                    strokeDasharray={2 * Math.PI * 13}
+                    strokeDashoffset={2 * Math.PI * 13 * (1 - timeLeft / CYCLE_SECONDS)}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                  />
+                </svg>
+                <span
                   style={{
-                    position: 'relative',
-                    width: 28,
-                    height: 28,
-                    display: 'grid',
-                    placeItems: 'center',
-                    flex: 'none',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    color: 'var(--tx)',
+                    zIndex: 1,
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  <svg width="28" height="28" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
-                    <circle cx="16" cy="16" r="13" fill="var(--card2)" stroke="var(--line2)" strokeWidth="2.5" />
-                    <circle
-                      cx="16"
-                      cy="16"
-                      r="13"
-                      fill="none"
-                      stroke={auraTheme.color}
-                      strokeWidth="2.5"
-                      strokeDasharray={2 * Math.PI * 13}
-                      strokeDashoffset={2 * Math.PI * 13 * (1 - timeLeft / CYCLE_SECONDS)}
-                      strokeLinecap="round"
-                      style={{ transition: 'stroke-dashoffset 0.9s linear' }}
-                    />
-                  </svg>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: 'var(--tx)',
-                      zIndex: 1,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {timeLeft}
-                  </span>
-                </div>
-              )}
-
-              {/* Navigation Arrows */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="hov k-squish"
-                  aria-label="Previous task"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 6,
-                    border: '1px solid var(--line2)',
-                    background: 'var(--card2)',
-                    color: 'var(--tx2)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Icon name="chevronLeft" size={12} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="hov k-squish"
-                  aria-label="Next task"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 6,
-                    border: '1px solid var(--line2)',
-                    background: 'var(--card2)',
-                    color: 'var(--tx2)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Icon name="chevronRight" size={12} />
-                </button>
+                  {timeLeft}
+                </span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Animated Task Content with Visible Swipe to the Left */}
@@ -439,7 +395,7 @@ export function UpcomingTasksCarousel({
                 style={{
                   width: '100%',
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(85px, 1fr) 2.6fr',
+                  gridTemplateColumns: 'minmax(95px, 1fr) 2.8fr',
                   gap: 12,
                   alignItems: 'stretch',
                 }}
@@ -453,27 +409,29 @@ export function UpcomingTasksCarousel({
                     borderRight: `1px solid color-mix(in srgb, ${auraTheme.color} 30%, var(--line))`,
                     paddingRight: 10,
                     minWidth: 0,
+                    width: '100%',
                     justifyContent: 'flex-start',
                   }}
                 >
                   {/* Serious Alarm Asset if <= 24 hours left */}
-                  {alert?.tier === 'red' && <SeriousAlarmBeacon size={19} />}
+                  {alert?.tier === 'red' && <SeriousAlarmBeacon size={20} />}
 
                   {/* Priority Tag */}
                   {t.priority && (
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 11.5,
                         fontWeight: 800,
                         textTransform: 'uppercase',
                         letterSpacing: '.06em',
-                        padding: '3px 7px',
-                        borderRadius: 6,
+                        padding: '4px 8px',
+                        borderRadius: 7,
                         color: PRIORITY_COLOR[t.priority] || 'var(--tx2)',
                         background: `color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 18%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 35%, transparent)`,
-                        width: 'fit-content',
-                        maxWidth: '100%',
+                        border: `1.5px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 35%, transparent)`,
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        textAlign: 'center',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -486,24 +444,25 @@ export function UpcomingTasksCarousel({
                   {/* Due Date Tag */}
                   <span
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 11.5,
                       fontWeight: 700,
                       color: t.due_on === todayISO ? PAL.coral : 'var(--tx2)',
                       background: 'var(--card2)',
-                      padding: '3px 7px',
-                      borderRadius: 6,
+                      padding: '4px 8px',
+                      borderRadius: 7,
                       border: '1px solid var(--line)',
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: 4,
-                      width: 'fit-content',
-                      maxWidth: '100%',
+                      width: '100%',
+                      boxSizing: 'border-box',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    <Icon name="clock" size={11} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
+                    <Icon name="clock" size={12} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
                     </span>
@@ -514,15 +473,16 @@ export function UpcomingTasksCarousel({
                     <span
                       key={tag}
                       style={{
-                        fontSize: 10,
+                        fontSize: 11.5,
                         fontWeight: 700,
                         color: 'var(--tx2)',
                         background: 'var(--card2)',
-                        padding: '2px 6px',
-                        borderRadius: 5,
+                        padding: '4px 8px',
+                        borderRadius: 7,
                         border: '1px solid var(--line2)',
-                        width: 'fit-content',
-                        maxWidth: '100%',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        textAlign: 'center',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -534,7 +494,7 @@ export function UpcomingTasksCarousel({
 
                   {/* Links */}
                   {links.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2, width: '100%' }}>
                       {links.map((link, idx) => {
                         const label = links.length === 1 ? 'LINK' : `LINK ${idx + 1}`;
                         return (
@@ -546,25 +506,26 @@ export function UpcomingTasksCarousel({
                             onClick={(e) => e.stopPropagation()}
                             title={link}
                             style={{
-                              display: 'inline-flex',
+                              display: 'flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: 4,
-                              fontSize: 10,
+                              fontSize: 11.5,
                               fontWeight: 800,
-                              padding: '3px 7px',
-                              borderRadius: 6,
+                              padding: '4px 8px',
+                              borderRadius: 7,
                               background: `color-mix(in srgb, ${auraTheme.color} 18%, var(--card2))`,
-                              border: `1px solid color-mix(in srgb, ${auraTheme.color} 40%, transparent)`,
+                              border: `1.5px solid color-mix(in srgb, ${auraTheme.color} 40%, transparent)`,
                               color: auraTheme.color,
                               textDecoration: 'none',
-                              width: 'fit-content',
-                              maxWidth: '100%',
+                              width: '100%',
+                              boxSizing: 'border-box',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            <Icon name="link" size={10} color={auraTheme.color} />
+                            <Icon name="link" size={11} color={auraTheme.color} />
                             <span>{label}</span>
                           </a>
                         );
