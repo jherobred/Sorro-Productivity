@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Task } from '@/lib/tasks';
@@ -202,16 +202,49 @@ export function UpcomingTasksCarousel({
     return () => clearInterval(interval);
   }, [upcomingTasks.length]);
 
-  const handlePrev = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentIdx((prev) => (prev + 1) % upcomingTasks.length);
+    setTimeLeft(CYCLE_SECONDS);
+  };
+
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setCurrentIdx((prev) => (prev - 1 + upcomingTasks.length) % upcomingTasks.length);
     setTimeLeft(CYCLE_SECONDS);
   };
 
-  const handleNext = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentIdx((prev) => (prev + 1) % upcomingTasks.length);
-    setTimeLeft(CYCLE_SECONDS);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length === 0) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - touchStartRef.current.x;
+    const deltaY = endY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    // Detect horizontal swipe (> 35px horizontal distance and predominantly horizontal within 600ms)
+    if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15 && elapsed < 600) {
+      if (deltaX < 0) {
+        // Swipe left -> Next task
+        handleNext();
+      } else {
+        // Swipe right -> Previous task
+        handlePrev();
+      }
+    }
   };
 
   const handleSelect = (idx: number) => {
@@ -278,6 +311,8 @@ export function UpcomingTasksCarousel({
   return (
     <div
       className={className}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{
         flex: '1 1 260px',
         minWidth: 0,

@@ -567,7 +567,6 @@ function Grid({
     if (phone || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-
     const rect = bodyRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -578,7 +577,7 @@ function Grid({
     setSlotDrag({
       day,
       startHour: snapHour,
-      currentHour: snapHour + 0.5,
+      currentHour: snapHour + 1,
       startX,
       startY,
     });
@@ -597,7 +596,7 @@ function Grid({
         if (!curr) return null;
         const s = Math.min(curr.startHour, curr.currentHour);
         const rawE = Math.max(curr.startHour, curr.currentHour);
-        const eHour = rawE === s ? s + 1 : Math.max(s + 0.5, rawE);
+        const eHour = (rawE === s || Math.abs(rawE - s) < 0.25) ? s + 1 : Math.max(s + 0.5, rawE);
 
         openSlot(curr.day, s, m.clientX, m.clientY, false, eHour);
         return null;
@@ -624,6 +623,16 @@ function Grid({
 
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
+  const daysSpanned = Math.max(1, Math.min(7, days));
+  const dayIndices = Array.from({ length: daysSpanned }, (_, i) => i);
+  const dayDates = dayIndices.map((i) => {
+    const d = new Date(ws);
+    d.setDate(d.getDate() + dayOffset + i);
+    return d;
+  });
+
+  const isToday = (d: Date) => d.toDateString() === new Date().toDateString();
+  const sameDay = (iso: string, d: Date) => new Date(iso).toDateString() === d.toDateString();
 
   /**
    * Which row of a run a pointer at `clientX` is over.
@@ -646,7 +655,10 @@ function Grid({
   const spanned = useMemo(() => new Set(spans.filter((s) => s.days > 1).flatMap((s) => s.ids)), [spans]);
 
   const press = (e: React.PointerEvent, ev: Ev, mode: 'move' | 'resize') => {
-    e.preventDefault();
+    const isTouch = phone || e.pointerType === 'touch';
+    if (!isTouch) {
+      e.preventDefault();
+    }
     e.stopPropagation();
     setSel(ev.id);
 
@@ -658,40 +670,81 @@ function Grid({
     const colW = (bodyRef.current?.clientWidth ?? 322) / days;
     // Locked by the toolbar toggle, or read-only because Google owns it.
     const locked = isReadOnly(ev) || prefs.lockEvents;
+
+    let holdTriggered = !isTouch; // On desktop, drag starts on movement; on touch, requires hold
     let moved = false;
 
-    const timer = window.setTimeout(() => {
-      if (moved) return;
-      if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
-      openEvent(ev, startX, startY);
-    }, K.longPressMs);
+    // Press and hold timer for mobile
+    const holdTimer = isTouch
+      ? window.setTimeout(() => {
+          if (moved || locked) return;
+          holdTriggered = true;
+          if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
+          setDrag({ id: ev.id, day: origDay, hour: origHour });
+        }, 380)
+      : null;
 
     const onMove = (m: PointerEvent) => {
       const dx = m.clientX - startX;
       const dy = m.clientY - startY;
-      if (!moved && Math.hypot(dx, dy) > K.longPressCancelPx) { moved = true; clearTimeout(timer); }
-      if (!moved || locked) return;
+      const dist = Math.hypot(dx, dy);
+
+      if (isTouch && !holdTriggered) {
+        if (dist > 8) {
+          // User is scrolling / swiping across screen before holding; cancel hold timer
+          if (holdTimer) clearTimeout(holdTimer);
+          moved = true;
+        }
+        return;
+      }
+
+      if (!moved && dist > K.longPressCancelPx) {
+        moved = true;
+      }
+
+      if (locked) return;
 
       // 30-min step, derived from the real row height so the chip tracks the pointer.
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
-      if (mode === 'resize') setResize({ id: ev.id, end: origEnd + steps * 0.5 });
-      else {
+      if (mode === 'resize') {
+        setResize({ id: ev.id, end: origEnd + steps * 0.5 });
+      } else {
         const dayStep = days === 1 ? 0 : Math.round(dx / colW);
         setDrag({ id: ev.id, day: Math.max(0, Math.min(6, origDay + dayStep)), hour: origHour + steps * 0.5 });
       }
     };
 
-    const onUp = () => {
-      clearTimeout(timer);
+    const onUp = (m: PointerEvent) => {
+      if (holdTimer) clearTimeout(holdTimer);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+
       if (locked) {
         if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
         return;
       }
+
+      if (isTouch && !holdTriggered) {
+        // Simple tap on mobile -> open event
+        if (Math.hypot(m.clientX - startX, m.clientY - startY) < 10) {
+          openEvent(ev, startX, startY);
+        }
+        return;
+      }
+
       // Commit on drop, not per frame.
-      setDrag((d) => { if (d && d.id === ev.id) A.moveTo(ev, d.day, d.hour); return null; });
-      setResize((r) => { if (r && r.id === ev.id) A.resizeTo(ev, r.end); return null; });
+      setDrag((d) => {
+        if (d && d.id === ev.id && (d.day !== origDay || d.hour !== origHour)) {
+          A.moveTo(ev, d.day, d.hour);
+        }
+        return null;
+      });
+      setResize((r) => {
+        if (r && r.id === ev.id && r.end !== origEnd) {
+          A.resizeTo(ev, r.end);
+        }
+        return null;
+      });
     };
 
     window.addEventListener('pointermove', onMove);
@@ -707,7 +760,10 @@ function Grid({
    * rules as a single chip and commits as one patch per member.
    */
   const pressSpan = (e: React.PointerEvent, s: Span) => {
-    e.preventDefault();
+    const isTouch = phone || e.pointerType === 'touch';
+    if (!isTouch) {
+      e.preventDefault();
+    }
     e.stopPropagation();
 
     const colW = (bodyRef.current?.clientWidth ?? 322) / days;
@@ -730,21 +786,39 @@ function Grid({
     const startY = e.clientY;
     const origDay = hit.day;
     const origHour = hoursOf(ev.starts_at);
-    const origEnd = hoursOf(ev.ends_at);
     const locked = isReadOnly(ev) || prefs.lockEvents;
+
+    let holdTriggered = !isTouch;
     let moved = false;
 
-    const timer = window.setTimeout(() => {
-      if (moved) return;
-      if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
-      openEvent(ev, startX, startY, s);
-    }, K.longPressMs);
+    const holdTimer = isTouch
+      ? window.setTimeout(() => {
+          if (moved || locked) return;
+          holdTriggered = true;
+          if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
+          setSpanDrag({ key: s.key, id: ev.id, fromDay: origDay, day: 0, hour: 0 });
+        }, 380)
+      : null;
 
     const onMove = (m: PointerEvent) => {
       const dx = m.clientX - startX;
       const dy = m.clientY - startY;
-      if (!moved && Math.hypot(dx, dy) > K.longPressCancelPx) { moved = true; clearTimeout(timer); }
-      if (!moved || locked) return;
+      const dist = Math.hypot(dx, dy);
+
+      if (isTouch && !holdTriggered) {
+        if (dist > 8) {
+          if (holdTimer) clearTimeout(holdTimer);
+          moved = true;
+        }
+        return;
+      }
+
+      if (!moved && dist > K.longPressCancelPx) {
+        moved = true;
+      }
+
+      if (locked) return;
+
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
       // One day moves, so it may go anywhere in the week — the run's own ends
       // stopped mattering the moment the whole bar stopped moving together.
@@ -752,14 +826,23 @@ function Grid({
       setSpanDrag({ key: s.key, id: ev.id, fromDay: origDay, day: dayStep, hour: steps * 0.5 });
     };
 
-    const onUp = () => {
-      clearTimeout(timer);
+    const onUp = (m: PointerEvent) => {
+      if (holdTimer) clearTimeout(holdTimer);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+
       if (locked) {
         if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
         return;
       }
+
+      if (isTouch && !holdTriggered) {
+        if (Math.hypot(m.clientX - startX, m.clientY - startY) < 10) {
+          openEvent(ev, startX, startY, s);
+        }
+        return;
+      }
+
       setSpanDrag((d) => {
         if (d && d.key === s.key && (d.day !== 0 || d.hour !== 0)) {
           A.moveTo(ev, origDay + d.day, origHour + d.hour);
@@ -925,7 +1008,7 @@ function Grid({
                 {!phone && slotDrag && slotDrag.day === idx && (() => {
                   const s = Math.min(slotDrag.startHour, slotDrag.currentHour);
                   const rawE = Math.max(slotDrag.startHour, slotDrag.currentHour);
-                  const e = rawE === s ? s + 0.5 : Math.max(s + 0.5, rawE);
+                  const e = (rawE === s || Math.abs(rawE - s) < 0.25) ? s + 1 : Math.max(s + 0.5, rawE);
                   return (
                     <div
                       aria-hidden
@@ -1061,7 +1144,7 @@ function EventChip({
         color: ink,
         boxShadow: lifted ? 'var(--shl)' : undefined,
         transform: lifted ? 'scale(1.02)' : undefined,
-        cursor: locked ? 'default' : 'grab', touchAction: 'none', zIndex: lifted ? 5 : 1,
+        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : 1,
         outline: selected ? `1px solid ${ev.color}` : undefined,
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
@@ -1120,7 +1203,7 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
         color: ink,
         boxShadow: lifted ? 'var(--shl)' : 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
         transform: lifted ? 'scale(1.01)' : undefined,
-        zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'none',
+        zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'pan-y',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title?.trim() || '(No title)'}
