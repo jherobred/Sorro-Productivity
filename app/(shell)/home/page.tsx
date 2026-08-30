@@ -89,6 +89,7 @@ export default function HomePage() {
     return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
   });
   const [greetSeq, setGreetSeq] = useState(0);
+  const [restExpanded, setRestExpanded] = useState(false);
   const [, tick] = useState(0);
 
   const ws = weekStart(new Date());
@@ -364,77 +365,201 @@ export default function HomePage() {
             })()}
 
             {/* The rest of today with event labels */}
-            <div style={{
-              flex: '1 1 280px', minWidth: 0, borderRadius: 15, padding: '16px 18px', minHeight: 180,
-              background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
-              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
-                <div style={KICKER}>The rest of today</div>
-                <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
-                  {todays.length} event{todays.length === 1 ? '' : 's'} to 10 PM
+            {phone ? (
+              <div style={{
+                flex: '1 1 280px', minWidth: 0, borderRadius: 15, padding: '16px 18px',
+                background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
+                display: 'flex', flexDirection: 'column', gap: 10,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <div style={KICKER}>Today's Schedule</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
+                    {todays.length} event{todays.length === 1 ? '' : 's'} today
+                  </div>
                 </div>
-              </div>
 
-              <div style={{ position: 'relative', height: 34, marginBottom: 8 }}>
-                <div style={{ position: 'absolute', top: 15, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
-                {todays.map((e) => {
-                  const s = hoursOf(e.starts_at);
-                  const len = hoursOf(e.ends_at) - s;
-                  const left = ((s - 9) / 13) * 100;
-                  if (left < -5 || left > 100) return null;
-                  return (
-                    <div
+                {/* Vertical Hour Schedule Preview */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {(() => {
+                    const curH = new Date().getHours();
+                    // 3 hours initially: [curH - 1, curH, curH + 1]; 5 hours when expanded: [curH - 1, curH, curH + 1, curH + 2, curH + 3]
+                    const hoursCount = restExpanded ? 5 : 3;
+                    const startH = Math.max(0, Math.min(24 - hoursCount, curH - 1));
+                    const hourList = Array.from({ length: hoursCount }, (_, i) => startH + i);
+
+                    return hourList.map((h) => {
+                      const isNow = h === curH;
+                      const hStr = h % 12 === 0 ? '12' : String(h % 12);
+                      const ampm = h < 12 ? 'AM' : 'PM';
+                      const hourEvents = todays.filter((e) => {
+                        const startHour = hoursOf(e.starts_at);
+                        const endHour = hoursOf(e.ends_at);
+                        return startHour < h + 1 && endHour > h;
+                      });
+
+                      return (
+                        <div
+                          key={h}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '7px 10px',
+                            borderRadius: 10,
+                            background: isNow ? 'color-mix(in srgb, var(--acc) 14%, var(--card))' : 'var(--card2)',
+                            border: isNow ? '1px solid color-mix(in srgb, var(--acc) 38%, transparent)' : '1px solid var(--line)',
+                          }}
+                        >
+                          {/* Hour Label */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, flex: 'none' }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: isNow ? 'var(--accTx)' : 'var(--tx)', fontVariantNumeric: 'tabular-nums' }}>
+                              {hStr} {ampm}
+                            </span>
+                            {isNow && (
+                              <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--accTx)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                                NOW
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Event Content */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {hourEvents.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {hourEvents.map((ev) => (
+                                  <div
+                                    key={ev.id}
+                                    onClick={() => router.push('/calendar/')}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 6,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color, flex: 'none' }} />
+                                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {ev.title}
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                                      {hhmm(hoursOf(ev.starts_at))}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--tx3)', fontStyle: 'italic' }}>
+                                No events
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Chevron Expand/Collapse Toggle Button */}
+                <button
+                  onClick={() => setRestExpanded(!restExpanded)}
+                  className="hov k-squish"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    background: 'var(--card2)',
+                    border: '1px solid var(--line2)',
+                    color: 'var(--tx2)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    marginTop: 2,
+                    width: '100%',
+                  }}
+                >
+                  <span>{restExpanded ? 'Show 3-hour preview' : 'Expand 5-hour today calendar'}</span>
+                  <Icon name={restExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                flex: '1 1 280px', minWidth: 0, borderRadius: 15, padding: '16px 18px', minHeight: 180,
+                background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
+                  <div style={KICKER}>The rest of today</div>
+                  <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 500, color: 'var(--tx3)' }}>
+                    {todays.length} event{todays.length === 1 ? '' : 's'} to 10 PM
+                  </div>
+                </div>
+
+                <div style={{ position: 'relative', height: 34, marginBottom: 8 }}>
+                  <div style={{ position: 'absolute', top: 15, left: 0, right: 0, height: 2, background: 'var(--line2)' }} />
+                  {todays.map((e) => {
+                    const s = hoursOf(e.starts_at);
+                    const len = hoursOf(e.ends_at) - s;
+                    const left = ((s - 9) / 13) * 100;
+                    if (left < -5 || left > 100) return null;
+                    return (
+                      <div
+                        key={e.id}
+                        title={`${e.title} (${hhmm(hoursOf(e.starts_at))} - ${hhmm(hoursOf(e.ends_at))})`}
+                        onClick={() => router.push('/calendar/')}
+                        style={{
+                          position: 'absolute', top: 6, left: `${Math.max(0, left)}%`,
+                          width: `${Math.max(4, (len / 13) * 100)}%`, height: 20, borderRadius: 6, background: e.color,
+                          display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '0 4px',
+                          boxShadow: `0 2px 8px color-mix(in srgb, ${e.color} 30%, transparent)`,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {e.title}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)', zIndex: 2 }} />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
+                  <span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
+                </div>
+
+                {/* Event Labels List */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {todays.slice(0, 3).map((e) => (
+                    <span
                       key={e.id}
-                      title={`${e.title} (${hhmm(hoursOf(e.starts_at))} - ${hhmm(hoursOf(e.ends_at))})`}
                       onClick={() => router.push('/calendar/')}
                       style={{
-                        position: 'absolute', top: 6, left: `${Math.max(0, left)}%`,
-                        width: `${Math.max(4, (len / 13) * 100)}%`, height: 20, borderRadius: 6, background: e.color,
-                        display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '0 4px',
-                        boxShadow: `0 2px 8px color-mix(in srgb, ${e.color} 30%, transparent)`,
-                        cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '2px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
+                        background: 'var(--card2)', border: '1px solid var(--line)',
+                        color: 'var(--tx2)', cursor: 'pointer',
                       }}
                     >
-                      <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {e.title}
-                      </span>
-                    </div>
-                  );
-                })}
-                <div style={{ position: 'absolute', top: 2, left: `${Math.max(0, Math.min(100, ((new Date().getHours() + new Date().getMinutes() / 60 - 9) / 13) * 100))}%`, width: 2, height: 30, background: 'var(--acc)', zIndex: 2 }} />
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color, flex: 'none' }} />
+                      <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+                      <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
+                    </span>
+                  ))}
+                  {todays.length > 3 && (
+                    <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 3} more</span>
+                  )}
+                  {todays.length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for the rest of today</span>
+                  )}
+                </div>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 500, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
-                <span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span>
-              </div>
-
-              {/* Event Labels List */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {todays.slice(0, 3).map((e) => (
-                  <span
-                    key={e.id}
-                    onClick={() => router.push('/calendar/')}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '2px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
-                      background: 'var(--card2)', border: '1px solid var(--line)',
-                      color: 'var(--tx2)', cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color, flex: 'none' }} />
-                    <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
-                    <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
-                  </span>
-                ))}
-                {todays.length > 3 && (
-                  <span style={{ fontSize: 10, color: 'var(--tx3)', alignSelf: 'center' }}>+{todays.length - 3} more</span>
-                )}
-                {todays.length === 0 && (
-                  <span style={{ fontSize: 11, color: 'var(--tx3)' }}>No events scheduled for the rest of today</span>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Upcoming Tasks Sliding Carousel (Replacing Overdue) */}
             <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} style={{ flex: '1 1 260px', width: '100%', minWidth: 0 }} />

@@ -96,6 +96,10 @@ export const ICONS = {
   expand: 'M9 4v16M4 5h2M4 12h2M4 19h2M20 4v16M12 9l3 3-3 3',
   phone: 'M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm6 17h.01',
   monitor: 'M3 4h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm5 16h8m-4-3v3',
+  chevronDown: 'm6 9 6 6 6-6',
+  chevronUp: 'm18 15-6-6-6 6',
+  chevronLeft: 'm15 18-6-6 6-6',
+  chevronRight: 'm9 6 6 6-6 6',
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -249,12 +249,36 @@ export default function CalendarPage() {
     setPop({ kind: 'event', ev: createdEv, x, y });
   };
 
-  /**
-   * The phone header is deliberately thin. Day view already highlights the day
-   * you are on and the strip scrolls to any other, so a heading repeating that
-   * date, and a "< Today >" pager for a thing you can just tap, were both
-   * spending scarce vertical space to say what the grid already says.
-   */
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - touchStartRef.current.x;
+    const deltaY = endY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY) * 1.2 && Math.abs(deltaX) > 40 && elapsed < 600) {
+      if (deltaX < 0) {
+        shift(1);
+      } else {
+        shift(-1);
+      }
+    }
+  };
+
   const showHeading = !phone || view === 'month' || view === 'agenda';
   const showPager = !phone || view !== 'day';
 
@@ -343,7 +367,12 @@ export default function CalendarPage() {
 
       {importing && <ScheduleImport onClose={() => setImporting(false)} />}
 
-      <div data-tour="calendar-grid" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        data-tour="calendar-grid"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', touchAction: 'pan-y' }}
+      >
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {/* The chrome above is not data-dependent and paints immediately;
               only the grid waits, so only the grid is outlined. */}
