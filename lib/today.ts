@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEvents, weekStart, hoursOf, type Ev } from './events';
 import { useTasks } from './tasks';
 import { useHabits, useTicks, ymd } from './habits';
@@ -19,7 +19,7 @@ import { useBudgets, useTransactions } from './money';
 export type TodayShape = {
   /** Today's events, earliest first, all-day ones excluded. */
   events: Ev[];
-  /** The next event that has not finished, or the one running right now. */
+  /** The next event that has not ended, or the one running right now. */
   next: Ev | null;
   /** True when `next` has already started. */
   ongoing: boolean;
@@ -37,7 +37,13 @@ export type TodayShape = {
 const MIN = 60_000;
 
 export function useToday(): TodayShape {
-  const ws = useMemo(() => weekStart(new Date()), []);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const ws = useMemo(() => weekStart(now), [now.toDateString()]);
   const { data: events = [] } = useEvents(ws, 7);
   const { data: tasks = [] } = useTasks();
   const { data: habits = [] } = useHabits();
@@ -46,7 +52,6 @@ export function useToday(): TodayShape {
   const { data: txns = [] } = useTransactions();
 
   return useMemo(() => {
-    const now = new Date();
     const today = ymd(now);
 
     const mine = events
@@ -86,7 +91,7 @@ export function useToday(): TodayShape {
       leftCentavos: budgeted ? budgeted - spent : null,
       spentPct: budgeted ? Math.min(100, Math.round((spent / budgeted) * 100)) : 0,
     };
-  }, [events, tasks, habits, ticks, budgets, txns]);
+  }, [events, tasks, habits, ticks, budgets, txns, now]);
 }
 
 /** "in 2h 10m", "in 8m", "now". Never a bare minute count past an hour. */

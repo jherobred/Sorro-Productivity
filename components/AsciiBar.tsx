@@ -50,34 +50,48 @@ export function AsciiBar({
   const { prefs } = usePrefs();
   const target = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
-  // Motion off means the bar is simply drawn at its value — no frame loop, no
-  // state, and no first-paint sweep from zero.
+  // Current displayed percentage held in a ref so concurrent frames, rapid
+  // updates, and uncommitted re-renders never lose the true instantaneous position.
+  const currentVal = useRef(prefs.motion ? 0 : target);
   const [shown, setShown] = useState(prefs.motion ? 0 : target);
   const raf = useRef(0);
   const from = useRef(0);
 
   useEffect(() => {
-    if (!prefs.motion) { setShown(target); return; }
+    if (!prefs.motion) {
+      currentVal.current = target;
+      setShown(target);
+      return;
+    }
 
-    from.current = shown;
+    from.current = currentVal.current;
     const delta = target - from.current;
-    if (delta === 0) return;
+    if (Math.abs(delta) < 0.05) {
+      currentVal.current = target;
+      setShown(target);
+      return;
+    }
 
-    // Short hops finish quickly; the full sweep gets the whole budget.
-    const dur = Math.max(120, RUN_MS * (Math.abs(delta) / 100));
+    // Dynamic duration with a minimum threshold so eighth-block progression
+    // (192 sub-cell steps) stays clearly visible and animated on both short hops
+    // and full sweeps.
+    const dur = Math.max(380, Math.min(750, 280 + 470 * (Math.abs(delta) / 100)));
     const t0 = performance.now();
 
     const step = (now: number) => {
       const t = Math.min(1, (now - t0) / dur);
-      setShown(from.current + delta * easeOut(t));
-      if (t < 1) raf.current = requestAnimationFrame(step);
+      const next = from.current + delta * easeOut(t);
+      currentVal.current = next;
+      setShown(next);
+      if (t < 1) {
+        raf.current = requestAnimationFrame(step);
+      } else {
+        currentVal.current = target;
+        setShown(target);
+      }
     };
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
-    // `shown` is the animation's own output — reading it here seeds the next
-    // run from wherever this one stopped, but depending on it would restart
-    // the loop on every frame.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, prefs.motion, cells]);
 
   const { filled, edge, rest } = barParts(shown, cells);
@@ -114,3 +128,4 @@ export function AsciiBar({
 export function AsciiBarBare(props: Omit<Parameters<typeof AsciiBar>[0], 'showValue'>) {
   return <AsciiBar {...props} showValue={false} />;
 }
+
