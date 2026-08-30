@@ -38,9 +38,9 @@ export type TaskAlert = {
 
 /**
  * Calculates deadline proximity and returns alert hierarchy with emoji and animation speed:
- * - Red (Fast 0.8s flash + 🚨): Overdue or due within 2 hours.
- * - Orange (Medium 1.4s flash + ⏰): Due within 8 hours or due today.
- * - Yellow (Slow 2.2s flash + ⏳): Approaching within 24 hours.
+ * - Red (Fast 0.8s flash + 🚨): 24 hours left (or overdue).
+ * - Orange (Medium 1.4s flash + ⏰): 2 days left (24h - 48h).
+ * - Yellow (Slow 2.2s flash + ⏳): 3 days left (48h - 72h).
  */
 export function getTaskAlert(task: Task): TaskAlert | null {
   if (task.done) return null;
@@ -59,34 +59,29 @@ export function getTaskAlert(task: Task): TaskAlert | null {
   const diffMs = dueTime - now;
   const diffHours = diffMs / (1000 * 60 * 60);
 
-  if (diffHours <= 2) {
+  if (diffHours <= 24) {
     return {
       tier: 'red',
       emoji: '🚨',
-      label: diffHours < 0 ? 'Overdue' : 'Due very soon',
+      label: diffHours < 0 ? 'Overdue' : 'Due within 24h',
       speed: '0.8s',
     };
   }
 
-  const todayStr = new Date().toDateString();
-  const isToday = task.due_on
-    ? new Date(`${task.due_on}T12:00:00`).toDateString() === todayStr
-    : new Date(task.due_at!).toDateString() === todayStr;
-
-  if (diffHours <= 8 || isToday) {
+  if (diffHours <= 48) {
     return {
       tier: 'orange',
       emoji: '⏰',
-      label: 'Due today',
+      label: '2 days left',
       speed: '1.4s',
     };
   }
 
-  if (diffHours <= 24) {
+  if (diffHours <= 72) {
     return {
       tier: 'yellow',
       emoji: '⏳',
-      label: 'Approaching deadline',
+      label: '3 days left',
       speed: '2.2s',
     };
   }

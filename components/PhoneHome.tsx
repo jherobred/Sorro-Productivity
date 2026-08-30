@@ -14,9 +14,8 @@ import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch, useScratchActions, TAG_COLOR, ago } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
-import { useEvents, type Ev, hhmm, hoursOf } from '@/lib/events';
+import { useEvents, useEventActions, type Ev, hhmm, hoursOf } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
-import { BuddyCompanion } from './BuddyCompanion';
 import { UpcomingTasksCarousel } from './UpcomingTasksCarousel';
 import { FocusHub } from './FocusHub';
 import { playTick } from '@/lib/audio';
@@ -62,6 +61,7 @@ export function PhoneHome({ name }: { name: string }) {
   const [focusOpen, setFocusOpen] = useState(false);
   const [ringsExpanded, setRingsExpanded] = useState(false);
   const [tasksExpanded, setTasksExpanded] = useState(false);
+  const [restExpanded, setRestExpanded] = useState(false);
 
   useOverlayBack(focusOpen, () => setFocusOpen(false));
 
@@ -78,6 +78,7 @@ export function PhoneHome({ name }: { name: string }) {
 
   const from = startOfToday();
   const { data: events = [] } = useEvents(from, 7);
+  const EA = useEventActions(from);
 
   const open = tasks.filter((t) => !t.done);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
@@ -420,9 +421,7 @@ export function PhoneHome({ name }: { name: string }) {
       </div>
 
       {/* Up Next Card */}
-      <button
-        onClick={() => router.push('/calendar/')}
-        className="hov k-squish"
+      <div
         style={{
           ...CARD,
           width: '100%',
@@ -490,7 +489,10 @@ export function PhoneHome({ name }: { name: string }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <div
+          onClick={() => router.push('/calendar/')}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+        >
           <span style={{ flex: 1, minWidth: 0 }}>
             <span
               style={{
@@ -516,76 +518,253 @@ export function PhoneHome({ name }: { name: string }) {
           </span>
           <Icon name="chev" size={14} color="var(--tx3)" />
         </div>
-      </button>
 
-      {/* Smaller "Rest of the Day" compact timeline under "Up next" */}
+        {/* Full-Width Animated Progress Bar */}
+        {next && (() => {
+          const startMs = new Date(next.starts_at).getTime();
+          const endMs = new Date(next.ends_at).getTime();
+          let pct = 0;
+          if (isNextOngoing) {
+            const duration = Math.max(1000, endMs - startMs);
+            const elapsed = Math.max(0, now - startMs);
+            pct = Math.min(100, Math.round((elapsed / duration) * 100));
+          } else if (startMs > now) {
+            const startOfDay = new Date(next.starts_at);
+            startOfDay.setHours(0, 0, 0, 0);
+            const totalWait = Math.max(1000, startMs - startOfDay.getTime());
+            const elapsedWait = Math.max(0, now - startOfDay.getTime());
+            pct = Math.min(100, Math.max(0, Math.round((elapsedWait / totalWait) * 100)));
+          }
+          return (
+            <div
+              role="progressbar"
+              aria-valuenow={Math.round(pct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              style={{
+                width: '100%',
+                height: 12,
+                borderRadius: 4,
+                background: 'color-mix(in srgb, var(--line2) 30%, var(--card2))',
+                border: '1px solid var(--line2)',
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                margin: '2px 0 2px',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: 'radial-gradient(circle, var(--line2) 1.25px, transparent 1.25px)',
+                  backgroundSize: '7px 7px',
+                  opacity: 0.65,
+                }}
+              />
+              <div
+                style={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  background: `linear-gradient(90deg, color-mix(in srgb, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 80%, transparent) 0%, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 100%)`,
+                  boxShadow: `0 0 10px color-mix(in srgb, ${isNextOngoing ? PAL.mint : next.color || PAL.sky} 50%, transparent)`,
+                  borderRadius: pct >= 99 ? 3 : '3px 0 0 3px',
+                  transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+                  position: 'relative',
+                  zIndex: 1,
+                }}
+              >
+                <div
+                  className="ascii-fill-shimmer"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%)',
+                    backgroundSize: '200% 100%',
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Schedule & Snooze Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4, width: '100%' }}>
+          <button
+            type="button"
+            onClick={() => router.push('/calendar/')}
+            className="acc k-squish"
+            style={{
+              padding: '7px 10px',
+              borderRadius: 8,
+              background: 'var(--acc)',
+              color: '#0C0F16',
+              fontSize: 11.5,
+              fontWeight: 800,
+              whiteSpace: 'nowrap',
+              width: '100%',
+              textAlign: 'center',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Schedule
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!next) {
+                toast('Nothing to snooze');
+                return;
+              }
+              EA.snooze.mutate({ id: next.id });
+              toast(`Reminder for “${next.title}” pushed 10 minutes`);
+            }}
+            className="hov k-squish"
+            style={{
+              padding: '7px 10px',
+              borderRadius: 8,
+              border: '1px solid var(--line2)',
+              background: 'var(--card2)',
+              color: 'var(--tx2)',
+              fontSize: 11.5,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              width: '100%',
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            Snooze
+          </button>
+        </div>
+      </div>
+
+      {/* Rest of the day: Vertical 3h preview with 5h expand chevron */}
       {todaysEvents.length > 0 && (
         <div
           style={{
             ...CARD,
             marginTop: 8,
-            padding: '10px 12px',
-            background: 'var(--card2)',
+            padding: '12px 14px',
+            background: 'color-mix(in srgb, var(--panel) 62%, transparent)',
             border: '1px solid var(--line)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ ...KICKER, fontSize: 8.5 }}>Rest of the day</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>{todaysEvents.length} events</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={KICKER}>Today's Schedule</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)' }}>{todaysEvents.length} event{todaysEvents.length === 1 ? '' : 's'}</span>
           </div>
 
-          <div
+          {/* Vertical hour preview */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(() => {
+              const curH = new Date().getHours();
+              const hoursCount = restExpanded ? 5 : 3;
+              const startH = Math.max(0, Math.min(24 - hoursCount, curH - 1));
+              const hourList = Array.from({ length: hoursCount }, (_, i) => startH + i);
+
+              return hourList.map((h) => {
+                const isNow = h === curH;
+                const hStr = h % 12 === 0 ? '12' : String(h % 12);
+                const ampm = h < 12 ? 'AM' : 'PM';
+                const hourEvents = todaysEvents.filter((e) => {
+                  const startHour = hoursOf(e.starts_at);
+                  const endHour = hoursOf(e.ends_at);
+                  return startHour < h + 1 && endHour > h;
+                });
+
+                return (
+                  <div
+                    key={h}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 9px',
+                      borderRadius: 8,
+                      background: isNow ? 'color-mix(in srgb, var(--acc) 14%, var(--card))' : 'var(--card2)',
+                      border: isNow ? '1px solid color-mix(in srgb, var(--acc) 38%, transparent)' : '1px solid var(--line)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 38, flex: 'none' }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: isNow ? 'var(--accTx)' : 'var(--tx)', fontVariantNumeric: 'tabular-nums' }}>
+                        {hStr} {ampm}
+                      </span>
+                      {isNow && (
+                        <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--accTx)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                          NOW
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {hourEvents.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {hourEvents.map((ev) => (
+                            <div
+                              key={ev.id}
+                              onClick={() => router.push('/calendar/')}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 4,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color || PAL.sky, flex: 'none' }} />
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {ev.title}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                                {hhmm(hoursOf(ev.starts_at))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontStyle: 'italic' }}>
+                          No events
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* Expand/Collapse Chevron Button */}
+          <button
+            type="button"
+            onClick={() => setRestExpanded(!restExpanded)}
+            className="hov k-squish"
             style={{
               display: 'flex',
-              height: 14,
-              borderRadius: 6,
-              background: 'var(--card)',
-              overflow: 'hidden',
-              gap: 2,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              padding: '5px 10px',
+              borderRadius: 7,
+              background: 'var(--card2)',
+              border: '1px solid var(--line2)',
+              color: 'var(--tx2)',
+              fontSize: 10.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              width: '100%',
             }}
           >
-            {todaysEvents.map((ev) => {
-              const startH = hoursOf(ev.starts_at);
-              const endH = hoursOf(ev.ends_at);
-              const durH = Math.max(0.5, endH - startH);
-              return (
-                <div
-                  key={ev.id}
-                  title={`${ev.title} (${hhmm(startH)} - ${hhmm(endH)})`}
-                  style={{
-                    flex: durH,
-                    background: ev.color || PAL.sky,
-                    borderRadius: 3,
-                    opacity: new Date(ev.ends_at).getTime() < now ? 0.4 : 0.9,
-                  }}
-                />
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 8, paddingBottom: 2 }} className="navsb">
-            {todaysEvents.map((ev) => (
-              <div
-                key={ev.id}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '2px 6px',
-                  borderRadius: 5,
-                  background: 'var(--card)',
-                  border: `1px solid color-mix(in srgb, ${ev.color || PAL.sky} 35%, transparent)`,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: ev.color || PAL.sky }} />
-                <span style={{ color: 'var(--tx)' }}>{ev.title}</span>
-                <span style={{ color: 'var(--tx3)', fontSize: 9 }}>{hhmm(hoursOf(ev.starts_at))}</span>
-              </div>
-            ))}
-          </div>
+            <span>{restExpanded ? 'Show 3-hour preview' : 'Expand 5-hour today calendar'}</span>
+            <Icon name={restExpanded ? 'chevronUp' : 'chevronDown'} size={11} />
+          </button>
         </div>
       )}
 
@@ -595,15 +774,6 @@ export function PhoneHome({ name }: { name: string }) {
         todayISO={today}
         style={{ width: '100%', minHeight: 165, marginTop: 10 }}
       />
-
-      {/* Companion (level & mascot) on mobile home */}
-      <div style={{ marginTop: 10 }}>
-        <BuddyCompanion
-          streak={bestStreak}
-          xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
-          onStartFocus={() => setFocusOpen(true)}
-        />
-      </div>
 
       {/* Tasks List (No Titles, Auto adjust to fit 4 with Show More) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>

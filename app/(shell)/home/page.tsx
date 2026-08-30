@@ -10,8 +10,6 @@ import { toast } from '@/lib/toast';
 import { useTasks } from '@/lib/tasks';
 import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
-import { Buddy } from '@/components/Buddy';
-import { BuddyCompanion } from '@/components/BuddyCompanion';
 import { UpcomingTasksCarousel } from '@/components/UpcomingTasksCarousel';
 import { FocusHub } from '@/components/FocusHub';
 import { playTick } from '@/lib/audio';
@@ -257,7 +255,6 @@ export default function HomePage() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 6 }}>
-                <Buddy daysSince={daysSinceDone} size={44} racing={open.length > 0} />
                 <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)' }}>
                   {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
                   {' · '}{open.length} things left{overdue.length ? ` · ${overdue.length} overdue` : ''}
@@ -571,16 +568,6 @@ export default function HomePage() {
         <Announcements phone={phone} />
 
         <div className="home-grid">
-          {/* Study Buddy Hub */}
-          <div data-tour="home-quests" className="home-grid-span-all">
-            <BuddyCompanion
-              daysSince={daysSinceDone}
-              streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
-              xp={tasks.filter((t) => t.done).length * 20 + ticks.length * 10}
-              onStartFocus={() => setFocusOpen(true)}
-            />
-          </div>
-
           {/* Today */}
           <div data-tour="home-timeline" style={CARD}>
             <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
