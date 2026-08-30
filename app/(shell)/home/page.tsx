@@ -1184,28 +1184,118 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                         </div>
                       </div>
 
-                      {/* Integrated Runner Progress Bar */}
-                      <div style={{ position: 'relative', width: '100%', paddingTop: 18, marginBottom: 12 }}>
-                        {/* Animated Running Man at the leading tip of the trail */}
+                      {/* Integrated Full-Width Runner Progress Bar */}
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(pct)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={ongoing ? 'Time elapsed' : 'Time until it starts'}
+                        style={{ position: 'relative', width: '100%', paddingTop: 26, marginBottom: 12 }}
+                      >
+                        {/* Custom Animated Running Man & Wind Stream Vector at the leading tip of the fill */}
                         <div
                           style={{
                             position: 'absolute',
-                            top: 0,
-                            left: `clamp(0px, calc(${pct}% - 14px), calc(100% - 32px))`,
-                            transition: 'left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                            top: 2,
+                            left: `${pct}%`,
+                            transform: 'translateX(-95%)',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: 2,
+                            gap: 3,
                             pointerEvents: 'none',
                             zIndex: 3,
+                            transition: 'left 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
                           }}
                         >
-                          <span className="runner-wind" style={{ fontSize: 13, lineHeight: 1 }} aria-hidden="true">💨</span>
-                          <span className="runner-man" style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">🏃</span>
+                          {/* Custom Animated Wind Trail */}
+                          <svg
+                            className="wind-stream"
+                            width="22"
+                            height="15"
+                            viewBox="0 0 24 16"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{ overflow: 'visible', opacity: 0.85 }}
+                            aria-hidden="true"
+                          >
+                            <path d="M2 4h14" stroke={ongoing ? PAL.mint : color} strokeWidth="2" strokeLinecap="round" strokeDasharray="3 2" />
+                            <path d="M0 8h20" stroke={ongoing ? PAL.mint : color} strokeWidth="2.25" strokeLinecap="round" />
+                            <path d="M4 12h12" stroke={ongoing ? PAL.mint : color} strokeWidth="2" strokeLinecap="round" strokeDasharray="4 2" />
+                          </svg>
+
+                          {/* Custom Animated Running Sprinter SVG */}
+                          <svg
+                            className="running-sprite"
+                            width="20"
+                            height="22"
+                            viewBox="0 0 24 26"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            {/* Head */}
+                            <circle cx="16" cy="4" r="3.2" fill={ongoing ? PAL.mint : color} />
+                            {/* Torso & Leaning Spine */}
+                            <path d="M14 7L10 15L15 14" stroke={ongoing ? PAL.mint : color} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                            {/* Arms */}
+                            <path d="M12 10L18 8L21 11" stroke={ongoing ? PAL.mint : color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M12 10L7 12L5 9" stroke={ongoing ? PAL.mint : color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                            {/* Legs */}
+                            <path d="M10 15L15 20L18 25" stroke={ongoing ? PAL.mint : color} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M10 15L6 18L3 17" stroke={ongoing ? PAL.mint : color} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </div>
 
-                        <AsciiBar value={pct} cells={28} hue={ongoing ? PAL.mint : color} showValue={false}
-                          label={ongoing ? 'Time elapsed' : 'Time until it starts'} />
+                        {/* Full-width Terminal Enclosed Progress Bar */}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: 14,
+                            borderRadius: 4,
+                            background: 'color-mix(in srgb, var(--line2) 30%, var(--card2))',
+                            border: '1px solid var(--line2)',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {/* Full-Width Background Matrix Pattern */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              backgroundImage: 'radial-gradient(circle, var(--line2) 1.25px, transparent 1.25px)',
+                              backgroundSize: '7px 7px',
+                              opacity: 0.65,
+                            }}
+                          />
+
+                          {/* Smooth Glow Fill Bar */}
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${pct}%`,
+                              background: `linear-gradient(90deg, color-mix(in srgb, ${ongoing ? PAL.mint : color} 80%, transparent) 0%, ${ongoing ? PAL.mint : color} 100%)`,
+                              boxShadow: `0 0 12px color-mix(in srgb, ${ongoing ? PAL.mint : color} 50%, transparent)`,
+                              borderRadius: pct >= 99 ? 3 : '3px 0 0 3px',
+                              transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+                              position: 'relative',
+                              zIndex: 1,
+                            }}
+                          >
+                            <div
+                              className="ascii-fill-shimmer"
+                              style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+                                backgroundSize: '200% 100%',
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
     </>
   );
