@@ -271,6 +271,15 @@ export function NoteEditor({
         borderRadius: 16, boxShadow: 'var(--sh)', padding: phone ? '16px 16px 48px' : '28px 36px 72px',
       }}>
         <div style={{ maxWidth: 740, margin: '0 auto', position: 'relative' }}>
+          {/* What is true about this note before you read a word of it: when it
+              last moved, and how many other notes point at it. It sits above
+              the title because that is the order you want it in — the footer
+              had the same facts where nobody scrolls. */}
+          <div className="kicker" style={{ color: 'var(--accTx)', marginBottom: 9 }}>
+            Edited {whenLabel(note.updated_at)}
+            {backlinks.length > 0 && ` · ${backlinks.length} backlink${backlinks.length === 1 ? '' : 's'}`}
+          </div>
+
           {/* Note Title - Seamless, zero-border input */}
           <textarea
             ref={(el) => { if (el) autosize(el); }}
@@ -302,7 +311,13 @@ export function NoteEditor({
               display: 'block',
             }} />
 
-          {/* Tags */}
+          {/* Tags, read as one line under the title. The row underneath is
+              still how you add and remove them. */}
+          {tags.length > 0 && (
+            <div style={{ fontSize: 12.5, color: 'var(--tx3)', margin: '0 0 14px' }}>
+              {tags.join(' · ')}
+            </div>
+          )}
           <TagRow tags={tags} onSet={onSetTags} />
 
           {/* Note Body or Formatted Read View */}
@@ -373,7 +388,6 @@ export function NoteEditor({
           }}>
             <span>{words} word{words === 1 ? '' : 's'}</span>
             {t.total > 0 && <span>{t.done}/{t.total} tasks completed</span>}
-            <span>Edited {whenLabel(note.updated_at)}</span>
             <span style={{ marginLeft: 'auto', fontWeight: 600, color: dirty ? 'var(--accTx)' : 'var(--tx3)' }}>
               {dirty ? 'Saving…' : 'Saved'}
             </span>
