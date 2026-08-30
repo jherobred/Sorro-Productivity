@@ -206,7 +206,10 @@ export default function HomePage() {
       {/* Hero — the day/night sky band with its drifting gradient and sun blob. */}
       <div style={{
         padding: phone ? '14px 14px 4px' : '20px 24px 6px', position: 'relative', overflow: 'hidden',
-        background: 'var(--panel)', borderBottom: '2px solid var(--line2)',
+        // No rule under the band. The hero card inside already has its own
+        // border, so this drew a second edge a few pixels below the first and
+        // read as a seam across the page rather than as a boundary.
+        background: 'var(--panel)',
       }}>
         <div style={{ position: 'relative' }}>
           <div style={{
