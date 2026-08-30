@@ -15,13 +15,14 @@ import {
   useNotebooks, useNotes, useTrash, useTags, useNoteActions, whenLabel, type Note,
 } from '@/lib/notes';
 import { NotebookTable } from '@/components/notes/NotebookTable';
+import { BoardShelf } from '@/components/notes/BoardShelf';
 import { NoteList } from '@/components/notes/NoteList';
 import { NoteEditor } from '@/components/notes/NoteEditor';
 import { GraphView } from '@/components/notes/GraphView';
 import { Canvas } from '@/components/notes/Canvas';
 import { Journal } from '@/components/notes/Journal';
 import { JavaLab } from '@/components/JavaLab';
-import { useBoards, useCanvasActions, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
+import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
 /**
  * Notebooks, rebuilt on Evernote's model.
@@ -58,12 +59,15 @@ export default function NotebooksPage() {
   // Canvases and graph views are notebooks too, so the shelf lists them and the
   // page owns making one — a tab is a place to work, not the only door in.
   const { data: boards = [] } = useBoards();
+  const { data: allNodes = [] } = useAllNodes();
   const B = useCanvasActions(null);
 
   const [nbId, setNbId] = useState<string | null>(null);
   /** Which canvas is open. Here rather than in Canvas, so a dot in the graph
       can open the board it belongs to. */
   const [boardId, setBoardId] = useState<string | null>(null);
+  /** Graph tab: null shows the shelf, 'auto' the all-notes view, else a board id. */
+  const [graphId, setGraphId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [inTrash, setInTrash] = useState(false);
 
@@ -71,6 +75,8 @@ export default function NotebooksPage() {
   useOverlayBack(!!nbId, () => { setNbId(null); setNoteId(null); });
   useOverlayBack(!!noteId && phone, () => setNoteId(null));
   useOverlayBack(inTrash, () => setInTrash(false));
+  useOverlayBack(tab === 'canvas' && !!boardId, () => setBoardId(null));
+  useOverlayBack(tab === 'graph' && !!graphId, () => setGraphId(null));
 
   const notebook = notebooks.find((b) => b.id === nbId) ?? null;
   const mine = useMemo(() => notes.filter((n) => n.notebook_id === nbId), [notes, nbId]);
@@ -131,12 +137,12 @@ export default function NotebooksPage() {
       viewport: { x: 0, y: 0, z: 1 },
       settings: kind === 'graph' ? DEFAULT_GRAPH : {},
     });
-    if (kind === 'canvas') setBoardId(id);
+    if (kind === 'canvas') setBoardId(id); else setGraphId(id);
     setTab(kind === 'graph' ? 'graph' : 'canvas');
   };
 
   const openBoard = (b: Board) => {
-    if (b.kind === 'graph') { setTab('graph'); return; }
+    if (b.kind === 'graph') { setGraphId(b.id); setTab('graph'); return; }
     setBoardId(b.id);
     setTab('canvas');
   };
@@ -339,12 +345,47 @@ $$
           )
         )}
 
-        {tab === 'graph' && (
+        {/* Canvas and Graph land on a shelf, the way Notebooks does. Opening a
+            board is a choice you make from a list, not one the tab makes for
+            you out of whichever board happened to be last. */}
+        {tab === 'graph' && !graphId && (
+          <BoardShelf
+            kind="graph" boards={boards} nodes={allNodes}
+            onOpen={openBoard}
+            onNew={() => newBoard('graph')}
+            onOpenAuto={() => setGraphId('auto')}
+            onRename={(b) => void ask('Rename graph', { initial: b.name, placeholder: 'Name' })
+              .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
+            onRecolour={(b, color) => B.saveBoard.mutate({ id: b.id, patch: { color } })}
+            onDelete={(b) => {
+              B.delBoard.mutate({ id: b.id });
+              toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+            }} />
+        )}
+
+        {tab === 'graph' && graphId && (
           <GraphView notes={notes} notebooks={notebooks} phone={phone}
+            boardId={graphId === 'auto' ? null : graphId}
+            onBack={() => setGraphId(null)}
             onOpenNote={(id) => { setTab('notebooks'); goToNote(id); }}
             onOpenBoard={(id) => { setTab('canvas'); setBoardId(id); }} />
         )}
-        {tab === 'canvas' && (
+
+        {tab === 'canvas' && !boardId && (
+          <BoardShelf
+            kind="canvas" boards={boards} nodes={allNodes}
+            onOpen={openBoard}
+            onNew={() => newBoard('canvas')}
+            onRename={(b) => void ask('Rename canvas', { initial: b.name, placeholder: 'Name' })
+              .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
+            onRecolour={(b, color) => B.saveBoard.mutate({ id: b.id, patch: { color } })}
+            onDelete={(b) => {
+              B.delBoard.mutate({ id: b.id });
+              toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+            }} />
+        )}
+
+        {tab === 'canvas' && boardId && (
           <Canvas notes={notes} phone={phone} boardId={boardId} onBoard={setBoardId}
             onOpenNote={(id) => { setTab('notebooks'); goToNote(id); }} />
         )}

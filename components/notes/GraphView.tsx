@@ -52,11 +52,14 @@ type P = {
 };
 
 export function GraphView({
-  notes, notebooks, phone, onOpenNote, onOpenBoard,
+  notes, notebooks, phone, boardId, onBack, onOpenNote, onOpenBoard,
 }: {
   notes: Note[];
   notebooks: Notebook[];
   phone: boolean;
+  /** Which saved view to draw. null is the automatic all-notes graph. */
+  boardId: string | null;
+  onBack: () => void;
   onOpenNote: (id: string) => void;
   onOpenBoard: (id: string) => void;
 }) {
@@ -65,77 +68,46 @@ export function GraphView({
   const graphs = useMemo(() => allBoards.filter((b) => b.kind === 'graph'), [allBoards]);
   const canvases = useMemo(() => allBoards.filter((b) => b.kind !== 'graph'), [allBoards]);
 
-  const [graphId, setGraphId] = useState<string | null>(null);
-  const graph = graphs.find((b) => b.id === graphId) ?? null;
   const A = useCanvasActions(null);
 
+  /**
+   * Settings for the automatic view, which has no row to save them to. Kept in
+   * memory on purpose: it is the live picture of everything, and a filter you
+   * set on it is a thing you are doing now, not a view you are keeping. Saved
+   * views are what keeping is for.
+   */
+  const [autoSettings, setAutoSettings] = useState<Partial<GraphSettings>>(DEFAULT_GRAPH);
+
+  const AUTO: Board = useMemo(() => ({
+    id: 'auto', name: 'All notes', kind: 'graph', color: prefs.accent,
+    position: -1, viewport: { x: 0, y: 0, z: 1 }, settings: autoSettings,
+    updated_at: new Date().toISOString(),
+  }), [prefs.accent, autoSettings]);
+
+  const graph = boardId ? (graphs.find((b) => b.id === boardId) ?? null) : AUTO;
+
+  // The shelf picks the view now, so a row deleted from under us goes back to
+  // the shelf rather than silently swapping to a different graph.
   useEffect(() => {
-    if (!phone && !graph && graphs.length) setGraphId(graphs[0].id);
-    if (graphId && !graphs.some((b) => b.id === graphId)) setGraphId(null);
-  }, [phone, graph, graphs, graphId]);
-
-  const newGraph = () => {
-    const id = crypto.randomUUID();
-    A.newBoard.mutate({
-      id, name: graphs.length ? `Graph ${graphs.length + 1}` : 'Everything', kind: 'graph',
-      color: CANVAS_COLORS[(graphs.length + 2) % CANVAS_COLORS.length],
-      position: graphs.length, viewport: { x: 0, y: 0, z: 1 }, settings: DEFAULT_GRAPH,
-    });
-    setGraphId(id);
-  };
-
-  const list = (
-    <BoardList
-      boards={graphs} selected={graph?.id ?? null} phone={phone} newLabel="New graph"
-      onPick={setGraphId} onNew={newGraph}
-      onRename={(b) => void ask('Rename graph', { initial: b.name, placeholder: 'Graph name' })
-        .then((n) => { if (n) A.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
-      onColor={(b, color) => A.saveBoard.mutate({ id: b.id, patch: { color } })}
-      onDelete={(b) => void confirmAsk(`Delete “${b.name}”?`, {
-        message: 'Only the saved view goes — your canvases and notes are untouched.',
-        confirmLabel: 'Delete', danger: true,
-      }).then((yes) => {
-        if (!yes) return;
-        A.delBoard.mutate({ id: b.id });
-        toast(`Deleted “${b.name}”`, () => A.restoreBoard.mutate({ id: b.id }));
-      })} />
-  );
-
-  const empty = (
-    <div style={{ ...PANEL, flex: 1, display: 'grid', placeItems: 'center', minHeight: 320 }}>
-      <div style={{ display: 'grid', justifyItems: 'center', gap: 10, textAlign: 'center', padding: 20 }}>
-        <p style={{ fontSize: 12.5, color: 'var(--tx3)', lineHeight: 1.7 }}>
-          No graph views yet.<br />
-          <span style={{ fontSize: 11 }}>A graph view is a saved picture of your canvases and notes.</span>
-        </p>
-        <button onClick={newGraph} className="k-squish" style={{ ...BTN, background: 'var(--acc)', color: 'var(--ink)', border: 0 }}>
-          <Icon name="plus" size={13} color="var(--ink)" />New graph
-        </button>
-      </div>
-    </div>
-  );
+    if (boardId && !graphs.some((b) => b.id === boardId)) onBack();
+  }, [boardId, graphs, onBack]);
 
   const board = graph ? (
     <Scene
       key={graph.id} graph={graph} boards={canvases} notes={notes} notebooks={notebooks} phone={phone}
       accent={prefs.accent}
-      onSettings={(patch) => A.saveBoard.mutate({ id: graph.id, patch: { settings: { ...DEFAULT_GRAPH, ...graph.settings, ...patch } } })}
+      onSettings={(patch) => {
+        if (graph.id === 'auto') { setAutoSettings((v) => ({ ...v, ...patch })); return; }
+        A.saveBoard.mutate({ id: graph.id, patch: { settings: { ...DEFAULT_GRAPH, ...graph.settings, ...patch } } });
+      }}
       onOpenNote={onOpenNote} onOpenBoard={onOpenBoard}
-      onBack={phone ? () => setGraphId(null) : undefined} />
-  ) : empty;
+      onBack={onBack} />
+  ) : null;
 
-  if (phone) {
-    return graph
-      ? board
-      : <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{graphs.length ? list : empty}</div>;
-  }
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14 }}>
-      <aside className="navsb" style={{ width: 196, flex: 'none', overflowY: 'auto', minHeight: 0 }}>{list}</aside>
-      {board}
-    </div>
-  );
+  // A view that vanished under us: the effect above is already sending us back
+  // to the shelf, so draw nothing for the frame in between rather than an
+  // empty state the user will never finish reading.
+  return board;
 }
 
 /* ------------------------------------------------------------------ scene */
