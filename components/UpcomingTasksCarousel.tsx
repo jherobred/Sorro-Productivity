@@ -1,20 +1,18 @@
-'use client';
-
 import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'motion/react';
 import type { Task } from '@/lib/tasks';
-import { useTaskActions } from '@/lib/tasks';
+import { useTaskActions, getTaskAlert } from '@/lib/tasks';
 import { Icon } from './Icon';
 import { PAL } from '@/lib/pal';
 import { playCelebration } from '@/lib/audio';
 import { toast } from '@/lib/toast';
 
 const KICKER: React.CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 700,
-  letterSpacing: '.11em',
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: '.12em',
   textTransform: 'uppercase',
-  color: 'var(--tx3)',
 };
 
 const PRIORITY_ORDER: Record<string, number> = {
@@ -41,6 +39,56 @@ function extractTags(title: string, notes: string): string[] {
   const tagRegex = /#([a-zA-Z0-9_\-]+)/g;
   const matches = combined.match(tagRegex);
   return matches ? Array.from(new Set(matches)) : [];
+}
+
+/**
+ * Serious emergency siren/alarm asset for <= 24 hours left tasks.
+ */
+function SeriousAlarmBeacon({ size = 20 }: { size?: number }) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 7px',
+        borderRadius: 6,
+        background: 'rgba(255, 59, 48, 0.18)',
+        border: '1.5px solid rgba(255, 59, 48, 0.55)',
+        animation: 'serious-alarm-pulse 0.9s infinite ease-in-out',
+      }}
+      title="Urgent: Less than 24 hours remaining!"
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{
+          filter: 'drop-shadow(0 0 6px #FF3B30)',
+        }}
+      >
+        {/* Siren Dome */}
+        <path
+          d="M6 15V10C6 6.68629 8.68629 4 12 4C15.3137 4 18 6.68629 18 10V15"
+          fill="#FF3B30"
+          stroke="#FFB3B3"
+          strokeWidth="1.5"
+        />
+        {/* Light Core */}
+        <ellipse cx="12" cy="9.5" rx="3.5" ry="4" fill="#FFFFFF" opacity="0.9" />
+        {/* Base */}
+        <rect x="4" y="15" width="16" height="4" rx="2" fill="#18181B" stroke="#FF3B30" strokeWidth="1.5" />
+        {/* Flashing Warning Beams */}
+        <line x1="12" y1="1" x2="12" y2="3" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="4.5" y1="4.5" x2="6" y2="6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
+        <line x1="19.5" y1="4.5" x2="18" y2="6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#FF4D4D', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+        URGENT ALARM
+      </span>
+    </div>
+  );
 }
 
 export function UpcomingTasksCarousel({
@@ -194,6 +242,38 @@ export function UpcomingTasksCarousel({
   const t = upcomingTasks[currentIdx] || upcomingTasks[0];
   const links = t ? extractLinks(`${t.title || ''} ${t.notes || ''}`) : [];
   const tags = t ? extractTags(t.title, t.notes) : [];
+  const alert = t ? getTaskAlert(t) : null;
+
+  // Compute aura theme & color based on deadline proximity
+  let auraTheme = {
+    color: 'var(--pal-amber, #FFC24B)',
+    bg: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
+    border: '1.5px solid color-mix(in srgb, var(--pal-amber) 35%, transparent)',
+    shadow: '0 4px 20px color-mix(in srgb, var(--pal-amber) 12%, transparent)',
+  };
+
+  if (alert?.tier === 'red') {
+    auraTheme = {
+      color: '#FF3B30',
+      bg: 'color-mix(in srgb, #FF3B30 14%, var(--card))',
+      border: '1.5px solid #FF3B30',
+      shadow: '0 0 24px rgba(255, 59, 48, 0.45), inset 0 0 16px rgba(255, 59, 48, 0.12)',
+    };
+  } else if (alert?.tier === 'orange') {
+    auraTheme = {
+      color: '#FF9A3C',
+      bg: 'color-mix(in srgb, #FF9A3C 14%, var(--card))',
+      border: '1.5px solid #FF9A3C',
+      shadow: '0 0 20px rgba(255, 154, 60, 0.35), inset 0 0 12px rgba(255, 154, 60, 0.1)',
+    };
+  } else if (alert?.tier === 'yellow') {
+    auraTheme = {
+      color: '#FFC24B',
+      bg: 'color-mix(in srgb, #FFC24B 14%, var(--card))',
+      border: '1.5px solid #FFC24B',
+      shadow: '0 0 18px rgba(255, 194, 75, 0.3), inset 0 0 10px rgba(255, 194, 75, 0.08)',
+    };
+  }
 
   return (
     <div
@@ -204,43 +284,68 @@ export function UpcomingTasksCarousel({
         maxWidth: '100%',
         borderRadius: 16,
         padding: '16px 18px',
-        background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
-        border: '1.5px solid color-mix(in srgb, var(--pal-amber) 32%, transparent)',
-        boxShadow: '0 4px 20px color-mix(in srgb, var(--pal-amber) 10%, transparent)',
-        minHeight: 180,
+        background: auraTheme.bg,
+        border: auraTheme.border,
+        boxShadow: auraTheme.shadow,
+        minHeight: 185,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
         justifyContent: 'space-between',
+        transition: 'all 0.4s ease',
         ...style,
       }}
     >
       {t ? (
         <>
-          {/* Header with Title, Auto-Timer & Arrows */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          {/* Header with Title, Circular Timer & Directional Arrows */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="check" size={13} color="var(--pal-amber)" />
-              <span style={{ ...KICKER, color: 'var(--pal-amber)' }}>Upcoming Tasks</span>
+              <Icon name="check" size={14} color={auraTheme.color} />
+              <span style={{ ...KICKER, color: auraTheme.color }}>Upcoming Tasks</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {/* Timer until next task */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              {/* Circular Countdown Timer */}
               {upcomingTasks.length > 1 && (
-                <span
+                <div
+                  title={`${timeLeft}s until next upcoming task`}
                   style={{
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    color: 'var(--tx3)',
-                    background: 'var(--card2)',
-                    padding: '2px 6px',
-                    borderRadius: 6,
-                    border: '1px solid var(--line2)',
-                    fontVariantNumeric: 'tabular-nums',
+                    position: 'relative',
+                    width: 28,
+                    height: 28,
+                    display: 'grid',
+                    placeItems: 'center',
+                    flex: 'none',
                   }}
                 >
-                  Next in {timeLeft}s
-                </span>
+                  <svg width="28" height="28" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
+                    <circle cx="16" cy="16" r="13" fill="var(--card2)" stroke="var(--line2)" strokeWidth="2.5" />
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r="13"
+                      fill="none"
+                      stroke={auraTheme.color}
+                      strokeWidth="2.5"
+                      strokeDasharray={2 * Math.PI * 13}
+                      strokeDashoffset={2 * Math.PI * 13 * (1 - timeLeft / CYCLE_SECONDS)}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                    />
+                  </svg>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: 'var(--tx)',
+                      zIndex: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {timeLeft}
+                  </span>
+                </div>
               )}
 
               {/* Navigation Arrows */}
@@ -251,8 +356,8 @@ export function UpcomingTasksCarousel({
                   className="hov k-squish"
                   aria-label="Previous task"
                   style={{
-                    width: 22,
-                    height: 22,
+                    width: 24,
+                    height: 24,
                     borderRadius: 6,
                     border: '1px solid var(--line2)',
                     background: 'var(--card2)',
@@ -262,7 +367,7 @@ export function UpcomingTasksCarousel({
                     cursor: 'pointer',
                   }}
                 >
-                  <Icon name="chevronLeft" size={11} />
+                  <Icon name="chevronLeft" size={12} />
                 </button>
                 <button
                   type="button"
@@ -270,8 +375,8 @@ export function UpcomingTasksCarousel({
                   className="hov k-squish"
                   aria-label="Next task"
                   style={{
-                    width: 22,
-                    height: 22,
+                    width: 24,
+                    height: 24,
                     borderRadius: 6,
                     border: '1px solid var(--line2)',
                     background: 'var(--card2)',
@@ -281,210 +386,230 @@ export function UpcomingTasksCarousel({
                     cursor: 'pointer',
                   }}
                 >
-                  <Icon name="chevronRight" size={11} />
+                  <Icon name="chevronRight" size={12} />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* 2-Column Split: 1/4 Left (Metadata: Tags, Dates, Links), 3/4 Right (Details & Mark Done) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, 1fr) 2.6fr', gap: 10, flex: 1, alignItems: 'stretch' }}>
-            {/* Left Column: 1/4 */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 5,
-                borderRight: '1px solid color-mix(in srgb, var(--pal-amber) 25%, var(--line))',
-                paddingRight: 8,
-                minWidth: 0,
-                justifyContent: 'flex-start',
-              }}
-            >
-              {/* Priority */}
-              {t.priority && (
-                <span
-                  style={{
-                    fontSize: 8.5,
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.06em',
-                    padding: '2px 5px',
-                    borderRadius: 5,
-                    color: PRIORITY_COLOR[t.priority] || 'var(--tx2)',
-                    background: `color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 16%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 30%, transparent)`,
-                    width: 'fit-content',
-                    maxWidth: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {t.priority}
-                </span>
-              )}
-
-              {/* Due Date */}
-              <span
+          {/* Animated Task Content with Visible Swipe to the Left */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 115, display: 'flex' }}>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: t.due_on === todayISO ? PAL.coral : 'var(--tx2)',
-                  background: 'var(--card2)',
-                  padding: '2px 5px',
-                  borderRadius: 5,
-                  border: '1px solid var(--line)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  width: 'fit-content',
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  width: '100%',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(85px, 1fr) 2.6fr',
+                  gap: 12,
+                  alignItems: 'stretch',
                 }}
               >
-                <Icon name="clock" size={9} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
-                </span>
-              </span>
-
-              {/* Tags */}
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    fontSize: 8.5,
-                    fontWeight: 600,
-                    color: 'var(--tx3)',
-                    background: 'var(--card2)',
-                    padding: '1px 5px',
-                    borderRadius: 4,
-                    border: '1px solid var(--line2)',
-                    width: 'fit-content',
-                    maxWidth: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-
-              {/* Links (Shows LINK or LINK 1, LINK 2, etc.) */}
-              {links.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-                  {links.map((link, idx) => {
-                    const label = links.length === 1 ? 'LINK' : `LINK ${idx + 1}`;
-                    return (
-                      <a
-                        key={link + idx}
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        title={link}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          fontSize: 8.5,
-                          fontWeight: 800,
-                          padding: '2px 5px',
-                          borderRadius: 4,
-                          background: 'color-mix(in srgb, var(--pal-amber) 16%, var(--card2))',
-                          border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, transparent)',
-                          color: 'var(--pal-amber)',
-                          textDecoration: 'none',
-                          width: 'fit-content',
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <Icon name="link" size={8} color="var(--pal-amber)" />
-                        <span>{label}</span>
-                      </a>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: 3/4 */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
-              <div
-                onClick={() => router.push(`/tasks?detail=${t.id}`)}
-                style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 3 }}
-              >
+                {/* Left Column: Metadata (1/4) */}
                 <div
                   style={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    letterSpacing: '-.02em',
-                    lineHeight: 1.25,
-                    color: 'var(--tx)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    wordBreak: 'break-word',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    borderRight: `1px solid color-mix(in srgb, ${auraTheme.color} 30%, var(--line))`,
+                    paddingRight: 10,
+                    minWidth: 0,
+                    justifyContent: 'flex-start',
                   }}
                 >
-                  {t.title}
-                </div>
+                  {/* Serious Alarm Asset if <= 24 hours left */}
+                  {alert?.tier === 'red' && <SeriousAlarmBeacon size={19} />}
 
-                {t.notes && (
-                  <div
+                  {/* Priority Tag */}
+                  {t.priority && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.06em',
+                        padding: '3px 7px',
+                        borderRadius: 6,
+                        color: PRIORITY_COLOR[t.priority] || 'var(--tx2)',
+                        background: `color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 18%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${PRIORITY_COLOR[t.priority] || 'var(--line)'} 35%, transparent)`,
+                        width: 'fit-content',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.priority}
+                    </span>
+                  )}
+
+                  {/* Due Date Tag */}
+                  <span
                     style={{
-                      fontSize: 11,
-                      color: 'var(--tx3)',
-                      lineHeight: 1.3,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      color: t.due_on === todayISO ? PAL.coral : 'var(--tx2)',
+                      background: 'var(--card2)',
+                      padding: '3px 7px',
+                      borderRadius: 6,
+                      border: '1px solid var(--line)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      width: 'fit-content',
+                      maxWidth: '100%',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      wordBreak: 'break-word',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    {t.notes}
-                  </div>
-                )}
-              </div>
+                    <Icon name="clock" size={11} color={t.due_on === todayISO ? PAL.coral : 'var(--tx3)'} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
+                    </span>
+                  </span>
 
-              {/* Full-Width Mark Done Button */}
-              <button
-                type="button"
-                onClick={(e) => handleToggleDone(e, t)}
-                className="k-squish"
-                style={{
-                  marginTop: 6,
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '7px 12px',
-                  borderRadius: 8,
-                  background: 'var(--pal-amber)',
-                  color: '#0A0912',
-                  fontSize: 11.5,
-                  fontWeight: 800,
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px color-mix(in srgb, var(--pal-amber) 30%, transparent)',
-                }}
-              >
-                <Icon name="check" size={12} color="#0A0912" />
-                <span>Mark Done</span>
-              </button>
-            </div>
+                  {/* Tags */}
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: 'var(--tx2)',
+                        background: 'var(--card2)',
+                        padding: '2px 6px',
+                        borderRadius: 5,
+                        border: '1px solid var(--line2)',
+                        width: 'fit-content',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+
+                  {/* Links */}
+                  {links.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
+                      {links.map((link, idx) => {
+                        const label = links.length === 1 ? 'LINK' : `LINK ${idx + 1}`;
+                        return (
+                          <a
+                            key={link + idx}
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title={link}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '3px 7px',
+                              borderRadius: 6,
+                              background: `color-mix(in srgb, ${auraTheme.color} 18%, var(--card2))`,
+                              border: `1px solid color-mix(in srgb, ${auraTheme.color} 40%, transparent)`,
+                              color: auraTheme.color,
+                              textDecoration: 'none',
+                              width: 'fit-content',
+                              maxWidth: '100%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <Icon name="link" size={10} color={auraTheme.color} />
+                            <span>{label}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Title, Description, and Full-Width Mark Done Button (3/4) */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
+                  <div
+                    onClick={() => router.push(`/tasks?detail=${t.id}`)}
+                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4 }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 17.5,
+                        fontWeight: 800,
+                        letterSpacing: '-.025em',
+                        lineHeight: 1.25,
+                        color: 'var(--tx)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {t.title}
+                    </div>
+
+                    {t.notes && (
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          color: 'var(--tx2)',
+                          lineHeight: 1.45,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {t.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Full-Width Mark Done Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleDone(e, t)}
+                    className="k-squish"
+                    style={{
+                      marginTop: 8,
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      borderRadius: 9,
+                      background: auraTheme.color,
+                      color: '#0A0912',
+                      fontSize: 12.5,
+                      fontWeight: 800,
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: `0 3px 10px color-mix(in srgb, ${auraTheme.color} 35%, transparent)`,
+                    }}
+                  >
+                    <Icon name="check" size={13} color="#0A0912" />
+                    <span>Mark Done</span>
+                  </button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Pagination Circles/Dots at the Bottom */}
@@ -499,10 +624,10 @@ export function UpcomingTasksCarousel({
                     onClick={() => handleSelect(idx)}
                     aria-label={`Go to task ${idx + 1}`}
                     style={{
-                      width: isActive ? 16 : 6,
+                      width: isActive ? 18 : 6,
                       height: 6,
                       borderRadius: 3,
-                      background: isActive ? 'var(--pal-amber)' : 'color-mix(in srgb, var(--tx3) 40%, transparent)',
+                      background: isActive ? auraTheme.color : 'color-mix(in srgb, var(--tx3) 40%, transparent)',
                       border: 'none',
                       padding: 0,
                       cursor: 'pointer',
