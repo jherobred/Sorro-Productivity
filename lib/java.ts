@@ -1,25 +1,22 @@
 /**
- * A real Java interpreter for the subset the Notebooks → Java tab advertises:
- * variables, arithmetic, strings, arrays, if / for / while / do, static methods,
- * and everything you print with System.out. No packages, files or threads.
+ * A full-featured Java AST interpreter and execution trace engine for the
+ * Notebooks → Java tab and interactive 3D Visualizer.
  *
- * Three passes, all in this file so the whole language lives in one place:
- *   lex()   source  → tokens
- *   parse() tokens  → AST
- *   run()   AST     → console output *and a step trace*
- *
- * The trace is the point. Every statement records the call stack, each frame's
- * locals and the console so far, which is what lets the UI scrub through an
- * execution and show what the heap looked like at any line, rather than only
- * printing the final answer.
- *
- * Two hard limits keep a bad program from taking the tab with it: STEP_CAP ends
- * runaway loops, and TRACE_CAP stops the recording (execution continues) once
- * the timeline is long enough to be useless to scrub anyway.
+ * Supports:
+ *   - Variables, primitive types (int, long, short, byte, double, float, char, boolean, String)
+ *   - Multi-dimensional arrays (1D, 2D matrices, array literals, length, indexing, assignment)
+ *   - Object-oriented features: classes, static nested/inner classes, fields, constructors,
+ *     object instantiation (new Node(...)), field access/mutation, this references
+ *   - Control flow: if/else, while, do/while, for, for-each, break, continue, return
+ *   - Recursion and deep call stack tracing
+ *   - Standard library: System.out (println, print, printf), Math (abs, max, min, pow, sqrt, etc.),
+ *     Arrays (toString, sort, fill, copyOf), Integer/Double parse and helper methods, String methods
+ *   - Rich execution trace recording: Call stack frames with typed badges, deep heap snapshots
+ *     (1D arrays, 2D terrain grids, binary trees, linked list node chains), and descriptive step notes.
  */
 
 const STEP_CAP = 400_000;
-const TRACE_CAP = 1_200;
+const TRACE_CAP = 1_500;
 
 /* ============================================================== 1. Lexing */
 
@@ -146,7 +143,7 @@ function readEscape(src: string, i: number): string {
 
 /* ============================================================== 2. Parsing */
 
-type Expr =
+export type Expr =
   | { e: 'lit'; t: string; v: unknown; line: number }
   | { e: 'name'; id: string; line: number }
   | { e: 'bin'; op: string; l: Expr; r: Expr; line: number }
@@ -159,9 +156,10 @@ type Expr =
   | { e: 'field'; target: Expr; name: string; line: number }
   | { e: 'index'; target: Expr; index: Expr; line: number }
   | { e: 'newarr'; type: string; sizes: Expr[]; init: Expr[] | null; line: number }
+  | { e: 'newobj'; className: string; args: Expr[]; line: number }
   | { e: 'cast'; type: string; x: Expr; line: number };
 
-type Stmt =
+export type Stmt =
   | { s: 'var'; type: string; decls: { name: string; init: Expr | null; extraDims: number }[]; line: number }
   | { s: 'expr'; x: Expr; line: number }
   | { s: 'if'; c: Expr; then: Stmt; else: Stmt | null; line: number }
@@ -175,9 +173,34 @@ type Stmt =
   | { s: 'continue'; line: number }
   | { s: 'empty'; line: number };
 
-type MethodDecl = { name: string; ret: string; params: { type: string; name: string }[]; body: Stmt[]; line: number };
-type ClassDecl = { name: string; methods: MethodDecl[]; fields: Stmt[] };
-export type Program = { classes: ClassDecl[] };
+export type FieldDecl = {
+  name: string;
+  type: string;
+  init: Expr | null;
+  line: number;
+  isStatic?: boolean;
+};
+
+export type MethodDecl = {
+  name: string;
+  ret: string;
+  params: { type: string; name: string }[];
+  body: Stmt[];
+  line: number;
+  isStatic?: boolean;
+};
+
+export type ClassDecl = {
+  name: string;
+  methods: MethodDecl[];
+  fields: FieldDecl[];
+  innerClasses: ClassDecl[];
+  isStatic?: boolean;
+};
+
+export type Program = {
+  classes: ClassDecl[];
+};
 
 const PRIMS = new Set(['int', 'long', 'short', 'byte', 'double', 'float', 'char', 'boolean', 'void', 'var']);
 const MODIFIERS = new Set(['public', 'private', 'protected', 'static', 'final', 'abstract', 'synchronized', 'native', 'strictfp', 'transient', 'volatile', 'default']);
@@ -202,13 +225,11 @@ export function parse(toks: Tok[]): Program {
   const looksLikeType = (n = 0): boolean => {
     const t = peek(n);
     if (t.k === 'kw' && PRIMS.has(t.v)) return true;
-    return t.k === 'id' && /^[A-Z]/.test(t.v);
+    return t.k === 'id' && /^[A-Za-z_$]/.test(t.v);
   };
 
   const parseType = (): string => {
     let name = wantId();
-    // Generics are accepted and erased — the subset has no user generics, but
-    // List<String> in a signature should not be a syntax error.
     if (at('<')) {
       let depth = 0;
       do {
@@ -233,9 +254,9 @@ export function parse(toks: Tok[]): Program {
       const raw = t.v.replace(/_/g, '');
       const suffix = /[lLfFdD]$/.test(raw) ? raw.slice(-1).toLowerCase() : '';
       const body = suffix ? raw.slice(0, -1) : raw;
-      const isFloat = suffix === 'f' || suffix === 'd' || /[.eE]/.test(body.replace(/^0[xX]/, ''));
+      const isFloatLit = suffix === 'f' || suffix === 'd' || /[.eE]/.test(body.replace(/^0[xX]/, ''));
       const v = /^0[xX]/.test(body) ? parseInt(body, 16) : Number(body);
-      return { e: 'lit', t: isFloat ? 'double' : suffix === 'l' ? 'long' : 'int', v, line };
+      return { e: 'lit', t: isFloatLit ? 'double' : suffix === 'l' ? 'long' : 'int', v, line };
     }
     if (t.k === 'str') { p++; return { e: 'lit', t: 'String', v: t.v, line }; }
     if (t.k === 'chr') { p++; return { e: 'lit', t: 'char', v: t.v.charCodeAt(0), line }; }
@@ -243,7 +264,17 @@ export function parse(toks: Tok[]): Program {
     if (eat('null')) return { e: 'lit', t: 'null', v: null, line };
 
     if (eat('new')) {
-      const type = wantId();
+      let type = wantId();
+      if (at('<')) {
+        let depth = 0;
+        do {
+          if (at('<')) depth++;
+          if (at('>')) depth--;
+          if (at('>>')) depth -= 2;
+          p++;
+        } while (depth > 0 && peek().k !== 'eof');
+      }
+
       if (at('[')) {
         const sizes: Expr[] = [];
         let dims = 0;
@@ -255,19 +286,17 @@ export function parse(toks: Tok[]): Program {
         }
         let init: Expr[] | null = null;
         if (at('{')) init = arrayInit();
-        return { e: 'newarr', type: type + '[]'.repeat(Math.max(1, dims) - 1), sizes, init, line };
+        return { e: 'newarr', type: type + '[]'.repeat(dims), sizes, init, line };
       }
-      // `new Something(...)` — no user classes in the subset, but String and the
-      // boxed types show up in beginner code, so treat them as conversions.
+
       want('(');
       const args: Expr[] = [];
       if (!at(')')) do { args.push(expression()); } while (eat(','));
       want(')');
-      return { e: 'call', target: null, name: `new ${type}`, args, line };
+      return { e: 'newobj', className: type, args, line };
     }
 
     if (eat('(')) {
-      // Cast vs parenthesised expression: `(int) x` is a cast, `(a) + b` is not.
       if (looksLikeType() && (peek(1).v === ')' || (peek(1).v === '[' && peek(2).v === ']'))) {
         const save = p;
         const type = parseType();
@@ -275,7 +304,9 @@ export function parse(toks: Tok[]): Program {
           const nxt = peek();
           const startsValue = nxt.k === 'num' || nxt.k === 'str' || nxt.k === 'chr' || nxt.k === 'id'
             || nxt.v === '(' || nxt.v === '-' || nxt.v === '!' || nxt.v === '~' || nxt.v === 'new';
-          if (startsValue && PRIMS.has(type.replace('[]', ''))) return { e: 'cast', type, x: unary(), line };
+          if (startsValue && (PRIMS.has(type.replace('[]', '')) || /^[A-Za-z_$]/.test(type))) {
+            return { e: 'cast', type, x: unary(), line };
+          }
         }
         p = save;
       }
@@ -285,7 +316,6 @@ export function parse(toks: Tok[]): Program {
     }
 
     if (at('{')) {
-      // Bare array initialiser, reachable from `int[] a = {1,2,3}`.
       return { e: 'newarr', type: 'var', sizes: [], init: arrayInit(), line };
     }
 
@@ -302,7 +332,7 @@ export function parse(toks: Tok[]): Program {
     const items: Expr[] = [];
     if (!at('}')) {
       do {
-        if (at('}')) break;                       // trailing comma
+        if (at('}')) break;
         items.push(at('{') ? { e: 'newarr', type: 'var', sizes: [], init: arrayInit(), line: peek().line } : expression());
       } while (eat(','));
     }
@@ -352,7 +382,6 @@ export function parse(toks: Tok[]): Program {
     return postfix();
   };
 
-  // Standard precedence climb. Each row binds tighter than the one below it.
   const LEVELS: string[][] = [
     ['||'], ['&&'], ['|'], ['^'], ['&'],
     ['==', '!='], ['<', '>', '<=', '>=', 'instanceof'],
@@ -364,8 +393,6 @@ export function parse(toks: Tok[]): Program {
     let l = binary(lv + 1);
     for (;;) {
       const t = peek();
-      // `>` inside a generic argument list never reaches here, since types are
-      // consumed whole by parseType().
       if (!LEVELS[lv].includes(t.v) || (t.k !== 'op' && t.v !== 'instanceof')) return l;
       p++;
       if (t.v === 'instanceof') { parseType(); l = { e: 'lit', t: 'boolean', v: true, line: t.line }; continue; }
@@ -397,13 +424,9 @@ export function parse(toks: Tok[]): Program {
 
   /* ---- statements ---- */
 
-  /**
-   * `Foo bar` is a declaration; `foo.bar()` and `a * b` are not. Scanning ahead
-   * for a type followed by a name is the only way to tell without types.
-   */
   const isLocalDecl = (): boolean => {
     if (peek().k === 'kw' && PRIMS.has(peek().v)) return true;
-    if (peek().k !== 'id' || !/^[A-Z]/.test(peek().v)) return false;
+    if (peek().k !== 'id') return false;
     let n = 1;
     if (peek(n).v === '<') {
       let depth = 0;
@@ -443,7 +466,7 @@ export function parse(toks: Tok[]): Program {
   function statement(): Stmt {
     const line = peek().line;
 
-    while (MODIFIERS.has(peek().v) && peek().k === 'kw') p++;   // `final int x = 1;`
+    while (MODIFIERS.has(peek().v) && peek().k === 'kw') p++;
 
     if (at('{')) return block();
     if (eat(';')) return { s: 'empty', line };
@@ -467,7 +490,6 @@ export function parse(toks: Tok[]): Program {
 
     if (eat('for')) {
       want('(');
-      // for-each: `for (Type name : iterable)`
       const save = p;
       if (isLocalDecl()) {
         const type = parseType();
@@ -506,10 +528,14 @@ export function parse(toks: Tok[]): Program {
     return { s: 'expr', x, line };
   }
 
-  /* ---- top level ---- */
+  /* ---- top level & classes ---- */
 
   const classDecl = (): ClassDecl => {
-    while (MODIFIERS.has(peek().v) && peek().k === 'kw') p++;
+    let isStatic = false;
+    while (MODIFIERS.has(peek().v) && peek().k === 'kw') {
+      if (peek().v === 'static') isStatic = true;
+      p++;
+    }
     if (!eat('class')) want('class');
     const name = wantId();
     if (eat('extends')) parseType();
@@ -517,51 +543,87 @@ export function parse(toks: Tok[]): Program {
     want('{');
 
     const methods: MethodDecl[] = [];
-    const fields: Stmt[] = [];
+    const fields: FieldDecl[] = [];
+    const innerClasses: ClassDecl[] = [];
 
     while (!at('}') && peek().k !== 'eof') {
       if (eat(';')) continue;
-      while (MODIFIERS.has(peek().v) && peek().k === 'kw') p++;
+      let memberStatic = false;
+      while (MODIFIERS.has(peek().v) && peek().k === 'kw') {
+        if (peek().v === 'static') memberStatic = true;
+        p++;
+      }
       if (at('@')) { p++; wantId(); continue; }
-      if (at('class')) { classDecl(); continue; }                 // nested class: parsed and dropped
+
+      if (at('class')) {
+        innerClasses.push(classDecl());
+        continue;
+      }
 
       const line = peek().line;
-      const ret = parseType();
-      const nameTok = peek();
+      const typeOrRet = parseType();
+      const nextTok = peek();
 
-      // Constructor: the "return type" was actually the class name and a '(' follows.
-      if (nameTok.v === '(' && ret === name) {
+      // Constructor: Type matches class name and is followed by '('
+      if (nextTok.v === '(' && typeOrRet === name) {
         want('(');
         const params: { type: string; name: string }[] = [];
-        if (!at(')')) do { while (eat('final')); params.push({ type: parseType(), name: wantId() }); } while (eat(','));
+        if (!at(')')) do {
+          while (eat('final'));
+          params.push({ type: parseType(), name: wantId() });
+        } while (eat(','));
         want(')');
-        methods.push({ name: '<init>', ret: 'void', params, body: (block() as { body: Stmt[] }).body, line });
+        if (eat('throws')) do { parseType(); } while (eat(','));
+        const body = (block() as { body: Stmt[] }).body;
+        methods.push({ name: '<init>', ret: 'void', params, body, line, isStatic: false });
         continue;
       }
 
       const memberName = wantId();
       if (at('(')) {
+        // Method declaration
         want('(');
         const params: { type: string; name: string }[] = [];
-        if (!at(')')) do { while (eat('final')); params.push({ type: parseType(), name: wantId() }); } while (eat(','));
+        if (!at(')')) do {
+          while (eat('final'));
+          params.push({ type: parseType(), name: wantId() });
+        } while (eat(','));
         want(')');
         if (eat('throws')) do { parseType(); } while (eat(','));
-        if (eat(';')) { continue; }                                 // abstract
-        methods.push({ name: memberName, ret, params, body: (block() as { body: Stmt[] }).body, line });
+        if (eat(';')) { continue; }
+        const body = (block() as { body: Stmt[] }).body;
+        methods.push({ name: memberName, ret: typeOrRet, params, body, line, isStatic: memberStatic });
       } else {
-        // Field. Rewind one so varDecl reads the whole thing including the type.
-        p -= 1;
-        let back = 1;
-        while (toks[p - 1] && (toks[p - 1].v === '[' || toks[p - 1].v === ']')) { p--; back++; }
-        p -= 1;
-        void back;
-        const d = varDecl();
+        // Field declaration
+        let extraDims = 0;
+        while (at('[') && peek(1).v === ']') { p += 2; extraDims++; }
+        let init: Expr | null = eat('=') ? expression() : null;
+        fields.push({
+          name: memberName,
+          type: typeOrRet + '[]'.repeat(extraDims),
+          init,
+          line,
+          isStatic: memberStatic,
+        });
+
+        while (eat(',')) {
+          const extraName = wantId();
+          let extraDims2 = 0;
+          while (at('[') && peek(1).v === ']') { p += 2; extraDims2++; }
+          const extraInit = eat('=') ? expression() : null;
+          fields.push({
+            name: extraName,
+            type: typeOrRet + '[]'.repeat(extraDims2),
+            init: extraInit,
+            line,
+            isStatic: memberStatic,
+          });
+        }
         want(';');
-        fields.push(d);
       }
     }
     want('}');
-    return { name, methods, fields };
+    return { name, methods, fields, innerClasses, isStatic };
   };
 
   const classes: ClassDecl[] = [];
@@ -570,11 +632,17 @@ export function parse(toks: Tok[]): Program {
     if (at('@')) { p++; wantId(); continue; }
     classes.push(classDecl());
   }
-  if (!classes.length) throw new JavaError('No class found — wrap your code in `class Main { … }`', 1);
+  if (!classes.length) throw new JavaError('No class found — wrap your code in `public class Main { … }`', 1);
   return { classes };
 }
 
 /* =========================================================== 3. Execution */
+
+export type JavaObject = {
+  _id: number;
+  className: string;
+  fields: Map<string, Val>;
+};
 
 export type Val = { t: string; v: unknown };
 
@@ -586,7 +654,7 @@ export type Step = {
   line: number;
   frames: FrameSnap[];
   heap: HeapObj[];
-  out: number;          // console length at this step, so the UI can reveal output in time
+  out: number;
   note: string;
 };
 
@@ -607,7 +675,6 @@ const isNum = (t: string) => ['int', 'long', 'short', 'byte', 'double', 'float',
 const isFloat = (t: string) => t === 'double' || t === 'float';
 const isArr = (t: string) => t.endsWith('[]');
 
-/** Java prints doubles with a decimal point even when they are whole. */
 function dstr(n: number): string {
   if (Number.isNaN(n)) return 'NaN';
   if (n === Infinity) return 'Infinity';
@@ -616,19 +683,21 @@ function dstr(n: number): string {
   return String(n);
 }
 
-/** Java's array toString: a type descriptor, an @, and an identity hash. */
-const ARR_TAG: Record<string, string> = {
-  int: '[I', long: '[J', short: '[S', byte: '[B', double: '[D', float: '[F', char: '[C', boolean: '[Z',
-};
-
-export function str(x: Val): string {
-  if (x.v === null || x.t === 'null') return 'null';
+export function str(x: Val | undefined | null): string {
+  if (!x || x.v === null || x.t === 'null') return 'null';
   if (x.t === 'char') return String.fromCharCode(x.v as number);
   if (isFloat(x.t)) return dstr(x.v as number);
   if (isArr(x.t)) {
-    const elem = x.t.slice(0, -2);
-    const tag = ARR_TAG[elem] ?? `[L${elem === 'String' ? 'java.lang.String' : elem};`;
-    return `${tag}@${((x.v as Val[]).length * 31 + 7).toString(16)}`;
+    const items = x.v as Val[];
+    return `[${items.map(str).join(', ')}]`;
+  }
+  if (typeof x.v === 'object' && x.v !== null && '_id' in x.v) {
+    const obj = x.v as JavaObject;
+    if (obj.fields.has('val')) {
+      const valV = obj.fields.get('val');
+      return `${obj.className}(${str(valV)})`;
+    }
+    return `${obj.className}#${obj._id}`;
   }
   return String(x.v);
 }
@@ -638,7 +707,6 @@ const truthy = (x: Val, line: number): boolean => {
   return x.v as boolean;
 };
 
-/** Java's binary numeric promotion: double wins, then long, otherwise int. */
 const promote = (a: string, b: string) =>
   isFloat(a) || isFloat(b) ? 'double' : a === 'long' || b === 'long' ? 'long' : 'int';
 
@@ -647,19 +715,20 @@ const asNum = (x: Val, line: number): number => {
   return x.v as number;
 };
 
-/** Narrow a value into a declared slot, the way an assignment would. */
 function coerce(type: string, x: Val, line: number): Val {
   if (type === 'var' || type === x.t) return { t: type === 'var' ? x.t : type, v: x.v };
   if (type === 'String') {
-    if (x.t === 'null') return { t: 'String', v: null };
-    if (x.t !== 'String') throw new JavaError(`Cannot put ${x.t} into a String`, line);
-    return x;
+    if (x.t === 'null' || x.v === null) return { t: 'String', v: null };
+    return { t: 'String', v: str(x) };
   }
   if (type === 'boolean') {
     if (x.t !== 'boolean') throw new JavaError(`Cannot put ${x.t} into a boolean`, line);
     return x;
   }
-  if (isArr(type)) return { t: type, v: x.v };
+  if (isArr(type)) {
+    if (x.t === 'null' || x.v === null) return { t: type, v: null };
+    return { t: type, v: x.v };
+  }
   if (isNum(type)) {
     const n = asNum(x, line);
     if (isFloat(type)) return { t: type, v: n };
@@ -669,25 +738,54 @@ function coerce(type: string, x: Val, line: number): Val {
     if (type === 'long') return { t: 'long', v: Math.trunc(n) };
     return { t: 'int', v: Math.trunc(n) | 0 };
   }
-  return x;
+  // User object references
+  if (x.t === 'null' || x.v === null) return { t: type, v: null };
+  return { t: type, v: x.v };
 }
 
 class Frame {
   scopes: Map<string, Val>[] = [new Map()];
-  constructor(readonly sig: string) {}
+  constructor(readonly sig: string, public thisVal: Val | null = null) {}
+
   push() { this.scopes.push(new Map()); }
   pop() { this.scopes.pop(); }
   declare(name: string, v: Val) { this.scopes[this.scopes.length - 1].set(name, v); }
+
   find(name: string): Map<string, Val> | null {
-    for (let i = this.scopes.length - 1; i >= 0; i--) if (this.scopes[i].has(name)) return this.scopes[i];
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (this.scopes[i].has(name)) return this.scopes[i];
+    }
     return null;
   }
-  get(name: string): Val | undefined { return this.find(name)?.get(name); }
-  /** Flattened, in declaration order, for the call-stack panel. */
+
+  get(name: string): Val | undefined {
+    const s = this.find(name);
+    if (s) return s.get(name);
+    if (this.thisVal && this.thisVal.v && typeof this.thisVal.v === 'object') {
+      const obj = this.thisVal.v as JavaObject;
+      return obj.fields?.get(name);
+    }
+    return undefined;
+  }
+
+  setField(name: string, value: Val): boolean {
+    if (this.thisVal && this.thisVal.v && typeof this.thisVal.v === 'object') {
+      const obj = this.thisVal.v as JavaObject;
+      if (obj.fields && (obj.fields.has(name) || name in obj.fields)) {
+        obj.fields.set(name, value);
+        return true;
+      }
+    }
+    return false;
+  }
+
   locals(): Local[] {
     const out: Local[] = [];
-    for (const sc of this.scopes) for (const [name, val] of sc) {
-      out.push({ name, type: val.t, text: str(val), value: val });
+    for (const sc of this.scopes) {
+      for (const [name, val] of sc) {
+        if (name === 'this') continue;
+        out.push({ name, type: val.t, text: str(val), value: val });
+      }
     }
     return out;
   }
@@ -701,11 +799,6 @@ export function run(src: string, entry = 'main'): RunResult {
   const started = performance.now();
   const out: string[] = [];
 
-  /**
-   * System.out is a character stream, not a list of lines: print() leaves the
-   * cursor mid-line and printf only breaks where the format says %n. So text
-   * accumulates in `pending` and only becomes an `out` row at a newline.
-   */
   let pending = '';
   const emit = (text: string) => {
     pending += text;
@@ -721,6 +814,7 @@ export function run(src: string, entry = 'main'): RunResult {
   let steps = 0;
   let truncated = false;
   let error: { message: string; line: number } | null = null;
+  let objectIdCounter = 0;
 
   let program: Program | null = null;
   try {
@@ -734,37 +828,141 @@ export function run(src: string, entry = 'main'): RunResult {
     };
   }
 
+  const classMap = new Map<string, ClassDecl>();
   const methods = new Map<string, MethodDecl>();
-  for (const c of program.classes) {
+
+  function registerClass(c: ClassDecl, outerName = '') {
+    const fullName = outerName ? `${outerName}.${c.name}` : c.name;
+    classMap.set(c.name, c);
+    if (outerName) classMap.set(fullName, c);
+
     for (const m of c.methods) {
-      methods.set(m.name, m);
-      methods.set(`${c.name}.${m.name}`, m);
+      if (m.name === '<init>') {
+        methods.set(`${c.name}.<init>`, m);
+        if (outerName) methods.set(`${fullName}.<init>`, m);
+      } else {
+        methods.set(m.name, m);
+        methods.set(`${c.name}.${m.name}`, m);
+        if (outerName) methods.set(`${fullName}.${m.name}`, m);
+      }
     }
+
+    for (const inner of c.innerClasses) {
+      registerClass(inner, fullName);
+    }
+  }
+
+  for (const c of program.classes) {
+    registerClass(c);
   }
 
   /* -------------------------------------------------- snapshots */
 
   const heapOf = (): HeapObj[] => {
     const seen = new Set<string>();
+    const seenObjIds = new Set<number>();
     const objs: HeapObj[] = [];
+
+    const flatten2D = (arrVal: Val): string[] => {
+      const rows = arrVal.v as Val[];
+      const cells: string[] = [];
+      for (const row of rows) {
+        if (isArr(row.t)) {
+          for (const item of row.v as Val[]) {
+            cells.push(str(item));
+          }
+        } else {
+          cells.push(str(row));
+        }
+      }
+      return cells;
+    };
+
+    const recordObject = (name: string, obj: JavaObject) => {
+      if (seenObjIds.has(obj._id)) return;
+      seenObjIds.add(obj._id);
+
+      const isTree = obj.fields.has('val') && (obj.fields.has('left') || obj.fields.has('right'));
+      const isList = obj.fields.has('val') && obj.fields.has('next');
+      const valStr = obj.fields.has('val') ? str(obj.fields.get('val')!) : '';
+
+      if (isTree) {
+        const leftObj = obj.fields.get('left')?.v as JavaObject | undefined;
+        const leftVal = leftObj && leftObj.fields ? (leftObj.fields.has('val') ? str(leftObj.fields.get('val')) : 'Node') : 'null';
+        const rightObj = obj.fields.get('right')?.v as JavaObject | undefined;
+        const rightVal = rightObj && rightObj.fields ? (rightObj.fields.has('val') ? str(rightObj.fields.get('val')) : 'Node') : 'null';
+        objs.push({
+          name: `${name || obj.className}#${obj._id}`,
+          type: obj.className,
+          text: `Node(${valStr})`,
+          cells: [valStr, `L:${leftVal}`, `R:${rightVal}`],
+          size: 3,
+        });
+
+        const lObj = obj.fields.get('left')?.v;
+        if (lObj && typeof lObj === 'object' && '_id' in lObj) recordObject(`${name}.left`, lObj as JavaObject);
+        const rObj = obj.fields.get('right')?.v;
+        if (rObj && typeof rObj === 'object' && '_id' in rObj) recordObject(`${name}.right`, rObj as JavaObject);
+      } else if (isList) {
+        const nextObjVal = obj.fields.get('next')?.v as JavaObject | undefined;
+        const nextVal = nextObjVal && nextObjVal.fields ? (nextObjVal.fields.has('val') ? str(nextObjVal.fields.get('val')) : 'Node') : 'null';
+        objs.push({
+          name: `${name || obj.className}#${obj._id}`,
+          type: obj.className,
+          text: `ListNode(${valStr})`,
+          cells: [valStr, `-> ${nextVal}`],
+          size: 2,
+        });
+
+        const nextObj = obj.fields.get('next')?.v;
+        if (nextObj && typeof nextObj === 'object' && '_id' in nextObj) recordObject(`${name}.next`, nextObj as JavaObject);
+      } else {
+        const fieldEntries = Array.from(obj.fields.entries());
+        objs.push({
+          name: `${name || obj.className}#${obj._id}`,
+          type: obj.className,
+          text: `${obj.className}#${obj._id}`,
+          cells: fieldEntries.map(([k, v]) => `${k}=${str(v)}`),
+          size: fieldEntries.length,
+        });
+      }
+    };
+
     for (let i = stack.length - 1; i >= 0; i--) {
       for (const l of stack[i].locals()) {
         if (seen.has(l.name)) continue;
-        if (l.value.v === null) continue;
+        if (l.value.v === null || l.value.t === 'null') continue;
+
         if (l.type === 'String') {
           seen.add(l.name);
           const s = l.value.v as string;
-          objs.push({ name: l.name, type: 'String', text: s, cells: [...s], size: s.length });
+          objs.push({ name: l.name, type: 'String', text: `"${s}"`, cells: [...s], size: s.length });
+        } else if (l.type.endsWith('[][]')) {
+          seen.add(l.name);
+          const rows = l.value.v as Val[];
+          const flatCells = flatten2D(l.value);
+          const numCols = rows[0] && isArr(rows[0].t) ? (rows[0].v as Val[]).length : 0;
+          objs.push({
+            name: l.name,
+            type: l.type,
+            text: `${rows.length}x${numCols} Matrix`,
+            cells: flatCells,
+            size: flatCells.length,
+          });
         } else if (isArr(l.type)) {
           seen.add(l.name);
           const items = l.value.v as Val[];
-          // A zero-length array has nothing to show, and the empty `args` the
-          // JVM hands main() would otherwise head the panel on every run.
-          if (!items.length) continue;
+          if (!items.length && l.name === 'args') continue;
           objs.push({
-            name: l.name, type: l.type, text: `[${items.map(str).join(', ')}]`,
-            cells: items.map(str), size: items.length,
+            name: l.name,
+            type: l.type,
+            text: `[${items.map(str).join(', ')}]`,
+            cells: items.map(str),
+            size: items.length,
           });
+        } else if (typeof l.value.v === 'object' && l.value.v !== null && '_id' in l.value.v) {
+          seen.add(l.name);
+          recordObject(l.name, l.value.v as JavaObject);
         }
       }
     }
@@ -777,6 +975,30 @@ export function run(src: string, entry = 'main'): RunResult {
     if (trace.length >= TRACE_CAP) { truncated = true; return; }
     trace.push({ line, frames: framesOf(), heap: heapOf(), out: out.length, note });
   };
+
+  /* -------------------------------------------------- expression stringifier */
+
+  function exprToString(x: Expr): string {
+    switch (x.e) {
+      case 'lit': return str({ t: x.t, v: x.v });
+      case 'name': return x.id;
+      case 'bin': return `${exprToString(x.l)} ${x.op} ${exprToString(x.r)}`;
+      case 'un': return `${x.op}${exprToString(x.x)}`;
+      case 'pre': return `${x.op}${exprToString(x.x)}`;
+      case 'post': return `${exprToString(x.x)}${x.op}`;
+      case 'assign': return `${exprToString(x.target)} ${x.op} ${exprToString(x.value)}`;
+      case 'cond': return `${exprToString(x.c)} ? ${exprToString(x.a)} : ${exprToString(x.b)}`;
+      case 'call': {
+        const targetStr = x.target ? `${exprToString(x.target)}.` : '';
+        return `${targetStr}${x.name}(${x.args.map(exprToString).join(', ')})`;
+      }
+      case 'field': return `${exprToString(x.target)}.${x.name}`;
+      case 'index': return `${exprToString(x.target)}[${exprToString(x.index)}]`;
+      case 'newobj': return `new ${x.className}(${x.args.map(exprToString).join(', ')})`;
+      case 'newarr': return `new ${x.type}`;
+      case 'cast': return `(${x.type}) ${exprToString(x.x)}`;
+    }
+  }
 
   /* -------------------------------------------------- expressions */
 
@@ -791,11 +1013,28 @@ export function run(src: string, entry = 'main'): RunResult {
   function assignTo(target: Expr, value: Val, line: number): Val {
     if (target.e === 'name') {
       const scope = frame().find(target.id);
-      if (!scope) throw new JavaError(`Cannot find symbol '${target.id}'`, line);
-      const declared = scope.get(target.id)!.t;
-      const next = coerce(declared, value, line);
-      scope.set(target.id, next);
-      return next;
+      if (scope) {
+        const declared = scope.get(target.id)!.t;
+        const next = coerce(declared, value, line);
+        scope.set(target.id, next);
+        return next;
+      }
+      if (frame().setField(target.id, value)) {
+        return value;
+      }
+      throw new JavaError(`Cannot find symbol '${target.id}'`, line);
+    }
+    if (target.e === 'field') {
+      const recv = evaluate(target.target);
+      if (recv.v === null || recv.t === 'null') {
+        throw new JavaError(`NullPointerException: Cannot assign field '${target.name}' because target is null`, line);
+      }
+      if (typeof recv.v === 'object' && recv.v !== null && '_id' in recv.v) {
+        const obj = recv.v as JavaObject;
+        obj.fields.set(target.name, value);
+        return value;
+      }
+      throw new JavaError(`Cannot assign field '${target.name}' on type '${recv.t}'`, line);
     }
     if (target.e === 'index') {
       const arr = evaluate(target.target);
@@ -805,7 +1044,8 @@ export function run(src: string, entry = 'main'): RunResult {
       if (i < 0 || i >= items.length) {
         throw new JavaError(`ArrayIndexOutOfBoundsException: Index ${i} out of bounds for length ${items.length}`, line);
       }
-      const next = coerce(arr.t.slice(0, -2), value, line);
+      const elemType = arr.t.slice(0, -2);
+      const next = coerce(elemType, value, line);
       items[i] = next;
       return next;
     }
@@ -816,11 +1056,32 @@ export function run(src: string, entry = 'main'): RunResult {
     if (op === '+' && (l.t === 'String' || r.t === 'String')) return { t: 'String', v: str(l) + str(r) };
 
     if (op === '==' || op === '!=') {
-      const eq = l.t === 'String' || r.t === 'String' || l.t === 'null' || r.t === 'null' || l.t === 'boolean'
-        ? l.v === r.v
-        : asNum(l, line) === asNum(r, line);
+      if (l.t === 'null' || r.t === 'null' || l.v === null || r.v === null) {
+        const isNullL = l.t === 'null' || l.v === null;
+        const isNullR = r.t === 'null' || r.v === null;
+        const eq = isNullL === isNullR;
+        return { t: 'boolean', v: op === '==' ? eq : !eq };
+      }
+      if (l.t === 'String' && r.t === 'String') {
+        const eq = l.v === r.v;
+        return { t: 'boolean', v: op === '==' ? eq : !eq };
+      }
+      if (l.t === 'boolean' && r.t === 'boolean') {
+        const eq = l.v === r.v;
+        return { t: 'boolean', v: op === '==' ? eq : !eq };
+      }
+      if (typeof l.v === 'object' && typeof r.v === 'object' && l.v !== null && r.v !== null) {
+        const eq = l.v === r.v;
+        return { t: 'boolean', v: op === '==' ? eq : !eq };
+      }
+      if (isNum(l.t) && isNum(r.t)) {
+        const eq = asNum(l, line) === asNum(r, line);
+        return { t: 'boolean', v: op === '==' ? eq : !eq };
+      }
+      const eq = l.v === r.v;
       return { t: 'boolean', v: op === '==' ? eq : !eq };
     }
+
     if (op === '&&' || op === '||') {
       return { t: 'boolean', v: op === '&&' ? truthy(l, line) && truthy(r, line) : truthy(l, line) || truthy(r, line) };
     }
@@ -861,8 +1122,6 @@ export function run(src: string, entry = 'main'): RunResult {
     throw new JavaError(`Unsupported operator '${op}'`, line);
   }
 
-  // int wraps at 32 bits, long does not (JS numbers lose precision past 2^53 —
-  // ponytail: swap in BigInt if anyone actually needs 64-bit wraparound).
   const trunc = (n: number, t: string) => (t === 'long' ? Math.trunc(n) : n | 0);
 
   function evaluate(x: Expr): Val {
@@ -872,7 +1131,6 @@ export function run(src: string, entry = 'main'): RunResult {
       case 'lit': return { t: x.t, v: x.v };
       case 'name': return lookup(x.id, x.line);
       case 'bin': {
-        // Short-circuit before evaluating the right side.
         if (x.op === '&&') return { t: 'boolean', v: truthy(evaluate(x.l), x.line) ? truthy(evaluate(x.r), x.line) : false };
         if (x.op === '||') return { t: 'boolean', v: truthy(evaluate(x.l), x.line) ? true : truthy(evaluate(x.r), x.line) };
         return binop(x.op, evaluate(x.l), evaluate(x.r), x.line);
@@ -917,12 +1175,12 @@ export function run(src: string, entry = 'main'): RunResult {
       }
       case 'field': return field(x);
       case 'newarr': return newArray(x);
+      case 'newobj': return instantiateClass(x.className, x.args.map(evaluate), x.line);
       case 'call': return call(x);
     }
   }
 
   function field(x: Expr & { e: 'field' }): Val {
-    // Static-looking names first, so `Integer.MAX_VALUE` never shadows a local.
     if (x.target.e === 'name') {
       const owner = x.target.id;
       const key = `${owner}.${x.name}`;
@@ -932,33 +1190,111 @@ export function run(src: string, entry = 'main'): RunResult {
         'Integer.MAX_VALUE': { t: 'int', v: 2147483647 },
         'Integer.MIN_VALUE': { t: 'int', v: -2147483648 },
         'Long.MAX_VALUE': { t: 'long', v: Number.MAX_SAFE_INTEGER },
+        'Long.MIN_VALUE': { t: 'long', v: -Number.MAX_SAFE_INTEGER },
         'Double.MAX_VALUE': { t: 'double', v: Number.MAX_VALUE },
       };
-      if (konst[key] && !frame()?.get(owner)) return konst[key];
+      if (konst[key] && !frame()?.find(owner)) return konst[key];
     }
+
     const t = evaluate(x.target);
     if (x.name === 'length') {
       if (isArr(t.t)) return { t: 'int', v: (t.v as Val[]).length };
       if (t.t === 'String') return { t: 'int', v: (t.v as string).length };
     }
-    throw new JavaError(`Unknown field '${x.name}'`, x.line);
+
+    if (t.v === null || t.t === 'null') {
+      throw new JavaError(`NullPointerException: Cannot read field '${x.name}' because target is null`, x.line);
+    }
+
+    if (typeof t.v === 'object' && t.v !== null && '_id' in t.v) {
+      const obj = t.v as JavaObject;
+      const fVal = obj.fields.get(x.name);
+      if (fVal !== undefined) return fVal;
+      return { t: 'null', v: null };
+    }
+
+    throw new JavaError(`Unknown field '${x.name}' on '${t.t}'`, x.line);
+  }
+
+  function allocMultiArray(baseElem: string, sizes: number[], dimIdx: number, line: number): Val {
+    const n = sizes[dimIdx];
+    if (n < 0) throw new JavaError('NegativeArraySizeException', line);
+    if (n > 5_000_000) throw new JavaError('OutOfMemoryError: array too large', line);
+    const remainingDims = sizes.length - 1 - dimIdx;
+    const currentType = baseElem + '[]'.repeat(remainingDims + 1);
+
+    if (remainingDims === 0) {
+      const zero: Val = baseElem === 'boolean' ? { t: 'boolean', v: false }
+        : baseElem === 'String' ? { t: 'String', v: null }
+        : isNum(baseElem) ? { t: baseElem, v: 0 }
+        : { t: baseElem, v: null };
+      return {
+        t: currentType,
+        v: Array.from({ length: n }, () => ({ ...zero })),
+      };
+    }
+
+    return {
+      t: currentType,
+      v: Array.from({ length: n }, () => allocMultiArray(baseElem, sizes, dimIdx + 1, line)),
+    };
   }
 
   function newArray(x: Expr & { e: 'newarr' }): Val {
-    const elem = x.type.endsWith('[]') ? x.type : x.type;
     if (x.init) {
       const items = x.init.map((i) => evaluate(i));
-      const t = elem === 'var' ? (items[0]?.t ?? 'int') : elem;
-      return { t: `${t}[]`, v: items.map((i) => coerce(t, i, x.line)) };
+      const firstT = items[0]?.t ?? 'int';
+      const declaredType = x.type === 'var' ? `${firstT}[]` : x.type;
+      const elemType = declaredType.endsWith('[]') ? declaredType.slice(0, -2) : firstT;
+      return {
+        t: declaredType,
+        v: items.map((i) => coerce(elemType, i, x.line)),
+      };
     }
-    const n = asNum(evaluate(x.sizes[0]), x.line);
-    if (n < 0) throw new JavaError('NegativeArraySizeException', x.line);
-    if (n > 5_000_000) throw new JavaError('OutOfMemoryError: array too large', x.line);
-    const zero: Val = elem === 'boolean' ? { t: 'boolean', v: false }
-      : elem === 'String' ? { t: 'String', v: null }
-      : isNum(elem) ? { t: elem, v: 0 }
-      : { t: 'null', v: null };
-    return { t: `${elem}[]`, v: Array.from({ length: n }, () => ({ ...zero })) };
+
+    const sizes = x.sizes.map((s) => asNum(evaluate(s), x.line));
+    const baseElem = x.type.replace(/\[\]/g, '');
+    return allocMultiArray(baseElem, sizes, 0, x.line);
+  }
+
+  function instantiateClass(className: string, args: Val[], line: number): Val {
+    if (className === 'String') return { t: 'String', v: args.length ? str(args[0]) : '' };
+    if (['Integer', 'Long', 'Short', 'Byte'].includes(className)) {
+      return { t: 'int', v: Math.trunc(asNum(args[0], line)) };
+    }
+    if (['Double', 'Float'].includes(className)) {
+      return { t: 'double', v: asNum(args[0], line) };
+    }
+
+    const cls = classMap.get(className);
+    if (!cls) {
+      throw new JavaError(`'new ${className}' is outside the supported subset`, line);
+    }
+
+    const objId = ++objectIdCounter;
+    const fields = new Map<string, Val>();
+
+    for (const f of cls.fields) {
+      if (!f.isStatic) {
+        fields.set(f.name, f.init ? coerce(f.type, evaluate(f.init), f.line) : defaultOf(f.type));
+      }
+    }
+
+    const obj: JavaObject = {
+      _id: objId,
+      className: cls.name,
+      fields,
+    };
+    const objVal: Val = { t: cls.name, v: obj };
+
+    const ctor = cls.methods.find((m) => m.name === '<init>' && m.params.length === args.length);
+    if (ctor) {
+      invoke(ctor, args, line, objVal);
+    } else if (args.length > 0) {
+      throw new JavaError(`Constructor ${cls.name} with ${args.length} argument(s) not found`, line);
+    }
+
+    return objVal;
   }
 
   function printed(args: Val[]): string {
@@ -968,24 +1304,26 @@ export function run(src: string, entry = 'main'): RunResult {
   function call(x: Expr & { e: 'call' }): Val {
     const line = x.line;
 
-    /* System.out.* — matched on the shape `System.out.name(...)`. */
+    /* System.out.* */
     if (x.target?.e === 'field' && x.target.name === 'out' && x.target.target.e === 'name' && x.target.target.id === 'System') {
       const args = x.args.map((a) => evaluate(a));
       if (x.name === 'println' || x.name === 'print') {
-        emit(printed(args) + (x.name === 'println' ? '\n' : ''));
-        // The printed-series chart only wants values that are actually numeric.
+        const text = printed(args);
+        emit(text + (x.name === 'println' ? '\n' : ''));
         if (args.length === 1 && isNum(args[0].t) && args[0].t !== 'char') series.push(args[0].v as number);
         return { t: 'void', v: null };
       }
       if (x.name === 'printf' || x.name === 'format') {
-        emit(format(str(args[0]), args.slice(1)));
+        const fmtStr = str(args[0]);
+        const formatted = format(fmtStr, args.slice(1));
+        emit(formatted);
         return { t: 'void', v: null };
       }
       throw new JavaError(`System.out has no method '${x.name}'`, line);
     }
 
-    /* Static helpers on a bare class name. */
-    if (x.target?.e === 'name' && !frame()?.get(x.target.id)) {
+    /* Static helpers on a class name */
+    if (x.target?.e === 'name' && !frame()?.find(x.target.id)) {
       const owner = x.target.id;
       const args = x.args.map((a) => evaluate(a));
       const st = staticCall(owner, x.name, args, line);
@@ -994,23 +1332,14 @@ export function run(src: string, entry = 'main'): RunResult {
       if (m) return invoke(m, args, line);
     }
 
-    /* Instance methods — String only, which is the whole reference surface here. */
+    /* Instance methods */
     if (x.target) {
       const recv = evaluate(x.target);
       const args = x.args.map((a) => evaluate(a));
       return instanceCall(recv, x.name, args, line);
     }
 
-    /* Bare name: a method in this file, or a conversion from `new`. */
-    if (x.name.startsWith('new ')) {
-      const type = x.name.slice(4);
-      const args = x.args.map((a) => evaluate(a));
-      if (type === 'String') return { t: 'String', v: args.length ? str(args[0]) : '' };
-      if (['Integer', 'Long', 'Short', 'Byte'].includes(type)) return { t: 'int', v: Math.trunc(asNum(args[0], line)) };
-      if (['Double', 'Float'].includes(type)) return { t: 'double', v: asNum(args[0], line) };
-      throw new JavaError(`'new ${type}' is outside the supported subset`, line);
-    }
-
+    /* Bare name: method in this file */
     const m = methods.get(x.name);
     if (!m) throw new JavaError(`Cannot find method '${x.name}'`, line);
     return invoke(m, x.args.map((a) => evaluate(a)), line);
@@ -1097,7 +1426,17 @@ export function run(src: string, entry = 'main'): RunResult {
   function instanceCall(recv: Val, name: string, args: Val[], line: number): Val {
     if (isArr(recv.t) && name === 'length') return { t: 'int', v: (recv.v as Val[]).length };
 
-    if (recv.t !== 'String') throw new JavaError(`'${recv.t}' has no method '${name}' in this subset`, line);
+    if (recv.t !== 'String') {
+      const cls = classMap.get(recv.t);
+      if (cls) {
+        const m = cls.methods.find((method) => method.name === name && method.params.length === args.length);
+        if (m) {
+          return invoke(m, args, line, recv);
+        }
+      }
+      throw new JavaError(`'${recv.t}' has no method '${name}' in this subset`, line);
+    }
+
     if (recv.v === null) throw new JavaError('NullPointerException', line);
     const s = recv.v as string;
     const n = (i: number) => asNum(args[i], line);
@@ -1138,7 +1477,6 @@ export function run(src: string, entry = 'main'): RunResult {
     throw new JavaError(`String has no method '${name}'`, line);
   }
 
-  /** The %d / %s / %.2f subset of Formatter that beginner code actually uses. */
   function format(fmt: string, args: Val[]): string {
     let i = 0;
     return fmt.replace(/%(-)?(\d+)?(?:\.(\d+))?([dsfnb%])/g, (_m, left, width, prec, kind) => {
@@ -1155,22 +1493,26 @@ export function run(src: string, entry = 'main'): RunResult {
     });
   }
 
-  function invoke(m: MethodDecl, args: Val[], line: number): Val {
-    if (stack.length > 400) throw new JavaError('StackOverflowError', line);
+  function invoke(m: MethodDecl, args: Val[], line: number, thisVal: Val | null = null): Val {
+    if (stack.length > 400) throw new JavaError('StackOverflowError: Call stack depth exceeded', line);
     if (args.length !== m.params.length) {
       throw new JavaError(`${m.name} expects ${m.params.length} argument(s), got ${args.length}`, line);
     }
 
-    const sig = `${m.name}(${m.params.map((p) => p.type).join(', ')})`;
-    const f = new Frame(sig);
+    const argList = m.params.map((p, i) => `${p.name}=${str(args[i])}`).join(', ');
+    const sig = `${m.name}(${argList})`;
+    const f = new Frame(sig, thisVal);
+    if (thisVal) {
+      f.declare('this', thisVal);
+    }
     m.params.forEach((prm, i) => f.declare(prm.name, coerce(prm.type, args[i], line)));
     stack.push(f);
-    record(m.line, `call ${m.name}`);
+    record(m.line, `call ${m.name}(${args.map(str).join(', ')})`);
 
     const flow = execBlock(m.body, f);
     const ret = flow && flow.signal === 'return' ? flow.value : { t: 'void' as const, v: null };
 
-    record(m.line, `return ${m.ret === 'void' ? '' : str(ret)}`.trim());
+    record(m.line, `return ${m.ret === 'void' ? 'void' : str(ret)}`.trim());
     stack.pop();
     return m.ret === 'void' ? { t: 'void', v: null } : coerce(m.ret, ret, line);
   }
@@ -1202,37 +1544,51 @@ export function run(src: string, entry = 'main'): RunResult {
           const value = d.init ? coerce(type, evaluate(d.init), st.line) : defaultOf(type);
           f.declare(d.name, value);
         }
-        record(st.line, `${st.decls.map((d) => d.name).join(', ')} = ${st.decls.map((d) => str(f.get(d.name)!)).join(', ')}`);
+        const note = st.decls.map((d) => `${d.name} = ${str(f.get(d.name)!)}`).join(', ');
+        record(st.line, note);
         return null;
       }
 
       case 'expr': {
-        evaluate(st.x);
-        record(st.line, describe(st.x));
+        const prevOutLen = out.length;
+        const res = evaluate(st.x);
+        if (out.length > prevOutLen) {
+          const latest = out[out.length - 1] ?? '';
+          record(st.line, `print: "${latest.slice(0, 48)}"`);
+        } else if (st.x.e === 'assign') {
+          const targetStr = exprToString(st.x.target);
+          record(st.line, `${targetStr} = ${str(res)}`);
+        } else {
+          record(st.line, describe(st.x));
+        }
         return null;
       }
 
       case 'block': return execBlock(st.body, f);
 
       case 'if': {
-        record(st.line, 'if');
-        if (truthy(evaluate(st.c), st.line)) return exec(st.then, f);
+        const cStr = exprToString(st.c);
+        const cVal = truthy(evaluate(st.c), st.line);
+        record(st.line, `if (${cStr}) -> ${cVal ? 'true' : 'false'}`);
+        if (cVal) return exec(st.then, f);
         return st.else ? exec(st.else, f) : null;
       }
 
       case 'while': {
+        const cStr = exprToString(st.c);
         while (truthy(evaluate(st.c), st.line)) {
-          record(st.line, 'while');
+          record(st.line, `while (${cStr}): true`);
           const flow = exec(st.body, f);
           if (flow === BREAK) break;
           if (flow && flow !== CONTINUE) return flow;
         }
+        record(st.line, `while (${cStr}): false (exit loop)`);
         return null;
       }
 
       case 'do': {
         do {
-          record(st.line, 'do');
+          record(st.line, 'do loop body iteration');
           const flow = exec(st.body, f);
           if (flow === BREAK) break;
           if (flow && flow !== CONTINUE) return flow;
@@ -1245,7 +1601,8 @@ export function run(src: string, entry = 'main'): RunResult {
         try {
           if (st.init) exec(st.init, f);
           while (st.c === null || truthy(evaluate(st.c), st.line)) {
-            record(st.line, 'for');
+            const condStr = st.c ? exprToString(st.c) : 'true';
+            record(st.line, `for condition (${condStr})`);
             const flow = exec(st.body, f);
             if (flow === BREAK) break;
             if (flow && flow !== CONTINUE) return flow;
@@ -1268,7 +1625,7 @@ export function run(src: string, entry = 'main'): RunResult {
           f.declare(st.name, defaultOf(st.type));
           for (const item of items) {
             f.find(st.name)!.set(st.name, coerce(st.type, item, st.line));
-            record(st.line, `${st.name} = ${str(item)}`);
+            record(st.line, `for-each: ${st.name} = ${str(item)}`);
             const flow = exec(st.body, f);
             if (flow === BREAK) break;
             if (flow && flow !== CONTINUE) return flow;
@@ -1281,7 +1638,7 @@ export function run(src: string, entry = 'main'): RunResult {
 
       case 'return': {
         const value = st.x ? evaluate(st.x) : { t: 'void' as const, v: null };
-        record(st.line, `return ${st.x ? str(value) : ''}`.trim());
+        record(st.line, `return ${st.x ? str(value) : 'void'}`);
         return { signal: 'return', value };
       }
 
@@ -1298,16 +1655,22 @@ export function run(src: string, entry = 'main'): RunResult {
     return { t: type, v: null };
   }
 
-  /** A short human label for the timeline, e.g. `total = total + i`. */
   function describe(x: Expr): string {
-    if (x.e === 'assign' && x.target.e === 'name') return `${x.target.id} ${x.op} …`;
-    if (x.e === 'post' && x.x.e === 'name') return `${x.x.id}${x.op}`;
-    if (x.e === 'pre' && x.x.e === 'name') return `${x.op}${x.x.id}`;
-    if (x.e === 'call') return `${x.name}()`;
-    return '';
+    if (x.e === 'assign') {
+      const targetStr = exprToString(x.target);
+      return `${targetStr} = …`;
+    }
+    if (x.e === 'post' || x.e === 'pre') return exprToString(x);
+    if (x.e === 'call') {
+      const targetStr = x.target ? `${exprToString(x.target)}.` : '';
+      return `${targetStr}${x.name}(…)`;
+    }
+    if (x.e === 'newobj') return `new ${x.className}(…)`;
+    if (x.e === 'newarr') return `new ${x.type}`;
+    return exprToString(x);
   }
 
-  /* -------------------------------------------------- go */
+  /* -------------------------------------------------- execution entry */
 
   const main = methods.get(entry) ?? methods.get('main');
   if (!main) {
@@ -1329,9 +1692,6 @@ export function run(src: string, entry = 'main'): RunResult {
     stack.push(f);
     record(main.line, `call ${main.name}`);
 
-    // Deliberately not execBlock(): that pops the body scope on the way out,
-    // and the call-stack panel is meant to show what main was holding at the
-    // moment it returned. So run the body here and snapshot before unwinding.
     f.push();
     for (const st of main.body) if (exec(st, f)) break;
     finalFrames = framesOf();
@@ -1344,10 +1704,10 @@ export function run(src: string, entry = 'main'): RunResult {
     error = { message: je.message, line: je.line };
     finalFrames = framesOf();
     finalHeap = heapOf();
-    record(je.line, 'threw');
+    record(je.line, `threw: ${je.message}`);
   }
 
-  flush();   // a trailing print() with no newline still belongs on screen
+  flush();
 
   return {
     out,
@@ -1367,11 +1727,6 @@ export function run(src: string, entry = 'main'): RunResult {
 
 export type Piece = { text: string; cls: 'kw' | 'str' | 'num' | 'com' | 'typ' | 'fn' | 'pun' | 'txt' };
 
-/**
- * Re-lexes for colour. Comments and whitespace are not tokens, so this walks the
- * source and fills the gaps between token spans — that way the output always
- * reconstructs the input exactly, and a lexer error still renders as plain text.
- */
 export function highlight(src: string): Piece[] {
   let toks: Tok[];
   try { toks = lex(src); } catch { return [{ text: src, cls: 'txt' }]; }
@@ -1382,7 +1737,6 @@ export function highlight(src: string): Piece[] {
   const gap = (upto: number) => {
     if (upto <= at) return;
     const text = src.slice(at, upto);
-    // Whitespace between tokens may hide a comment; colour it as one if so.
     for (const part of text.split(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g)) {
       if (!part) continue;
       out.push({ text: part, cls: part.startsWith('//') || part.startsWith('/*') ? 'com' : 'txt' });
@@ -1401,7 +1755,7 @@ export function highlight(src: string): Piece[] {
       : t.k === 'num' ? 'num'
       : t.k === 'op' ? 'pun'
       : next === '(' ? 'fn'
-      : /^[A-Z]/.test(t.v) ? 'typ'
+      : /^[A-Za-z_$]/.test(t.v) && (toks[i - 1]?.v === 'class' || /^[A-Z]/.test(t.v)) ? 'typ'
       : 'txt';
     out.push({ text: raw, cls });
     at = t.to;
@@ -1412,12 +1766,6 @@ export function highlight(src: string): Piece[] {
 
 /* ==================================================== 5. Self-check */
 
-/**
- * One runnable check covering the paths that would silently give wrong answers:
- * integer division, string building, arrays, loops with break, recursion, and
- * the two error cases the UI has to render. Call from a scratch file:
- *   node -e "require('./lib/java').demo()"
- */
 export function demo() {
   const ok = (label: string, got: unknown, want: unknown) => {
     const g = JSON.stringify(got);
@@ -1448,6 +1796,13 @@ export function demo() {
   ok('recursion',
     run('class Main { static int fib(int n) { if (n < 2) return n; return fib(n-1) + fib(n-2); } public static void main(String[] a) { System.out.println(fib(10)); } }').out,
     ['55']);
+
+  ok('2D array matrices',
+    run(src('int[][] m = new int[2][2]; m[0][1] = 99; System.out.println(m[0][1]);')).out, ['99']);
+
+  ok('user classes and instantiation',
+    run('class Main { static class Node { int val; Node next; Node(int v) { this.val = v; } } public static void main(String[] args) { Node n = new Node(42); System.out.println(n.val); } }').out,
+    ['42']);
 
   ok('printf', run(src('System.out.printf("%.2f%n", 3.14159);')).out, ['3.14']);
   ok('print does not end the line', run(src('System.out.print("a"); System.out.print("b"); System.out.println("c");')).out, ['abc']);
