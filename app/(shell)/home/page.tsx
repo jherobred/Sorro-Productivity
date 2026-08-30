@@ -323,9 +323,9 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 7, marginTop: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 'auto', width: '100%' }}>
                     <button onClick={() => router.push('/calendar/')} className="acc k-squish"
-                      style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                      style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>
                       Open schedule
                     </button>
                     <button
@@ -335,7 +335,7 @@ export default function HomePage() {
                         toast(`Reminder for “${upNext.title}” pushed 10 minutes`);
                       }}
                       className="hov k-squish"
-                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>
                       Snooze 10m
                     </button>
                   </div>
