@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePrefs } from '@/lib/prefs';
+import { useLayout } from '@/lib/useLayout';
 import { barParts } from '@/lib/asciiBar';
 
 /**
@@ -27,7 +28,7 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export function AsciiBar({
   value,
-  cells = 24,
+  cells: wanted = 24,
   hue,
   label,
   showValue = true,
@@ -48,7 +49,16 @@ export function AsciiBar({
   size?: number;
 }) {
   const { prefs } = usePrefs();
+  const { phone } = useLayout();
   const target = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+
+  /**
+   * A bar is a fixed number of mono characters, so it cannot reflow — past
+   * about 24 cells it simply runs off a 390px phone. Capping here rather than
+   * at each call site means a caller picking a width for a desktop card does
+   * not also have to remember the phone.
+   */
+  const cells = phone ? Math.min(wanted, 24) : wanted;
 
   // Current displayed percentage held in a ref so concurrent frames, rapid
   // updates, and uncommitted re-renders never lose the true instantaneous position.

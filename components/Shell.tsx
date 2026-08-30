@@ -51,7 +51,6 @@ import { DayColumn } from './shell/DayColumn';
 import { HubBoard } from './shell/HubBoard';
 import { ContextPane } from './shell/ContextPane';
 import { ShellDock } from './shell/ShellDock';
-import { SectionChips } from './shell/SectionChips';
 import { useSidePanelWidth } from '@/lib/sidePanel';
 
 
@@ -1046,17 +1045,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
               }}>{k.n}</button>
             ))}
           </div>
-        )}
-
-        {/* L4 gave its left 320px to the day and never gets it back, so the
-            sections run along the top of the right pane instead. */}
-        {layout === 'L4' && (
-          <SectionChips
-            sections={SECTIONS.filter((x) => BUILT.has(x.id)).map((x) => ({
-              id: x.id, name: x.name, ic: x.ic, hue: SECHUE[x.id] || acc,
-              badge: x.id === 'tasks' && taskCount > 0 ? String(taskCount) : undefined,
-            }))}
-            active={section} go={go} onMore={() => go('more')} />
         )}
 
         {/* Full width, matching the reference screenshots */}

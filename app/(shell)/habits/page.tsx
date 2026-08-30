@@ -25,6 +25,7 @@ import { HabitCreatorModal } from '@/components/habits/HabitCreatorModal';
 import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
 import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
 import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';
+import { HabitStats } from '@/components/habits/HabitStats';
 import { AsciiBar } from '@/components/AsciiBar';
 
 type ViewMode = 'week' | 'day' | 'year' | 'analytics';
@@ -86,7 +87,32 @@ export default function HabitsPage() {
   const challengeHabits = filteredHabits.filter((h) => h.challenge_id);
 
   return (
-    <div style={{ padding: phone ? '14px 14px 28px' : '20px 24px 36px', maxWidth: 1240, marginInline: 'auto' }}>
+    <div style={{
+      padding: phone ? '14px 14px 28px' : '20px 24px 36px', maxWidth: 1480, marginInline: 'auto',
+      display: 'flex', flexDirection: phone ? 'column' : 'row', gap: phone ? 16 : 20,
+      alignItems: 'flex-start',
+    }}>
+      {/* The column stays put while the habits scroll past it, which is the
+          point of putting it there: the run you are on is context for what you
+          are looking at, not a thing to scroll back up for. */}
+      <div className={phone ? 'navsb' : undefined} style={{
+        position: phone ? 'static' : 'sticky', top: 0, alignSelf: 'flex-start',
+        width: phone ? '100%' : undefined,
+        display: 'flex', minHeight: 0,
+        // On a phone the whole column ahead of the habits is a screen and a
+        // half of scrolling before the first thing you came here to tick, so
+        // it gets a ceiling and scrolls inside it — the same shape L4's day
+        // strip takes at this width.
+        maxHeight: phone ? 320 : 'calc(100dvh - 120px)',
+        overflowY: phone ? 'auto' : 'visible',
+      }}>
+        <HabitStats habits={habits} ticks={ticks} phone={phone} />
+      </div>
+
+      {/* width:100% matters on a phone: the row becomes a column there, so
+          `flex: 1` sizes the height and the width falls back to the content's,
+          which ran 97px past the screen. */}
+      <div style={{ flex: 1, minWidth: 0, width: '100%' }}>
       {/* Hero Gamification & Buddy Banner */}
       <div
         style={{
@@ -207,7 +233,10 @@ export default function HabitsPage() {
             <span>Rank Progress: Level {gamification.level}</span>
             <span>{gamification.currentLevelXp} / 250 XP to Level {gamification.level + 1}</span>
           </div>
-          <AsciiBar value={gamification.levelProgress} cells={40} hue="var(--accTx)" showValue={false}
+          {/* 40 mono cells is ~290px before the row's padding, which a 390px
+              phone cannot hold. The bar has a fixed character count, so the
+              count is what has to change. */}
+          <AsciiBar value={gamification.levelProgress} cells={phone ? 22 : 40} hue="var(--accTx)" showValue={false}
             label={`Level ${gamification.level}, ${gamification.currentLevelXp} of 250 XP`} />
         </div>
       </div>
@@ -574,6 +603,7 @@ export default function HabitsPage() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }
