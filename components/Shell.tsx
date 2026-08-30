@@ -523,60 +523,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {sidebarMode === 'open' ? (
-            /* Open Mode Action Bar */
-            <div style={{ position: 'relative', padding: '0 12px 12px', minWidth: 236 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <button onClick={() => setSheet('note')} className="acc k-squish" style={{
-                  display: 'flex', alignItems: 'center', gap: 7, flex: '1 1 auto', height: 34, padding: '0 13px',
-                  borderRadius: 9, background: acc, color: ON_ACCENT, fontSize: 12.5, fontWeight: 800,
-                }}>
-                  <Icon name="bookPlus" size={15} color={ON_ACCENT} />Note
-                </button>
-                <button title="New task" aria-label="New task" onClick={() => setSheet('task')} className="hov k-squish" style={SIDE_ACTION}>
-                  <Icon name="taskPlus" size={15} color="var(--tx2)" />
-                </button>
-                <button title="AI helper" aria-label="AI helper" onClick={() => toast('The AI panel is switched off in this build')}
-                  className="hov k-squish" style={SIDE_ACTION}>
-                  <Icon name="spark" size={15} color="var(--tx2)" />
-                </button>
-                <button title="More actions" aria-label="More actions" aria-haspopup="menu" className="hov k-squish" style={SIDE_ACTION}
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setMenu({
-                      x: r.left, y: r.bottom + 6, kind: 'global', label: 'Quick actions',
-                      items: [
-                        { label: viewMode === 'phone' ? 'Switch to Web View' : 'Dedicated Phone View', icon: viewMode === 'phone' ? 'monitor' : 'phone', run: () => setViewMode(viewMode === 'phone' ? 'web' : 'phone') },
-                        { label: 'New expense', icon: 'money', run: () => setSheet('money') },
-                        { label: 'Search everything', icon: 'search', run: () => setSearch(true) },
-                        { label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark', run: () => void update({ motion: !prefs.motion }) },
-                        { label: dark ? 'Light mode' : 'Dark mode', icon: 'moon', run: () => void update({ theme: dark ? 'light' : 'dark' }) },
-                        { label: 'Settings & Profile', icon: 'cog', run: () => { setSettingsTab('general'); setSettings(true); } },
-                      ],
-                    });
-                  }}>
-                  <Icon name="dots" size={15} color="var(--tx2)" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Compact Icon-Only Note Quick Action */
-            <div style={{ padding: '0 0 10px', display: 'flex', justifyContent: 'center', width: 64 }}>
-              <button
-                onClick={() => setSheet('note')}
-                title="New note"
-                aria-label="New note"
-                className="acc k-squish"
-                style={{
-                  width: 38, height: 38, borderRadius: 10, background: acc, color: ON_ACCENT,
-                  display: 'grid', placeItems: 'center', cursor: 'pointer',
-                }}
-              >
-                <Icon name="bookPlus" size={16} color={ON_ACCENT} />
-              </button>
-            </div>
-          )}
-
           {/* Section list */}
           <div className="navsb" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarMode === 'open' ? '0 8px 0 17px' : '0 10px', width: sidebarMode === 'open' ? 236 : 64 }}>
             {(layout === 'L3' && sidebarMode === 'open' ? groupedSections : SECTIONS).map((sec) => {
@@ -1118,10 +1064,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-const SIDE_ACTION: React.CSSProperties = {
-  width: 30, height: 34, flex: 'none', borderRadius: 9, border: '1px solid var(--line2)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-};
 
 function OfflinePill() {
   const [online, setOnline] = useState(true);
