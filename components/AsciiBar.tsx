@@ -134,7 +134,7 @@ export function AsciiBar({
           style={{
             color: color,
             background: prefs.motion && (filled || edge)
-              ? `linear-gradient(90deg, ${color} 0%, ${color} 30%, #FFFFFF 50%, ${color} 70%, ${color} 100%)`
+              ? `linear-gradient(90deg, ${color} 0%, ${color} 30%, color-mix(in srgb, ${color} 68%, #FFFFFF) 50%, ${color} 70%, ${color} 100%)`
               : undefined,
             fontWeight: 700,
           }}

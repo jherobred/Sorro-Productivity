@@ -1184,25 +1184,26 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
                         </div>
                       </div>
 
-                      {/* Animated Running Man Runner Track with Wind Trail */}
-                      <div style={{ position: 'relative', width: '100%', height: 22, margin: '2px 0 0', overflow: 'hidden' }}>
+                      {/* Integrated Runner Progress Bar */}
+                      <div style={{ position: 'relative', width: '100%', paddingTop: 18, marginBottom: 12 }}>
+                        {/* Animated Running Man at the leading tip of the trail */}
                         <div
                           style={{
                             position: 'absolute',
-                            left: `clamp(0px, calc(${pct}% - 14px), calc(100% - 38px))`,
+                            top: 0,
+                            left: `clamp(0px, calc(${pct}% - 14px), calc(100% - 32px))`,
                             transition: 'left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1)',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: 3,
+                            gap: 2,
                             pointerEvents: 'none',
+                            zIndex: 3,
                           }}
                         >
                           <span className="runner-wind" style={{ fontSize: 13, lineHeight: 1 }} aria-hidden="true">💨</span>
                           <span className="runner-man" style={{ fontSize: 16, lineHeight: 1 }} aria-hidden="true">🏃</span>
                         </div>
-                      </div>
 
-                      <div style={{ marginBottom: 12 }}>
                         <AsciiBar value={pct} cells={28} hue={ongoing ? PAL.mint : color} showValue={false}
                           label={ongoing ? 'Time elapsed' : 'Time until it starts'} />
                       </div>
