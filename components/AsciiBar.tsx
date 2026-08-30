@@ -108,7 +108,7 @@ export function AsciiBar({
         fontFamily: 'var(--font-mono)', fontSize: size, lineHeight: 1.1,
       }}
     >
-      <span aria-hidden style={{ whiteSpace: 'pre', letterSpacing: '-.04em', minWidth: 0, overflow: 'hidden' }}>
+      <span aria-hidden style={{ whiteSpace: 'pre', letterSpacing: '0', minWidth: 0, overflow: 'hidden' }}>
         <span style={{ color: hue || 'var(--accTx)' }}>{filled}{edge}</span>
         <span style={{ color: 'var(--line2)' }}>{rest}</span>
       </span>

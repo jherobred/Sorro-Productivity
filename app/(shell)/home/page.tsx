@@ -1112,13 +1112,30 @@ function UpNextCountdown({ startsAt, endsAt, color }: { startsAt: string; endsAt
     return () => clearInterval(t);
   }, []);
 
-  const ongoing = new Date(startsAt).getTime() <= now;
-  const target = ongoing ? new Date(endsAt).getTime() : new Date(startsAt).getTime();
+  const startMs = new Date(startsAt).getTime();
+  const endMs = new Date(endsAt).getTime();
+  const ongoing = startMs <= now && endMs > now;
+  const target = ongoing ? endMs : startMs;
   const total = Math.floor(Math.max(0, target - now) / 1000);
   const hrs = Math.floor(total / 3600);
   const mins = Math.floor((total % 3600) / 60);
   const secs = total % 60;
-  const pct = Math.max(4, Math.min(100, Math.round(((120 - Math.min(120, Math.round(total / 60))) / 120) * 100)));
+
+  // Real, accurate percentage based on actual time elapsed:
+  // If ongoing: percentage of event duration completed (0% to 100%).
+  // If upcoming: percentage of time elapsed today towards the event start.
+  let pct = 0;
+  if (ongoing) {
+    const duration = Math.max(1000, endMs - startMs);
+    const elapsed = Math.max(0, now - startMs);
+    pct = Math.min(100, Math.round((elapsed / duration) * 100));
+  } else if (startMs > now) {
+    const startOfDay = new Date(startsAt);
+    startOfDay.setHours(0, 0, 0, 0);
+    const totalWait = Math.max(1000, startMs - startOfDay.getTime());
+    const elapsedWait = Math.max(0, now - startOfDay.getTime());
+    pct = Math.min(100, Math.max(0, Math.round((elapsedWait / totalWait) * 100)));
+  }
 
   return (
     <>
