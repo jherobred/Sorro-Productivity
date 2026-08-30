@@ -346,7 +346,7 @@ function Money() {
           subscription is a payment that will happen whether you look or not. */}
       {tab === 'Plan' && (
         <>
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {goals.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No goals yet.</div>}
           {goals.map((g) => {
             const p = Math.min(100, Math.round((g.saved_centavos / Math.max(1, g.target_centavos)) * 100));

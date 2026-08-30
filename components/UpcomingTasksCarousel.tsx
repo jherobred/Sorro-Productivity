@@ -152,8 +152,9 @@ export function UpcomingTasksCarousel({
     <div
       className={className}
       style={{
-        flex: 'none',
-        width: 280,
+        flex: '1 1 260px',
+        minWidth: 0,
+        maxWidth: '100%',
         borderRadius: 16,
         padding: '16px 18px',
         background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',

@@ -284,7 +284,7 @@ export default function PeoplePage() {
           </>
         ) : list
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
           {list}
           {detail ?? <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: 20 }}>Pick someone.</div>}
         </div>

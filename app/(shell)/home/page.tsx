@@ -41,6 +41,7 @@ import { AsciiBar } from '@/components/AsciiBar';
 const AMBER = '#F5B33C';
 const CARD: React.CSSProperties = {
   background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)',
+  minWidth: 0, overflow: 'hidden',
 };
 
 /**
@@ -264,7 +265,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap', width: '100%', minWidth: 0 }}>
             {/* Up next with animated Border Trail matching event calendar color */}
             {(() => {
               const upNextColor = upNext?.color || INDIGO;
@@ -282,6 +283,7 @@ export default function HomePage() {
                   display: 'flex',
                   flexDirection: 'column',
                   zIndex: 1,
+                  minWidth: 0,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -342,7 +344,7 @@ export default function HomePage() {
 
               if (upNext) {
                 return (
-                  <div className="border-trail-wrap" style={{ flex: 'none', width: 280, display: 'flex' }}>
+                  <div className="border-trail-wrap" style={{ flex: '1 1 260px', width: '100%', minWidth: 0, display: 'flex' }}>
                     <div
                       className="border-trail-spinner"
                       style={{
@@ -355,7 +357,7 @@ export default function HomePage() {
               }
 
               return (
-                <div style={{ flex: 'none', width: 280, display: 'flex' }}>
+                <div style={{ flex: '1 1 260px', width: '100%', minWidth: 0, display: 'flex' }}>
                   {cardBody}
                 </div>
               );
@@ -363,7 +365,7 @@ export default function HomePage() {
 
             {/* The rest of today with event labels */}
             <div style={{
-              flex: 1, minWidth: 320, borderRadius: 15, padding: '16px 18px', minHeight: 180,
+              flex: '1 1 280px', minWidth: 0, borderRadius: 15, padding: '16px 18px', minHeight: 180,
               background: 'color-mix(in srgb, var(--panel) 62%, transparent)', border: '1px solid var(--line)',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>
@@ -435,7 +437,7 @@ export default function HomePage() {
             </div>
 
             {/* Upcoming Tasks Sliding Carousel (Replacing Overdue) */}
-            <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} />
+            <UpcomingTasksCarousel tasks={tasks} todayISO={todayISO} style={{ flex: '1 1 260px', width: '100%', minWidth: 0 }} />
           </div>
         </div>
       </div>
@@ -443,9 +445,9 @@ export default function HomePage() {
       <div style={{ padding: phone ? '16px 14px 26px' : '20px 24px 30px' }}>
         <Announcements phone={phone} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(3,1fr)', gap: 12, alignContent: 'start' }}>
+        <div className="home-grid">
           {/* Study Buddy Hub */}
-          <div data-tour="home-quests" style={{ gridColumn: phone ? 'span 1' : 'span 3' }}>
+          <div data-tour="home-quests" className="home-grid-span-all">
             <BuddyCompanion
               daysSince={daysSinceDone}
               streak={habits.reduce((m, h) => Math.max(m, streak(ticks, h.id)), 0)}
@@ -706,13 +708,15 @@ function Scratchpad({ phone }: { phone: boolean }) {
   };
 
   return (
-    <div style={{
-      ...CARD,
-      gridColumn: phone ? 'auto' : 'span 2',
-      background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
-      border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
-      boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
-    }}>
+    <div
+      className={phone ? undefined : 'home-grid-span-2'}
+      style={{
+        ...CARD,
+        background: 'color-mix(in srgb, #FFF9E6 10%, var(--card))',
+        border: '1px solid color-mix(in srgb, #F5B33C 32%, var(--line))',
+        boxShadow: '0 4px 20px rgba(245, 179, 60, 0.05), var(--sh)',
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--pal-amber)' }} />
