@@ -95,6 +95,7 @@ export function AsciiBar({
   }, [target, prefs.motion, cells]);
 
   const { filled, edge, rest } = barParts(shown, cells);
+  const color = hue || 'var(--accTx)';
 
   return (
     <div
@@ -104,16 +105,37 @@ export function AsciiBar({
       aria-valuemax={100}
       aria-label={label}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-        fontFamily: 'var(--font-mono)', fontSize: size, lineHeight: 1.1,
+        display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0,
+        fontFamily: 'var(--font-mono)', fontSize: size, lineHeight: 1.15,
+        verticalAlign: 'middle', userSelect: 'none',
       }}
     >
-      <span aria-hidden style={{ whiteSpace: 'pre', letterSpacing: '0', minWidth: 0, overflow: 'hidden' }}>
-        <span style={{ color: hue || 'var(--accTx)' }}>{filled}{edge}</span>
-        <span style={{ color: 'var(--line2)' }}>{rest}</span>
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-flex', alignItems: 'center', whiteSpace: 'pre',
+          letterSpacing: '0', minWidth: 0, overflow: 'hidden',
+          fontFamily: 'var(--font-mono)', fontSize: size,
+        }}
+      >
+        <span style={{ color: 'var(--tx3)', opacity: 0.7, marginRight: 1 }}>[</span>
+        <span
+          className={prefs.motion && (filled || edge) ? 'ascii-fill-shimmer' : undefined}
+          style={{
+            color: color,
+            background: prefs.motion && (filled || edge)
+              ? `linear-gradient(90deg, ${color} 0%, ${color} 30%, #FFFFFF 50%, ${color} 70%, ${color} 100%)`
+              : undefined,
+            fontWeight: 700,
+          }}
+        >
+          {filled}{edge}
+        </span>
+        <span style={{ color: 'var(--line2)', opacity: 0.55, fontWeight: 400 }}>{rest}</span>
+        <span style={{ color: 'var(--tx3)', opacity: 0.7, marginLeft: 1 }}>]</span>
       </span>
       {showValue && (
-        <span className="num" style={{ flex: 'none', color: 'var(--tx2)', fontSize: size - .5, fontWeight: 600 }}>
+        <span className="num" style={{ flex: 'none', color: 'var(--tx2)', fontSize: Math.max(9.5, size - 0.5), fontWeight: 700 }}>
           {Math.round(shown)}{suffix}
         </span>
       )}
@@ -128,4 +150,5 @@ export function AsciiBar({
 export function AsciiBarBare(props: Omit<Parameters<typeof AsciiBar>[0], 'showValue'>) {
   return <AsciiBar {...props} showValue={false} />;
 }
+
 

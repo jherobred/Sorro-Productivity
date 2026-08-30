@@ -428,8 +428,26 @@
    motion — which on Windows is a common default — so the in-app motion toggle
    did nothing and the mascots rendered frozen at 30% opacity. `.nomo` still
    covers the case where the user has actually turned motion off. */
+/* ASCII Progress Bar Shimmer & Glow (Claude Code CLI aesthetic) */
+@keyframes ascii-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.ascii-fill-shimmer {
+  background-size: 200% 100% !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  animation: ascii-shimmer 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-play-state: var(--anim, running);
+}
+.nomo .ascii-fill-shimmer {
+  animation: none !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion='on']) :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom) { animation: none !important; }
+  :root:not([data-motion='on']) :is(.mc, .mc-eyes, .mc-ears, .mc-spark, .mc-z, .mc-crown, .mc-dust circle, .mc-zoom, .ascii-fill-shimmer) { animation: none !important; }
+  :root:not([data-motion='on']) .ascii-fill-shimmer { -webkit-text-fill-color: currentColor !important; }
   :root:not([data-motion='on']) .mc.race { transform: rotate(7deg) !important; }
   :root:not([data-motion='on']) :is(.mc-dust, .mc-zoom) { opacity: .3 !important; }
   :root:not([data-motion='on']) :is(.tr-walk, .tr-fill) { transition: none !important; }
@@ -440,3 +458,4 @@
     animation-iteration-count: 1 !important;
   }
 }
+
