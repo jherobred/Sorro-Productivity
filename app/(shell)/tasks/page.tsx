@@ -13,7 +13,7 @@ import { useRegisterSidePanel } from '@/lib/sidePanel';
 import { TabRail } from '@/components/TabRail';
 import { TaskTable } from '@/components/tasks/TaskTable';
 import { useLayout } from '@/lib/useLayout';
-import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task, type List } from '@/lib/tasks';
+import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, parseTaskLinks, serializeTaskWithLinks, type Task, type List, type CustomTaskLink } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
@@ -714,58 +714,111 @@ function TaskRow({
                   )}
                 </div>
 
-                {/* Details / Notes snippet */}
-                {row.task.notes && (
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: 12,
-                      color: 'var(--tx3)',
-                      marginTop: 2,
-                      lineHeight: 1.35,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {row.task.notes}
-                  </span>
-                )}
-
-                {/* Attached Links in Task Row */}
+                {/* Details / Notes snippet & Structured Link Badges */}
                 {(() => {
-                  const urlMatch = row.task.notes?.match(/https?:\/\/[^\s]+/i);
-                  if (!urlMatch) return null;
-                  const url = urlMatch[0];
-                  let host = url;
-                  try {
-                    host = new URL(url).hostname.replace(/^www\./, '');
-                  } catch {}
+                  const p = parseTaskLinks(row.task.notes || '');
                   return (
-                    <div style={{ marginTop: 4 }}>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 7px',
-                          borderRadius: 6,
-                          background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
-                          border: '1px solid color-mix(in srgb, var(--pal-sky) 30%, transparent)',
-                          color: 'var(--pal-sky)',
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <Icon name="link" size={10} color="var(--pal-sky)" />
-                        <span>{host}</span>
-                      </a>
-                    </div>
+                    <>
+                      {p.cleanNotes && (
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: 12,
+                            color: 'var(--tx3)',
+                            marginTop: 2,
+                            lineHeight: 1.35,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {p.cleanNotes}
+                        </span>
+                      )}
+
+                      {(p.submissionLink || p.googleDocsLink || p.customLinks.length > 0) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+                          {p.submissionLink && (
+                            <a
+                              href={p.submissionLink.startsWith('http') ? p.submissionLink : `https://${p.submissionLink}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Submission: ${p.submissionLink}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 7px',
+                                borderRadius: 6,
+                                background: 'color-mix(in srgb, var(--pal-coral) 14%, var(--card2))',
+                                border: '1px solid color-mix(in srgb, var(--pal-coral) 35%, transparent)',
+                                color: 'var(--pal-coral)',
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                              }}
+                            >
+                              <Icon name="send" size={10} color="var(--pal-coral)" />
+                              <span>Submission</span>
+                            </a>
+                          )}
+
+                          {p.googleDocsLink && (
+                            <a
+                              href={p.googleDocsLink.startsWith('http') ? p.googleDocsLink : `https://${p.googleDocsLink}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Google Docs: ${p.googleDocsLink}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 7px',
+                                borderRadius: 6,
+                                background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
+                                border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
+                                color: 'var(--pal-sky)',
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                              }}
+                            >
+                              <Icon name="book" size={10} color="var(--pal-sky)" />
+                              <span>Google Docs</span>
+                            </a>
+                          )}
+
+                          {p.customLinks.map((cl, i) => (
+                            <a
+                              key={cl.id || i}
+                              href={cl.url.startsWith('http') ? cl.url : `https://${cl.url}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`${cl.label}: ${cl.url}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 7px',
+                                borderRadius: 6,
+                                background: 'color-mix(in srgb, var(--pal-mint) 14%, var(--card2))',
+                                border: '1px solid color-mix(in srgb, var(--pal-mint) 35%, transparent)',
+                                color: 'var(--pal-mint)',
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                              }}
+                            >
+                              <Icon name="link" size={10} color="var(--pal-mint)" />
+                              <span>{cl.label || 'Link'}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
 
@@ -989,50 +1042,58 @@ function TaskEditSidepanel({
   const pushes = prefs.shellLayout === 'L5' && !phone;
   useRegisterSidePanel(pushes ? 440 : 0);
 
+  const initialParsed = parseTaskLinks(task.notes ?? '');
   const [title, setTitle] = useState(task.title);
-  const [notes, setNotes] = useState(task.notes ?? '');
-  const [newLinkUrl, setNewLinkUrl] = useState('');
-  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [cleanNotes, setCleanNotes] = useState(initialParsed.cleanNotes);
+  const [submissionLink, setSubmissionLink] = useState(initialParsed.submissionLink);
+  const [googleDocsLink, setGoogleDocsLink] = useState(initialParsed.googleDocsLink);
+  const [customLinks, setCustomLinks] = useState<CustomTaskLink[]>(initialParsed.customLinks);
+
   const prevTaskIdRef = useRef(task.id);
   const titleRef = useRef(title);
-  const notesRef = useRef(notes);
+  const cleanNotesRef = useRef(cleanNotes);
+  const submissionLinkRef = useRef(submissionLink);
+  const googleDocsLinkRef = useRef(googleDocsLink);
+  const customLinksRef = useRef(customLinks);
+
   titleRef.current = title;
-  notesRef.current = notes;
+  cleanNotesRef.current = cleanNotes;
+  submissionLinkRef.current = submissionLink;
+  googleDocsLinkRef.current = googleDocsLink;
+  customLinksRef.current = customLinks;
 
   const stars = task.stars || 0;
   const alert = getTaskAlert(task);
   const countdown = formatTaskCountdown(task, nowMs);
 
-  const handleAddLink = useCallback(() => {
-    if (!newLinkUrl.trim()) return;
-    const url = newLinkUrl.trim();
-    const nextNotes = notes ? `${notes}\n\n🔗 ${url}` : `🔗 ${url}`;
-    setNotes(nextNotes);
-    onPatch({ notes: nextNotes });
-    setNewLinkUrl('');
-    setShowLinkInput(false);
-    toast('Link attached to task 🔗');
-  }, [newLinkUrl, notes, onPatch]);
-
   // Sync only when opening a different task
   useEffect(() => {
     if (prevTaskIdRef.current !== task.id) {
       prevTaskIdRef.current = task.id;
+      const p = parseTaskLinks(task.notes ?? '');
       setTitle(task.title);
-      setNotes(task.notes ?? '');
+      setCleanNotes(p.cleanNotes);
+      setSubmissionLink(p.submissionLink);
+      setGoogleDocsLink(p.googleDocsLink);
+      setCustomLinks(p.customLinks);
     }
   }, [task.id, task.title, task.notes]);
 
   const patchWithLatest = useCallback((extraPatch: Partial<Task> = {}) => {
     const currentTitle = titleRef.current.trim();
-    const currentNotes = notesRef.current;
+    const finalNotes = serializeTaskWithLinks(
+      cleanNotesRef.current,
+      submissionLinkRef.current,
+      googleDocsLinkRef.current,
+      customLinksRef.current
+    );
     const combined: Partial<Task> = { ...extraPatch };
 
     if (currentTitle && currentTitle !== task.title) {
       combined.title = currentTitle;
     }
-    if (currentNotes !== (task.notes ?? '')) {
-      combined.notes = currentNotes;
+    if (finalNotes !== (task.notes ?? '')) {
+      combined.notes = finalNotes;
     }
 
     if (Object.keys(combined).length > 0) {
@@ -1040,21 +1101,27 @@ function TaskEditSidepanel({
     }
   }, [task.title, task.notes, onPatch]);
 
-  // Debounced auto-save for title and notes
+  // Debounced auto-save for title, notes, and links
   useEffect(() => {
     const timer = setTimeout(() => {
       const trimmed = title.trim();
+      const finalNotes = serializeTaskWithLinks(
+        cleanNotes,
+        submissionLink,
+        googleDocsLink,
+        customLinks
+      );
       const needsTitleUpdate = trimmed && trimmed !== task.title;
-      const needsNotesUpdate = notes !== (task.notes ?? '');
+      const needsNotesUpdate = finalNotes !== (task.notes ?? '');
       if (needsTitleUpdate || needsNotesUpdate) {
         onPatch({
           ...(needsTitleUpdate ? { title: trimmed } : {}),
-          ...(needsNotesUpdate ? { notes } : {}),
+          ...(needsNotesUpdate ? { notes: finalNotes } : {}),
         });
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [title, notes, task.title, task.notes, onPatch]);
+  }, [title, cleanNotes, submissionLink, googleDocsLink, customLinks, task.title, task.notes, onPatch]);
 
   const handleClose = useCallback(() => {
     patchWithLatest();
@@ -1281,11 +1348,11 @@ function TaskEditSidepanel({
         <div style={{ marginBottom: 18 }}>
           <div style={KICKER}>Notes / Description</div>
           <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            value={cleanNotes}
+            onChange={(e) => setCleanNotes(e.target.value)}
             onBlur={() => patchWithLatest()}
-            rows={4}
-            placeholder="Add details, links, or notes…"
+            rows={3}
+            placeholder="Add details, instructions, or notes…"
             style={{
               width: '100%',
               marginTop: 6,
@@ -1305,49 +1372,60 @@ function TaskEditSidepanel({
 
         {/* Links Section */}
         <div style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <div style={KICKER}>Attached Links</div>
-            {!showLinkInput && (
-              <button
-                type="button"
-                onClick={() => setShowLinkInput(true)}
-                className="k-squish"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--pal-sky)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                <Icon name="plus" size={11} color="var(--pal-sky)" />
-                <span>Add a Link</span>
-              </button>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={KICKER}>Task Links & Submissions</div>
+            <button
+              type="button"
+              onClick={() => setCustomLinks([...customLinks, { id: crypto.randomUUID(), label: 'Link', url: '' }])}
+              className="k-squish"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: 'none',
+                border: 'none',
+                color: 'var(--pal-sky)',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="plus" size={11} color="var(--pal-sky)" />
+              <span>Add Another Link</span>
+            </button>
           </div>
 
-          {showLinkInput && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* 1. Submission Link */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 124,
+                  flex: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.06em',
+                  color: submissionLink ? 'var(--pal-coral)' : 'var(--tx3)',
+                }}
+              >
+                <Icon name="send" size={13} color={submissionLink ? 'var(--pal-coral)' : 'var(--tx3)'} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Submission</span>
+              </div>
               <input
                 type="url"
-                value={newLinkUrl}
-                onChange={(e) => setNewLinkUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddLink();
-                  }
-                }}
-                placeholder="https://example.com"
-                autoFocus
+                value={submissionLink}
+                onChange={(e) => setSubmissionLink(e.target.value)}
+                onBlur={() => patchWithLatest()}
+                placeholder="Canvas, Turnitin, or portal link"
                 style={{
                   flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: 8,
+                  minWidth: 0,
+                  padding: '9px 12px',
+                  borderRadius: 9,
                   border: '1px solid var(--line2)',
                   background: 'var(--card2)',
                   color: 'var(--tx)',
@@ -1355,133 +1433,192 @@ function TaskEditSidepanel({
                   outline: 'none',
                 }}
               />
-              <button
-                type="button"
-                onClick={handleAddLink}
-                className="k-squish"
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  background: 'var(--pal-sky)',
-                  color: '#0A0912',
-                  fontSize: 11.5,
-                  fontWeight: 800,
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Attach
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLinkInput(false);
-                  setNewLinkUrl('');
-                }}
-                className="k-squish"
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 8,
-                  background: 'var(--card2)',
-                  border: '1px solid var(--line2)',
-                  color: 'var(--tx3)',
-                  fontSize: 11.5,
-                  cursor: 'pointer',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {/* Extracted Links */}
-          {(() => {
-            const urls = notes.match(/https?:\/\/[^\s]+/gi) || [];
-            if (urls.length === 0 && !showLinkInput) {
-              return (
-                <button
-                  type="button"
-                  onClick={() => setShowLinkInput(true)}
+              {submissionLink && (
+                <a
+                  href={submissionLink.startsWith('http') ? submissionLink : `https://${submissionLink}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hov k-squish"
+                  title="Open Submission Link"
                   style={{
-                    width: '100%',
-                    padding: '8px 12px',
+                    width: 32,
+                    height: 32,
                     borderRadius: 8,
-                    border: '1px dashed var(--line2)',
-                    background: 'transparent',
-                    color: 'var(--tx3)',
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    cursor: 'pointer',
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    flex: 'none',
+                    color: 'var(--pal-coral)',
+                    textDecoration: 'none',
                   }}
                 >
-                  <Icon name="link" size={12} color="var(--tx3)" />
-                  <span>Add a Link</span>
-                </button>
-              );
-            }
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {urls.map((url, i) => {
-                  let host = url;
-                  try {
-                    host = new URL(url).hostname.replace(/^www\./, '');
-                  } catch {}
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        background: 'var(--card2)',
-                        border: '1px solid var(--line2)',
-                      }}
-                    >
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          color: 'var(--pal-sky)',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          textDecoration: 'none',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <Icon name="link" size={12} color="var(--pal-sky)" />
-                        <span>{host}</span>
-                      </a>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          color: 'var(--tx3)',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Open ↗
-                      </a>
-                    </div>
-                  );
-                })}
+                  <Icon name="link" size={13} color="var(--pal-coral)" />
+                </a>
+              )}
+            </div>
+
+            {/* 2. Google Docs Link */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 124,
+                  flex: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.06em',
+                  color: googleDocsLink ? 'var(--pal-sky)' : 'var(--tx3)',
+                }}
+              >
+                <Icon name="book" size={13} color={googleDocsLink ? 'var(--pal-sky)' : 'var(--tx3)'} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Google Docs</span>
               </div>
-            );
-          })()}
+              <input
+                type="url"
+                value={googleDocsLink}
+                onChange={(e) => setGoogleDocsLink(e.target.value)}
+                onBlur={() => patchWithLatest()}
+                placeholder="docs.google.com/… or Drive link"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: '9px 12px',
+                  borderRadius: 9,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                }}
+              />
+              {googleDocsLink && (
+                <a
+                  href={googleDocsLink.startsWith('http') ? googleDocsLink : `https://${googleDocsLink}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hov k-squish"
+                  title="Open Google Docs Link"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    flex: 'none',
+                    color: 'var(--pal-sky)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <Icon name="link" size={13} color="var(--pal-sky)" />
+                </a>
+              )}
+            </div>
+
+            {/* 3. Multiple Custom Links */}
+            {customLinks.map((cl, idx) => (
+              <div key={cl.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  value={cl.label}
+                  onChange={(e) => {
+                    const next = [...customLinks];
+                    next[idx] = { ...next[idx], label: e.target.value };
+                    setCustomLinks(next);
+                  }}
+                  onBlur={() => patchWithLatest()}
+                  placeholder="Label"
+                  style={{
+                    width: 124,
+                    flex: 'none',
+                    padding: '9px 10px',
+                    borderRadius: 9,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    color: 'var(--tx)',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.06em',
+                    outline: 'none',
+                  }}
+                />
+                <input
+                  type="url"
+                  value={cl.url}
+                  onChange={(e) => {
+                    const next = [...customLinks];
+                    next[idx] = { ...next[idx], url: e.target.value };
+                    setCustomLinks(next);
+                  }}
+                  onBlur={() => patchWithLatest()}
+                  placeholder="https://…"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: '9px 12px',
+                    borderRadius: 9,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    color: 'var(--tx)',
+                    fontSize: 12,
+                    outline: 'none',
+                  }}
+                />
+                {cl.url && (
+                  <a
+                    href={cl.url.startsWith('http') ? cl.url : `https://${cl.url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hov k-squish"
+                    title={`Open ${cl.label || 'Link'}`}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      border: '1px solid var(--line2)',
+                      background: 'var(--card2)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      flex: 'none',
+                      color: 'var(--pal-mint)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Icon name="link" size={13} color="var(--pal-mint)" />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = customLinks.filter((_, i) => i !== idx);
+                    setCustomLinks(next);
+                    patchWithLatest();
+                  }}
+                  className="hov k-squish"
+                  title="Remove link"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card2)',
+                    color: 'var(--tx3)',
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                    flex: 'none',
+                  }}
+                >
+                  <Icon name="close" size={13} color="var(--tx3)" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Due Date & Time */}

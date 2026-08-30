@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { PAL } from '@/lib/pal';
-import type { List, NewTask } from '@/lib/tasks';
+import type { List, NewTask, CustomTaskLink } from '@/lib/tasks';
+import { serializeTaskWithLinks } from '@/lib/tasks';
 import { TextLoop } from '@/components/core/text-loop';
 
 /**
@@ -59,8 +60,10 @@ export function TaskComposer({
   const [time, setTime] = useState('');
   const [priority, setPriority] = useState<'low' | 'med' | 'high' | null>(null);
   const [stars, setStars] = useState(0);
-  const [linkUrl, setLinkUrl] = useState('');
-  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [submissionLink, setSubmissionLink] = useState('');
+  const [googleDocsLink, setGoogleDocsLink] = useState('');
+  const [customLinks, setCustomLinks] = useState<CustomTaskLink[]>([]);
+  const [showLinksSection, setShowLinksSection] = useState(false);
   const [listId, setListId] = useState<string | null>(defaultListId);
   const box = useRef<HTMLDivElement>(null);
 
@@ -72,16 +75,16 @@ export function TaskComposer({
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (box.current?.contains(e.target as Node)) return;
-      if (!title.trim() && !notes.trim() && !linkUrl.trim()) setOpen(false);
+      if (!title.trim() && !notes.trim() && !submissionLink.trim() && !googleDocsLink.trim() && customLinks.length === 0) setOpen(false);
     };
     window.addEventListener('pointerdown', onDown);
     return () => window.removeEventListener('pointerdown', onDown);
-  }, [open, title, notes, linkUrl]);
+  }, [open, title, notes, submissionLink, googleDocsLink, customLinks]);
 
   const reset = () => {
     setTitle(''); setNotes(''); setDue(null); setTime('');
     setPriority(null); setStars(0); setListId(defaultListId);
-    setLinkUrl(''); setShowLinkInput(false);
+    setSubmissionLink(''); setGoogleDocsLink(''); setCustomLinks([]); setShowLinksSection(false);
   };
 
   const submit = () => {
@@ -94,11 +97,7 @@ export function TaskComposer({
         due_at = d.toISOString();
       }
     }
-    let finalNotes = notes.trim();
-    if (linkUrl.trim()) {
-      const url = linkUrl.trim();
-      finalNotes = finalNotes ? `${finalNotes}\n\n🔗 ${url}` : `🔗 ${url}`;
-    }
+    const finalNotes = serializeTaskWithLinks(notes, submissionLink, googleDocsLink, customLinks);
     onCreate({
       id: crypto.randomUUID(),
       title: t,
@@ -258,7 +257,7 @@ export function TaskComposer({
         )}
       </div>
 
-      {(due || time || priority || linkUrl || (listId && listId !== defaultListId)) && (
+      {(due || time || priority || submissionLink || googleDocsLink || customLinks.length > 0 || (listId && listId !== defaultListId)) && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, paddingLeft: 26 }}>
           {(due || time) && (
             <Chip on onClick={() => { setDue(null); setTime(''); }}>
@@ -272,12 +271,27 @@ export function TaskComposer({
               <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
             </Chip>
           )}
-          {linkUrl && (
-            <Chip on onClick={() => setLinkUrl('')} tint="var(--pal-sky)">
-              🔗 {linkUrl.replace(/^https?:\/\//, '').slice(0, 22)}
+          {submissionLink && (
+            <Chip on onClick={() => setSubmissionLink('')} tint="var(--pal-coral)">
+              <Icon name="send" size={10} color="inherit" />
+              <span>Submission</span>
               <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
             </Chip>
           )}
+          {googleDocsLink && (
+            <Chip on onClick={() => setGoogleDocsLink('')} tint="var(--pal-sky)">
+              <Icon name="book" size={10} color="inherit" />
+              <span>Docs</span>
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          )}
+          {customLinks.map((cl, i) => (
+            <Chip key={cl.id || i} on onClick={() => setCustomLinks(customLinks.filter((_, idx) => idx !== i))} tint="var(--pal-mint)">
+              <Icon name="link" size={10} color="inherit" />
+              <span>{cl.label || 'Link'}</span>
+              <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="close" size={10} color="inherit" /></span>
+            </Chip>
+          ))}
           {listId && listId !== defaultListId && (
             <Chip on onClick={() => setListId(defaultListId)} tint={lists.find(l => l.id === listId)?.color}>
               {lists.find(l => l.id === listId)?.name}
@@ -307,67 +321,129 @@ export function TaskComposer({
               border: 'none', outline: 'none',
             }} />
 
-          <Row label="Link">
-            {!showLinkInput && !linkUrl ? (
-              <button
-                type="button"
-                onClick={() => setShowLinkInput(true)}
-                className="k-chip"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  minHeight: 30,
-                  padding: '0 11px',
-                  borderRadius: 999,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  border: '1px dashed var(--line2)',
-                  background: 'transparent',
-                  color: 'var(--tx2)',
-                  cursor: 'pointer',
-                }}
-              >
-                <Icon name="link" size={12} color="var(--tx3)" />
-                <span>Add a Link</span>
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {/* Submission Link */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{
+                width: 56, flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: '.07em',
+                textTransform: 'uppercase', color: submissionLink ? 'var(--pal-coral)' : 'var(--tx3)',
+              }}>
+                Submit
+              </span>
+              <input
+                type="url"
+                value={submissionLink}
+                onChange={(e) => setSubmissionLink(e.target.value)}
+                placeholder="Submission link (Canvas, Turnitin, portal…)"
+                style={{ ...FIELD, flex: 1, minWidth: 200 }}
+              />
+              {submissionLink && (
+                <button
+                  type="button"
+                  onClick={() => setSubmissionLink('')}
+                  className="k-squish"
+                  style={{
+                    width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+                    background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx3)', cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="close" size={11} color="var(--tx3)" />
+                </button>
+              )}
+            </div>
+
+            {/* Google Docs Link */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{
+                width: 56, flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: '.07em',
+                textTransform: 'uppercase', color: googleDocsLink ? 'var(--pal-sky)' : 'var(--tx3)',
+              }}>
+                GDocs
+              </span>
+              <input
+                type="url"
+                value={googleDocsLink}
+                onChange={(e) => setGoogleDocsLink(e.target.value)}
+                placeholder="Google Docs or Drive link (docs.google.com/…)"
+                style={{ ...FIELD, flex: 1, minWidth: 200 }}
+              />
+              {googleDocsLink && (
+                <button
+                  type="button"
+                  onClick={() => setGoogleDocsLink('')}
+                  className="k-squish"
+                  style={{
+                    width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+                    background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx3)', cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="close" size={11} color="var(--tx3)" />
+                </button>
+              )}
+            </div>
+
+            {/* Custom / Multiple Additional Links */}
+            {customLinks.map((cl, idx) => (
+              <div key={cl.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <input
-                  type="url"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://example.com/resource"
-                  autoFocus
+                  value={cl.label}
+                  onChange={(e) => {
+                    const next = [...customLinks];
+                    next[idx] = { ...next[idx], label: e.target.value };
+                    setCustomLinks(next);
+                  }}
+                  placeholder="Label"
                   style={{
                     ...FIELD,
-                    flex: 1,
+                    width: 56,
+                    padding: '0 6px',
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
                   }}
+                />
+                <input
+                  type="url"
+                  value={cl.url}
+                  onChange={(e) => {
+                    const next = [...customLinks];
+                    next[idx] = { ...next[idx], url: e.target.value };
+                    setCustomLinks(next);
+                  }}
+                  placeholder="https://…"
+                  style={{ ...FIELD, flex: 1, minWidth: 200 }}
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!linkUrl) setShowLinkInput(false);
-                    else setLinkUrl('');
-                  }}
+                  onClick={() => setCustomLinks(customLinks.filter((_, i) => i !== idx))}
                   className="k-squish"
                   style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 6,
-                    display: 'grid',
-                    placeItems: 'center',
-                    background: 'var(--card2)',
-                    border: '1px solid var(--line2)',
-                    color: 'var(--tx3)',
-                    cursor: 'pointer',
+                    width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+                    background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx3)', cursor: 'pointer',
                   }}
                 >
-                  <Icon name="close" size={12} color="var(--tx3)" />
+                  <Icon name="close" size={11} color="var(--tx3)" />
                 </button>
               </div>
-            )}
-          </Row>
+            ))}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+              <span style={{ width: 56, flex: 'none' }} />
+              <button
+                type="button"
+                onClick={() => setCustomLinks([...customLinks, { id: crypto.randomUUID(), label: 'Link', url: '' }])}
+                className="k-chip"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, padding: '0 10px',
+                  borderRadius: 999, fontSize: 11, fontWeight: 700, border: '1px dashed var(--line2)',
+                  background: 'transparent', color: 'var(--pal-sky)', cursor: 'pointer',
+                }}
+              >
+                <Icon name="plus" size={11} color="var(--pal-sky)" />
+                <span>Add Another Link</span>
+              </button>
+            </div>
+          </div>
 
           <Row label="Due">
             {dueChips.map((c) => (

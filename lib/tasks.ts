@@ -143,6 +143,121 @@ export function formatTaskCountdown(task: Task, nowMs: number = Date.now()): {
   return { text: `${mm}:${ss} left`, isOverdue: false, totalMs: diffMs };
 }
 
+export type CustomTaskLink = {
+  id: string;
+  label: string;
+  url: string;
+};
+
+export type ParsedTaskLinks = {
+  submissionLink: string;
+  googleDocsLink: string;
+  customLinks: CustomTaskLink[];
+  cleanNotes: string;
+};
+
+/**
+ * Extracts Submission Link, Google Docs Link, and multiple custom links from task notes.
+ */
+export function parseTaskLinks(rawNotes: string = ''): ParsedTaskLinks {
+  let submissionLink = '';
+  let googleDocsLink = '';
+  const customLinks: CustomTaskLink[] = [];
+  const lines = (rawNotes || '').split('\n');
+  const remainingLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      remainingLines.push(line);
+      continue;
+    }
+
+    // Match Submission Link
+    const subMatch = trimmed.match(/^(?:🔗\s*|📄\s*)?Submission(?:\s*Link)?:\s*(?<url>https?:\/\/[^\s]+)/i)
+      || trimmed.match(/^\[Submission(?: Link)?\]\((?<url>https?:\/\/[^\s\)]+)\)/i);
+
+    // Match Google Docs Link
+    const docsMatch = trimmed.match(/^(?:📄\s*|🔗\s*)?Google\s*Docs?(?:\s*Link)?:\s*(?<url>https?:\/\/[^\s]+)/i)
+      || trimmed.match(/^\[Google Docs?(?: Link)?\]\((?<url>https?:\/\/[^\s\)]+)\)/i);
+
+    // Match Custom Named Link: e.g. "🔗 Figma: https://..." or "Link 1: https://..." or "[Portfolio](https://...)"
+    const customMatch = trimmed.match(/^(?:🔗\s*|📄\s*)?(?:\[(?<label>[^\]]+)\]\((?<url>https?:\/\/[^\s\)]+)\)|(?<label2>[A-Za-z0-9\s_\-]+):\s*(?<url2>https?:\/\/[^\s]+))/i);
+
+    // Match plain 🔗 url
+    const emojiMatch = trimmed.match(/^🔗\s*(?<url>https?:\/\/[^\s]+)$/i);
+
+    if (subMatch?.groups?.url) {
+      submissionLink = subMatch.groups.url;
+    } else if (docsMatch?.groups?.url) {
+      googleDocsLink = docsMatch.groups.url;
+    } else if (customMatch) {
+      const label = (customMatch.groups?.label || customMatch.groups?.label2 || '').trim();
+      const url = (customMatch.groups?.url || customMatch.groups?.url2 || '').trim();
+      if (url) {
+        if (label.toLowerCase().includes('submission')) {
+          submissionLink = url;
+        } else if (label.toLowerCase().includes('google doc') || label.toLowerCase().includes('gdoc') || url.includes('docs.google.com')) {
+          googleDocsLink = url;
+        } else {
+          customLinks.push({ id: crypto.randomUUID(), label: label || 'Link', url });
+        }
+      } else {
+        remainingLines.push(line);
+      }
+    } else if (emojiMatch?.groups?.url) {
+      const url = emojiMatch.groups.url;
+      if (url.includes('docs.google.com') && !googleDocsLink) {
+        googleDocsLink = url;
+      } else {
+        customLinks.push({ id: crypto.randomUUID(), label: 'Link', url });
+      }
+    } else {
+      remainingLines.push(line);
+    }
+  }
+
+  return {
+    submissionLink,
+    googleDocsLink,
+    customLinks,
+    cleanNotes: remainingLines.join('\n').trim(),
+  };
+}
+
+/**
+ * Serializes clean notes + Submission Link + Google Docs Link + Custom links into a stored markdown string.
+ */
+export function serializeTaskWithLinks(
+  cleanNotes: string,
+  submissionLink: string,
+  googleDocsLink: string,
+  customLinks: CustomTaskLink[]
+): string {
+  const parts: string[] = [];
+  const text = cleanNotes.trim();
+  if (text) parts.push(text);
+
+  const linkLines: string[] = [];
+  if (submissionLink.trim()) {
+    linkLines.push(`🔗 Submission Link: ${submissionLink.trim()}`);
+  }
+  if (googleDocsLink.trim()) {
+    linkLines.push(`📄 Google Docs Link: ${googleDocsLink.trim()}`);
+  }
+  for (const cl of customLinks) {
+    if (cl.url.trim()) {
+      linkLines.push(`🔗 ${cl.label.trim() || 'Link'}: ${cl.url.trim()}`);
+    }
+  }
+
+  if (linkLines.length > 0) {
+    parts.push(linkLines.join('\n'));
+  }
+
+  return parts.join('\n\n');
+}
+
 const TASKS_KEY = ['tasks'] as const;
 const LISTS_KEY = ['lists'] as const;
 

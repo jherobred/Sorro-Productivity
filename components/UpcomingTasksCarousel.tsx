@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Task } from '@/lib/tasks';
-import { useTaskActions, getTaskAlert } from '@/lib/tasks';
+import { useTaskActions, getTaskAlert, parseTaskLinks } from '@/lib/tasks';
 import { Icon } from './Icon';
 import { PAL } from '@/lib/pal';
 import { playCelebration } from '@/lib/audio';
@@ -275,7 +275,23 @@ export function UpcomingTasksCarousel({
   };
 
   const t = upcomingTasks[currentIdx] || upcomingTasks[0];
-  const links = t ? extractLinks(`${t.title || ''} ${t.notes || ''}`) : [];
+  const parsedLinks = useMemo(() => {
+    if (!t) return [];
+    const p = parseTaskLinks(t.notes || '');
+    const res: { label: string; url: string }[] = [];
+    if (p.submissionLink) res.push({ label: 'SUBMISSION', url: p.submissionLink });
+    if (p.googleDocsLink) res.push({ label: 'DOCS', url: p.googleDocsLink });
+    for (const cl of p.customLinks) {
+      if (cl.url) res.push({ label: (cl.label || 'LINK').toUpperCase().slice(0, 12), url: cl.url });
+    }
+    const otherUrls = extractLinks(p.cleanNotes);
+    for (const u of otherUrls) {
+      if (!res.some((r) => r.url === u)) {
+        res.push({ label: 'LINK', url: u });
+      }
+    }
+    return res;
+  }, [t]);
   const tags = t ? extractTags(t.title, t.notes) : [];
   const alert = t ? getTaskAlert(t) : null;
 
@@ -543,43 +559,40 @@ export function UpcomingTasksCarousel({
                   ))}
 
                   {/* Links */}
-                  {links.length > 0 && (
+                  {parsedLinks.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2, width: '100%' }}>
-                      {links.map((link, idx) => {
-                        const label = links.length === 1 ? 'LINK' : `LINK ${idx + 1}`;
-                        return (
-                          <a
-                            key={link + idx}
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            title={link}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 4,
-                              fontSize: 11.5,
-                              fontWeight: 800,
-                              padding: '4px 8px',
-                              borderRadius: 7,
-                              background: `color-mix(in srgb, ${auraTheme.color} 18%, var(--card2))`,
-                              border: `1.5px solid color-mix(in srgb, ${auraTheme.color} 40%, transparent)`,
-                              color: auraTheme.color,
-                              textDecoration: 'none',
-                              width: '100%',
-                              boxSizing: 'border-box',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            <Icon name="link" size={11} color={auraTheme.color} />
-                            <span>{label}</span>
-                          </a>
-                        );
-                      })}
+                      {parsedLinks.map((item, idx) => (
+                        <a
+                          key={item.url + idx}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title={`${item.label}: ${item.url}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            padding: '4px 8px',
+                            borderRadius: 7,
+                            background: `color-mix(in srgb, ${auraTheme.color} 18%, var(--card2))`,
+                            border: `1.5px solid color-mix(in srgb, ${auraTheme.color} 40%, transparent)`,
+                            color: auraTheme.color,
+                            textDecoration: 'none',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Icon name="link" size={11} color={auraTheme.color} />
+                          <span>{item.label}</span>
+                        </a>
+                      ))}
                     </div>
                   )}
                 </div>
