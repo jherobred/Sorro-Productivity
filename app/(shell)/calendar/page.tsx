@@ -662,7 +662,7 @@ function Grid({
    * skips them.
    */
   const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
-  const spanned = useMemo(() => new Set(spans.flatMap((s) => s.ids)), [spans]);
+  const spanned = useMemo(() => new Set(spans.filter((s) => s.days > 1).flatMap((s) => s.ids)), [spans]);
 
   const spanHit = (s: Span, clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect();
