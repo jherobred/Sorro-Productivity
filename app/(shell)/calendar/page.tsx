@@ -85,6 +85,20 @@ export default function CalendarPage() {
   const A = useEventActions(ws);
   const TA = useTaskActions();
 
+  // Only the single immediate next event (or currently ongoing event) displays the countdown timer
+  const nextEventId = useMemo(() => {
+    const nonAllDay = events.filter((e) => !e.all_day && !e.deleted_at);
+    const ongoing = nonAllDay
+      .filter((e) => new Date(e.starts_at).getTime() <= nowMs && nowMs <= new Date(e.ends_at).getTime())
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+    if (ongoing) return ongoing.id;
+
+    const upcoming = nonAllDay
+      .filter((e) => new Date(e.starts_at).getTime() > nowMs)
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+    return upcoming?.id ?? null;
+  }, [events, nowMs]);
+
   const setCalView = useCallback((v: View) => {
     setView(v);
     void update({ calView: v });
@@ -388,18 +402,18 @@ export default function CalendarPage() {
             </div>
           )}
           {!isPending && view === 'week' && (
-            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs}
+            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId}
               sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
           )}
           {!isPending && view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
-              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs}
+              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId}
                 sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
           {!isPending && view === 'month' && (
-            <Month ws={windowStart} month={ws.getMonth()} events={events} tasks={windowTasks} nowMs={nowMs}
+            <Month ws={windowStart} month={ws.getMonth()} events={events} tasks={windowTasks} nowMs={nowMs} nextEventId={nextEventId}
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The
                 // old version reused the current week and only moved the
@@ -410,13 +424,13 @@ export default function CalendarPage() {
                 setCalView('day');
               }} />
           )}
-          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nowMs={nowMs} />}
+          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nowMs={nowMs} nextEventId={nextEventId} />}
           {!isPending && view === 'countdown' && <Countdown events={events} A={A} />}
         </div>
       </div>
 
       {pop?.kind === 'event' && (
-        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nowMs={nowMs}
+        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nowMs={nowMs} nextEventId={nextEventId}
           runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
           onClose={() => setPop(null)}
           onEdit={() => { setEdit(pop.ev); setPop(null); }}
@@ -544,7 +558,7 @@ export default function CalendarPage() {
 /* ---------------------------------------------------------------- week/day */
 
 function Grid({
-  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, nowMs = Date.now(),
+  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, nowMs = Date.now(), nextEventId,
 }: {
   days: number;
   dayOffset?: number;
@@ -560,6 +574,7 @@ function Grid({
   openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean, endHour?: number, initialTab?: 'event' | 'task') => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
   nowMs?: number;
+  nextEventId?: string | null;
 }) {
   const { prefs } = usePrefs();
   const dark = prefs.theme === 'dark';
@@ -1078,6 +1093,7 @@ function Grid({
                       <EventChip key={pos.ev.id} ev={pos.ev} top={pct(pos.start)} height={Math.max((0.5 / SPAN) * 100, pct(pos.end) - pct(pos.start))}
                         left={leftStyle} width={widthStyle}
                         label={hhmm(pos.start)} lifted={isDrag || isResize} selected={sel === pos.ev.id}
+                        isNext={pos.ev.id === nextEventId}
                         onPointerDown={(p) => press(p, pos.ev, 'move')}
                         onResize={(p) => press(p, pos.ev, 'resize')}
                         dark={dark}
@@ -1122,17 +1138,17 @@ function Grid({
 }
 
 function EventChip({
-  ev, top, height, left = '3px', width = 'calc(100% - 6px)', label, lifted, selected, dark, nowMs = Date.now(), onPointerDown, onResize, onOpen,
+  ev, top, height, left = '3px', width = 'calc(100% - 6px)', label, lifted, selected, dark, isNext, nowMs = Date.now(), onPointerDown, onResize, onOpen,
 }: {
   ev: Ev; top: number; height: number; left?: string | number; width?: string | number; label: string; lifted: boolean; selected: boolean;
-  dark: boolean; nowMs?: number;
+  dark: boolean; isNext?: boolean; nowMs?: number;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
   onOpen: (e: React.MouseEvent) => void;
 }) {
   const locked = isReadOnly(ev);
   const ink = chipInk(ev, dark);
-  const cd = formatEventCountdown(ev.starts_at, ev.ends_at, nowMs);
+  const cd = isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
 
   return (
     <div
@@ -1421,19 +1437,19 @@ function DayStrip({ ws, focus, onPick, onJump }: {
 }
 
 /** Six weeks from `ws`, with the days outside `month` dimmed. */
-function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now() }: {
-  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void; nowMs?: number;
+function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEventId }: {
+  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void; nowMs?: number; nextEventId?: string | null;
 }) {
   const { prefs } = usePrefs();
 
   const byDay = useMemo(() => {
-    const m = new Map<string, { title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }[]>();
-    const push = (k: string, v: { title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }) =>
+    const m = new Map<string, { id?: string; title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }[]>();
+    const push = (k: string, v: { id?: string; title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }) =>
       m.set(k, [...(m.get(k) ?? []), v]);
-    for (const e of events) push(new Date(e.starts_at).toDateString(), { title: e.title, color: e.color, starts_at: e.starts_at, ends_at: e.ends_at });
+    for (const e of events) push(new Date(e.starts_at).toDateString(), { id: e.id, title: e.title, color: e.color, starts_at: e.starts_at, ends_at: e.ends_at });
     for (const t of tasks) {
       if (!t.due_on) continue;
-      push(new Date(`${t.due_on}T12:00:00`).toDateString(), { title: t.title, color: 'var(--acc)', task: true });
+      push(new Date(`${t.due_on}T12:00:00`).toDateString(), { id: t.id, title: t.title, color: 'var(--acc)', task: true });
     }
     return m;
   }, [events, tasks]);
@@ -1464,7 +1480,8 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now() }: {
                 {date.getDate()}
               </span>
               {items.slice(0, 3).map((it, n) => {
-                const cd = it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
+                const isNext = it.id === nextEventId;
+                const cd = isNext && it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
                 return (
                   <span key={n} style={{
                     fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
@@ -1502,7 +1519,7 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now() }: {
 }
 
 /** Agenda — one block per day, each row a colour bar, 44px time, title, location. */
-function Agenda({ ws, events, tasks, nowMs = Date.now() }: { ws: Date; events: Ev[]; tasks: Task[]; nowMs?: number }) {
+function Agenda({ ws, events, tasks, nowMs = Date.now(), nextEventId }: { ws: Date; events: Ev[]; tasks: Task[]; nowMs?: number; nextEventId?: string | null }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(ws);
     d.setDate(d.getDate() + i);
@@ -1553,7 +1570,8 @@ function Agenda({ ws, events, tasks, nowMs = Date.now() }: { ws: Date; events: E
               {d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
             </div>
             {items.map((a) => {
-              const cd = a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
+              const isNext = a.id === nextEventId;
+              const cd = isNext && a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
               return (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
                   <span style={{
@@ -1815,13 +1833,8 @@ const LABEL: React.CSSProperties = {
 
 /* ------------------------------------------------------------- the bubbles */
 
-/**
- * What Google shows when you click an event: the thing itself, then the small
- * number of actions worth having at that moment. Everything else lives behind
- * Edit, which opens the full sheet.
- */
 function EventPopover({
-  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nowMs = Date.now(),
+  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nowMs = Date.now(), nextEventId,
 }: {
   ev: Ev; x: number; y: number;
   /** How many days this event's run covers, or 0 when it stands alone. */
@@ -1830,6 +1843,7 @@ function EventPopover({
   onDelete: () => void; onDeleteRun: () => void;
   onUpdateTitle?: (title: string) => void;
   nowMs?: number;
+  nextEventId?: string | null;
 }) {
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at);
@@ -1925,8 +1939,9 @@ function EventPopover({
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
           <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Weekly on {dayName}</div>
 
-          {/* Live Countdown Badge */}
+          {/* Live Countdown Badge — only for the single next upcoming event */}
           {(() => {
+            if (ev.id !== nextEventId) return null;
             const cd = formatEventCountdown(ev.starts_at, ev.ends_at, nowMs);
             if (!cd || cd.status === 'past') return null;
             return (
