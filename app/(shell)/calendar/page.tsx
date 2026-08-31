@@ -1052,7 +1052,7 @@ function Grid({
                 {/* Events for this day, packed into non-obstructing sub-columns if overlapping */}
                 {(() => {
                   const dayColEvents = events
-                    .filter((e) => !e.all_day && !spanned.has(e.id)
+                    .filter((e) => !e.all_day
                       && (dayIndex(e.starts_at, ws) === idx || (drag?.id === e.id && drag.day === idx)))
                     .map((e) => {
                       const isDrag = drag?.id === e.id;
@@ -1114,17 +1114,6 @@ function Grid({
               </div>
             );
           })}
-
-          {/* Multi-day runs */}
-          <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-            {spans.filter((s) => s.days > 1).map((s) => (
-              <SpanChip key={s.key} span={s} days={days} dark={dark}
-                nowMs={nowMs}
-                offset={spanDrag?.key === s.key ? spanDrag : null}
-                onPointerDown={(p) => pressSpan(p, s)}
-                onOpen={(x, y) => openEvent(spanHit(s, x).ev, x, y, s)} />
-            ))}
-          </div>
         </div>
         </div>
       </div>
