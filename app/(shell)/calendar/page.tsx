@@ -471,16 +471,28 @@ export default function CalendarPage() {
             });
             setPop(null);
           }}
-          onCreate={(title) => {
-            A.addAt(pop.day, pop.hour, prefs.accent, pop.allDay, title.trim() || '(No title)', pop.endHour);
+          onCreate={(title, loc, desc, sName) => {
+            const id = crypto.randomUUID();
+            const eH = pop.allDay ? 23.98 : (pop.endHour !== undefined ? pop.endHour : pop.hour + 1);
+            A.create.mutate({
+              id,
+              title: title.trim() || (pop.allDay ? 'All-day item' : '(No title)'),
+              short_name: sName?.trim() || undefined,
+              starts_at: at(ws, pop.day, pop.allDay ? 0 : pop.hour),
+              ends_at: at(ws, pop.day, eH),
+              all_day: pop.allDay,
+              color: prefs.accent,
+            });
+            toast(pop.allDay ? 'New all-day item' : `New event: ${hhmm(pop.hour)} – ${hhmm(eH)}`);
             setPop(null);
           }}
-          onMoreOptions={(title) => {
+          onMoreOptions={(title, sName) => {
             const startIso = at(ws, pop.day, pop.allDay ? 0 : pop.hour);
             const endIso = at(ws, pop.day, pop.allDay ? 23.98 : (pop.endHour ?? pop.hour + 1));
             const draftEv: Ev = {
               id: crypto.randomUUID(),
               title: title?.trim() || '(No title)',
+              short_name: sName?.trim() || undefined,
               starts_at: startIso,
               ends_at: endIso,
               color: prefs.accent,
@@ -508,6 +520,7 @@ export default function CalendarPage() {
               A.create.mutate({
                 id: edit.id,
                 title: patch.title || '(No title)',
+                short_name: patch.short_name,
                 starts_at: patch.starts_at || edit.starts_at,
                 ends_at: patch.ends_at || edit.ends_at,
                 color: patch.color || edit.color,
@@ -1531,6 +1544,7 @@ const timeValue = (iso: string) => {
 
 function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSave: (p: Partial<Ev>) => void }) {
   const [title, setTitle] = useState(ev.title);
+  const [shortName, setShortName] = useState(ev.short_name ?? '');
   const [location, setLocation] = useState(ev.location);
   const [color, setColor] = useState(ev.color);
   const [date, setDate] = useState(dateValue(ev.starts_at));
@@ -1573,7 +1587,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
     const ends = new Date(`${date}T${allDay ? '23:59' : to}`);
     if (ends <= starts) { toast('The end time has to be after the start'); return; }
     onSave({
-      title, location, color, text_color: textColor, all_day: allDay,
+      title, short_name: shortName.trim(), location, color, text_color: textColor, all_day: allDay,
       starts_at: starts.toISOString(), ends_at: ends.toISOString(),
     });
   };
@@ -1589,7 +1603,11 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
         style={{ width: '100%', maxWidth: 460, background: 'var(--card)', borderRadius: '14px 14px 0 0', border: '1px solid var(--line2)', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em', marginBottom: 16 }}>Edit event</h2>
 
+        <span style={LABEL}>Title</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="Title" style={FIELD} />
+        <span style={LABEL}>Short Name (Optional — 1-2 words for home timeline)</span>
+        <input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="e.g. CS101, Gym, Calc" aria-label="Short Name" style={FIELD} />
+        <span style={LABEL}>Location</span>
         <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" aria-label="Location" style={FIELD} />
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, margin: '4px 0 10px', fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', minHeight: 40 }}>
@@ -1789,6 +1807,12 @@ function EventPopover({
               }}
             >
               {ev.title?.trim() || '(No title)'}
+            </div>
+          )}
+          {ev.short_name && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 7px', borderRadius: 6, background: 'color-mix(in srgb, var(--acc) 14%, var(--card2))', border: '1px solid color-mix(in srgb, var(--acc) 30%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--accTx, var(--tx))' }}>
+              <Icon name="tag" size={10} color="inherit" />
+              <span>Short name: {ev.short_name}</span>
             </div>
           )}
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
@@ -2038,12 +2062,13 @@ function QuickCreate({
   x: number; y: number; ws: Date; day: number; hour: number; endHour?: number; allDay: boolean;
   initialTab?: 'event' | 'task' | 'out_of_office' | 'working_location';
   accent: string; onClose: () => void;
-  onCreate: (title: string, loc?: string, desc?: string) => void;
+  onCreate: (title: string, loc?: string, desc?: string, shortName?: string) => void;
   onCreateTask?: (title: string, notes?: string) => void;
-  onMoreOptions?: (title: string) => void;
+  onMoreOptions?: (title: string, shortName?: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<'event' | 'task' | 'out_of_office' | 'working_location'>(initialTab);
   const [title, setTitle] = useState('');
+  const [shortName, setShortName] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const d = new Date(ws);
@@ -2057,7 +2082,7 @@ function QuickCreate({
     if (activeTab === 'task') {
       onCreateTask?.(title.trim() || '(No title)', notes);
     } else {
-      onCreate(title.trim() || '(No title)', location, notes);
+      onCreate(title.trim() || '(No title)', location, notes, shortName.trim());
     }
   };
 
@@ -2179,6 +2204,26 @@ function QuickCreate({
         </>
       ) : (
         <>
+          {/* Short Name Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <Icon name="tag" size={15} color="var(--tx3)" />
+            <input
+              value={shortName}
+              onChange={(e) => setShortName(e.target.value)}
+              placeholder="Short name (optional — 1-2 words e.g. CS101, Gym)"
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px dashed var(--line2)',
+                padding: '4px 0',
+                fontSize: 13,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
           {/* Add Guests */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <Icon name="people" size={15} color="var(--tx3)" />
@@ -2251,7 +2296,7 @@ function QuickCreate({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingTop: 4 }}>
         <button
           type="button"
-          onClick={() => onMoreOptions?.(title)}
+          onClick={() => onMoreOptions?.(title, shortName)}
           className="hov k-squish"
           style={{
             padding: '7px 12px',

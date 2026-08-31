@@ -8,7 +8,7 @@ import { supabase, currentUserId } from '@/lib/supabase';
 import { queryClient } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { useTasks } from '@/lib/tasks';
-import { useEvents, weekStart, hoursOf, hhmm, useEventActions } from '@/lib/events';
+import { useEvents, weekStart, hoursOf, hhmm, useEventActions, getEventShortName } from '@/lib/events';
 import { usePrefs } from '@/lib/prefs';
 import { UpcomingTasksCarousel } from '@/components/UpcomingTasksCarousel';
 import { FocusHub } from '@/components/FocusHub';
@@ -462,7 +462,7 @@ export default function HomePage() {
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: ev.color || PAL.sky, flex: 'none' }} />
                                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                         {ev.title}
+                                         {getEventShortName(ev)}
                                        </span>
                                      </div>
                                      <span style={{ fontSize: 10, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
@@ -576,7 +576,7 @@ export default function HomePage() {
                         }}
                       >
                         <span style={{ fontSize: 9.5, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {e.title}
+                          {getEventShortName(e)}
                         </span>
                       </div>
                     );
@@ -609,6 +609,7 @@ export default function HomePage() {
                   {todays.slice(0, 4).map((e) => (
                     <span
                       key={e.id}
+                      title={e.title}
                       onClick={() => router.push('/calendar/')}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -618,7 +619,7 @@ export default function HomePage() {
                       }}
                     >
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: e.color || PAL.sky, flex: 'none' }} />
-                      <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+                      <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getEventShortName(e)}</span>
                       <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
                     </span>
                   ))}

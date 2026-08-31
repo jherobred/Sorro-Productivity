@@ -14,7 +14,7 @@ import { useTasks, useTaskActions, type Task } from '@/lib/tasks';
 import { useHabits, useTicks, useHabitActions, ymd, streak } from '@/lib/habits';
 import { useScratch, useScratchActions, TAG_COLOR, ago } from '@/lib/scratch';
 import { useTransactions, useBudgets } from '@/lib/money';
-import { useEvents, useEventActions, type Ev, hhmm, hoursOf } from '@/lib/events';
+import { useEvents, useEventActions, type Ev, hhmm, hoursOf, getEventShortName } from '@/lib/events';
 import { PhoneHomeSkeleton } from './Skeleton';
 import { UpcomingTasksCarousel } from './UpcomingTasksCarousel';
 import { FocusHub } from './FocusHub';
@@ -515,7 +515,7 @@ export function PhoneHome({ name }: { name: string }) {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color || PAL.sky, flex: 'none' }} />
                                 <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {ev.title}
+                                  {getEventShortName(ev)}
                                 </span>
                               </div>
                               <span style={{ fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
@@ -638,7 +638,7 @@ export function PhoneHome({ name }: { name: string }) {
                 }}
               >
                 <span style={{ fontSize: 9, fontWeight: 800, color: '#0A0912', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {e.title}
+                  {getEventShortName(e)}
                 </span>
               </div>
             );
@@ -671,6 +671,7 @@ export function PhoneHome({ name }: { name: string }) {
           {todaysEvents.slice(0, 3).map((e) => (
             <span
               key={e.id}
+              title={e.title}
               onClick={() => router.push('/calendar/')}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -680,7 +681,7 @@ export function PhoneHome({ name }: { name: string }) {
               }}
             >
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: e.color || PAL.sky, flex: 'none' }} />
-              <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</span>
+              <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getEventShortName(e)}</span>
               <span style={{ fontSize: 9, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{hhmm(hoursOf(e.starts_at))}</span>
             </span>
           ))}

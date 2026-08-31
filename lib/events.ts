@@ -11,6 +11,7 @@ import { settler } from './settle';
 export type Ev = {
   id: string;
   title: string;
+  short_name?: string | null;
   starts_at: string;
   ends_at: string;
   all_day: boolean;
@@ -30,6 +31,35 @@ export type Ev = {
   snoozed_until: string | null;
   deleted_at: string | null;
 };
+
+const EVENT_META_KEY = 'bd_events_local_meta';
+
+export function getEventMetaMap(): Record<string, { short_name?: string }> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(EVENT_META_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function setEventMeta(id: string, meta: { short_name?: string | null }) {
+  if (typeof window === 'undefined') return;
+  try {
+    const cur = getEventMetaMap();
+    if (meta.short_name !== undefined) {
+      cur[id] = { ...cur[id], short_name: meta.short_name?.trim() || undefined };
+    }
+    localStorage.setItem(EVENT_META_KEY, JSON.stringify(cur));
+  } catch {}
+}
+
+export function getEventShortName(e: { title: string; short_name?: string | null }): string {
+  if (e.short_name && e.short_name.trim()) return e.short_name.trim();
+  const title = e.title.trim();
+  if (!title || title === '(No title)') return 'Event';
+  return title;
+}
 
 /** Synced events belong to the other calendar; editing them here would diverge. */
 export const isReadOnly = (e: Ev) => e.source === 'gcal_ics';
@@ -142,7 +172,11 @@ export function useEvents(ws: Date, days = 7) {
         .lt('starts_at', to.toISOString())
         .order('starts_at');
       if (error) throw error;
-      return (data ?? []) as Ev[];
+      const meta = getEventMetaMap();
+      return (data ?? []).map((e) => ({
+        ...e,
+        short_name: meta[e.id]?.short_name ?? '',
+      })) as Ev[];
     },
   });
 }
@@ -227,9 +261,11 @@ export function chipInk(ev: Pick<Ev, 'color' | 'text_color'>, dark: boolean): st
 
 const CREATE = defineMutation(
   'event.create',
-  async (v: { id: string; title: string; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
+  async (v: { id: string; title: string; short_name?: string | null; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
     const user_id = await currentUserId();
-    const { error } = await supabase.from('bd_events').insert({ ...v, user_id });
+    const { short_name, ...payload } = v;
+    if (short_name !== undefined) setEventMeta(v.id, { short_name });
+    const { error } = await supabase.from('bd_events').insert({ ...payload, user_id });
     if (error) throw error;
   }
 );
@@ -237,8 +273,12 @@ const CREATE = defineMutation(
 // Drag and resize both land here. Fires on drop, not per frame, and must
 // accept partials (BACKEND.md "PATCH /events/:id").
 const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Partial<Ev> }) => {
-  const { error } = await supabase.from('bd_events').update(v.patch).eq('id', v.id);
-  if (error) throw error;
+  const { short_name, ...patch } = v.patch;
+  if (short_name !== undefined) setEventMeta(v.id, { short_name });
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase.from('bd_events').update(patch).eq('id', v.id);
+    if (error) throw error;
+  }
 });
 
 const DELETE = defineMutation('event.delete', async (v: { id: string }) => {
@@ -332,19 +372,23 @@ export function useEventActions(ws: Date) {
 
   const create = useMutation({
     mutationKey: CREATE,
-    onMutate: (v: { id: string; title: string; starts_at: string; ends_at: string; color: string; all_day?: boolean }) =>
-      optimistic((prev) => [
+    onMutate: (v: { id: string; title: string; short_name?: string | null; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
+      if (v.short_name !== undefined) setEventMeta(v.id, { short_name: v.short_name });
+      return optimistic((prev) => [
         ...prev,
         { ...v, all_day: v.all_day ?? false, location: '', remind_minutes: null, snoozed_until: null, deleted_at: null },
-      ]),
+      ]);
+    },
     onError: rollback,
     onSettled: settle,
   });
 
   const update = useMutation({
     mutationKey: UPDATE,
-    onMutate: (v: { id: string; patch: Partial<Ev> }) =>
-      optimistic((prev) => prev.map((e) => (e.id === v.id ? { ...e, ...v.patch } : e))),
+    onMutate: (v: { id: string; patch: Partial<Ev> }) => {
+      if (v.patch.short_name !== undefined) setEventMeta(v.id, { short_name: v.patch.short_name });
+      return optimistic((prev) => prev.map((e) => (e.id === v.id ? { ...e, ...v.patch } : e)));
+    },
     onError: rollback,
     onSettled: settle,
   });

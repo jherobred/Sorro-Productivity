@@ -100,6 +100,7 @@ export const ICONS = {
   chevronUp: 'm18 15-6-6-6 6',
   chevronLeft: 'm15 18-6-6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
+  tag: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01',
 } as const;
 
 export type IconName = keyof typeof ICONS;

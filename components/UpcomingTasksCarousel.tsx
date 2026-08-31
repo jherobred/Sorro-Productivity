@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Task } from '@/lib/tasks';
-import { useTaskActions, getTaskAlert, parseTaskLinks } from '@/lib/tasks';
+import { useTaskActions, getTaskAlert, parseTaskLinks, formatTaskCountdown } from '@/lib/tasks';
 import { Icon } from './Icon';
 import { PAL } from '@/lib/pal';
 import { playCelebration } from '@/lib/audio';
@@ -194,7 +194,13 @@ export function UpcomingTasksCarousel({
     ];
   }, [tasks, todayISO, next7DaysISO]);
 
-  // Auto-cycle timer
+  // Auto-cycle timer & live nowMs ticker
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (upcomingTasks.length <= 1) return;
     const interval = setInterval(() => {
@@ -299,6 +305,7 @@ export function UpcomingTasksCarousel({
   }, [t]);
   const tags = t ? extractTags(t.title, t.notes) : [];
   const alert = t ? getTaskAlert(t) : null;
+  const taskCountdown = t ? formatTaskCountdown(t, nowMs) : null;
 
   // Compute aura theme & color based on deadline proximity
   let auraTheme = {
@@ -357,10 +364,38 @@ export function UpcomingTasksCarousel({
       {t ? (
         <>
           {/* Header with Title & Circular Timer */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Icon name="check" size={14} color={auraTheme.color} />
               <span style={{ ...KICKER, color: auraTheme.color }}>Upcoming Tasks</span>
+              {taskCountdown && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 7px',
+                    borderRadius: 6,
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    fontVariantNumeric: 'tabular-nums',
+                    background: taskCountdown.isOverdue || alert?.tier === 'red'
+                      ? 'color-mix(in srgb, #FF3B30 20%, var(--card2))'
+                      : alert?.tier === 'orange'
+                      ? 'color-mix(in srgb, #FF9A3C 20%, var(--card2))'
+                      : 'color-mix(in srgb, var(--pal-amber) 18%, var(--card2))',
+                    color: taskCountdown.isOverdue || alert?.tier === 'red'
+                      ? '#FF3B30'
+                      : alert?.tier === 'orange'
+                      ? '#FF9A3C'
+                      : 'var(--tx)',
+                    border: `1px solid ${taskCountdown.isOverdue || alert?.tier === 'red' ? 'rgba(255, 59, 48, 0.4)' : 'var(--line2)'}`,
+                  }}
+                >
+                  <Icon name="clock" size={11} color="currentColor" />
+                  <span>{taskCountdown.text}</span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -538,6 +573,44 @@ export function UpcomingTasksCarousel({
                       {getDueLabel(t.due_on ?? null, t.due_at ?? null)}
                     </span>
                   </span>
+
+                  {/* Task Countdown Timer Tag */}
+                  {taskCountdown && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: taskCountdown.isOverdue || alert?.tier === 'red'
+                          ? '#FF3B30'
+                          : alert?.tier === 'orange'
+                          ? '#FF9A3C'
+                          : 'var(--tx2)',
+                        background: taskCountdown.isOverdue || alert?.tier === 'red'
+                          ? 'color-mix(in srgb, #FF3B30 18%, var(--card2))'
+                          : alert?.tier === 'orange'
+                          ? 'color-mix(in srgb, #FF9A3C 18%, var(--card2))'
+                          : 'var(--card2)',
+                        padding: '4px 8px',
+                        borderRadius: 7,
+                        border: `1px solid ${taskCountdown.isOverdue || alert?.tier === 'red' ? 'rgba(255, 59, 48, 0.4)' : 'var(--line)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      <Icon name="clock" size={11} color="currentColor" />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {taskCountdown.text}
+                      </span>
+                    </span>
+                  )}
 
                   {/* Tags */}
                   {tags.map((tag) => (
