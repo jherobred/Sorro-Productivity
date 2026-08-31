@@ -56,6 +56,7 @@ export function TaskComposer({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [course, setCourse] = useState('');
   const [due, setDue] = useState<string | null>(null);
   const [time, setTime] = useState('');
   const [priority, setPriority] = useState<'low' | 'med' | 'high' | null>(null);
@@ -75,14 +76,14 @@ export function TaskComposer({
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (box.current?.contains(e.target as Node)) return;
-      if (!title.trim() && !notes.trim() && !submissionLink.trim() && !googleDocsLink.trim() && customLinks.length === 0) setOpen(false);
+      if (!title.trim() && !notes.trim() && !course.trim() && !submissionLink.trim() && !googleDocsLink.trim() && customLinks.length === 0) setOpen(false);
     };
     window.addEventListener('pointerdown', onDown);
     return () => window.removeEventListener('pointerdown', onDown);
-  }, [open, title, notes, submissionLink, googleDocsLink, customLinks]);
+  }, [open, title, notes, course, submissionLink, googleDocsLink, customLinks]);
 
   const reset = () => {
-    setTitle(''); setNotes(''); setDue(null); setTime('');
+    setTitle(''); setNotes(''); setCourse(''); setDue(null); setTime('');
     setPriority(null); setStars(0); setListId(defaultListId);
     setSubmissionLink(''); setGoogleDocsLink(''); setCustomLinks([]); setShowLinksSection(false);
   };
@@ -97,7 +98,7 @@ export function TaskComposer({
         due_at = d.toISOString();
       }
     }
-    const finalNotes = serializeTaskWithLinks(notes, submissionLink, googleDocsLink, customLinks);
+    const finalNotes = serializeTaskWithLinks(notes, submissionLink, googleDocsLink, customLinks, course);
     onCreate({
       id: crypto.randomUUID(),
       title: t,
@@ -107,6 +108,7 @@ export function TaskComposer({
       due_at,
       priority: priority || null,
       stars: stars || 0,
+      course: course.trim() || null,
     });
     reset();
   };
@@ -444,6 +446,32 @@ export function TaskComposer({
               </button>
             </div>
           </div>
+
+          <Row label="Course">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+              <input
+                type="text"
+                value={course}
+                onChange={(e) => setCourse(e.target.value)}
+                placeholder="e.g. CS 101, MATH 20, Physics…"
+                aria-label="Course or subject"
+                style={{ ...FIELD, flex: 1 }}
+              />
+              {course && (
+                <button
+                  type="button"
+                  onClick={() => setCourse('')}
+                  className="k-squish"
+                  style={{
+                    width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+                    background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx3)', cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="close" size={11} color="var(--tx3)" />
+                </button>
+              )}
+            </div>
+          </Row>
 
           <Row label="Due">
             {dueChips.map((c) => (

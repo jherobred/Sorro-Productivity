@@ -547,6 +547,35 @@ export function UpcomingTasksCarousel({
                     </span>
                   )}
 
+                  {/* Course / Subject Tag */}
+                  {(t.course || parseTaskLinks(t.notes || '').course) && (
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: 'var(--pal-sky)',
+                        background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
+                        padding: '4px 8px',
+                        borderRadius: 7,
+                        border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Icon name="book" size={12} color="var(--pal-sky)" />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.course || parseTaskLinks(t.notes || '').course}
+                      </span>
+                    </span>
+                  )}
+
                   {/* Due Date Tag */}
                   <span
                     style={{

@@ -123,9 +123,29 @@ export function TaskTable({
                   }} />
               </td>
               <td style={{ ...CELL, color: 'var(--tx)', fontWeight: 600 }}>
-                <span style={{ display: 'block', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.task.title}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: 420 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.task.title}
+                  </span>
+                  {r.task.course && (
+                    <span style={{
+                      flex: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 3,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
+                      border: '1px solid color-mix(in srgb, var(--pal-sky) 30%, transparent)',
+                      color: 'var(--pal-sky)',
+                    }}>
+                      <Icon name="book" size={9} color="var(--pal-sky)" />
+                      <span>{r.task.course}</span>
+                    </span>
+                  )}
+                </div>
               </td>
               <td style={CELL}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>

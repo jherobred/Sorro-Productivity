@@ -16,7 +16,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
-  isReadOnly, liveEventIds, GRID_START, GRID_END, type Ev, type Span,
+  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, type Ev, type Span,
 } from '@/lib/events';
 
 /**
@@ -47,6 +47,12 @@ const VIEW_ICON: Record<View, IconName> = {
 export default function CalendarPage() {
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const [ws, setWs] = useState(() => weekStart(new Date(), prefs.weekStart));
   const [focusDay, setFocusDay] = useState(() => dayIndex(new Date().toISOString(), weekStart(new Date(), prefs.weekStart)));
   const [sel, setSel] = useState<string | null>(null);
@@ -382,18 +388,18 @@ export default function CalendarPage() {
             </div>
           )}
           {!isPending && view === 'week' && (
-            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
+            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs}
               sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
           )}
           {!isPending && view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
-              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA}
+              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs}
                 sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
           {!isPending && view === 'month' && (
-            <Month ws={windowStart} month={ws.getMonth()} events={events} tasks={windowTasks}
+            <Month ws={windowStart} month={ws.getMonth()} events={events} tasks={windowTasks} nowMs={nowMs}
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The
                 // old version reused the current week and only moved the
@@ -404,13 +410,13 @@ export default function CalendarPage() {
                 setCalView('day');
               }} />
           )}
-          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} />}
+          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nowMs={nowMs} />}
           {!isPending && view === 'countdown' && <Countdown events={events} A={A} />}
         </div>
       </div>
 
       {pop?.kind === 'event' && (
-        <EventPopover ev={pop.ev} x={pop.x} y={pop.y}
+        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nowMs={nowMs}
           runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
           onClose={() => setPop(null)}
           onEdit={() => { setEdit(pop.ev); setPop(null); }}
@@ -538,7 +544,7 @@ export default function CalendarPage() {
 /* ---------------------------------------------------------------- week/day */
 
 function Grid({
-  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule,
+  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, nowMs = Date.now(),
 }: {
   days: number;
   dayOffset?: number;
@@ -553,6 +559,7 @@ function Grid({
   openTask: (task: Task, x: number, y: number) => void;
   openSlot: (day: number, hour: number, x: number, y: number, allDay?: boolean, endHour?: number, initialTab?: 'event' | 'task') => void;
   onSchedule: (t: Task, day: number, hour: number | null) => void;
+  nowMs?: number;
 }) {
   const { prefs } = usePrefs();
   const dark = prefs.theme === 'dark';
@@ -648,47 +655,42 @@ function Grid({
   const sameDay = (iso: string, d: Date) => new Date(iso).toDateString() === d.toDateString();
 
   /**
-   * Which row of a run a pointer at `clientX` is over.
+   * Multi-day runs, drawn as one bar rather than N chips.
    *
-   * The bar covers several columns and each is a separate event. Every path
-   * that acts on a run — the click, the long press, the drag — has to ask this
-   * first, or it acts on `s.ev`, which is always the *first* day. That is the
-   * whole bug: clicking Thursday of a Wed–Fri class and pressing delete removed
-   * Wednesday.
+   * Only whole days that meet at the same hour count: `spanRuns` handles the
+   * grouping, and `spanned` is the set of IDs it took so the single-day pass
+   * skips them.
    */
+  const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
+  const spanned = useMemo(() => new Set(spans.flatMap((s) => s.ids)), [spans]);
+
   const spanHit = (s: Span, clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect();
-    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-    const col = rect ? Math.floor((clientX - rect.left) / colW) : s.firstDay;
-    return s.members.find((m) => m.day === col) ?? s.members[0];
+    const w = rect?.width ?? 1;
+    const col = Math.max(0, Math.min(days - 1, Math.floor(((clientX - (rect?.left ?? 0)) / w) * days)));
+    const hitEv = s.members.find((m) => m.day === col)?.ev ?? s.ev;
+    return { day: col, ev: hitEv };
   };
 
-  /** Multi-day runs draw as one bar; their members are skipped per column. */
-  const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
-  const spanned = useMemo(() => new Set(spans.filter((s) => s.days > 1).flatMap((s) => s.ids)), [spans]);
-
-  const press = (e: React.PointerEvent, ev: Ev, mode: 'move' | 'resize') => {
+  const press = (e: React.PointerEvent, ev: Ev, action: 'move' | 'resize') => {
     const isTouch = phone || e.pointerType === 'touch';
     if (!isTouch) {
       e.preventDefault();
     }
     e.stopPropagation();
     setSel(ev.id);
-
     const startX = e.clientX;
     const startY = e.clientY;
     const origDay = dayIndex(ev.starts_at, ws);
     const origHour = hoursOf(ev.starts_at);
     const origEnd = hoursOf(ev.ends_at);
-    const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-    // Locked by the toolbar toggle, or read-only because Google owns it.
+    const len = origEnd - origHour;
     const locked = isReadOnly(ev) || prefs.lockEvents;
 
-    let holdTriggered = !isTouch; // On desktop, drag starts on movement; on touch, requires hold
+    let holdTriggered = !isTouch || action === 'resize';
     let moved = false;
 
-    // Press and hold timer for mobile
-    const holdTimer = isTouch
+    const holdTimer = isTouch && action === 'move'
       ? window.setTimeout(() => {
           if (moved || locked) return;
           holdTriggered = true;
@@ -702,9 +704,8 @@ function Grid({
       const dy = m.clientY - startY;
       const dist = Math.hypot(dx, dy);
 
-      if (isTouch && !holdTriggered) {
+      if (isTouch && action === 'move' && !holdTriggered) {
         if (dist > 8) {
-          // User is scrolling / swiping across screen before holding; cancel hold timer
           if (holdTimer) clearTimeout(holdTimer);
           moved = true;
         }
@@ -717,13 +718,20 @@ function Grid({
 
       if (locked) return;
 
-      // 30-min step, derived from the real row height so the chip tracks the pointer.
+      const rect = bodyRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
-      if (mode === 'resize') {
-        setResize({ id: ev.id, end: origEnd + steps * 0.5 });
+
+      if (action === 'move') {
+        const d = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor(((m.clientX - rect.left) / rect.width) * days)));
+        const rawH = origHour + steps * 0.5;
+        const h = Math.max(GRID_START, Math.min(GRID_END - len, Math.round(rawH * 2) / 2));
+        setDrag({ id: ev.id, day: d, hour: h });
       } else {
-        const dayStep = days === 1 ? 0 : Math.round(dx / colW);
-        setDrag({ id: ev.id, day: Math.max(0, Math.min(6, origDay + dayStep)), hour: origHour + steps * 0.5 });
+        const rawE = origEnd + steps * 0.5;
+        const end = Math.max(origHour + 0.5, Math.min(GRID_END, Math.round(rawE * 2) / 2));
+        setResize({ id: ev.id, end });
       }
     };
 
@@ -738,14 +746,12 @@ function Grid({
       }
 
       if (isTouch && !holdTriggered) {
-        // Simple tap on mobile -> open event
         if (Math.hypot(m.clientX - startX, m.clientY - startY) < 10) {
           openEvent(ev, startX, startY);
         }
         return;
       }
 
-      // Commit on drop, not per frame.
       setDrag((d) => {
         if (d && d.id === ev.id && (d.day !== origDay || d.hour !== origHour)) {
           A.moveTo(ev, d.day, d.hour);
@@ -766,11 +772,6 @@ function Grid({
 
   /**
    * The same gesture on a run of days.
-   *
-   * A class that meets Mon–Fri at 09:00 is five rows drawn as one bar, and the
-   * bar used to swallow the pointer without offering anything in return — the
-   * one thing on the grid you could look at and not move. It drags by the same
-   * rules as a single chip and commits as one patch per member.
    */
   const pressSpan = (e: React.PointerEvent, s: Span) => {
     const isTouch = phone || e.pointerType === 'touch';
@@ -780,16 +781,6 @@ function Grid({
     e.stopPropagation();
 
     const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-
-    /**
-     * Which day of the run was actually touched.
-     *
-     * The bar spans several columns and every one of them is a separate row.
-     * Acting on `s.ev` — the first day's — is why deleting from the middle of a
-     * run deleted Monday, and why dragging it took all five days with it. The
-     * pointer's x against the grid says which column, and `members` says which
-     * row is in that column.
-     */
     const hit = spanHit(s, e.clientX);
     const ev = hit.ev;
 
@@ -833,8 +824,6 @@ function Grid({
       if (locked) return;
 
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
-      // One day moves, so it may go anywhere in the week — the run's own ends
-      // stopped mattering the moment the whole bar stopped moving together.
       const dayStep = Math.max(-origDay, Math.min(days - 1 - origDay, Math.round(dx / colW)));
       setSpanDrag({ key: s.key, id: ev.id, fromDay: origDay, day: dayStep, hour: steps * 0.5 });
     };
@@ -912,10 +901,6 @@ function Grid({
     tasks.filter((t) => t.due_at && dayIndex(t.due_at, ws) === col);
 
   return (
-    // Header row and all-day strip stay put; only the hours scroll. Google
-    // Calendar's arrangement, and the only one that works once the grid covers
-    // a full day: you must be able to reach 23:00 without losing the date you
-    // are looking at.
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--sh)' }}>
       <div style={{ display: 'flex', flex: 'none', position: 'relative' }}>
         <div style={{ width: GUTTER, flex: 'none', borderBottom: '1px solid var(--line)' }} />
@@ -982,10 +967,7 @@ function Grid({
 
       {/* the scrolling day */}
       <div ref={scroller} className="navsb" style={{ display: 'flex', overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0 }}>
-        {/* Hour axis. Labels sit ON their rule, centred — except the first and
-            last, which would then hang half outside the column and be clipped:
-            12 AM was simply missing, and midnight at the bottom was sheared in
-            half. Those two align to the inside edge instead. */}
+        {/* Hour axis */}
         <div style={{ width: GUTTER, flex: 'none', position: 'relative', height: GRID_H }}>
           {hours.map((h, i) => {
             const first = i === 0;
@@ -1082,12 +1064,12 @@ function Grid({
                         onPointerDown={(p) => press(p, e, 'move')}
                         onResize={(p) => press(p, e, 'resize')}
                         dark={dark}
+                        nowMs={nowMs}
                         onOpen={(p) => openEvent(e, p.clientX, p.clientY)} />
                     );
                   })}
 
-                {/* Tasks with a time render dashed, so they read as a deadline
-                    rather than a booking — the same distinction the design makes. */}
+                {/* Tasks with a time render dashed */}
                 {slotTasks(idx).map((t) => {
                   const h = hoursOf(t.due_at!);
                   const ghost = taskDrag?.task.id === t.id;
@@ -1115,11 +1097,11 @@ function Grid({
             );
           })}
 
-          {/* Multi-day runs, drawn over the columns. The layer ignores the
-              pointer so clicking an empty slot underneath still creates. */}
+          {/* Multi-day runs */}
           <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
             {spans.filter((s) => s.days > 1).map((s) => (
               <SpanChip key={s.key} span={s} days={days} dark={dark}
+                nowMs={nowMs}
                 offset={spanDrag?.key === s.key ? spanDrag : null}
                 onPointerDown={(p) => pressSpan(p, s)}
                 onOpen={(x, y) => openEvent(spanHit(s, x).ev, x, y, s)} />
@@ -1133,16 +1115,18 @@ function Grid({
 }
 
 function EventChip({
-  ev, top, height, label, lifted, selected, dark, onPointerDown, onResize, onOpen,
+  ev, top, height, label, lifted, selected, dark, nowMs = Date.now(), onPointerDown, onResize, onOpen,
 }: {
   ev: Ev; top: number; height: number; label: string; lifted: boolean; selected: boolean;
-  dark: boolean;
+  dark: boolean; nowMs?: number;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
   onOpen: (e: React.MouseEvent) => void;
 }) {
   const locked = isReadOnly(ev);
   const ink = chipInk(ev, dark);
+  const cd = formatEventCountdown(ev.starts_at, ev.ends_at, nowMs);
+
   return (
     <div
       onPointerDown={onPointerDown}
@@ -1162,14 +1146,48 @@ function EventChip({
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
       }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
-        {locked && <Icon name="lock" size={9} color={ink} />}
-        {ev.title?.trim() || '(No title)'}
-      </span>
-      <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-        {label} {ev.location}
-      </span>
+      <div>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
+          {locked && <Icon name="lock" size={9} color={ink} />}
+          {ev.title?.trim() || '(No title)'}
+        </span>
+        <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+          {label} {ev.location}
+        </span>
+      </div>
+
+      {/* Countdown timer right inside the event slot itself */}
+      {cd && cd.status !== 'past' && (
+        <div style={{
+          marginTop: 'auto',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 8.5,
+          fontWeight: 800,
+          fontVariantNumeric: 'tabular-nums',
+          padding: '1px 5px',
+          borderRadius: 4,
+          background: cd.status === 'ongoing'
+            ? 'color-mix(in srgb, var(--pal-mint) 28%, var(--card))'
+            : 'color-mix(in srgb, var(--pal-sky) 26%, var(--card))',
+          color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+          border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 45%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 45%, transparent)'}`,
+          width: 'fit-content',
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+          <span>{cd.badge}</span>
+        </div>
+      )}
+
       {/* bottom edge resizes the end time in 30-min steps */}
       {!locked && (
         <div onPointerDown={onResize}
@@ -1180,9 +1198,9 @@ function EventChip({
 }
 
 /** The horizontal bar Google draws for a run of identical days. */
-function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
+function SpanChip({ span: s, days, offset, dark, nowMs = Date.now(), onPointerDown, onOpen }: {
   span: Span; days: number;
-  dark: boolean;
+  dark: boolean; nowMs?: number;
   offset: { day: number; fromDay: number; hour: number } | null;
   onPointerDown: (e: React.PointerEvent) => void;
   onOpen: (x: number, y: number) => void;
@@ -1191,18 +1209,11 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
   const shift = offset?.hour ?? 0;
   const start = hoursOf(s.ev.starts_at) + shift;
   const end = hoursOf(s.ev.ends_at) + shift;
-  /**
-   * Picking one day out of the run.
-   *
-   * The bar used to slide bodily — five days moving because you grabbed one of
-   * them. Now the moment a drag starts it shrinks to the single column you took
-   * hold of and follows the pointer, which is both what happens on drop and the
-   * only honest picture of it. Let go and the run redraws itself around what is
-   * left, because `spanRuns` is a grouping pass over the rows, not a record.
-   */
   const firstDay = lifted ? offset!.fromDay + offset!.day : s.firstDay;
   const width = lifted ? 1 : s.days;
   const ink = chipInk(s.ev, dark);
+  const cd = formatEventCountdown(s.ev.starts_at, s.ev.ends_at, nowMs);
+
   return (
     <div
       onPointerDown={onPointerDown}
@@ -1223,6 +1234,9 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title?.trim() || '(No title)'}
@@ -1236,9 +1250,32 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
           </span>
         )}
       </span>
-      <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-        {hhmm(start)}–{hhmm(end)} · {s.ev.location}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 2 }}>
+        <span style={{ fontSize: 9.5, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
+          {hhmm(start)}–{hhmm(end)} · {s.ev.location}
+        </span>
+        {cd && cd.status !== 'past' && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            padding: '1px 5px',
+            borderRadius: 4,
+            fontSize: 8.5,
+            fontWeight: 800,
+            fontVariantNumeric: 'tabular-nums',
+            background: cd.status === 'ongoing'
+              ? 'color-mix(in srgb, var(--pal-mint) 28%, var(--card))'
+              : 'color-mix(in srgb, var(--pal-sky) 26%, var(--card))',
+            color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+            border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 45%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 45%, transparent)'}`,
+            whiteSpace: 'nowrap',
+          }}>
+            <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+            <span>{cd.badge}</span>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -1377,16 +1414,16 @@ function DayStrip({ ws, focus, onPick, onJump }: {
 }
 
 /** Six weeks from `ws`, with the days outside `month` dimmed. */
-function Month({ ws, month, events, tasks, onPickDay }: {
-  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void;
+function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now() }: {
+  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void; nowMs?: number;
 }) {
   const { prefs } = usePrefs();
 
   const byDay = useMemo(() => {
-    const m = new Map<string, { title: string; color: string; task?: boolean }[]>();
-    const push = (k: string, v: { title: string; color: string; task?: boolean }) =>
+    const m = new Map<string, { title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }[]>();
+    const push = (k: string, v: { title: string; color: string; starts_at?: string; ends_at?: string; task?: boolean }) =>
       m.set(k, [...(m.get(k) ?? []), v]);
-    for (const e of events) push(new Date(e.starts_at).toDateString(), { title: e.title, color: e.color });
+    for (const e of events) push(new Date(e.starts_at).toDateString(), { title: e.title, color: e.color, starts_at: e.starts_at, ends_at: e.ends_at });
     for (const t of tasks) {
       if (!t.due_on) continue;
       push(new Date(`${t.due_on}T12:00:00`).toDateString(), { title: t.title, color: 'var(--acc)', task: true });
@@ -1419,15 +1456,35 @@ function Month({ ws, month, events, tasks, onPickDay }: {
               <span style={{ fontSize: 11.5, fontWeight: today ? 800 : 600, color: today ? SECHUE.calendar : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
                 {date.getDate()}
               </span>
-              {items.slice(0, 3).map((it, n) => (
-                <span key={n} style={{
-                  fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
-                  background: `color-mix(in srgb, ${it.color} 22%, transparent)`,
-                  border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : undefined,
-                  color: 'var(--tx2)',
-                }}>{it.title}</span>
-              ))}
+              {items.slice(0, 3).map((it, n) => {
+                const cd = it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
+                return (
+                  <span key={n} style={{
+                    fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+                    background: `color-mix(in srgb, ${it.color} 22%, transparent)`,
+                    border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : undefined,
+                    color: 'var(--tx2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 3,
+                  }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
+                    {cd && cd.status !== 'past' && (
+                      <span style={{
+                        fontSize: 8,
+                        fontWeight: 800,
+                        flex: 'none',
+                        color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {cd.status === 'ongoing' ? '🟢' : '⏱️'}{cd.text}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
               {items.length > 3 && <span style={{ fontSize: 8.5, color: 'var(--tx3)' }}>+{items.length - 3} more</span>}
             </button>
           );
@@ -1438,7 +1495,7 @@ function Month({ ws, month, events, tasks, onPickDay }: {
 }
 
 /** Agenda — one block per day, each row a colour bar, 44px time, title, location. */
-function Agenda({ ws, events, tasks }: { ws: Date; events: Ev[]; tasks: Task[] }) {
+function Agenda({ ws, events, tasks, nowMs = Date.now() }: { ws: Date; events: Ev[]; tasks: Task[]; nowMs?: number }) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(ws);
     d.setDate(d.getDate() + i);
@@ -1448,16 +1505,32 @@ function Agenda({ ws, events, tasks }: { ws: Date; events: Ev[]; tasks: Task[] }
   return (
     <div>
       {days.map((d, i) => {
-        const items = events
+        type AgendaItem = {
+          id: string;
+          time: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          title: string;
+          meta: string;
+          color: string;
+          task: boolean;
+        };
+
+        const evItems: AgendaItem[] = events
           .filter((e) => dayIndex(e.starts_at, ws) === i)
-          .map((e) => ({ id: e.id, time: hoursOf(e.starts_at), title: e.title, meta: e.location, color: e.color, task: false }))
-          .concat(tasks
-            .filter((t) => dayIndex(`${t.due_on}T12:00:00`, ws) === i)
-            .map((t) => ({
-              id: t.id, time: t.due_at ? hoursOf(t.due_at) : 23.9, title: t.title,
-              meta: t.due_at ? 'Task' : 'Task · no set time', color: '#7C6CFF', task: true,
-            })))
-          .sort((a, b) => a.time - b.time);
+          .map((e) => ({
+            id: e.id, time: hoursOf(e.starts_at), starts_at: e.starts_at, ends_at: e.ends_at,
+            title: e.title, meta: e.location, color: e.color, task: false,
+          }));
+
+        const taskItems: AgendaItem[] = tasks
+          .filter((t) => dayIndex(`${t.due_on}T12:00:00`, ws) === i)
+          .map((t) => ({
+            id: t.id, time: t.due_at ? hoursOf(t.due_at) : 23.9, starts_at: t.due_at ?? null, ends_at: null,
+            title: t.title, meta: t.due_at ? 'Task' : 'Task · no set time', color: '#7C6CFF', task: true,
+          }));
+
+        const items = [...evItems, ...taskItems].sort((a, b) => a.time - b.time);
         if (!items.length) return null;
         const today = d.toDateString() === new Date().toDateString();
         return (
@@ -1472,19 +1545,45 @@ function Agenda({ ws, events, tasks }: { ws: Date; events: Ev[]; tasks: Task[] }
             }}>
               {d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
             </div>
-            {items.map((a) => (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
-                <span style={{
-                  width: 3, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, flex: 'none',
-                  background: a.color, opacity: a.task ? 0.6 : 1,
-                }} />
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums' }}>
-                  {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
-                </span>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{a.title}</span>
-                <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{a.meta}</span>
-              </div>
-            ))}
+            {items.map((a) => {
+              const cd = a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
+                  <span style={{
+                    width: 3, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, flex: 'none',
+                    background: a.color, opacity: a.task ? 0.6 : 1,
+                  }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                    {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{a.title}</span>
+                    {cd && cd.status !== 'past' && (
+                      <span style={{
+                        flex: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '1px 7px',
+                        borderRadius: 5,
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        fontVariantNumeric: 'tabular-nums',
+                        background: cd.status === 'ongoing'
+                          ? 'color-mix(in srgb, var(--pal-mint) 20%, var(--card2))'
+                          : 'color-mix(in srgb, var(--pal-sky) 18%, var(--card2))',
+                        border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 40%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 40%, transparent)'}`,
+                        color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+                      }}>
+                        <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+                        <span>{cd.badge}</span>
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 'none' }}>{a.meta}</span>
+                </div>
+              );
+            })}
           </div>
         );
       })}
@@ -1715,7 +1814,7 @@ const LABEL: React.CSSProperties = {
  * Edit, which opens the full sheet.
  */
 function EventPopover({
-  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle,
+  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nowMs = Date.now(),
 }: {
   ev: Ev; x: number; y: number;
   /** How many days this event's run covers, or 0 when it stands alone. */
@@ -1723,6 +1822,7 @@ function EventPopover({
   onClose: () => void; onEdit: () => void; onDuplicate: () => void;
   onDelete: () => void; onDeleteRun: () => void;
   onUpdateTitle?: (title: string) => void;
+  nowMs?: number;
 }) {
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at);
@@ -1817,6 +1917,33 @@ function EventPopover({
           )}
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
           <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Weekly on {dayName}</div>
+
+          {/* Live Countdown Badge */}
+          {(() => {
+            const cd = formatEventCountdown(ev.starts_at, ev.ends_at, nowMs);
+            if (!cd || cd.status === 'past') return null;
+            return (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                marginTop: 8,
+                padding: '4px 10px',
+                borderRadius: 8,
+                fontSize: 11.5,
+                fontWeight: 800,
+                fontVariantNumeric: 'tabular-nums',
+                background: cd.status === 'ongoing'
+                  ? 'color-mix(in srgb, var(--pal-mint) 22%, var(--card2))'
+                  : 'color-mix(in srgb, var(--pal-sky) 20%, var(--card2))',
+                color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+                border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 45%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 45%, transparent)'}`,
+              }}>
+                <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+                <span>{cd.badge}</span>
+              </div>
+            );
+          })()}
 
           {/* Meeting Notes Section */}
           <div style={{

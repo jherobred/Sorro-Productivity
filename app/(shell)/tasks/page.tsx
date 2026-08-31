@@ -739,8 +739,29 @@ function TaskRow({
                         </span>
                       )}
 
-                      {(p.submissionLink || p.googleDocsLink || p.customLinks.length > 0) && (
+                      {(row.task.course || p.course || p.submissionLink || p.googleDocsLink || p.customLinks.length > 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+                          {(row.task.course || p.course) && (
+                            <span
+                              title={`Course: ${row.task.course || p.course}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 7px',
+                                borderRadius: 6,
+                                background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
+                                border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
+                                color: 'var(--pal-sky)',
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Icon name="book" size={10} color="var(--pal-sky)" />
+                              <span>{row.task.course || p.course}</span>
+                            </span>
+                          )}
+
                           {p.submissionLink && (
                             <a
                               href={p.submissionLink.startsWith('http') ? p.submissionLink : `https://${p.submissionLink}`}
@@ -1047,6 +1068,7 @@ function TaskEditSidepanel({
 
   const initialParsed = parseTaskLinks(task.notes ?? '');
   const [title, setTitle] = useState(task.title);
+  const [course, setCourse] = useState(task.course || initialParsed.course || '');
   const [cleanNotes, setCleanNotes] = useState(initialParsed.cleanNotes);
   const [submissionLink, setSubmissionLink] = useState(initialParsed.submissionLink);
   const [googleDocsLink, setGoogleDocsLink] = useState(initialParsed.googleDocsLink);
@@ -1054,12 +1076,14 @@ function TaskEditSidepanel({
 
   const prevTaskIdRef = useRef(task.id);
   const titleRef = useRef(title);
+  const courseRef = useRef(course);
   const cleanNotesRef = useRef(cleanNotes);
   const submissionLinkRef = useRef(submissionLink);
   const googleDocsLinkRef = useRef(googleDocsLink);
   const customLinksRef = useRef(customLinks);
 
   titleRef.current = title;
+  courseRef.current = course;
   cleanNotesRef.current = cleanNotes;
   submissionLinkRef.current = submissionLink;
   googleDocsLinkRef.current = googleDocsLink;
@@ -1075,25 +1099,31 @@ function TaskEditSidepanel({
       prevTaskIdRef.current = task.id;
       const p = parseTaskLinks(task.notes ?? '');
       setTitle(task.title);
+      setCourse(task.course || p.course || '');
       setCleanNotes(p.cleanNotes);
       setSubmissionLink(p.submissionLink);
       setGoogleDocsLink(p.googleDocsLink);
       setCustomLinks(p.customLinks);
     }
-  }, [task.id, task.title, task.notes]);
+  }, [task.id, task.title, task.notes, task.course]);
 
   const patchWithLatest = useCallback((extraPatch: Partial<Task> = {}) => {
     const currentTitle = titleRef.current.trim();
+    const currentCourse = courseRef.current.trim();
     const finalNotes = serializeTaskWithLinks(
       cleanNotesRef.current,
       submissionLinkRef.current,
       googleDocsLinkRef.current,
-      customLinksRef.current
+      customLinksRef.current,
+      currentCourse
     );
     const combined: Partial<Task> = { ...extraPatch };
 
     if (currentTitle && currentTitle !== task.title) {
       combined.title = currentTitle;
+    }
+    if (currentCourse !== (task.course || '')) {
+      combined.course = currentCourse || null;
     }
     if (finalNotes !== (task.notes ?? '')) {
       combined.notes = finalNotes;
@@ -1102,29 +1132,33 @@ function TaskEditSidepanel({
     if (Object.keys(combined).length > 0) {
       onPatch(combined);
     }
-  }, [task.title, task.notes, onPatch]);
+  }, [task.title, task.notes, task.course, onPatch]);
 
-  // Debounced auto-save for title, notes, and links
+  // Debounced auto-save for title, course, notes, and links
   useEffect(() => {
     const timer = setTimeout(() => {
       const trimmed = title.trim();
+      const currentCourse = course.trim();
       const finalNotes = serializeTaskWithLinks(
         cleanNotes,
         submissionLink,
         googleDocsLink,
-        customLinks
+        customLinks,
+        currentCourse
       );
       const needsTitleUpdate = trimmed && trimmed !== task.title;
+      const needsCourseUpdate = currentCourse !== (task.course || '');
       const needsNotesUpdate = finalNotes !== (task.notes ?? '');
-      if (needsTitleUpdate || needsNotesUpdate) {
+      if (needsTitleUpdate || needsCourseUpdate || needsNotesUpdate) {
         onPatch({
           ...(needsTitleUpdate ? { title: trimmed } : {}),
+          ...(needsCourseUpdate ? { course: currentCourse || null } : {}),
           ...(needsNotesUpdate ? { notes: finalNotes } : {}),
         });
       }
-    }, 400);
+    }, 600);
     return () => clearTimeout(timer);
-  }, [title, cleanNotes, submissionLink, googleDocsLink, customLinks, task.title, task.notes, onPatch]);
+  }, [title, course, cleanNotes, submissionLink, googleDocsLink, customLinks, task.title, task.course, task.notes, onPatch]);
 
   const handleClose = useCallback(() => {
     patchWithLatest();
@@ -1345,6 +1379,59 @@ function TaskEditSidepanel({
               transition: 'border-color .15s ease',
             }}
           />
+        </div>
+
+        {/* Course / Subject */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={KICKER}>Course / Subject</div>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: 6 }}>
+            <input
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+              onBlur={() => patchWithLatest()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  patchWithLatest();
+                  (e.target as HTMLElement).blur();
+                }
+              }}
+              placeholder="e.g. CS 101, MATH 20, Physics…"
+              style={{
+                width: '100%',
+                padding: '11px 14px 11px 36px',
+                borderRadius: 12,
+                border: '1px solid var(--line2)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--tx)',
+                background: 'var(--card2)',
+                outline: 'none',
+                transition: 'border-color .15s ease',
+              }}
+            />
+            <span style={{ position: 'absolute', left: 12, pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+              <Icon name="book" size={14} color="var(--pal-sky)" />
+            </span>
+            {course && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCourse('');
+                  patchWithLatest({ course: null });
+                }}
+                className="k-squish"
+                title="Clear course"
+                style={{
+                  position: 'absolute', right: 10, width: 22, height: 22, borderRadius: 6,
+                  display: 'grid', placeItems: 'center', background: 'var(--card)',
+                  border: '1px solid var(--line2)', color: 'var(--tx3)', cursor: 'pointer',
+                }}
+              >
+                <Icon name="close" size={11} color="var(--tx3)" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Description / Notes */}

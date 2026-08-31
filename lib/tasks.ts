@@ -26,6 +26,8 @@ export type Task = {
   /** When it was ticked. Written by COMPLETE below; read so a screen can tell
       "did anything get done today" without a second query. */
   completed_at?: string | null;
+  /** Course / Subject code or name (e.g. CS 101, MATH 20) */
+  course?: string | null;
 };
 
 export type List = { id: string; name: string; color: string; position: number };
@@ -153,16 +155,18 @@ export type CustomTaskLink = {
 export type ParsedTaskLinks = {
   submissionLink: string;
   googleDocsLink: string;
+  course: string;
   customLinks: CustomTaskLink[];
   cleanNotes: string;
 };
 
 /**
- * Extracts Submission Link, Google Docs Link, and multiple custom links from task notes.
+ * Extracts Submission Link, Google Docs Link, Course/Subject, and multiple custom links from task notes.
  */
 export function parseTaskLinks(rawNotes: string = ''): ParsedTaskLinks {
   let submissionLink = '';
   let googleDocsLink = '';
+  let course = '';
   const customLinks: CustomTaskLink[] = [];
   const lines = (rawNotes || '').split('\n');
   const remainingLines: string[] = [];
@@ -171,6 +175,15 @@ export function parseTaskLinks(rawNotes: string = ''): ParsedTaskLinks {
     const trimmed = line.trim();
     if (!trimmed) {
       remainingLines.push(line);
+      continue;
+    }
+
+    // Match Course / Subject tag
+    const courseMatch = trimmed.match(/^(?:📚\s*|🏷️\s*)?(?:\[\s*)?Course(?:\s*[\/:]\s*|\s*:\s*)(?<courseVal>[^\]\n]+)(?:\])?$/i)
+      || trimmed.match(/^(?:📚\s*|🏷️\s*)?(?:\[\s*)?Subject(?:\s*[\/:]\s*|\s*:\s*)(?<courseVal2>[^\]\n]+)(?:\])?$/i);
+
+    if (courseMatch) {
+      course = (courseMatch.groups?.courseVal || courseMatch.groups?.courseVal2 || '').trim();
       continue;
     }
 
@@ -221,39 +234,44 @@ export function parseTaskLinks(rawNotes: string = ''): ParsedTaskLinks {
   return {
     submissionLink,
     googleDocsLink,
+    course,
     customLinks,
     cleanNotes: remainingLines.join('\n').trim(),
   };
 }
 
 /**
- * Serializes clean notes + Submission Link + Google Docs Link + Custom links into a stored markdown string.
+ * Serializes clean notes + Course + Submission Link + Google Docs Link + Custom links into a stored markdown string.
  */
 export function serializeTaskWithLinks(
   cleanNotes: string,
   submissionLink: string,
   googleDocsLink: string,
-  customLinks: CustomTaskLink[]
+  customLinks: CustomTaskLink[],
+  course?: string | null
 ): string {
   const parts: string[] = [];
   const text = cleanNotes.trim();
   if (text) parts.push(text);
 
-  const linkLines: string[] = [];
+  const metaLines: string[] = [];
+  if (course && course.trim()) {
+    metaLines.push(`📚 Course: ${course.trim()}`);
+  }
   if (submissionLink.trim()) {
-    linkLines.push(`🔗 Submission Link: ${submissionLink.trim()}`);
+    metaLines.push(`🔗 Submission Link: ${submissionLink.trim()}`);
   }
   if (googleDocsLink.trim()) {
-    linkLines.push(`📄 Google Docs Link: ${googleDocsLink.trim()}`);
+    metaLines.push(`📄 Google Docs Link: ${googleDocsLink.trim()}`);
   }
   for (const cl of customLinks) {
     if (cl.url.trim()) {
-      linkLines.push(`🔗 ${cl.label.trim() || 'Link'}: ${cl.url.trim()}`);
+      metaLines.push(`🔗 ${cl.label.trim() || 'Link'}: ${cl.url.trim()}`);
     }
   }
 
-  if (linkLines.length > 0) {
-    parts.push(linkLines.join('\n'));
+  if (metaLines.length > 0) {
+    parts.push(metaLines.join('\n'));
   }
 
   return parts.join('\n\n');
@@ -286,7 +304,13 @@ export function useTasks() {
         .is('deleted_at', null)
         .order('position');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((t) => {
+        const parsed = parseTaskLinks(t.notes);
+        return {
+          ...t,
+          course: (t as unknown as { course?: string | null }).course || parsed.course || null,
+        };
+      });
     },
   });
 }
@@ -310,17 +334,27 @@ export type NewTask = {
   due_at?: string | null;
   priority?: 'low' | 'med' | 'high' | null;
   stars?: number;
+  course?: string | null;
 };
 
 const CREATE = defineMutation('task.create', async (v: NewTask) => {
   const user_id = await currentUserId();
   const targetListId = v.listId || v.list_id || null;
+  const parsed = parseTaskLinks(v.notes ?? '');
+  const course = v.course || parsed.course || '';
+  const finalNotes = serializeTaskWithLinks(
+    parsed.cleanNotes,
+    parsed.submissionLink,
+    parsed.googleDocsLink,
+    parsed.customLinks,
+    course
+  );
   const { error } = await supabase.from('bd_tasks').insert({
     id: v.id,
     user_id,
     title: v.title.trim(),
     list_id: targetListId,
-    notes: v.notes ?? '',
+    notes: finalNotes,
     due_on: v.due_on || null,
     due_at: v.due_at || null,
     priority: v.priority || null,
@@ -400,6 +434,7 @@ export function useTaskActions() {
           stars: v.stars ?? 0,
           position: Number.MAX_SAFE_INTEGER,
           deleted_at: null,
+          course: v.course ?? null,
         },
       ]);
     },

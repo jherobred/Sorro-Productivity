@@ -529,3 +529,82 @@ export function useEventActions(ws: Date) {
     duplicate, removeWithUndo, wipe, wipeRun,
   };
 }
+
+export type EventCountdown = {
+  status: 'upcoming' | 'ongoing' | 'past';
+  text: string;
+  badge: string;
+  secondsLeft: number;
+};
+
+/**
+ * Calculates countdown until event starts or ends:
+ * - Upcoming: "in 2h 15m", "in 45m 10s", "in 3d"
+ * - Ongoing: "45m left", "1h 10m left"
+ */
+export function formatEventCountdown(
+  startsAt: string,
+  endsAt: string,
+  nowMs: number = Date.now()
+): EventCountdown | null {
+  const startMs = new Date(startsAt).getTime();
+  const endMs = new Date(endsAt).getTime();
+  if (isNaN(startMs) || isNaN(endMs)) return null;
+
+  if (nowMs < startMs) {
+    const diff = startMs - nowMs;
+    const totalSec = Math.floor(diff / 1000);
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    let text = '';
+    if (days > 0) {
+      text = `in ${days}d ${hours}h`;
+    } else if (hours > 0) {
+      text = `in ${hours}h ${mins}m`;
+    } else if (mins > 0) {
+      text = `in ${mins}m ${secs}s`;
+    } else {
+      text = `in ${secs}s`;
+    }
+
+    return {
+      status: 'upcoming',
+      text,
+      badge: `Starts ${text}`,
+      secondsLeft: totalSec,
+    };
+  } else if (nowMs >= startMs && nowMs <= endMs) {
+    const diff = endMs - nowMs;
+    const totalSec = Math.floor(diff / 1000);
+    const hours = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    let text = '';
+    if (hours > 0) {
+      text = `${hours}h ${mins}m left`;
+    } else if (mins > 0) {
+      text = `${mins}m ${secs}s left`;
+    } else {
+      text = `${secs}s left`;
+    }
+
+    return {
+      status: 'ongoing',
+      text,
+      badge: `Ongoing · ${text}`,
+      secondsLeft: totalSec,
+    };
+  } else {
+    return {
+      status: 'past',
+      text: 'Ended',
+      badge: 'Ended',
+      secondsLeft: 0,
+    };
+  }
+}
+
