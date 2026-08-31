@@ -268,6 +268,46 @@ export default function PeoplePage() {
         </button>
       ))}
 
+      {/* If search query matches contacts in trash, allow instant 1-click restore */}
+      {q.trim() && trashedPeople.some((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) && (
+        <div style={{
+          marginTop: 6, marginBottom: 8, padding: '10px 12px', borderRadius: 10,
+          background: 'color-mix(in srgb, var(--pal-coral) 12%, var(--card2))',
+          border: '1px solid color-mix(in srgb, var(--pal-coral) 30%, transparent)',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--pal-coral)', letterSpacing: '.06em' }}>
+            Found in Trash:
+          </div>
+          {trashedPeople.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())).map((tp) => (
+            <div key={tp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <PersonAvatar name={tp.name} color={tp.color} path={tp.photo_path} size={24} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {tp.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  restore.mutate({ id: tp.id });
+                  setSel(tp.id);
+                  toast(`Restored ${tp.name}`);
+                }}
+                className="hov k-squish"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 6,
+                  background: 'var(--card)', border: '1px solid var(--line2)',
+                  fontSize: 11, fontWeight: 800, color: 'var(--pal-mint)', cursor: 'pointer', flex: 'none',
+                }}
+              >
+                <Icon name="undo" size={11} color="var(--pal-mint)" /> Restore
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {filteredPeople.length === 0 && (
         q ? (
           <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 2px' }}>
