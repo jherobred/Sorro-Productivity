@@ -14,10 +14,34 @@ export type Txn = {
   category: string;
   occurred_at: string;
   deleted_at: string | null;
+  /** Where it happened, and who with. Both optional — see the Lazy path below. */
+  place?: string | null;
+  who?: string | null;
+  /**
+   * False for a row the Lazy button wrote: the amount and jar are right, the
+   * rest was skipped. The feed marks these so they can be finished later rather
+   * than passing as complete.
+   */
+  detailed?: boolean;
+};
+
+/**
+ * What a new transaction needs. `occurred_at` and `deleted_at` are the
+ * database's to set; the three optional fields are the log sheet's, and are all
+ * absent when the Lazy button wrote the row.
+ */
+export type NewTxn = {
+  id: string; name: string; amount_centavos: number; category: string;
+  account_id: string | null;
+  place?: string | null; who?: string | null; detailed?: boolean;
 };
 
 export type Account = { id: string; name: string; kind: string; color: string; opening_centavos: number };
-export type Budget = { id: string; category: string; period: string; amount_centavos: number };
+export type Budget = {
+  id: string; category: string; period: string; amount_centavos: number;
+  /** Null falls back to a shipped photograph, then to a tinted initial. */
+  photo_path?: string | null;
+};
 export type ToBuy = { id: string; name: string; amount_centavos: number; bought_at: string | null };
 
 const TXN_KEY = ['transactions'] as const;
@@ -46,7 +70,7 @@ export function useTransactions() {
     queryFn: async (): Promise<Txn[]> => {
       const { data, error } = await supabase
         .from('bd_transactions')
-        .select('id,account_id,name,amount_centavos,category,occurred_at,deleted_at')
+        .select('id,account_id,name,amount_centavos,category,occurred_at,deleted_at,place,who,detailed')
         .is('deleted_at', null)
         .order('occurred_at', { ascending: false })
         .limit(100);
@@ -71,7 +95,7 @@ export function useBudgets() {
   return useQuery({
     queryKey: BUD_KEY,
     queryFn: async (): Promise<Budget[]> => {
-      const { data, error } = await supabase.from('bd_budgets').select('id,category,period,amount_centavos');
+      const { data, error } = await supabase.from('bd_budgets').select('id,category,period,amount_centavos,photo_path');
       if (error) throw error;
       return data ?? [];
     },
@@ -110,7 +134,7 @@ export async function lockedSections(): Promise<string[]> {
 
 const ADD_TXN = defineMutation(
   'money.addTxn',
-  async (v: { id: string; name: string; amount_centavos: number; category: string; account_id: string | null }) => {
+  async (v: NewTxn) => {
     const user_id = await currentUserId();
     const { error } = await supabase.from('bd_transactions').insert({ ...v, user_id });
     if (error) throw error;
@@ -172,7 +196,7 @@ export function useMoneyActions() {
 
   const addTxn = useMutation({
     mutationKey: ADD_TXN,
-    onMutate: (v: { id: string; name: string; amount_centavos: number; category: string; account_id: string | null }) => {
+    onMutate: (v: NewTxn) => {
       const prev = queryClient.getQueryData<Txn[]>(TXN_KEY) ?? [];
       queryClient.setQueryData<Txn[]>(TXN_KEY, [
         { ...v, occurred_at: new Date().toISOString(), deleted_at: null },

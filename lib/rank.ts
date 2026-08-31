@@ -94,7 +94,7 @@ export const METRICS = [
   { id: 'habit', label: 'A habit', hint: 'Ticks on one of your habits', icon: 'habit', unit: 'days' },
   { id: 'task', label: 'Tasks done', hint: 'Anything you complete in Tasks', icon: 'task', unit: 'tasks' },
   { id: 'project', label: 'Project progress', hint: 'Percentage moved on a board', icon: 'proj', unit: '%' },
-  { id: 'body', label: 'Gym sessions', hint: 'Days logged in Body', icon: 'gym', unit: 'sessions' },
+  { id: 'body', label: 'Gym sessions', hint: 'Days logged in Gym', icon: 'gym', unit: 'sessions' },
   { id: 'study', label: 'Study hours', hint: 'Deep-work blocks on the calendar', icon: 'clock', unit: 'hours' },
 ] as const;
 

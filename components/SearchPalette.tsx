@@ -19,7 +19,8 @@ type Group = { g: string; items: Row[] };
 const SECTIONS: [string, string, IconName][] = [
   ['home', 'Home', 'home'], ['calendar', 'Calendar', 'cal'], ['tasks', 'Tasks', 'task'],
   ['notebooks', 'Notebooks', 'book'], ['projects', 'Projects', 'proj'], ['habits', 'Habits', 'habit'],
-  ['body', 'Body', 'heart'], ['money', 'Money', 'money'], ['community', 'Community', 'chat'],
+  ['gym', 'Gym', 'heart'], ['fuel', 'Fuel', 'food'],
+  ['money', 'Money', 'money'], ['community', 'Community', 'chat'],
   ['files', 'Files', 'files'], ['people', 'People', 'people'], ['profile', 'Profile', 'focus'],
 ];
 

@@ -75,6 +75,8 @@ export function MealSheet({
       onSave({
         id: crypto.randomUUID(), on_date: on, name: name.trim() || 'Meal', slot,
         kcal: num(kcal), protein: num(protein), carbs: num(carbs), fat: num(fat), photo_path,
+        // The scanner cannot know where you were; Fuel's editor asks for it.
+        place: null,
       });
       onClose();
     } catch (e) {

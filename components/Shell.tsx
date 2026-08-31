@@ -86,7 +86,8 @@ const SECTIONS: Section[] = [
   { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: 'Notebooks', c: PAL.indigo }, { n: 'Canvas', c: PAL.cyan }, { n: 'Graph', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Java', c: PAL.amber }] },
   { id: 'projects', name: 'Projects', ic: 'proj' },
   { id: 'habits', name: 'Habits', ic: 'habit' },
-  { id: 'body', name: 'Body', ic: 'heart', kids: [{ n: 'Health', c: PAL.pink }, { n: 'Food', c: PAL.amber }, { n: 'Gym', c: PAL.mint }] },
+  { id: 'gym', name: 'Gym', ic: 'heart' },
+  { id: 'fuel', name: 'Fuel', ic: 'food' },
   { id: 'money', name: 'Money', ic: 'money', lock: true },
   { id: 'profile', name: 'Profile', ic: 'focus' },
   { id: 'community', name: 'Community', ic: 'chat', kids: [{ n: 'Feed', c: PAL.pink }, { n: 'Messages', c: PAL.sky }, { n: 'Challenges', c: PAL.amber }] },
@@ -94,7 +95,7 @@ const SECTIONS: Section[] = [
   { id: 'people', name: 'People', ic: 'people' },
 ];
 
-const BUILT = new Set(['home', 'tasks', 'calendar', 'habits', 'money', 'notebooks', 'people', 'files', 'body', 'projects', 'community', 'profile', 'more']);
+const BUILT = new Set(['home', 'tasks', 'calendar', 'habits', 'money', 'notebooks', 'people', 'files', 'gym', 'fuel', 'projects', 'community', 'profile', 'more']);
 
 const MORE_SECTION: Section = { id: 'more', name: 'More', ic: 'more' };
 
@@ -360,7 +361,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           f: '/community/',
           p: '/profile/',
           m: '/money/',
-          o: '/body/',
+          o: '/gym/',
+          u: '/fuel/',
           j: '/projects/',
         };
         if (routes[target]) {

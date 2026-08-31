@@ -30,7 +30,8 @@ import { toast } from '@/lib/toast';
 const ITEMS: { id: string; n: string; meta: string; ic: IconName }[] = [
   { id: 'projects', n: 'Projects', meta: 'Boards and milestones', ic: 'proj' },
   { id: 'habits', n: 'Habits', meta: 'Streaks and heatmaps', ic: 'habit' },
-  { id: 'body', n: 'Body', meta: 'Health, food and gym', ic: 'heart' },
+  { id: 'gym', n: 'Gym', meta: 'Splits, sets and volume', ic: 'heart' },
+  { id: 'fuel', n: 'Fuel', meta: 'Water, meals, steps, sleep', ic: 'food' },
   { id: 'money', n: 'Money', meta: 'Budgets and spend', ic: 'money' },
   { id: 'community', n: 'Community', meta: 'Feed, threads, challenges', ic: 'chat' },
   { id: 'files', n: 'Files', meta: 'Basedly Drive', ic: 'files' },

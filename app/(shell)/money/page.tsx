@@ -14,7 +14,12 @@ import {
 } from '@/lib/money';
 import { InlineForm, AddButton, RowActions, toCentavos, fromCentavos } from '@/components/MoneyRows';
 import { TabRail } from '@/components/TabRail';
-import { RunwayGauge, Stacks, Jars, colourOf } from '@/components/money/Instruments';
+import { Stacks, colourOf } from '@/components/money/Instruments';
+import { Jar, type JarRow } from '@/components/money/Jars';
+import { JarPage } from '@/components/money/JarPage';
+import { MoneyPad } from '@/components/money/MoneyPad';
+import { LogSheet } from '@/components/money/LogSheet';
+import { logDay } from '@/lib/logday';
 import { QuickAdd } from '@/components/money/QuickAdd';
 import { burnPerDay, runwayDays, runwayFill, byCategory, monthStart } from '@/lib/runway';
 import { toast } from '@/lib/toast';
@@ -100,6 +105,14 @@ function Money() {
   // One editor at a time across the whole screen: `${tab}:${id}` for an edit,
   // `${tab}:new` for a create, null for none.
   const [editing, setEditing] = useState<string | null>(null);
+
+  // The pad, and where its money is going. `armed` is the jar a single tap
+  // picked; `inside` is the jar a double tap opened.
+  const [pad, setPad] = useState(0);
+  const [kind, setKind] = useState<'expense' | 'income'>('expense');
+  const [armed, setArmed] = useState<string | null>(null);
+  const [inside, setInside] = useState<string | null>(null);
+  const [sheet, setSheet] = useState(false);
   const BA = useBudgetActions();
   const GA = useGoalActions();
   const SA = useSubActions();
@@ -120,7 +133,34 @@ function Money() {
   const burn = burnPerDay(txns, 30);
   const days = runwayDays(balance, burn);
   const spend = byCategory(txns, monthStart(), Date.now());
-  const jars = budgets.map((b) => ({ category: b.category, budget: b.amount_centavos, spent: spentBy(b.category) }));
+  const jars: JarRow[] = budgets.map((b) => ({
+    id: b.id, category: b.category, budget: b.amount_centavos,
+    spent: spentBy(b.category), photo_path: b.photo_path,
+  }));
+
+  /** Today by the lived day, not the calendar one — see lib/logday.ts. */
+  const todaysOut = txns
+    .filter((t) => logDay(t.occurred_at) === logDay(new Date()))
+    .reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
+
+  const armedJar = jars.find((j) => j.id === armed) ?? null;
+  const openJar = jars.find((j) => j.id === inside) ?? null;
+
+  /** One place both the pad and the jar page write through. */
+  const commit = (details: { name: string; where: string; who: string } | null) => {
+    A.addTxn.mutate({
+      id: crypto.randomUUID(),
+      name: details?.name?.trim() || armedJar?.category || 'Expense',
+      amount_centavos: (kind === 'expense' ? -1 : 1) * pad * 100,
+      category: armedJar?.category ?? 'Other',
+      account_id: accounts[0]?.id ?? null,
+      place: details?.where?.trim() || null,
+      who: details?.who?.trim() || null,
+      detailed: details !== null,
+    });
+    toast(details ? `${peso(pad * 100)} logged` : `${peso(pad * 100)} logged — details later`);
+    setPad(0);
+  };
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 820, marginInline: 'auto' }}>
@@ -140,33 +180,86 @@ function Money() {
 
       {isPending && <MoneySkeleton />}
 
-      {!isPending && tab === 'Overview' && (
+      {!isPending && tab === 'Overview' && inside && openJar && (
+        <JarPage
+          jar={openJar}
+          txns={txns}
+          onBack={() => setInside(null)}
+          onEdit={(patch) => { BA.edit.mutate({ id: openJar.id, patch }); toast('Jar updated'); }}
+          onDelete={(t) => A.removeWithUndo(t)}
+          onArchive={(t) => { A.editTxn.mutate({ id: t.id, patch: { category: 'Archived' } }); toast('Moved to Archived'); }}
+          onAdd={() => { setArmed(openJar.id); setInside(null); }}
+        />
+      )}
+
+      {!isPending && tab === 'Overview' && !inside && (
         <>
-          {/* The one number the screen is for. Balance divided by your own
-              rate of spending, which is a question a bank statement never
-              answers however many rows it has. */}
-          <div data-tour="money-budget-ring" style={{ ...CARD, display: 'grid', gap: 6 }}>
-            <div style={KICKER}>How long you can keep going</div>
-            <RunwayGauge days={days} fill={runwayFill(days)} burn={burn} />
+          {/* Runway as a bar rather than a gauge: it is one number and a
+              direction, and a half-circle dial spent a third of the screen
+              saying so. The label carries the burn too, which the dial could
+              only fit underneath itself. */}
+          <div data-tour="money-budget-ring" style={{ display: 'grid', gap: 8 }}>
+            <AsciiBar
+              value={runwayFill(days) * 100}
+              hue={days !== null && days < 7 ? PAL.coral : MINT}
+              text={days === null ? 'Nothing spent yet' : `${days} days of runway · ${peso(burn)}/day`}
+              label="Runway"
+            />
             <div style={{
               display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
-              paddingTop: 6, borderTop: '1px solid var(--line)',
+              paddingTop: 2,
             }}>
               {accounts.map((a) => (
                 <div key={a.id} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-                    {peso(balances.get(a.id) ?? 0)}
-                  </div>
+                  <div className="num" style={{ fontSize: 14.5, fontWeight: 800 }}>{peso(balances.get(a.id) ?? 0)}</div>
                   <div style={KICKER}>{a.name}</div>
                 </div>
               ))}
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral, fontVariantNumeric: 'tabular-nums' }}>
-                  {peso(monthOut)}
-                </div>
+                <div className="num" style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral }}>{peso(todaysOut)}</div>
+                <div style={KICKER}>out today</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div className="num" style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral }}>{peso(monthOut)}</div>
                 <div style={KICKER}>out this month</div>
               </div>
             </div>
+          </div>
+
+          {/* The pad is on the screen because Money is opened to log far more
+              often than it is opened to look. */}
+          <div style={{ marginTop: 12 }}>
+            <MoneyPad
+              amount={pad}
+              kind={kind}
+              jar={armedJar?.category ?? null}
+              onAmount={setPad}
+              onKind={setKind}
+              onSubmit={() => setSheet(true)}
+            />
+          </div>
+
+          {/* One tap arms a jar, two taps open it. */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '18px 0 8px' }}>
+            <div style={KICKER}>Jars</div>
+            <div style={{ fontSize: 10.5, color: armedJar ? MINT : 'var(--tx3)', fontWeight: 600 }}>
+              {armedJar ? `Logging into ${armedJar.category}` : 'Tap a jar to log into it'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {jars.length === 0 && editing !== 'budget:new' && (
+              <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No jars yet — add one below.</div>
+            )}
+            {jars.map((j) => (
+              <Jar
+                key={j.id}
+                jar={j}
+                armed={armed === j.id}
+                onArm={() => setArmed((cur) => (cur === j.id ? null : j.id))}
+                onOpen={() => { setArmed(null); setInside(j.id); }}
+              />
+            ))}
           </div>
 
           {/* Height is money. Four stacks says in a second what four rows of
@@ -179,78 +272,31 @@ function Money() {
             <Stacks spend={spend} />
           </div>
 
-          {/* A budget is an envelope that drains — how much is left is the
-              thing you act on, not what percentage has gone. */}
-          <div style={{ ...CARD, marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 12 }}>
-              <div style={KICKER}>What is left in each jar</div>
-              <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>
-                {jars.length ? `${jars.filter((j) => j.spent < j.budget).length} of ${jars.length} still have room` : ''}
-              </div>
-            </div>
-            <Jars jars={jars} />
-          </div>
-
-          {/* Budgets belong next to what was actually spent. On their own tab
-              they were a list of numbers you had to hold in your head while
-              you went to look at the other list. */}
-          <div style={{ ...CARD, marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 4 }}>
-              <div style={KICKER}>Budgets</div>
-              <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
-                this month
-              </div>
-            </div>
-            {budgets.length === 0 && editing !== 'budget:new' && (
-              <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '8px 0' }}>No budgets set.</div>
-            )}
-            {budgets.map((b) => {
-              const sp = spentBy(b.category);
-              const pc = Math.min(100, Math.round((sp / b.amount_centavos) * 100));
-              const over = sp > b.amount_centavos;
-              if (editing === `budget:${b.id}`) {
-                return (
-                  <InlineForm key={b.id}
-                    fields={[{ key: 'category', label: 'Category', kind: 'text' }, { key: 'amount', label: 'Monthly limit', kind: 'money' }]}
-                    initial={{ category: b.category, amount: fromCentavos(b.amount_centavos) }}
-                    submitLabel="Save"
-                    onCancel={() => setEditing(null)}
-                    onSubmit={(v) => {
-                      BA.edit.mutate({ id: b.id, patch: { category: v.category, amount_centavos: toCentavos(v.amount) } });
-                      setEditing(null);
-                      toast('Budget updated');
-                    }} />
-                );
-              }
-              return (
-                <div key={b.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, flex: 1 }}>{b.category}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{peso(sp)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>of {peso(b.amount_centavos)}</div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: over ? PAL.coral : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{pc}%</div>
-                    <RowActions label={b.category} onEdit={() => setEditing(`budget:${b.id}`)}
-                      onDelete={() => BA.removeWithUndo(b, b.category)} />
-                  </div>
-                  <AsciiBar value={pc} cells={30} hue={over ? PAL.coral : '#F5B33C'} showValue={false}
-                    label={`${b.category} budget used`} />
-                </div>
-              );
-            })}
-            {editing === 'budget:new' ? (
+          {/* Display and editing both moved into the jars above, so all this
+              block still owes is a way to make a new one. */}
+          {editing === 'budget:new' ? (
+            <div style={{ ...CARD, marginTop: 12 }}>
               <InlineForm
-                fields={[{ key: 'category', label: 'Category', kind: 'text', placeholder: 'Food' }, { key: 'amount', label: 'Monthly limit', kind: 'money', placeholder: '6000' }]}
-                submitLabel="Add budget"
+                fields={[
+                  { key: 'category', label: 'Name', kind: 'text', placeholder: 'Food' },
+                  { key: 'amount', label: 'Monthly limit', kind: 'money', placeholder: '6000' },
+                ]}
+                submitLabel="Add jar"
                 onCancel={() => setEditing(null)}
                 onSubmit={(v) => {
-                  BA.add.mutate({ id: crypto.randomUUID(), category: v.category, amount_centavos: toCentavos(v.amount), period: 'monthly' });
+                  BA.add.mutate({
+                    id: crypto.randomUUID(), category: v.category,
+                    amount_centavos: toCentavos(v.amount), period: 'monthly',
+                  });
                   setEditing(null);
-                  toast(`Budget for ${v.category} added`);
+                  toast(`${v.category} jar added`);
                 }} />
-            ) : (
-              <AddButton label="Add a budget" onClick={() => setEditing('budget:new')} />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 12 }}>
+              <AddButton label="Add a jar" onClick={() => setEditing('budget:new')} />
+            </div>
+          )}
         </>
       )}
 
@@ -466,6 +512,16 @@ function Money() {
         </div>
         </>
       )}
+      {sheet && (
+        <LogSheet
+          amount={pad * 100}
+          kind={kind}
+          jar={armedJar?.category ?? null}
+          onClose={() => setSheet(false)}
+          onSave={(d) => commit(d)}
+        />
+      )}
+
       {adding && (
         <QuickAdd onClose={() => setAdding(false)}
           onAdd={(d) => {

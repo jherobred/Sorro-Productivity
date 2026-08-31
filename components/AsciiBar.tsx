@@ -1,9 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import { usePrefs } from '@/lib/prefs';
-import { useLayout } from '@/lib/useLayout';
-import { barParts } from '@/lib/asciiBar';
 
 /**
  * The one progress bar in the app.
@@ -13,143 +10,190 @@ import { barParts } from '@/lib/asciiBar';
  * caller wrote out again with its own duration. Same shape twelve times, and
  * twelve chances for one of them to animate differently from the rest.
  *
- * This one is drawn in text. A bar of `█` on a track of `░` at the app's mono
- * face, which means it lines up with every other number on the screen and
- * needs no track element, no overflow clip and no border-radius.
+ * That was solved by drawing it in text — a bar of `█` on a track of `░` — but
+ * text bought the consistency at the price of everything else. A fixed
+ * character count cannot reflow, so it was capped at 24 cells and truncated on
+ * a phone; the number had to sit outside the track; and a row of block glyphs
+ * reads as a terminal rather than as a body or a budget.
  *
- * The sub-cell geometry lives in lib/asciiBar.ts so it can be checked without
- * a DOM; this file is only the frame loop and the markup.
+ * This is the bar Home already used for "Happening Now": a real object. A
+ * dotted track, a fill that glows in the section hue, a shimmer that sweeps it,
+ * and the label *inside* the bar — which means a bar can finally say what it is
+ * measuring rather than only how far along it is.
+ *
+ * Five shapes, one component. `shape` picks the geometry; everything else about
+ * a bar is the same in all of them, which is the whole point of there being one
+ * of these.
+ *
+ * The `cells` prop is kept and ignored. Fourteen call sites passed a character
+ * count; deleting the prop would mean touching all fourteen to say nothing, and
+ * a fluid bar has no cells to count.
  */
 
-/** How long the fill takes to travel the whole bar, at any distance. */
-const RUN_MS = 620;
+/** How long the fill takes to travel, at any distance. Matches Home. */
+const RUN_MS = 800;
+const EASE = 'cubic-bezier(.16, 1, .3, 1)';
 
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+export type BarShape =
+  /** 24px with room for a label. The default, and what most rows want. */
+  | 'standard'
+  /** 15px, no label. For a row that already prints its number alongside. */
+  | 'slim'
+  /** 4px, square, sits flush along the bottom edge of a card or button. */
+  | 'edge'
+  /** 22px carrying two numbers — spent on the left, the limit on the right. */
+  | 'jar'
+  /** Fills upward instead of across, with the label set vertically. */
+  | 'vertical';
+
+const GEOM: Record<BarShape, { size: number; radius: number; font: number; dot: number }> = {
+  standard: { size: 24, radius: 6, font: 11, dot: 7 },
+  slim: { size: 15, radius: 5, font: 9, dot: 5 },
+  edge: { size: 4, radius: 0, font: 0, dot: 0 },
+  jar: { size: 22, radius: 6, font: 10, dot: 7 },
+  vertical: { size: 34, radius: 9, font: 9, dot: 6 },
+};
 
 export function AsciiBar({
   value,
-  cells: wanted = 24,
   hue,
   label,
   showValue = true,
   suffix = '%',
-  size = 12,
+  shape = 'standard',
+  text,
+  rightText,
+  length,
+  cells: _cells,
+  size: _size,
 }: {
   /** 0–100. Values outside are clamped rather than overflowing the track. */
   value: number;
-  /** Track length in characters. */
-  cells?: number;
-  /** Section hue for the filled run. Defaults to the accent. */
+  /** Section hue for the fill. Defaults to the accent. */
   hue?: string;
-  /** Announced to screen readers, which never see the blocks. */
+  /** Announced to screen readers, which never see the bar. */
   label?: string;
+  /** Print the percentage inside the track. */
   showValue?: boolean;
   /** Written after the number. Pass '' for a bare count. */
   suffix?: string;
+  shape?: BarShape;
+  /** Overrides the percentage with your own words, e.g. "1.50 L of 2.5 L". */
+  text?: string;
+  /** `jar` only: the right-hand number, e.g. the budget. */
+  rightText?: string;
+  /** Track length for `vertical` (height) — ignored by the others, which fill their width. */
+  length?: number;
+  /** Retired with the text bar. Accepted so the existing call sites still compile. */
+  cells?: number;
+  /** Retired with the text bar. */
   size?: number;
 }) {
   const { prefs } = usePrefs();
-  const { phone } = useLayout();
-  const target = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const pct = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const g = GEOM[shape];
+  const colour = hue || 'var(--accTx)';
+  const vertical = shape === 'vertical';
+  const full = pct >= 99.5;
 
   /**
-   * A bar is a fixed number of mono characters, so it cannot reflow — past
-   * about 24 cells it simply runs off a 390px phone. Capping here rather than
-   * at each call site means a caller picking a width for a desktop card does
-   * not also have to remember the phone.
+   * The fill is a plain width/height transition rather than a rAF loop. The
+   * text bar needed frames because it had to recompute glyphs; a div does not,
+   * and letting the compositor own it keeps a screen full of bars off the main
+   * thread.
    */
-  const cells = phone ? Math.min(wanted, 24) : wanted;
+  const move = prefs.motion ? `${vertical ? 'height' : 'width'} ${RUN_MS}ms ${EASE}` : 'none';
 
-  // Current displayed percentage held in a ref so concurrent frames, rapid
-  // updates, and uncommitted re-renders never lose the true instantaneous position.
-  const currentVal = useRef(prefs.motion ? 0 : target);
-  const [shown, setShown] = useState(prefs.motion ? 0 : target);
-  const raf = useRef(0);
-  const from = useRef(0);
+  const inner = (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute',
+        ...(vertical
+          ? { left: 0, right: 0, bottom: 0, height: `${pct}%` }
+          : { left: 0, top: 0, bottom: 0, width: `${pct}%` }),
+        display: 'block',
+        zIndex: 1,
+        borderRadius: full
+          ? g.radius
+          : vertical
+            ? `0 0 ${g.radius - 1}px ${g.radius - 1}px`
+            : `${g.radius - 1}px 0 0 ${g.radius - 1}px`,
+        background: `linear-gradient(${vertical ? '0deg' : '90deg'},
+          color-mix(in srgb, ${colour} 78%, transparent) 0%, ${colour} 100%)`,
+        boxShadow: `0 0 ${shape === 'edge' ? 8 : 12}px color-mix(in srgb, ${colour} 45%, transparent)`,
+        transition: move,
+        overflow: 'hidden',
+      }}
+    >
+      {prefs.motion && pct > 0 && shape !== 'edge' && (
+        <span
+          className="bar-sheen"
+          style={{
+            position: 'absolute', inset: 0, backgroundSize: '200% 100%',
+            backgroundImage:
+              'linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%)',
+          }}
+        />
+      )}
+    </span>
+  );
 
-  useEffect(() => {
-    if (!prefs.motion) {
-      currentVal.current = target;
-      setShown(target);
-      return;
-    }
-
-    from.current = currentVal.current;
-    const delta = target - from.current;
-    if (Math.abs(delta) < 0.05) {
-      currentVal.current = target;
-      setShown(target);
-      return;
-    }
-
-    // Dynamic duration with a minimum threshold so eighth-block progression
-    // (192 sub-cell steps) stays clearly visible and animated on both short hops
-    // and full sweeps.
-    const dur = Math.max(380, Math.min(750, 280 + 470 * (Math.abs(delta) / 100)));
-    const t0 = performance.now();
-
-    const step = (now: number) => {
-      const t = Math.min(1, (now - t0) / dur);
-      const next = from.current + delta * easeOut(t);
-      currentVal.current = next;
-      setShown(next);
-      if (t < 1) {
-        raf.current = requestAnimationFrame(step);
-      } else {
-        currentVal.current = target;
-        setShown(target);
-      }
-    };
-    raf.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf.current);
-  }, [target, prefs.motion, cells]);
-
-  const { filled, edge, rest } = barParts(shown, cells);
-  const color = hue || 'var(--accTx)';
+  const words = text ?? (showValue ? `${Math.round(pct)}${suffix}` : '');
+  const showLabel = shape !== 'edge' && (words !== '' || rightText);
 
   return (
-    <div
+    <span
       role="progressbar"
-      aria-valuenow={Math.round(target)}
+      aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0,
-        fontFamily: 'var(--font-mono)', fontSize: size, lineHeight: 1.15,
-        verticalAlign: 'middle', userSelect: 'none',
+        position: 'relative',
+        display: 'block',
+        flex: 'none',
+        ...(vertical
+          ? { width: g.size, height: length ?? '100%', minHeight: 64 }
+          : { width: '100%', height: g.size }),
+        borderRadius: g.radius,
+        background: 'color-mix(in srgb, var(--line2) 38%, var(--card2))',
+        border: shape === 'edge' ? 'none' : '1px solid var(--line2)',
+        overflow: 'hidden',
       }}
     >
-      <span
-        aria-hidden
-        style={{
-          display: 'inline-flex', alignItems: 'center', whiteSpace: 'pre',
-          letterSpacing: '0', minWidth: 0, overflow: 'hidden',
-          fontFamily: 'var(--font-mono)', fontSize: size,
-        }}
-      >
-        <span style={{ color: 'var(--tx3)', opacity: 0.7, marginRight: 1 }}>[</span>
+      {g.dot > 0 && (
         <span
-          className={prefs.motion && (filled || edge) ? 'ascii-fill-shimmer' : undefined}
+          aria-hidden
           style={{
-            color: color,
-            background: prefs.motion && (filled || edge)
-              ? `linear-gradient(90deg, ${color} 0%, ${color} 30%, color-mix(in srgb, ${color} 68%, #FFFFFF) 50%, ${color} 70%, ${color} 100%)`
-              : undefined,
-            fontWeight: 700,
+            position: 'absolute', inset: 0, opacity: 0.62,
+            backgroundImage: 'radial-gradient(circle, var(--line2) 1.2px, transparent 1.2px)',
+            backgroundSize: `${g.dot}px ${g.dot}px`,
+          }}
+        />
+      )}
+      {inner}
+      {showLabel && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0, zIndex: 3, display: 'flex', alignItems: 'center',
+            justifyContent: rightText ? 'space-between' : 'center',
+            padding: rightText ? '0 8px' : 0,
+            gap: 5, pointerEvents: 'none',
+            fontFamily: 'var(--font-mono)', fontSize: g.font, fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums', color: 'var(--tx)',
+            textShadow: '0 1px 3px rgba(0,0,0,.75)',
+            ...(vertical
+              ? { writingMode: 'vertical-rl' as const, transform: 'rotate(180deg)', justifyContent: 'center' }
+              : null),
           }}
         >
-          {filled}{edge}
-        </span>
-        <span style={{ color: 'var(--line2)', opacity: 0.55, fontWeight: 400 }}>{rest}</span>
-        <span style={{ color: 'var(--tx3)', opacity: 0.7, marginLeft: 1 }}>]</span>
-      </span>
-      {showValue && (
-        <span className="num" style={{ flex: 'none', color: 'var(--tx2)', fontSize: Math.max(9.5, size - 0.5), fontWeight: 700 }}>
-          {Math.round(shown)}{suffix}
+          {words && <span>{words}</span>}
+          {rightText && <span style={{ opacity: 0.85 }}>{rightText}</span>}
         </span>
       )}
-    </div>
+    </span>
   );
 }
 
@@ -160,5 +204,3 @@ export function AsciiBar({
 export function AsciiBarBare(props: Omit<Parameters<typeof AsciiBar>[0], 'showValue'>) {
   return <AsciiBar {...props} showValue={false} />;
 }
-
-

@@ -36,6 +36,8 @@ export type Day = {
 export type Meal = {
   id: string; on_date: string; name: string; slot: string;
   kcal: number; protein: number; carbs: number; fat: number; photo_path: string | null;
+  /** Where it was bought or eaten. Free text — "sa tabi ng SM" is a real answer. */
+  place: string | null;
 };
 
 export type Workout = {
@@ -89,7 +91,7 @@ export function useMeals(on: string) {
       const fx = fixture<Meal[]>('meals');
       if (fx) return fx;
       const { data, error } = await supabase.from('bd_meals')
-        .select('id,on_date,name,slot,kcal,protein,carbs,fat,photo_path')
+        .select('id,on_date,name,slot,kcal,protein,carbs,fat,photo_path,place')
         .eq('on_date', on).order('id');
       if (error) throw error;
       return (data ?? []) as Meal[];
@@ -124,6 +126,11 @@ const SET_DAY = defineMutation('body2.setDay', async (v: { on_date: string; patc
 const ADD_MEAL = defineMutation('body2.addMeal', async (v: Meal) => {
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_meals').insert({ ...v, user_id });
+  if (error) throw error;
+});
+
+const EDIT_MEAL = defineMutation('body2.editMeal', async (v: { id: string; patch: Partial<Meal> }) => {
+  const { error } = await supabase.from('bd_meals').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -186,6 +193,17 @@ export function useBodyActions(back = 30, on = ymd(new Date())) {
     onSettled: settle,
   });
 
+  const editMeal = useMutation<unknown, Error, { id: string; patch: Partial<Meal> }, Meal[]>({
+    mutationKey: EDIT_MEAL,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Meal[]>(mealKey) ?? [];
+      queryClient.setQueryData<Meal[]>(mealKey, prev.map((m) => (m.id === v.id ? { ...m, ...v.patch } : m)));
+      return prev;
+    },
+    onError: (e, _v, ctx) => { if (ctx) queryClient.setQueryData(mealKey, ctx); toast(e.message); },
+    onSettled: settle,
+  });
+
   const delMeal = useMutation<unknown, Error, { id: string }, Meal[]>({
     mutationKey: DEL_MEAL,
     onMutate: (v) => {
@@ -230,7 +248,7 @@ export function useBodyActions(back = 30, on = ymd(new Date())) {
     onSettled: settle,
   });
 
-  return { setDay, addMeal, delMeal, addWorkout, editWorkout, delWorkout };
+  return { setDay, addMeal, editMeal, delMeal, addWorkout, editWorkout, delWorkout };
 }
 
 /* --------------------------------------------------------------- reckoning */

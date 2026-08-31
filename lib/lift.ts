@@ -126,6 +126,17 @@ export function e1rm(weight: number, reps: number): number {
   return Math.round(weight * (1 + Math.min(reps, 12) / 30) * 10) / 10;
 }
 
+/**
+ * Pounds per kilogram. Sets are stored in kg because that is what the plates in
+ * a Philippine gym are cast in; volume is *read* in lbs because the numbers are
+ * bigger and a session total is a number you compare against last week rather
+ * than load onto a bar.
+ */
+export const LB_PER_KG = 2.20462262;
+
+/** Kilograms as pounds, rounded — a volume total has no use for decimals. */
+export const lbs = (kg: number): number => Math.round(kg * LB_PER_KG);
+
 /** Weight moved: every completed set, weight times reps. Unfinished sets are not work. */
 export function volumeOf(sets: WorkoutSet[]): number {
   return Math.round(sets.filter((s) => s.done).reduce((n, s) => n + s.weight_kg * s.reps, 0));

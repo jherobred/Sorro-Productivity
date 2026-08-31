@@ -445,6 +445,48 @@
   -webkit-text-fill-color: currentColor !important;
 }
 
+/* The progress bar's sheen.
+   Distinct from .ascii-fill-shimmer above, which clips its gradient to *text* —
+   correct when the bar was drawn in block glyphs, invisible now that the fill
+   is a div with nothing inside it to clip to. */
+@keyframes bar-sheen {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.bar-sheen {
+  animation: bar-sheen 2.4s linear infinite;
+  animation-play-state: var(--anim, running);
+}
+
+/* The water surface: a rounded square wider than the glass, turning. Its width
+   sets how much curve is visible, so it is tuned in the component rather than
+   here; this only spins it. Duration and direction come from the hydration
+   state, which is why they are inline styles and not in this rule. */
+@keyframes water-wave {
+  to { transform: translateX(-50%) rotate(360deg); }
+}
+.water-wave {
+  animation-name: water-wave;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-play-state: var(--anim, running);
+}
+
+/* Reserved for the two over-drinking warnings. Nothing else on Fuel pulses, so
+   this reads as an interruption rather than as decoration. */
+@keyframes water-thump {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.water-thump {
+  animation: water-thump 1s ease-in-out infinite;
+  animation-play-state: var(--anim, running);
+}
+
+.nomo .bar-sheen,
+.nomo .water-wave,
+.nomo .water-thump { animation: none !important; }
+
 /* Custom Running Man Vector Stride & Wind Stream */
 @keyframes runner-stride {
   0% { transform: translateY(0) rotate(-5deg); }

@@ -137,8 +137,12 @@ export function HubBoard({ go, phone }: { go: (id: string) => void; phone: boole
       body: <>{line('Boards, milestones and owners')}{quiet('Open the board')}</>,
     },
     {
-      id: 'body', name: 'Body', icon: 'heart', hue: SECHUE.body,
-      body: <>{line('Health, Food and Gym')}{quiet("Today's split and what you ate")}</>,
+      id: 'gym', name: 'Gym', icon: 'heart', hue: SECHUE.gym,
+      body: <>{line('Your split and this week’s volume')}{quiet('Start today’s routine')}</>,
+    },
+    {
+      id: 'fuel', name: 'Fuel', icon: 'food', hue: SECHUE.fuel,
+      body: <>{line('Water, meals, steps and sleep')}{quiet('What you have taken in today')}</>,
     },
     {
       id: 'community', name: 'Community', icon: 'chat', hue: 'var(--acc)',
