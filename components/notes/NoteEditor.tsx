@@ -580,7 +580,10 @@ export function NoteEditor({
   /* --------------------------------------------------------------- render */
 
   const lines = useMemo(() => parse(body), [body]);
-  const lineCount = useMemo(() => Math.max(body.split('\n').length, 1), [body]);
+  const lineCount = useMemo(() => {
+    if (!body) return 1;
+    return body.split('\n').length;
+  }, [body]);
   const words = wordCount(body);
   const t = taskCount(body);
 
@@ -588,6 +591,8 @@ export function NoteEditor({
     () => lines.some((l) => l.kind === 'math' || l.text.includes('$') || l.text.includes('\\(')),
     [lines],
   );
+
+  const linePx = phone ? 25.52 : 27.28;
 
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -713,22 +718,29 @@ export function NoteEditor({
                 aria-hidden
                 style={{
                   flex: 'none',
-                  minWidth: phone ? 26 : 34,
-                  maxWidth: 48,
-                  padding: '8px 6px 8px 0',
+                  minWidth: phone ? 24 : 32,
+                  maxWidth: 44,
+                  padding: '8px 8px 8px 0',
                   textAlign: 'right',
                   fontFamily: MONO,
-                  fontSize: phone ? 11 : 12.5,
-                  lineHeight: 1.76,
-                  color: 'var(--tx3)',
-                  opacity: 0.55,
                   userSelect: 'none',
                   borderRight: '1px solid var(--line2)',
-                  marginRight: 10,
+                  marginRight: 12,
+                  boxSizing: 'border-box',
                 }}
               >
-                {Array.from({ length: Math.max(lineCount, 15) }, (_, idx) => (
-                  <div key={idx + 1} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {Array.from({ length: lineCount }, (_, idx) => (
+                  <div
+                    key={idx + 1}
+                    style={{
+                      height: linePx,
+                      lineHeight: `${linePx}px`,
+                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: phone ? 11.5 : 12.5,
+                      color: 'var(--tx3)',
+                      opacity: 0.5,
+                    }}
+                  >
                     {idx + 1}
                   </div>
                 ))}
@@ -762,15 +774,15 @@ export function NoteEditor({
                     onKeyDown={onKeyDown}
                     placeholder="Start writing… Type $$ for math blocks, $..$ for inline equations, [[ ]] to link notes."
                     aria-label="Note body"
-                    rows={12}
+                    rows={lineCount}
                     className="note-editor-clean-input"
                     style={{
                       width: '100%',
-                      minHeight: phone ? 320 : 420,
+                      minHeight: phone ? 280 : 360,
                       resize: 'none',
                       overflow: 'hidden',
                       fontSize: phone ? 14.5 : 15.5,
-                      lineHeight: 1.76,
+                      lineHeight: `${linePx}px`,
                       letterSpacing: '-.01em',
                       color: 'var(--tx)',
                       fontFamily: 'inherit',
@@ -779,7 +791,9 @@ export function NoteEditor({
                       boxShadow: 'none',
                       background: 'transparent',
                       padding: '8px 0',
+                      margin: 0,
                       display: 'block',
+                      boxSizing: 'border-box',
                     }}
                   />
 
