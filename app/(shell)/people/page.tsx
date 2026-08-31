@@ -124,36 +124,10 @@ export default function PeoplePage() {
   const settle = settler(qc, KEY);
   const { isFollowing, toggleFollow } = useFollows();
 
-  const [viewTab, setViewTab] = useState<'roster' | 'archived' | 'trash'>('roster');
+  const [viewTab, setViewTab] = useState<'roster' | 'trash'>('roster');
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxGroup[] } | null>(null);
-
-  // Archived people persisted in localStorage
-  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('bd_archived_people_ids');
-        return raw ? new Set(JSON.parse(raw)) : new Set<string>();
-      } catch {
-        return new Set<string>();
-      }
-    }
-    return new Set<string>();
-  });
-
-  const toggleArchive = (id: string) => {
-    setArchivedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('bd_archived_people_ids', JSON.stringify([...next]));
-      }
-      toast(next.has(id) ? 'Contact archived' : 'Contact unarchived');
-      return next;
-    });
-  };
 
   const { data: rawPeople = [], isPending } = useQuery({
     queryKey: KEY,
@@ -168,17 +142,13 @@ export default function PeoplePage() {
   const people = useMemo(() => overlayPeople(rawPeople), [rawPeople]);
 
   const activePeople = useMemo(() => people.filter((p) => !p.deleted_at), [people]);
-  const nonArchivedPeople = useMemo(() => activePeople.filter((p) => !archivedIds.has(p.id)), [activePeople, archivedIds]);
-  const archivedPeople = useMemo(() => activePeople.filter((p) => archivedIds.has(p.id)), [activePeople, archivedIds]);
   const trashedPeople = useMemo(() => people.filter((p) => !!p.deleted_at), [people]);
 
   useEffect(() => {
-    if (viewTab === 'roster' && !sel && nonArchivedPeople.length && !phone) {
-      setSel(nonArchivedPeople[0].id);
-    } else if (viewTab === 'archived' && !sel && archivedPeople.length && !phone) {
-      setSel(archivedPeople[0].id);
+    if (viewTab === 'roster' && !sel && activePeople.length && !phone) {
+      setSel(activePeople[0].id);
     }
-  }, [nonArchivedPeople, archivedPeople, sel, phone, viewTab]);
+  }, [activePeople, sel, phone, viewTab]);
 
   const add = useMutation<unknown, Error, { id: string; name: string; category: string; color: string; email: string }>({
     mutationKey: ADD,
@@ -266,12 +236,10 @@ export default function PeoplePage() {
       const remaining = activePeople.filter((item) => item.id !== p.id);
       setSel(remaining.length ? remaining[0].id : null);
     }
-    toast(`Moved ${p.name} to Trash`, () => restore.mutate({ id: p.id }));
+    toast(`Moved ${p.name} to Trash / Archive`, () => restore.mutate({ id: p.id }));
   };
 
-  const currentList = viewTab === 'archived' ? archivedPeople : nonArchivedPeople;
-
-  const filteredPeople = currentList.filter((p) => {
+  const filteredPeople = activePeople.filter((p) => {
     if (!q.trim()) return true;
     const term = q.trim().toLowerCase();
     return p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term) || (p.email && p.email.toLowerCase().includes(term));
@@ -280,7 +248,6 @@ export default function PeoplePage() {
   const isFollowed = person ? (isFollowing(person.name.toLowerCase().replace(/\s+/g, '')) || isFollowing(person.id)) : false;
 
   const personContextMenu = (p: Person): CtxGroup[] => {
-    const isArchived = archivedIds.has(p.id);
     return [
       { items: [
         {
@@ -309,13 +276,8 @@ export default function PeoplePage() {
         })),
       },
       {
-        label: 'Status & Info',
+        label: 'Info & Copy',
         items: [
-          {
-            label: isArchived ? 'Unarchive Contact' : 'Archive Contact',
-            icon: 'clock',
-            run: () => toggleArchive(p.id),
-          },
           {
             label: 'Copy Contact Details',
             icon: 'copy',
@@ -330,12 +292,12 @@ export default function PeoplePage() {
       {
         items: [
           {
-            label: 'Move to Trash',
+            label: 'Move to Trash & Archive',
             icon: 'trash',
             danger: true,
-            run: () => void confirmAsk(`Move “${p.name}” to Trash?`, {
-              message: 'You can restore them anytime from the Trash archive.',
-              confirmLabel: 'Move to Trash',
+            run: () => void confirmAsk(`Move “${p.name}” to Trash / Archive?`, {
+              message: 'You can restore them anytime from the Trash & Archive tab.',
+              confirmLabel: 'Move to Archive / Trash',
               danger: true,
             }).then((yes) => { if (yes) deleteWithUndo(p); }),
           },
@@ -348,9 +310,9 @@ export default function PeoplePage() {
     <RowsSkeleton rows={6} label="Loading your people" lead="circle" />
   ) : (
     <div data-tour="people-roster" style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      {/* Top Segment: All People vs Archived vs Trash Archive */}
+      {/* Top Segment: All People vs Trash & Archive */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 3, padding: 3, borderRadius: 9, background: 'var(--card2)',
+        display: 'flex', alignItems: 'center', gap: 4, padding: 3, borderRadius: 9, background: 'var(--card2)',
         border: '1px solid var(--line2)', marginBottom: 8,
       }}>
         <button
@@ -358,31 +320,15 @@ export default function PeoplePage() {
           onClick={() => setViewTab('roster')}
           className="k-squish"
           style={{
-            flex: 1, padding: '5px 6px', borderRadius: 7, fontSize: 11, fontWeight: viewTab === 'roster' ? 800 : 600,
+            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: viewTab === 'roster' ? 800 : 600,
             background: viewTab === 'roster' ? 'var(--card)' : 'transparent',
             color: viewTab === 'roster' ? 'var(--tx)' : 'var(--tx3)',
             boxShadow: viewTab === 'roster' ? 'var(--sh)' : 'none',
-            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
           }}
         >
-          <Icon name="people" size={11} color={viewTab === 'roster' ? 'var(--accTx)' : 'var(--tx3)'} />
-          <span>All ({nonArchivedPeople.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setViewTab('archived')}
-          className="k-squish"
-          style={{
-            flex: 1, padding: '5px 6px', borderRadius: 7, fontSize: 11, fontWeight: viewTab === 'archived' ? 800 : 600,
-            background: viewTab === 'archived' ? 'var(--card)' : 'transparent',
-            color: viewTab === 'archived' ? 'var(--tx)' : 'var(--tx3)',
-            boxShadow: viewTab === 'archived' ? 'var(--sh)' : 'none',
-            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          }}
-        >
-          <Icon name="clock" size={11} color={viewTab === 'archived' ? 'var(--pal-amber)' : 'var(--tx3)'} />
-          <span>Archive ({archivedPeople.length})</span>
+          <Icon name="people" size={12} color={viewTab === 'roster' ? 'var(--accTx)' : 'var(--tx3)'} />
+          <span>All ({activePeople.length})</span>
         </button>
 
         <button
@@ -390,15 +336,15 @@ export default function PeoplePage() {
           onClick={() => { setViewTab('trash'); setSel(null); }}
           className="k-squish"
           style={{
-            flex: 1, padding: '5px 6px', borderRadius: 7, fontSize: 11, fontWeight: viewTab === 'trash' ? 800 : 600,
+            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: viewTab === 'trash' ? 800 : 600,
             background: viewTab === 'trash' ? 'var(--card)' : 'transparent',
             color: viewTab === 'trash' ? 'var(--tx)' : 'var(--tx3)',
             boxShadow: viewTab === 'trash' ? 'var(--sh)' : 'none',
-            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
           }}
         >
-          <Icon name="trash" size={11} color={viewTab === 'trash' ? 'var(--pal-coral)' : 'var(--tx3)'} />
-          <span>Trash ({trashedPeople.length})</span>
+          <Icon name="trash" size={12} color={viewTab === 'trash' ? 'var(--pal-coral)' : 'var(--tx3)'} />
+          <span>Trash & Archive ({trashedPeople.length})</span>
         </button>
 
         <button onClick={create} className="hov k-squish" aria-label="Add someone" title="Add someone"
@@ -416,7 +362,7 @@ export default function PeoplePage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={viewTab === 'archived' ? 'Search archived contacts…' : 'Search contacts…'}
+          placeholder="Search contacts…"
           style={{ flex: 1, minWidth: 0, fontSize: 12, border: 'none', background: 'transparent', color: 'var(--tx)', outline: 'none' }}
         />
         {q && (
@@ -425,7 +371,6 @@ export default function PeoplePage() {
       </div>
 
       {filteredPeople.map((p) => {
-        const isArchived = archivedIds.has(p.id);
         return (
           <button
             key={p.id}
@@ -447,15 +392,7 @@ export default function PeoplePage() {
                 color: p.name === 'Untitled Person' ? 'var(--tx3)' : 'var(--tx)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{p.name}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-                <span>{p.category}</span>
-                {isArchived && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 4,
-                    color: 'var(--pal-amber)', background: 'color-mix(in srgb, var(--pal-amber) 15%, transparent)',
-                  }}>Archived</span>
-                )}
-              </span>
+              <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{p.category}</span>
             </span>
           </button>
         );
@@ -470,7 +407,7 @@ export default function PeoplePage() {
           display: 'flex', flexDirection: 'column', gap: 6,
         }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--pal-coral)', letterSpacing: '.06em' }}>
-            Found in Trash:
+            Found in Trash & Archive:
           </div>
           {trashedPeople.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())).map((tp) => (
             <div key={tp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -507,22 +444,16 @@ export default function PeoplePage() {
             No contacts match “{q}”.
           </div>
         ) : (
-          viewTab === 'archived' ? (
-            <div style={{ padding: '24px 10px', textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>
-              No archived contacts. Right-click any contact to archive them.
-            </div>
-          ) : (
-            <>
-              <GhostRoster />
-              <button onClick={create} className="acc k-squish" style={{
-                marginTop: 10, padding: '9px 14px', borderRadius: 10, background: 'var(--acc)',
-                color: 'var(--ink)', fontSize: 12, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: 'none', cursor: 'pointer',
-              }}>
-                <Icon name="plus" size={14} color="var(--ink)" />Add the first person
-              </button>
-            </>
-          )
+          <>
+            <GhostRoster />
+            <button onClick={create} className="acc k-squish" style={{
+              marginTop: 10, padding: '9px 14px', borderRadius: 10, background: 'var(--acc)',
+              color: 'var(--ink)', fontSize: 12, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: 'none', cursor: 'pointer',
+            }}>
+              <Icon name="plus" size={14} color="var(--ink)" />Add the first person
+            </button>
+          </>
         )
       )}
     </div>
@@ -537,16 +468,16 @@ export default function PeoplePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="trash" size={16} color="var(--pal-coral)" />
           <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--tx)' }}>
-            Trash Archive ({trashedPeople.length})
+            Trash & Archive ({trashedPeople.length})
           </span>
         </div>
 
         {trashedPeople.length > 0 && (
           <button
             type="button"
-            onClick={() => void confirmAsk('Empty all people in trash?', {
-              message: 'This will permanently remove all trashed contacts.',
-              confirmLabel: 'Empty Trash',
+            onClick={() => void confirmAsk('Empty all people in Trash & Archive?', {
+              message: 'This will permanently remove all trashed/archived contacts.',
+              confirmLabel: 'Empty Trash & Archive',
               danger: true,
             }).then((yes) => {
               if (yes) {
@@ -560,14 +491,14 @@ export default function PeoplePage() {
               background: 'var(--card2)', color: 'var(--pal-coral)', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
             }}
           >
-            Empty Trash
+            Empty Trash & Archive
           </button>
         )}
       </div>
 
       {trashedPeople.length === 0 ? (
         <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>
-          Trash is empty. Deleted contacts will appear here and can be restored anytime.
+          Trash & Archive is empty. Deleted and archived contacts will appear here and can be restored anytime.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

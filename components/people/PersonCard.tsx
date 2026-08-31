@@ -18,6 +18,7 @@ export type OsintData = {
   networks?: string[]; // domains, IPs, WHOIS
   emails?: string[];
   phones?: string[];
+  canvas_course_url?: string;
   dossier_notes?: string;
   confidence?: 'confirmed' | 'probable' | 'unverified';
 };
@@ -115,6 +116,12 @@ const SOCIAL_PLATFORMS: { label: string; icon: IconName; placeholder: string; pr
     label: 'Website',
     icon: 'link',
     placeholder: 'https://personal-site.com',
+    prefix: (v) => (v.startsWith('http') ? v : `https://${v}`),
+  },
+  {
+    label: 'Canvas Course Site',
+    icon: 'book',
+    placeholder: 'https://canvas.instructure.com/courses/...',
     prefix: (v) => (v.startsWith('http') ? v : `https://${v}`),
   },
   {
@@ -400,6 +407,22 @@ export function PersonCard({
             href={person.basedly_handle ? `/profile/?u=${encodeURIComponent(person.basedly_handle.replace(/^@/, ''))}` : undefined}
             onSave={(v) => onPatch({ basedly_handle: v.replace(/^@/, '') })}
           />
+          {/* Professor / Teacher specific: Canvas Course Site Link */}
+          {(person.category === 'Prof' || person.category.toLowerCase().includes('prof') || person.category.toLowerCase().includes('teacher') || person.category.toLowerCase().includes('instructor')) && (
+            <InlineField
+              label="Canvas Course Site"
+              icon="book"
+              value={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || ''}
+              placeholder="https://canvas.instructure.com/courses/..."
+              type="url"
+              href={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || undefined}
+              onSave={(v) => {
+                const normalized = v.trim() ? (v.trim().startsWith('http') ? v.trim() : `https://${v.trim()}`) : '';
+                updateSocialLink('Canvas Course Site', normalized, (val) => val);
+                patchOsint({ canvas_course_url: normalized || undefined });
+              }}
+            />
+          )}
         </div>
 
         <div>
