@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="saladBowl" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2D2833"/>
+      <stop offset="85%" stop-color="#191620"/>
+      <stop offset="100%" stop-color="#0E0D12"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+
+  <rect width="400" height="300" fill="#0C0B12"/>
+  <circle cx="200" cy="150" r="140" fill="#14131D" opacity="0.8"/>
+
+  <!-- Wooden/Ceramic bowl -->
+  <ellipse cx="200" cy="150" rx="135" ry="120" fill="url(#saladBowl)" filter="url(#shadow)" stroke="#4A455A" stroke-width="3"/>
+  <ellipse cx="200" cy="150" rx="115" ry="102" fill="#201C27"/>
+
+  <!-- Eggplant / Talong Base & Green Mango bits -->
+  <g filter="url(#shadow)">
+    <!-- Grilled Talong slices -->
+    <path d="M 120,130 Q 150,110 180,125 Q 160,150 130,145 Z" fill="#4C2A58"/>
+    <path d="M 210,130 Q 240,110 270,125 Q 250,155 220,145 Z" fill="#4C2A58"/>
+    <!-- Fresh Green Mango slices (Mangga) -->
+    <path d="M 160,105 Q 185,95 210,105 Q 200,125 175,120 Z" fill="#FACC15"/>
+    <path d="M 140,165 Q 165,150 190,165 Q 175,185 150,180 Z" fill="#FDE047"/>
+  </g>
+
+  <!-- Salted Egg (Itlog na Maalat) Wedges -->
+  <g filter="url(#shadow)">
+    <!-- White -->
+    <ellipse cx="145" cy="190" rx="22" ry="16" fill="#F4EDE4" stroke="#E2D4C3" stroke-width="1.5" transform="rotate(-15 145 190)"/>
+    <!-- Bright Orange Salted Egg Yolk -->
+    <circle cx="145" cy="190" r="10" fill="#EA580C"/>
+    <circle cx="143" cy="188" r="3" fill="#FB923C" opacity="0.8"/>
+
+    <!-- White 2 -->
+    <ellipse cx="245" cy="180" rx="22" ry="16" fill="#F4EDE4" stroke="#E2D4C3" stroke-width="1.5" transform="rotate(20 245 180)"/>
+    <!-- Bright Orange Salted Egg Yolk 2 -->
+    <circle cx="245" cy="180" r="10" fill="#EA580C"/>
+    <circle cx="243" cy="178" r="3" fill="#FB923C" opacity="0.8"/>
+  </g>
+
+  <!-- Diced Red Tomatoes (Kamatis) -->
+  <g fill="#EF4444" filter="url(#shadow)">
+    <rect x="185" y="135" width="16" height="14" rx="4"/>
+    <rect x="165" y="145" width="14" height="14" rx="4"/>
+    <rect x="210" y="145" width="16" height="14" rx="4"/>
+    <rect x="190" y="165" width="18" height="15" rx="4"/>
+  </g>
+  <!-- Tomato seeds -->
+  <g fill="#FEF08A">
+    <circle cx="193" cy="142" r="1.8"/>
+    <circle cx="218" cy="152" r="1.8"/>
+    <circle cx="199" cy="172" r="1.8"/>
+  </g>
+
+  <!-- Red Onion rings & Bagoong garnish -->
+  <g stroke="#C084FC" stroke-width="2.5" fill="none" opacity="0.85">
+    <ellipse cx="170" cy="115" rx="14" ry="8" transform="rotate(25 170 115)"/>
+    <ellipse cx="225" cy="115" rx="16" ry="9" transform="rotate(-20 225 115)"/>
+  </g>
+  <!-- Bagoong Alamang dollop -->
+  <circle cx="200" cy="152" r="9" fill="#7C2D37" stroke="#4C1D24" stroke-width="1.5"/>
+</svg>

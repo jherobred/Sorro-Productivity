@@ -139,21 +139,38 @@ export function NotebookTable({
           <Icon name="bookPlus" size={15} color="var(--ink)" />New notebook
         </button>
 
-        <button onClick={() => onNewBoard('canvas')} className="hov tap" style={NEW_BTN}>
-          <Icon name="grid" size={14} color="var(--tx3)" />New canvas
-        </button>
-        <button onClick={() => onNewBoard('graph')} className="hov tap" style={NEW_BTN}>
-          <Icon name="link" size={14} color="var(--tx3)" />New graph
-        </button>
-
         <button onClick={() => setDesc((v) => !v)} className="hov tap"
           title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
           style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
           <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
 
+        {onOpenTrash && (
+          <button
+            onClick={onOpenTrash}
+            className="hov tap"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              minHeight: 36,
+              borderRadius: 999,
+              border: '1px solid var(--line2)',
+              background: 'var(--card)',
+              color: trashCount > 0 ? 'var(--pal-coral)' : 'var(--tx3)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="trash" size={13} color="var(--pal-coral)" />
+            <span>Bin{trashCount > 0 ? ` (${trashCount})` : ''}</span>
+          </button>
+        )}
+
         <label style={{
-          marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8, flex: phone ? '1 1 100%' : '0 0 260px',
+          marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8, flex: phone ? '1 1 100%' : '0 0 240px',
           padding: '0 12px', height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card)',
         }}>
           <Icon name="search" size={14} color="var(--tx3)" />
@@ -193,72 +210,16 @@ export function NotebookTable({
               );
             })}
 
-            {boardRows.map((b) => (
-              <BoardRow key={b.id} board={b} me={me} phone={phone}
-                onOpen={() => onOpenBoard(b)}
-                onMenu={(x, y) => setMenu({
-                  x, y, label: b.name,
-                  items: [
-                    { items: [{ label: 'Open', icon: b.kind === 'graph' ? 'link' : 'grid', run: () => onOpenBoard(b) }] },
-                    { items: [
-                      { label: 'Rename', icon: 'edit', run: () => onRenameBoard(b) },
-                      { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },
-                    ] },
-                    { items: [{ label: `Delete ${b.kind === 'graph' ? 'graph' : 'canvas'}`, icon: 'trash', danger: true, run: () => onDeleteBoard(b) }] },
-                  ],
-                })} />
-            ))}
-
-            {rows.length + boardRows.length === 0 && (
+            {rows.length === 0 && (
               <tr>
                 <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
-                  {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook, a canvas or a graph.'}
+                  {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {/* Full Width Trash / Archive Section Bar */}
-      {onOpenTrash && (
-        <div style={{
-          marginTop: 'auto',
-          padding: '10px 12px',
-          borderRadius: 12,
-          background: 'var(--card2)',
-          border: '1px solid var(--line2)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 8,
-          flex: 'none',
-        }}>
-          <button
-            onClick={onOpenTrash}
-            className="hov k-squish"
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              padding: '10px 16px',
-              borderRadius: 10,
-              background: 'var(--card)',
-              border: '1px solid var(--line2)',
-              fontSize: 12.5,
-              fontWeight: 800,
-              color: 'var(--tx)',
-              cursor: 'pointer',
-            }}
-          >
-            <Icon name="trash" size={14} color="var(--pal-coral)" />
-            <span>Bin ({trashCount} deleted note{trashCount === 1 ? '' : 's'}, {archivedNbIds?.size ?? 0} archived notebook{(archivedNbIds?.size ?? 0) === 1 ? '' : 's'})</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }

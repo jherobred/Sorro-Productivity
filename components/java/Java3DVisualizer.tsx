@@ -6,6 +6,43 @@ import { playClick } from '@/lib/audio';
 import { PAL } from '@/lib/pal';
 import type { FrameSnap, HeapObj } from '@/lib/java';
 
+export interface AISimEntity {
+  id: number;
+  label: string;
+  val: string | number;
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  type?: 'cube' | 'sphere' | 'cylinder' | 'node';
+}
+
+export interface AISimLink {
+  from: number;
+  to: number;
+  color: string;
+  label?: string;
+}
+
+export interface AISimStep {
+  line: number;
+  message: string;
+  highlightIds?: number[];
+  activeId?: number;
+  variables?: Record<string, unknown>;
+}
+
+export interface AISimulationData {
+  title?: string;
+  algorithm?: string;
+  dimension?: '3d' | '2.5d' | '2d';
+  suggestedMode?: VisMode;
+  summary?: string;
+  entities?: AISimEntity[];
+  links?: AISimLink[];
+  steps?: AISimStep[];
+}
+
 interface Java3DVisualizerProps {
   frames: FrameSnap[];
   heap: HeapObj[];
@@ -13,6 +50,7 @@ interface Java3DVisualizerProps {
   activeLine: number | null;
   stepNote?: string;
   phone?: boolean;
+  aiSimulation?: AISimulationData | null;
 }
 
 export type RenderStyle = 'stage2d' | 'orbit3d';
@@ -61,6 +99,7 @@ export function Java3DVisualizer({
   activeLine,
   stepNote,
   phone = false,
+  aiSimulation,
 }: Java3DVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -965,13 +1004,69 @@ export function Java3DVisualizer({
         }
       };
 
-      const count = 8;
-      const spacing = 32;
-      const startX = -((count - 1) * spacing) / 2;
-      for (let i = 0; i < count; i++) {
-        const x = startX + i * spacing;
-        const h = 20 + i * 12;
-        drawVoxel3D(x, 0, 0, 22, h, 22, PAL.indigo, '#5748D6', '#3E32A3', `${h}`);
+      if (aiSimulation && aiSimulation.entities && aiSimulation.entities.length > 0) {
+        // Draw Links
+        if (aiSimulation.links) {
+          aiSimulation.links.forEach((lk) => {
+            const fromE = aiSimulation.entities?.find((e) => e.id === lk.from);
+            const toE = aiSimulation.entities?.find((e) => e.id === lk.to);
+            if (fromE && toE) {
+              const p1 = project(fromE.x, fromE.y, fromE.z);
+              const p2 = project(toE.x, toE.y, toE.z);
+              ctx.strokeStyle = lk.color || '#89DDFF';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+
+              if (lk.label) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 9px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(lk.label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 4);
+              }
+            }
+          });
+        }
+
+        // Draw Entities
+        aiSimulation.entities.forEach((ent) => {
+          const p = project(ent.x, ent.y, ent.z);
+          const col = ent.color || '#7C6CFF';
+          const size = Math.max(16, Math.round(28 * p.scale));
+
+          ctx.save();
+          if (ent.type === 'sphere' || ent.type === 'node') {
+            ctx.fillStyle = col;
+            ctx.shadowColor = col;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          } else {
+            drawVoxel3D(ent.x, ent.y, ent.z, size, size, size, col, col, col, String(ent.val));
+          }
+
+          // Label
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = `bold ${Math.max(9, Math.round(10 * p.scale))}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(ent.label || String(ent.val), p.x, p.y + size / 2 + 12);
+          ctx.restore();
+        });
+      } else {
+        const count = 8;
+        const spacing = 32;
+        const startX = -((count - 1) * spacing) / 2;
+        for (let i = 0; i < count; i++) {
+          const x = startX + i * spacing;
+          const h = 20 + i * 12;
+          drawVoxel3D(x, 0, 0, 22, h, 22, PAL.indigo, '#5748D6', '#3E32A3', `${h}`);
+        }
       }
 
       const gizmoX = width - 36;
@@ -987,7 +1082,7 @@ export function Java3DVisualizer({
     }
 
     ctx.restore();
-  }, [renderStyle, yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote]);
+  }, [renderStyle, yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote, aiSimulation]);
 
   useEffect(() => {
     let active = true;

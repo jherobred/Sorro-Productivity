@@ -83,7 +83,7 @@ const SECTIONS: Section[] = [
   { id: 'home', name: 'Home', ic: 'home' },
   { id: 'calendar', name: 'Calendar', ic: 'cal', kids: [{ n: 'Classes', c: PAL.indigo }, { n: 'Personal', c: PAL.mint }, { n: 'Org — CSSS', c: PAL.violet }] },
   { id: 'tasks', name: 'Tasks', ic: 'task' },
-  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: 'Notebooks', c: PAL.indigo }, { n: 'Canvas', c: PAL.cyan }, { n: 'Graph', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Java', c: PAL.amber }] },
+  { id: 'notebooks', name: 'Notebooks', ic: 'book', kids: [{ n: 'Shelf', c: PAL.pink }, { n: 'Notebooks', c: PAL.indigo }, { n: 'Canvas', c: PAL.cyan }, { n: 'Graph', c: PAL.violet }, { n: 'Journal', c: PAL.coral }, { n: 'Java', c: PAL.amber }] },
   { id: 'projects', name: 'Projects', ic: 'proj' },
   { id: 'habits', name: 'Habits', ic: 'habit' },
   { id: 'gym', name: 'Gym', ic: 'heart' },
@@ -591,26 +591,47 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     }} />
                     <button onClick={() => go(sec.id)} onPointerDown={() => prefetchSection(sec.id)} style={{
                       display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
-                      padding: '7px 4px 7px 8px', borderRadius: 8, fontSize: 12.5, fontWeight: on ? 700 : 500,
+                      padding: hasKids ? '7px 4px 7px 8px' : '7px 8px 7px 8px', borderRadius: 8, fontSize: 12.5, fontWeight: on ? 700 : 500,
                       background: 'transparent', color: on ? hueTx(hue) : 'var(--tx2)',
                       opacity: BUILT.has(sec.id) ? 1 : 0.45,
                     }}>
                       <Icon name={sec.ic} size={15} color={on ? hueTx(hue) : 'var(--tx2)'} />
                       <span style={{ flex: 1, textAlign: 'left' }}>{sec.name}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{badge}</span>
+                      {badge && (
+                        <span style={{
+                          minWidth: 20,
+                          height: 18,
+                          padding: '0 6px',
+                          borderRadius: 9,
+                          background: on ? 'color-mix(in srgb, var(--tx) 12%, transparent)' : 'var(--card2)',
+                          border: `1px solid ${on ? 'color-mix(in srgb, var(--tx) 20%, transparent)' : 'var(--line)'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          color: on ? hueTx(hue) : 'var(--tx2)',
+                          fontVariantNumeric: 'tabular-nums',
+                          flex: 'none',
+                        }}>
+                          {badge}
+                        </span>
+                      )}
                     </button>
-                    <button
-                      onClick={() => setOpenKids((k) => ({ ...k, [sec.id]: !open }))}
-                      aria-label={`${open ? 'Hide' : 'Show'} items under ${sec.name}`}
-                      aria-expanded={open}
-                      title="Show or hide sub-items"
-                      style={{
-                        width: 22, height: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        marginRight: 4, borderRadius: 6, opacity: hasKids ? 1 : 0, pointerEvents: hasKids ? 'auto' : 'none',
-                      }}>
-                      <Icon name="chev" size={13} color={on ? hueTx(hue) : 'var(--tx3)'}
-                        style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .28s cubic-bezier(0.16,1,0.3,1)' }} />
-                    </button>
+                    {hasKids && (
+                      <button
+                        onClick={() => setOpenKids((k) => ({ ...k, [sec.id]: !open }))}
+                        aria-label={`${open ? 'Hide' : 'Show'} items under ${sec.name}`}
+                        aria-expanded={open}
+                        title="Show or hide sub-items"
+                        style={{
+                          width: 22, height: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          marginRight: 4, borderRadius: 6,
+                        }}>
+                        <Icon name="chev" size={13} color={on ? hueTx(hue) : 'var(--tx3)'}
+                          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .28s cubic-bezier(0.16,1,0.3,1)' }} />
+                      </button>
+                    )}
                   </div>
 
                   {open && sec.kids && (

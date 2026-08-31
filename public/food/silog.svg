@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="plate" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2D2B38"/>
+      <stop offset="85%" stop-color="#191822"/>
+      <stop offset="100%" stop-color="#111018"/>
+    </radialGradient>
+    <radialGradient id="rice" cx="45%" cy="45%" r="50%">
+      <stop offset="0%" stop-color="#FFFDF7"/>
+      <stop offset="75%" stop-color="#EADDC7"/>
+      <stop offset="100%" stop-color="#D4C4A8"/>
+    </radialGradient>
+    <radialGradient id="eggYolk" cx="40%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#FFD000"/>
+      <stop offset="70%" stop-color="#FF9500"/>
+      <stop offset="100%" stop-color="#E66A00"/>
+    </radialGradient>
+    <linearGradient id="tapa" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6B3012"/>
+      <stop offset="50%" stop-color="#421B0A"/>
+      <stop offset="100%" stop-color="#260E04"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background scene -->
+  <rect width="400" height="300" fill="#0C0B12"/>
+  <circle cx="200" cy="150" r="140" fill="#14131D" opacity="0.8"/>
+
+  <!-- Banana leaf accent -->
+  <path d="M 50,220 Q 180,270 340,210 Q 370,140 330,80 Q 200,40 70,110 Z" fill="#2E5A27" opacity="0.6" />
+
+  <!-- Ceramic plate -->
+  <ellipse cx="200" cy="150" rx="135" ry="120" fill="url(#plate)" filter="url(#shadow)" stroke="#3E3A4D" stroke-width="3"/>
+  <ellipse cx="200" cy="150" rx="115" ry="100" fill="none" stroke="#2B2838" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+  <!-- Garlic Fried Rice mound (Sinangag) -->
+  <ellipse cx="140" cy="145" rx="55" ry="50" fill="url(#rice)" filter="url(#shadow)"/>
+  <!-- Garlic bits -->
+  <g fill="#A77A38" opacity="0.85">
+    <circle cx="130" cy="125" r="2.5"/>
+    <circle cx="150" cy="135" r="2"/>
+    <circle cx="120" cy="150" r="2.2"/>
+    <circle cx="145" cy="160" r="2.8"/>
+    <circle cx="160" cy="120" r="1.8"/>
+    <circle cx="135" cy="140" r="3"/>
+  </g>
+
+  <!-- Beef Tapa / Tocino strips -->
+  <g filter="url(#shadow)">
+    <path d="M 205,100 C 230,90 260,95 275,115 C 265,130 235,125 210,115 Z" fill="url(#tapa)"/>
+    <path d="M 215,120 C 245,115 285,125 280,145 C 255,155 225,145 215,130 Z" fill="url(#tapa)"/>
+    <path d="M 210,145 C 240,140 270,150 265,175 C 240,180 220,165 205,155 Z" fill="url(#tapa)"/>
+    <!-- Glaze highlight -->
+    <path d="M 220,105 Q 245,100 260,112" stroke="#FF9E54" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+    <path d="M 225,128 Q 255,125 270,138" stroke="#FF9E54" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+  </g>
+
+  <!-- Sunny side up Egg (Itlog) -->
+  <g filter="url(#shadow)">
+    <!-- Crispy egg white with browned frilly edge -->
+    <path d="M 140,185 C 160,180 185,185 200,200 C 210,215 205,235 185,245 C 165,250 140,240 130,225 C 120,210 125,190 140,185 Z" fill="#F8F6EB"/>
+    <path d="M 138,187 C 158,182 182,187 197,202 C 207,216 202,233 183,243 C 164,248 141,238 132,224 Z" stroke="#C88E3E" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <!-- Rich Yolk -->
+    <circle cx="165" cy="215" r="18" fill="url(#eggYolk)"/>
+    <!-- Yolk highlight -->
+    <ellipse cx="160" cy="210" rx="5" ry="3" fill="#FFFFFF" opacity="0.75" transform="rotate(-20 160 210)"/>
+  </g>
+
+  <!-- Dipping vinegar saucer (Suka) -->
+  <circle cx="250" cy="215" r="22" fill="#24222E" stroke="#484457" stroke-width="2"/>
+  <circle cx="250" cy="215" r="17" fill="#6B2D26" opacity="0.8"/>
+  <circle cx="247" cy="212" r="2.5" fill="#DC2626"/>
+  <circle cx="253" cy="217" r="2" fill="#FFF"/>
+</svg>

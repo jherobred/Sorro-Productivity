@@ -22,6 +22,7 @@ import { GraphView } from '@/components/notes/GraphView';
 import { Canvas } from '@/components/notes/Canvas';
 import { Journal } from '@/components/notes/Journal';
 import { JavaLab } from '@/components/JavaLab';
+import { GlobalShelf } from '@/components/notes/GlobalShelf';
 import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
 /**
@@ -37,6 +38,7 @@ import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH,
  */
 
 const TABS = [
+  { id: 'shelf', label: 'Shelf', icon: 'layers' },
   { id: 'notebooks', label: 'Notebooks', icon: 'book' },
   { id: 'canvas', label: 'Canvas', icon: 'grid' },
   { id: 'graph', label: 'Graph', icon: 'link' },
@@ -48,7 +50,7 @@ type Tab = (typeof TABS)[number]['id'];
 export default function NotebooksPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
-  const [tab, setTab] = useState<Tab>('notebooks');
+  const [tab, setTab] = useState<Tab>('shelf');
 
   const { data: notebooks = [], isPending } = useNotebooks();
   const { data: notes = [] } = useNotes();
@@ -129,7 +131,8 @@ export default function NotebooksPage() {
       const detail = (e as CustomEvent<{ section: string; focus: string }>).detail;
       if (detail && detail.section === 'notebooks' && detail.focus) {
         const lower = detail.focus.toLowerCase();
-        if (lower === 'notebooks' || lower === 'notes') setTab('notebooks');
+        if (lower === 'shelf') setTab('shelf');
+        else if (lower === 'notebooks' || lower === 'notes') setTab('notebooks');
         else if (lower === 'canvas' || lower === 'canvases') setTab('canvas');
         else if (lower === 'graph') setTab('graph');
         else if (lower === 'journal') setTab('journal');
@@ -295,6 +298,22 @@ $$
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
         padding: phone ? '0 14px 20px' : '0 22px 20px',
       }}>
+        {tab === 'shelf' && (
+          <GlobalShelf
+            notebooks={notebooks}
+            notes={notes}
+            boards={boards}
+            onOpenNotebook={(id) => { setTab('notebooks'); openNotebook(id); }}
+            onOpenNote={(bid, nid) => { setTab('notebooks'); openNotebook(bid, nid); }}
+            onOpenBoard={(b) => {
+              if (b.kind === 'graph') { setGraphId(b.id); setTab('graph'); }
+              else { setBoardId(b.id); setTab('canvas'); }
+            }}
+            onJumpTab={(t) => setTab(t)}
+            onNewNotebook={() => { setTab('notebooks'); newNotebook(); }}
+          />
+        )}
+
         {/* Only the shelf waits on a query; the tab rail and the trash list
             above it are already drawn. */}
         {tab === 'notebooks' && isPending && !inTrash && !notebook && <ShelfSkeleton count={6} />}

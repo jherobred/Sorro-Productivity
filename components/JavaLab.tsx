@@ -14,7 +14,7 @@ import { playClick, playTick, playCelebration } from '@/lib/audio';
 import { run, highlight, type RunResult, type Step, type FrameSnap, type HeapObj, type Local } from '@/lib/java';
 import { ask } from '@/lib/ask';
 import { JAVA_TEMPLATES, type JavaTemplate } from '@/lib/javaTemplates';
-import { Java3DVisualizer } from './java/Java3DVisualizer';
+import { Java3DVisualizer, type AISimulationData } from './java/Java3DVisualizer';
 import { TracePlaybackHUD } from './java/TracePlaybackHUD';
 
 /**
@@ -90,6 +90,8 @@ export function JavaLab() {
   const [selId, setSelId] = useState<string | null>(null);
   const [src, setSrc] = useState('');
   const [result, setResult] = useState<RunResult | null>(null);
+  const [aiSimulation, setAiSimulation] = useState<AISimulationData | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
   const [at, setAt] = useState<number | null>(null); // scrubber position; null = final state
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -150,6 +152,37 @@ export function JavaLab() {
       }
     }
   }, [src, phone, mobileTab]);
+
+  // Generate Gemini AI 3D/2.5D/2D Simulation
+  const doAiSimulate = useCallback(async () => {
+    if (!src.trim()) return;
+    playClick();
+    setIsSimulating(true);
+    toast('Generating Gemini AI Simulation...');
+    try {
+      const res = await fetch('/api/java-simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src }),
+      });
+      const data = await res.json();
+      if (data.ok && data.simulation) {
+        setAiSimulation(data.simulation);
+        playCelebration();
+        toast(`✨ Gemini AI Simulation Ready: ${data.simulation.title || data.simulation.algorithm || 'Simulation'}`);
+        if (phone && mobileTab === 'code') {
+          setMobileTab('3d');
+        }
+      } else {
+        toast('Simulation synthesized with engine');
+      }
+    } catch {
+      toast('Simulation synthesized with engine');
+    } finally {
+      setIsSimulating(false);
+      doRun();
+    }
+  }, [src, phone, mobileTab, doRun]);
 
   // Shortcut: ⌘↵ / Ctrl+↵ to run
   useEffect(() => {
@@ -680,6 +713,33 @@ export function JavaLab() {
               <span>Run (⌘↵)</span>
             </button>
 
+            {/* Gemini AI 3D/2.5D/2D Simulation Button */}
+            <button
+              onClick={() => void doAiSimulate()}
+              disabled={!file || isSimulating}
+              className="hov k-squish"
+              title="Generate 3D/2.5D/2D Gemini AI Simulation of Java code"
+              aria-label="Gemini AI Simulation"
+              style={{
+                minHeight: 38,
+                padding: '0 12px',
+                borderRadius: 8,
+                background: 'color-mix(in srgb, var(--pal-amber) 16%, var(--card2))',
+                border: '1px solid color-mix(in srgb, var(--pal-amber) 40%, transparent)',
+                color: 'var(--pal-amber)',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: file && !isSimulating ? 1 : 0.5,
+              }}
+            >
+              <Icon name="spark" size={14} color="var(--pal-amber)" />
+              <span>{isSimulating ? 'Simulating...' : '✨ AI Simulate'}</span>
+            </button>
+
             {/* Desktop Layout Mode Switcher */}
             {!phone && (
               <div
@@ -775,6 +835,7 @@ export function JavaLab() {
                   activeLine={activeLine}
                   stepNote={step?.note}
                   phone={true}
+                  aiSimulation={aiSimulation}
                 />
               </div>
             )}
@@ -882,6 +943,7 @@ export function JavaLab() {
                       activeLine={activeLine}
                       stepNote={step?.note}
                       phone={phone}
+                      aiSimulation={aiSimulation}
                     />
                   </div>
                 )}

@@ -335,19 +335,78 @@ export default function CalendarPage() {
         <div style={{ marginLeft: showHeading ? 'auto' : 0, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', width: showHeading ? undefined : '100%' }}>
           {showPager && (
             <>
-              <button onClick={() => shift(-1)} className="hov k-squish" aria-label={`Previous ${view}`}
-                style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34 }}>
-                <Icon name="back" size={15} color="var(--tx2)" />
-              </button>
-              <button onClick={goToday} className="hov k-squish"
-                style={{ padding: '7px 11px', borderRadius: 9, fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 34 }}>
-                Today
-              </button>
-              <button onClick={() => shift(1)} className="hov k-squish" aria-label={`Next ${view}`}
-                style={{ padding: 8, borderRadius: 9, minWidth: 34, minHeight: 34, transform: 'rotate(180deg)' }}>
-                <Icon name="back" size={15} color="var(--tx2)" />
-              </button>
-              {!phone && <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 5px' }} />}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  height: 34,
+                  padding: 2,
+                  borderRadius: 10,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card)',
+                }}
+              >
+                <button
+                  onClick={() => shift(-1)}
+                  className="hov k-squish"
+                  aria-label={`Previous ${view}`}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="back" size={14} color="var(--tx2)" />
+                </button>
+                <button
+                  onClick={goToday}
+                  className="hov k-squish"
+                  style={{
+                    height: 30,
+                    padding: '0 10px',
+                    borderRadius: 8,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: 'var(--tx)',
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => shift(1)}
+                  className="hov k-squish"
+                  aria-label={`Next ${view}`}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="back" size={14} color="var(--tx2)" style={{ transform: 'scaleX(-1)' }} />
+                </button>
+              </div>
+              {!phone && <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 4px' }} />}
             </>
           )}
 

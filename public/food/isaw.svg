@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="slate" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#262330"/>
+      <stop offset="90%" stop-color="#14131A"/>
+      <stop offset="100%" stop-color="#0E0D12"/>
+    </radialGradient>
+    <linearGradient id="isawColor" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#DE751F"/>
+      <stop offset="50%" stop-color="#9C400B"/>
+      <stop offset="100%" stop-color="#4F1C03"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <rect width="400" height="300" fill="#0C0B12"/>
+
+  <!-- Charcoal grill background feeling -->
+  <circle cx="200" cy="150" r="135" fill="url(#slate)" stroke="#383446" stroke-width="2.5" filter="url(#shadow)"/>
+
+  <!-- Skewers (sticks) -->
+  <line x1="80" y1="90" x2="320" y2="90" stroke="#DEBA85" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="140" x2="320" y2="140" stroke="#DEBA85" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="190" x2="320" y2="190" stroke="#DEBA85" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Characteristic zig-zag coiled Isaw (Chicken Intestine) on sticks -->
+  <g filter="url(#shadow)">
+    <!-- Skewer 1 -->
+    <path d="M 120,90 Q 135,68 150,90 Q 165,112 180,90 Q 195,68 210,90 Q 225,112 240,90 Q 255,68 270,90" fill="none" stroke="url(#isawColor)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Skewer 2 -->
+    <path d="M 120,140 Q 135,118 150,140 Q 165,162 180,140 Q 195,118 210,140 Q 225,162 240,140 Q 255,118 270,140" fill="none" stroke="url(#isawColor)" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Skewer 3 -->
+    <path d="M 120,190 Q 135,168 150,190 Q 165,212 180,190 Q 195,168 210,190 Q 225,212 240,190 Q 255,168 270,190" fill="none" stroke="url(#isawColor)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Char / Grill marks -->
+  <g stroke="#1A0A03" stroke-width="3.5" stroke-linecap="round">
+    <line x1="135" y1="72" x2="142" y2="82"/>
+    <line x1="195" y1="72" x2="202" y2="82"/>
+    <line x1="255" y1="72" x2="262" y2="82"/>
+
+    <line x1="165" y1="148" x2="172" y2="158"/>
+    <line x1="225" y1="148" x2="232" y2="158"/>
+
+    <line x1="135" y1="172" x2="142" y2="182"/>
+    <line x1="195" y1="172" x2="202" y2="182"/>
+  </g>
+
+  <!-- Spicy vinegar dip bowl (Spiced Suka with onions & chili) -->
+  <circle cx="200" cy="245" r="28" fill="#1C1A24" stroke="#4B475B" stroke-width="2.5" filter="url(#shadow)"/>
+  <circle cx="200" cy="245" r="22" fill="#58211E" opacity="0.9"/>
+  <!-- Diced onions & chili in vinegar -->
+  <rect x="190" y="240" width="6" height="6" rx="1.5" fill="#FFFFFF" opacity="0.9"/>
+  <rect x="202" y="248" width="5" height="5" rx="1.5" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="196" cy="248" r="3" fill="#EF4444"/>
+  <circle cx="206" cy="239" r="2.5" fill="#EF4444"/>
+</svg>
