@@ -42,6 +42,7 @@ const HEAD: React.CSSProperties = {
 export function NotebookTable({
   notebooks, notes, boards, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
   onNewBoard, onOpenBoard, onRenameBoard, onDeleteBoard,
+  archivedNbIds, onToggleArchive, trashCount = 0, onOpenTrash,
 }: {
   notebooks: Notebook[];
   notes: Note[];
@@ -57,6 +58,10 @@ export function NotebookTable({
   onOpenBoard: (b: Board) => void;
   onRenameBoard: (b: Board) => void;
   onDeleteBoard: (b: Board) => void;
+  archivedNbIds?: Set<string>;
+  onToggleArchive?: (id: string) => void;
+  trashCount?: number;
+  onOpenTrash?: () => void;
 }) {
   const { prefs } = usePrefs();
   const { phone } = useLayout();
@@ -88,32 +93,36 @@ export function NotebookTable({
     return [...list].sort((a, b) => (desc ? -1 : 1) * a.name.localeCompare(b.name));
   }, [boards, q, desc]);
 
-  const rowMenu = (b: Notebook): CtxGroup[] => [
-    { items: [
-      { label: 'Open', icon: 'book', run: () => onOpen(b.id) },
-      { label: open[b.id] ? 'Collapse' : 'Show notes', icon: open[b.id] ? 'collapse' : 'expand',
-        run: () => setOpen((o) => ({ ...o, [b.id]: !o[b.id] })) },
-    ] },
-    { label: 'Notebook', items: [
-      { label: 'Rename', icon: 'edit', shortcut: 'F2',
-        run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
-          .then((n) => { if (n && n !== b.name) onRename(b, n); }) },
-      { label: 'Colour', icon: 'palette', items: COLOURS.map((c) => ({
-        label: c.n, icon: 'palette' as IconName, checked: b.color === c.v, run: () => onRecolour(b, c.v),
-      })) },
-      { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },
-    ] },
-    { items: [
-      { label: 'Delete notebook', icon: 'trash', danger: true,
-        hint: (byBook.get(b.id)?.length ?? 0) ? 'Its notes go to the trash' : undefined,
-        run: () => void confirmAsk(`Delete “${b.name}”?`, {
-          message: (byBook.get(b.id)?.length ?? 0)
-            ? `${byBook.get(b.id)!.length} notes move to the trash, where you can still get them back.`
-            : 'It is empty.',
-          confirmLabel: 'Delete', danger: true,
-        }).then((yes) => { if (yes) onDelete(b); }) },
-    ] },
-  ];
+  const rowMenu = (b: Notebook): CtxGroup[] => {
+    const isArchived = archivedNbIds?.has(b.id) ?? false;
+    return [
+      { items: [
+        { label: 'Open', icon: 'book', run: () => onOpen(b.id) },
+        { label: open[b.id] ? 'Collapse' : 'Show notes', icon: open[b.id] ? 'collapse' : 'expand',
+          run: () => setOpen((o) => ({ ...o, [b.id]: !o[b.id] })) },
+      ] },
+      { label: 'Notebook', items: [
+        { label: 'Rename', icon: 'edit', shortcut: 'F2',
+          run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
+            .then((n) => { if (n && n !== b.name) onRename(b, n); }) },
+        { label: 'Colour', icon: 'palette', items: COLOURS.map((c) => ({
+          label: c.n, icon: 'palette' as IconName, checked: b.color === c.v, run: () => onRecolour(b, c.v),
+        })) },
+        { label: isArchived ? 'Unarchive notebook' : 'Archive notebook', icon: 'clock', run: () => onToggleArchive?.(b.id) },
+        { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },
+      ] },
+      { items: [
+        { label: 'Delete notebook', icon: 'trash', danger: true,
+          hint: (byBook.get(b.id)?.length ?? 0) ? 'Its notes go to the trash' : undefined,
+          run: () => void confirmAsk(`Delete “${b.name}”?`, {
+            message: (byBook.get(b.id)?.length ?? 0)
+              ? `${byBook.get(b.id)!.length} notes move to the trash, where you can still get them back.`
+              : 'It is empty.',
+            confirmLabel: 'Delete', danger: true,
+          }).then((yes) => { if (yes) onDelete(b); }) },
+      ] },
+    ];
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 }}>
@@ -174,8 +183,9 @@ export function NotebookTable({
               const kids = byBook.get(b.id) ?? [];
               const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
               const isOpen = !!open[b.id];
+              const isArchived = archivedNbIds?.has(b.id) ?? false;
               return (
-                <BookRow key={b.id} book={b} kids={kids} last={last} me={me} phone={phone} isOpen={isOpen}
+                <BookRow key={b.id} book={b} kids={kids} last={last} me={me} phone={phone} isOpen={isOpen} isArchived={isArchived}
                   onToggle={() => setOpen((o) => ({ ...o, [b.id]: !o[b.id] }))}
                   onOpen={() => onOpen(b.id)}
                   onOpenNote={(nid) => onOpenNote(b.id, nid)}
@@ -209,6 +219,46 @@ export function NotebookTable({
           </tbody>
         </table>
       </div>
+
+      {/* Full Width Trash / Archive Section Bar */}
+      {onOpenTrash && (
+        <div style={{
+          marginTop: 'auto',
+          padding: '10px 12px',
+          borderRadius: 12,
+          background: 'var(--card2)',
+          border: '1px solid var(--line2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
+          flex: 'none',
+        }}>
+          <button
+            onClick={onOpenTrash}
+            className="hov k-squish"
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              borderRadius: 10,
+              background: 'var(--card)',
+              border: '1px solid var(--line2)',
+              fontSize: 12.5,
+              fontWeight: 800,
+              color: 'var(--tx)',
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="trash" size={14} color="var(--pal-coral)" />
+            <span>Trash & Archive ({trashCount} deleted note{trashCount === 1 ? '' : 's'}, {archivedNbIds?.size ?? 0} archived notebook{(archivedNbIds?.size ?? 0) === 1 ? '' : 's'})</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -279,9 +329,9 @@ const NEW_BTN: React.CSSProperties = {
 };
 
 function BookRow({
-  book: b, kids, last, me, phone, isOpen, onToggle, onOpen, onOpenNote, onMenu,
+  book: b, kids, last, me, phone, isOpen, isArchived, onToggle, onOpen, onOpenNote, onMenu,
 }: {
-  book: Notebook; kids: Note[]; last: string | null; me: Identity; phone: boolean; isOpen: boolean;
+  book: Notebook; kids: Note[]; last: string | null; me: Identity; phone: boolean; isOpen: boolean; isArchived?: boolean;
   onToggle: () => void; onOpen: () => void; onOpenNote: (id: string) => void;
   onMenu: (x: number, y: number) => void;
 }) {
@@ -292,7 +342,7 @@ function BookRow({
 
   return (
     <>
-      <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
+      <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer', opacity: isArchived ? 0.75 : 1 }}
         onDoubleClick={onOpen}
         onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}>
         <td style={{ ...cell, paddingRight: 0 }}>
@@ -309,6 +359,16 @@ function BookRow({
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {b.name}
             </span>
+            {isArchived && (
+              <span style={{
+                flex: 'none', padding: '1px 6px', borderRadius: 5, fontSize: 9.5, fontWeight: 800,
+                letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--pal-amber)',
+                background: 'color-mix(in srgb, var(--pal-amber) 16%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--pal-amber) 30%, transparent)',
+              }}>
+                Archived
+              </span>
+            )}
             {phone && <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{kids.length}</span>}
           </button>
         </td>

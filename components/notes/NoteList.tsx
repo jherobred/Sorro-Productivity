@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
-import { ask } from '@/lib/ask';
+import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview, taskCount } from '@/lib/md';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
@@ -23,6 +23,7 @@ const SORT_LABEL: Record<Sort, string> = { updated: 'Date updated', created: 'Da
 
 export function NoteList({
   notebook, notes, tags, selected, phone, onPick, onNew, onNewMathNote, onDelete, onMove, onRename, notebooks,
+  trashCount, onOpenTrash,
 }: {
   notebook: Notebook;
   notes: Note[];
@@ -36,6 +37,8 @@ export function NoteList({
   onMove: (n: Note, notebookId: string) => void;
   onRename: (n: Note, title: string) => void;
   notebooks: Notebook[];
+  trashCount?: number;
+  onOpenTrash?: () => void;
 }) {
   const { prefs } = usePrefs();
   const [q, setQ] = useState('');
@@ -82,7 +85,17 @@ export function NoteList({
           })) },
       ] },
       { items: [
-        { label: 'Delete note', icon: 'trash', danger: true, shortcut: '⌫', run: () => onDelete(n) },
+        {
+          label: 'Delete note',
+          icon: 'trash',
+          danger: true,
+          shortcut: '⌫',
+          run: () => void confirmAsk(`Move “${n.title || 'Untitled'}” to Trash?`, {
+            message: 'This note will be safely moved to the Trash archive where you can restore it anytime.',
+            confirmLabel: 'Move to Trash',
+            danger: true,
+          }).then((yes) => { if (yes) onDelete(n); }),
+        },
       ] },
     ];
   };
@@ -226,6 +239,25 @@ export function NoteList({
           </div>
         )}
       </div>
+
+      {/* Bottom Left Trash / Archive Button for notes in this notebook */}
+      {onOpenTrash && (
+        <div style={{ marginTop: 'auto', paddingTop: 6, borderTop: '1px solid var(--line2)', flex: 'none' }}>
+          <button
+            onClick={onOpenTrash}
+            className="hov k-squish"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 10,
+              border: '1px solid var(--line2)', background: 'var(--card2)',
+              fontSize: 12, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', width: '100%',
+              justifyContent: 'flex-start',
+            }}
+          >
+            <Icon name="trash" size={13} color="var(--pal-coral, var(--tx3))" />
+            <span>Trash / Archive {typeof trashCount === 'number' && trashCount > 0 ? `(${trashCount})` : ''}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

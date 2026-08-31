@@ -12,7 +12,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import {
-  useNotebooks, useNotes, useTrash, useTags, useNoteActions, whenLabel, type Note,
+  useNotebooks, useNotes, useTrash, useTags, useNoteActions, whenLabel, type Note, type Notebook,
 } from '@/lib/notes';
 import { NotebookTable } from '@/components/notes/NotebookTable';
 import { BoardShelf } from '@/components/notes/BoardShelf';
@@ -70,6 +70,30 @@ export default function NotebooksPage() {
   const [graphId, setGraphId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [inTrash, setInTrash] = useState(false);
+  const [archivedNbIds, setArchivedNbIds] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('bd_archived_notebooks');
+        return raw ? new Set(JSON.parse(raw)) : new Set<string>();
+      } catch {
+        return new Set<string>();
+      }
+    }
+    return new Set<string>();
+  });
+
+  const toggleArchiveNotebook = (id: string) => {
+    setArchivedNbIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('bd_archived_notebooks', JSON.stringify([...next]));
+      }
+      toast(next.has(id) ? 'Notebook archived' : 'Notebook unarchived');
+      return next;
+    });
+  };
 
   // Back closes the note, then the notebook, before it changes section.
   useOverlayBack(!!nbId, () => { setNbId(null); setNoteId(null); });
@@ -81,6 +105,7 @@ export default function NotebooksPage() {
   const notebook = notebooks.find((b) => b.id === nbId) ?? null;
   const mine = useMemo(() => notes.filter((n) => n.notebook_id === nbId), [notes, nbId]);
   const note = mine.find((n) => n.id === noteId) ?? null;
+  const archivedNotebooks = useMemo(() => notebooks.filter((b) => archivedNbIds.has(b.id)), [notebooks, archivedNbIds]);
 
   // Synchronize tab with dropdown picks and URL query parameter
   useEffect(() => {
@@ -212,8 +237,16 @@ $$
   };
 
   const removeNote = (n: Note) => {
-    A.deleteWithUndo(n);
-    if (noteId === n.id) setNoteId(null);
+    void confirmAsk(`Move “${n.title || 'Untitled'}” to Trash?`, {
+      message: 'This note will be safely moved to the Trash archive where you can restore it anytime.',
+      confirmLabel: 'Move to Trash',
+      danger: true,
+    }).then((yes) => {
+      if (yes) {
+        A.deleteWithUndo(n);
+        if (noteId === n.id) setNoteId(null);
+      }
+    });
   };
 
   return (
@@ -245,14 +278,14 @@ $$
               inTrash={inTrash}
               onRoot={() => { setNbId(null); setNoteId(null); setInTrash(false); }} />
             <button onClick={() => { setInTrash((v) => !v); setNbId(null); }} className="hov"
-              aria-pressed={inTrash} title="Trash"
+              aria-pressed={inTrash} title="Trash & Archive"
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
                 borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
-                fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)',
+                fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
               }}>
               <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
-              Trash{trash.length ? ` ${trash.length}` : ''}
+              Trash & Archive{trash.length ? ` ${trash.length}` : ''}
             </button>
           </div>
         )}
@@ -270,9 +303,12 @@ $$
           inTrash ? (
             <TrashList
               notes={trash}
+              archivedNotebooks={archivedNotebooks}
+              onUnarchiveNotebook={toggleArchiveNotebook}
+              onDeleteNotebook={(b) => { A.delNotebook.mutate({ id: b.id }); toast(`Deleted “${b.name}”`); }}
               onRestore={(n) => { A.restoreNote.mutate({ id: n.id }); toast(`Restored “${n.title || 'Untitled'}”`); }}
               onEmpty={() => void confirmAsk('Empty the trash?', {
-                message: `${trash.length} note${trash.length === 1 ? '' : 's'} will be gone for good.`,
+                message: `${trash.length} note${trash.length === 1 ? '' : 's'} will be permanently deleted and cannot be recovered.`,
                 confirmLabel: 'Delete forever', danger: true,
               }).then((yes) => { if (yes) { A.purge.mutate({ ids: trash.map((n) => n.id) }); toast('Trash emptied'); } })} />
           ) : !notebook ? (
@@ -281,14 +317,18 @@ $$
                 <button onClick={() => setInTrash(true)} className="hov" style={{
                   display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8,
                   padding: '6px 11px', minHeight: 32, borderRadius: 9, border: '1px solid var(--line2)',
-                  fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
                 }}>
-                  <Icon name="trash" size={13} color="var(--tx3)" />Trash{trash.length ? ` ${trash.length}` : ''}
+                  <Icon name="trash" size={13} color="var(--tx3)" />Trash & Archive{trash.length ? ` ${trash.length}` : ''}
                 </button>
               )}
-              <div data-tour="notebooks-sidebar" style={{ width: '100%' }}>
+              <div data-tour="notebooks-sidebar" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <NotebookTable
                   notebooks={notebooks} notes={notes} boards={boards}
+                  archivedNbIds={archivedNbIds}
+                  onToggleArchive={toggleArchiveNotebook}
+                  trashCount={trash.length}
+                  onOpenTrash={() => { setInTrash(true); setNbId(null); }}
                   onOpen={(id) => openNotebook(id)}
                   onOpenNote={(bid, nid) => openNotebook(bid, nid)}
                   onNew={newNotebook}
@@ -300,8 +340,14 @@ $$
                   onRenameBoard={(b) => void ask(`Rename ${b.kind === 'graph' ? 'graph' : 'canvas'}`, { initial: b.name, placeholder: 'Name' })
                     .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
                   onDeleteBoard={(b) => {
-                    B.delBoard.mutate({ id: b.id });
-                    toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+                    void confirmAsk(`Delete ${b.kind === 'graph' ? 'graph' : 'canvas'} “${b.name}”?`, {
+                      message: 'You can restore it anytime with Undo.', confirmLabel: 'Delete', danger: true,
+                    }).then((yes) => {
+                      if (yes) {
+                        B.delBoard.mutate({ id: b.id });
+                        toast(`Deleted “${b.name}”`, () => B.restoreBoard.mutate({ id: b.id }));
+                      }
+                    });
                   }} />
               </div>
             </>
@@ -312,6 +358,8 @@ $$
                   <NoteList
                     notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
                     selected={noteId} phone={phone}
+                    trashCount={trash.filter((n) => n.notebook_id === nbId).length || trash.length}
+                    onOpenTrash={() => { setInTrash(true); setNbId(null); }}
                     onPick={setNoteId}
                     onNew={() => newNote()}
                     onNewMathNote={newMathNote}
@@ -415,47 +463,119 @@ function Crumbs({
 }
 
 function TrashList({
-  notes, onRestore, onEmpty,
-}: { notes: Note[]; onRestore: (n: Note) => void; onEmpty: () => void }) {
+  notes, archivedNotebooks = [], onRestore, onEmpty, onUnarchiveNotebook, onDeleteNotebook,
+}: {
+  notes: Note[];
+  archivedNotebooks?: Notebook[];
+  onRestore: (n: Note) => void;
+  onEmpty: () => void;
+  onUnarchiveNotebook?: (id: string) => void;
+  onDeleteNotebook?: (b: Notebook) => void;
+}) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>
-          {notes.length ? `${notes.length} deleted note${notes.length === 1 ? '' : 's'}` : 'The trash is empty.'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>
+          Trash & Archive ({notes.length} deleted note{notes.length === 1 ? '' : 's'}, {archivedNotebooks.length} archived notebook{archivedNotebooks.length === 1 ? '' : 's'})
         </div>
         {notes.length > 0 && (
-          <button onClick={onEmpty} className="hov" style={{
-            marginLeft: 'auto', padding: '6px 12px', minHeight: 32, borderRadius: 9,
-            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: PAL.coral,
+          <button onClick={onEmpty} className="hov k-squish" style={{
+            padding: '6px 12px', minHeight: 32, borderRadius: 9, cursor: 'pointer',
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 800, color: 'var(--pal-coral)',
+            background: 'var(--card2)',
           }}>
             Empty trash
           </button>
         )}
       </div>
 
-      <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {notes.map((n) => (
-          <div key={n.id} style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12,
-            background: 'var(--card)', boxShadow: 'var(--sh)', flex: 'none',
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>{n.title || 'Untitled'}</div>
-              <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {preview(n.body, 90) || 'Empty'}
-              </div>
+      <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Archived Notebooks Section */}
+        {archivedNotebooks.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--pal-amber)', marginBottom: 8 }}>
+              Archived Notebooks ({archivedNotebooks.length})
             </div>
-            <div style={{ fontSize: 10.5, color: 'var(--tx3)', flex: 'none' }}>
-              {n.deleted_at ? whenLabel(n.deleted_at) : ''}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {archivedNotebooks.map((b) => (
+                <div key={b.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12,
+                  background: 'var(--card)', border: '1px solid var(--line2)', boxShadow: 'var(--sh)', flex: 'none',
+                }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: b.color, flex: 'none' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{b.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>Archived Notebook</div>
+                  </div>
+                  <button
+                    onClick={() => onUnarchiveNotebook?.(b.id)}
+                    className="hov k-squish"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+                      border: '1px solid var(--line2)', background: 'var(--card2)',
+                      fontSize: 11.5, fontWeight: 700, color: 'var(--pal-mint)', cursor: 'pointer',
+                    }}
+                  >
+                    <Icon name="undo" size={12} color="var(--pal-mint)" /> Unarchive
+                  </button>
+                  <button
+                    onClick={() => void confirmAsk(`Permanently delete notebook “${b.name}”?`, {
+                      message: 'This will move any notes inside it to trash and delete the notebook.',
+                      confirmLabel: 'Delete',
+                      danger: true,
+                    }).then((yes) => { if (yes) onDeleteNotebook?.(b); })}
+                    className="hov k-squish"
+                    title="Delete notebook"
+                    style={{
+                      padding: '6px 9px', borderRadius: 8, border: '1px solid var(--line2)',
+                      background: 'transparent', color: 'var(--pal-coral)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    <Icon name="trash" size={12} color="var(--pal-coral)" />
+                  </button>
+                </div>
+              ))}
             </div>
-            <button onClick={() => onRestore(n)} className="hov" style={{
-              flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
-              borderRadius: 9, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)',
-            }}>
-              <Icon name="undo" size={13} color="var(--tx3)" />Restore
-            </button>
           </div>
-        ))}
+        )}
+
+        {/* Deleted Notes Section */}
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 8 }}>
+            Deleted Notes ({notes.length})
+          </div>
+          {notes.length === 0 ? (
+            <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)', background: 'var(--card)', borderRadius: 12 }}>
+              No deleted notes in trash.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {notes.map((n) => (
+                <div key={n.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12,
+                  background: 'var(--card)', border: '1px solid var(--line2)', boxShadow: 'var(--sh)', flex: 'none',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{n.title || 'Untitled'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                      {preview(n.body, 90) || 'Empty'}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', flex: 'none' }}>
+                    {n.deleted_at ? whenLabel(n.deleted_at) : ''}
+                  </div>
+                  <button onClick={() => onRestore(n)} className="hov k-squish" style={{
+                    flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minHeight: 32,
+                    borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--pal-mint)',
+                    background: 'var(--card2)', cursor: 'pointer',
+                  }}>
+                    <Icon name="undo" size={13} color="var(--pal-mint)" />Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
 import { PAL } from '@/lib/pal';
-import { ask } from '@/lib/ask';
+import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import {
   parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount,
@@ -711,15 +711,23 @@ export function NoteEditor({
           <TagRow tags={tags} onSet={onSetTags} />
 
           {/* Note Body or Formatted Read View with Optional Line Numbers */}
-          <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, minHeight: 320, width: '100%' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'stretch',
+            flex: '1 1 auto',
+            minHeight: phone ? 280 : 360,
+            width: '100%',
+            marginBottom: 20,
+            position: 'relative',
+          }}>
             {/* Left Line Numbers Gutter (Notepad++ style) */}
             {showLineNumbers && !read && (
               <div
                 aria-hidden
                 style={{
                   flex: 'none',
-                  minWidth: phone ? 24 : 32,
-                  maxWidth: 44,
+                  minWidth: phone ? 26 : 36,
+                  maxWidth: 48,
                   padding: '8px 8px 8px 0',
                   textAlign: 'right',
                   fontFamily: MONO,
@@ -727,6 +735,7 @@ export function NoteEditor({
                   borderRight: '1px solid var(--line2)',
                   marginRight: 12,
                   boxSizing: 'border-box',
+                  overflow: 'hidden',
                 }}
               >
                 {Array.from({ length: lineCount }, (_, idx) => (
@@ -738,7 +747,7 @@ export function NoteEditor({
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: phone ? 11.5 : 12.5,
                       color: 'var(--tx3)',
-                      opacity: 0.5,
+                      opacity: 0.55,
                     }}
                   >
                     {idx + 1}
@@ -826,8 +835,9 @@ export function NoteEditor({
 
           {/* Footer Metadata */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 'auto',
-            paddingTop: 16, borderTop: '1px solid var(--line)', fontSize: 11, color: 'var(--tx3)',
+            display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+            paddingTop: 14, borderTop: '1px solid var(--line2)', fontSize: 11, color: 'var(--tx3)',
+            flex: 'none', width: '100%',
           }}>
             <span>{words} word{words === 1 ? '' : 's'}</span>
             <span>{lineCount} line{lineCount === 1 ? '' : 's'}</span>
@@ -839,7 +849,7 @@ export function NoteEditor({
 
           {/* Backlinks */}
           {backlinks.length > 0 && (
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--line2)', flex: 'none' }}>
               <div style={KICKER}>Linked from</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8 }}>
                 {backlinks.map((n) => (
@@ -1111,9 +1121,18 @@ function Toolbar({
         </button>
       </div>
 
-      <button onClick={onDelete} className="hov tap" title="Delete note" aria-label="Delete note"
-        style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-        <Icon name="trash" size={13.5} color="var(--tx3)" />
+      <button
+        onClick={() => void confirmAsk('Move this note to Trash?', {
+          message: 'This note will be safely moved to the Trash archive where you can restore it anytime.',
+          confirmLabel: 'Move to Trash',
+          danger: true,
+        }).then((yes) => { if (yes) onDelete(); })}
+        className="hov tap"
+        title="Delete note"
+        aria-label="Delete note"
+        style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}
+      >
+        <Icon name="trash" size={13.5} color="var(--pal-coral, var(--tx3))" />
       </button>
     </div>
   );
