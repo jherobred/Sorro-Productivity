@@ -100,15 +100,18 @@ export function MoneyPad({
         ))}
       </div>
 
+      {/* Money's own mint, not the user's accent: this button is the one
+          green thing on a screen where red means spending. */}
       <button
         onClick={onSubmit}
         disabled={amount === 0}
-        className="acc k-squish"
+        className="k-squish"
         style={{
-          width: '100%', minHeight: 42, borderRadius: 11, border: 'none', marginTop: 2,
-          background: amount === 0 ? 'var(--card2)' : 'var(--acc)',
-          color: amount === 0 ? 'var(--tx3)' : 'var(--ink)',
-          fontSize: 13, fontWeight: 800, cursor: amount === 0 ? 'not-allowed' : 'pointer',
+          width: '100%', minHeight: 44, borderRadius: 11, border: 'none', marginTop: 2,
+          background: amount === 0 ? 'var(--card2)' : '#34D9A0',
+          color: amount === 0 ? 'var(--tx3)' : '#08130E',
+          fontSize: 13.5, fontWeight: 800, cursor: amount === 0 ? 'not-allowed' : 'pointer',
+          boxShadow: amount === 0 ? 'none' : '0 0 22px color-mix(in srgb, #34D9A0 30%, transparent)',
         }}
       >
         Log it

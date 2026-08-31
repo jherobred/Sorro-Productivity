@@ -59,7 +59,7 @@ export const GROUP_LABEL: Record<Group, string> = {
 };
 
 /** The day's targets. Not settings yet — one place to change them when they are. */
-export const GOALS = { water: 8, steps: 10000, sleep: 8, kcal: 2200 };
+export const GOALS = { water: 10, steps: 9000, sleep: 8, kcal: 2200 };
 
 const DAYS = ['body_days'] as const;
 const MEALS = ['meals'] as const;

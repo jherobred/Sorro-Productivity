@@ -37,6 +37,27 @@ export type JarRow = {
   photo_path?: string | null;
 };
 
+/**
+ * How the jar is doing, in two words after the money.
+ *
+ * "₱420 left" is only half an answer — left for how long? A jar with a fifth of
+ * its month still to cover is in trouble at the same number another jar is
+ * comfortable at, so the days remaining are the other half, and a jar spending
+ * faster than the calendar just says so.
+ */
+function qualifier(jar: JarRow, daysLeft: number): string {
+  const spentShare = jar.spent / Math.max(1, jar.budget);
+  const monthGone = 1 - daysLeft / 30;
+  if (spentShare > monthGone + 0.15) return ' · tight';
+  return daysLeft > 0 ? ` · ${daysLeft} day${daysLeft === 1 ? '' : 's'}` : '';
+}
+
+/** Days left in the calendar month, which is the period a budget covers. */
+function daysLeftInMonth(now = new Date()): number {
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return Math.max(0, end - now.getDate());
+}
+
 export function Jar({
   jar, armed, onArm, onOpen,
 }: {
@@ -45,6 +66,7 @@ export function Jar({
   onArm: () => void;
   onOpen: () => void;
 }) {
+  const daysLeft = daysLeftInMonth();
   const tap = useDoubleTap(onArm, onOpen);
   const over = jar.spent > jar.budget;
   const left = jar.budget - jar.spent;
@@ -91,7 +113,7 @@ export function Jar({
           <span className="num" style={{
             fontSize: 10, fontWeight: 600, flex: 'none', color: over ? '#FF9B9B' : 'var(--tx3)',
           }}>
-            {over ? `${peso(-left)} over` : `${peso(left)} left`}
+            {over ? `${peso(-left)} over` : `${peso(left)} left${qualifier(jar, daysLeft)}`}
           </span>
         </span>
         <AsciiBar

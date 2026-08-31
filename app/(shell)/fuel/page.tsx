@@ -165,7 +165,7 @@ export default function FuelPage() {
 
         {/* Meals: tap a photograph to edit it, the last tile to add one. */}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: 1 }}>
-          <div style={KICKER}>Meals — tap to edit</div>
+          <div style={KICKER}>Meals — tap to edit, hold none</div>
           <span className="num" style={{ fontSize: 9, color: 'var(--tx3)' }}>{meals.length} TODAY</span>
         </div>
 

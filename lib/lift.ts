@@ -217,7 +217,17 @@ export const workedOf = (name: string): string => exerciseOf(name)?.worked ?? 'W
 
 /* ---------------------------------------------------------------- plans */
 
-export type Routine = { id: string; name: string; exercises: string[] };
+export type Routine = {
+  id: string; name: string; exercises: string[];
+  /**
+   * What the session actually trains, in gym words.
+   *
+   * `MUSCLES` only resolves to six buckets — a push day comes out as
+   * "Chest, Arms", which is true and says nothing. Nobody calls it that. This
+   * is the line printed across the session photograph.
+   */
+  focus: string;
+};
 
 /**
  * The weekly plan, as a fixed set of splits rather than a routine builder.
@@ -229,13 +239,13 @@ export type Routine = { id: string; name: string; exercises: string[] };
  * from a split is still just exercises you can add to or drop.
  */
 export const ROUTINES: Routine[] = [
-  { id: 'push', name: 'Push Day', exercises: ['Bench press', 'Incline press', 'Overhead press', 'Lateral raise', 'Cable pushdown'] },
-  { id: 'pull', name: 'Pull Day', exercises: ['Deadlift', 'Barbell row', 'Lat pulldown', 'Face pull', 'Barbell curl'] },
-  { id: 'legs', name: 'Leg Day', exercises: ['Back squat', 'Romanian deadlift', 'Leg press', 'Leg curl', 'Calf raise'] },
-  { id: 'upper', name: 'Upper Body', exercises: ['Bench press', 'Barbell row', 'Overhead press', 'Lat pulldown', 'Barbell curl'] },
-  { id: 'lower', name: 'Lower Body', exercises: ['Back squat', 'Romanian deadlift', 'Hip thrust', 'Leg extension', 'Calf raise'] },
-  { id: 'full', name: 'Full Body', exercises: ['Back squat', 'Bench press', 'Barbell row', 'Overhead press', 'Plank'] },
-  { id: 'cardio', name: 'Cardio', exercises: ['Run', 'Skipping'] },
+  { id: 'push', name: 'Push Day', exercises: ['Bench press', 'Incline press', 'Overhead press', 'Lateral raise', 'Cable pushdown'], focus: 'Chest · Shoulders · Triceps' },
+  { id: 'pull', name: 'Pull Day', exercises: ['Deadlift', 'Barbell row', 'Lat pulldown', 'Face pull', 'Barbell curl'], focus: 'Back · Biceps · Rear delts' },
+  { id: 'legs', name: 'Leg Day', exercises: ['Back squat', 'Romanian deadlift', 'Leg press', 'Leg curl', 'Calf raise'], focus: 'Quads · Hamstrings · Glutes' },
+  { id: 'upper', name: 'Upper Body', exercises: ['Bench press', 'Barbell row', 'Overhead press', 'Lat pulldown', 'Barbell curl'], focus: 'Chest · Back · Shoulders' },
+  { id: 'lower', name: 'Lower Body', exercises: ['Back squat', 'Romanian deadlift', 'Hip thrust', 'Leg extension', 'Calf raise'], focus: 'Quads · Hamstrings · Glutes' },
+  { id: 'full', name: 'Full Body', exercises: ['Back squat', 'Bench press', 'Barbell row', 'Overhead press', 'Plank'], focus: 'Full body' },
+  { id: 'cardio', name: 'Cardio', exercises: ['Run', 'Skipping'], focus: 'Heart & lungs' },
 ];
 
 export const routineOf = (id: string | null | undefined): Routine | null =>

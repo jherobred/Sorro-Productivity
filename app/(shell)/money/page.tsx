@@ -164,23 +164,31 @@ function Money() {
 
   return (
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 820, marginInline: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* No tab rail and no Spent button. Money is opened to log, and both of
+          those charged a tap before you could. Everything the tabs held is
+          still here, further down the same scroll. */}
+      <div style={{ marginBottom: 12 }}>
         <h1 className="sronly">Money</h1>
-        <TabRail tabs={TABS.map((t) => ({ id: t, label: t }))} value={tab} onChange={setTab}
-          phone={phone} label="Money sections" />
-
-        <button onClick={() => setAdding(true)} className="k-squish"
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px',
-            borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, minHeight: 38,
-          }}>
-          <Icon name="plus" size={14} color="var(--ink)" />Spent
-        </button>
+        {!phone && (
+          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>Money</div>
+        )}
+        <div style={{
+          fontSize: phone ? 22 : 11, fontWeight: phone ? 800 : 500,
+          letterSpacing: phone ? '-.03em' : 0,
+          color: phone ? 'var(--tx)' : 'var(--tx3)', marginTop: phone ? 0 : 4,
+        }}>
+          {phone ? 'Money' : `${peso(balance)} across ${accounts.length} account${accounts.length === 1 ? '' : 's'}`}
+        </div>
+        {phone && (
+          <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>
+            {peso(balance)} across {accounts.length} account{accounts.length === 1 ? '' : 's'}
+          </div>
+        )}
       </div>
 
       {isPending && <MoneySkeleton />}
 
-      {!isPending && tab === 'Overview' && inside && openJar && (
+      {!isPending && inside && openJar && (
         <JarPage
           jar={openJar}
           txns={txns}
@@ -192,38 +200,19 @@ function Money() {
         />
       )}
 
-      {!isPending && tab === 'Overview' && !inside && (
+      {!isPending && !inside && (
         <>
           {/* Runway as a bar rather than a gauge: it is one number and a
               direction, and a half-circle dial spent a third of the screen
               saying so. The label carries the burn too, which the dial could
               only fit underneath itself. */}
-          <div data-tour="money-budget-ring" style={{ display: 'grid', gap: 8 }}>
+          <div data-tour="money-budget-ring">
             <AsciiBar
               value={runwayFill(days) * 100}
               hue={days !== null && days < 7 ? PAL.coral : MINT}
               text={days === null ? 'Nothing spent yet' : `${days} days of runway · ${peso(burn)}/day`}
               label="Runway"
             />
-            <div style={{
-              display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
-              paddingTop: 2,
-            }}>
-              {accounts.map((a) => (
-                <div key={a.id} style={{ textAlign: 'center' }}>
-                  <div className="num" style={{ fontSize: 14.5, fontWeight: 800 }}>{peso(balances.get(a.id) ?? 0)}</div>
-                  <div style={KICKER}>{a.name}</div>
-                </div>
-              ))}
-              <div style={{ textAlign: 'center' }}>
-                <div className="num" style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral }}>{peso(todaysOut)}</div>
-                <div style={KICKER}>out today</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div className="num" style={{ fontSize: 14.5, fontWeight: 800, color: PAL.coral }}>{peso(monthOut)}</div>
-                <div style={KICKER}>out this month</div>
-              </div>
-            </div>
           </div>
 
           {/* The pad is on the screen because Money is opened to log far more
@@ -303,7 +292,7 @@ function Money() {
       {/* What happened, and what is about to. The to-buy list is only a
           transaction that has not been made yet, so it belongs beside the
           ones that have rather than on a tab of its own. */}
-      {tab === 'Activity' && (
+      {!isPending && !inside && (
         <>
         <div style={CARD}>
           {txns.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Nothing logged yet.</div>}
@@ -390,7 +379,7 @@ function Money() {
 
       {/* Money already spoken for: a goal is saving towards something, a
           subscription is a payment that will happen whether you look or not. */}
-      {tab === 'Plan' && (
+      {!isPending && !inside && (
         <>
         <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {goals.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No goals yet.</div>}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { MovementSheet } from '@/components/gym/MovementSheet';
@@ -33,6 +33,8 @@ import { useWorkouts, useBodyActions } from '@/lib/body';
  */
 
 const HUE = PAL.pink;
+/** The rest a set earns, matching the training overlay's own timer. */
+const REST_S = 90;
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export default function GymPage() {
@@ -79,7 +81,9 @@ export default function GymPage() {
     const prevIds = new Set(workouts.filter((w) => w.on_date < from).map((w) => w.id));
     const now = volumeOf(sets.filter((s) => ids.has(s.workout_id)));
     const before = volumeOf(sets.filter((s) => prevIds.has(s.workout_id)));
-    return { now, target: Math.max(before, 1) };
+    // With no previous week there is nothing to be a percentage of, and
+    // dividing by a floor of 1 would call every first session 100%.
+    return { now, target: before, comparable: before > 0 };
   }, [workouts, sets]);
 
   /** The next set that has not been ticked, which is what "up next" means. */
@@ -94,6 +98,32 @@ export default function GymPage() {
 
   const totalSets = blocks.reduce((n, b) => n + b.sets.length, 0);
   const doneSets = mine.filter((s) => s.done).length;
+
+  /**
+   * What the card claims before anything is logged. A split names its
+   * exercises, not its sets, so four is the working assumption — the same one
+   * the progression logic makes.
+   */
+  const exerciseCount = blocks.length || todayRoutine?.exercises.length || 0;
+  const plannedSets = totalSets || exerciseCount * 4;
+  // 2.2 min a set: the work plus the 90s rest that follows most of them.
+  const estMinutes = Math.max(1, Math.round(plannedSets * 2.2));
+
+  /**
+   * Rest runs from the moment a set is ticked. The set rows own the tick, so
+   * the page watches the completed count rather than being told.
+   */
+  const [rest, setRest] = useState(0);
+  const lastDone = useRef(doneSets);
+  useEffect(() => {
+    if (doneSets > lastDone.current) setRest(REST_S);
+    lastDone.current = doneSets;
+  }, [doneSets]);
+  useEffect(() => {
+    if (rest <= 0) return;
+    const t = setInterval(() => setRest((r) => Math.max(0, r - 1)), 1000);
+    return () => clearInterval(t);
+  }, [rest > 0]);
   const hero = blocks[0]?.exercise ?? todayRoutine?.exercises[0] ?? 'Bench press';
   const heroShot = shotOf(hero);
 
@@ -161,7 +191,7 @@ export default function GymPage() {
                     <span style={{
                       display: 'block', fontSize: 7.5, fontWeight: 600,
                       color: on ? HUE : 'var(--tx3)', textTransform: 'uppercase',
-                    }}>{r ? r.name.replace(/ (Day|Body)$/, '') : 'Rest'}</span>
+                    }}>{r ? r.id.toUpperCase() : 'Rest'}</span>
                   </button>
                 );
               })}
@@ -171,11 +201,10 @@ export default function GymPage() {
                 Today · {todayRoutine?.name ?? 'No split set'}
               </div>
               <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.15 }}>
-                {blocks.length ? blocks.map((b) => b.exercise).slice(0, 3).join(' · ') : todayRoutine?.exercises.slice(0, 3).join(' · ') ?? 'Pick a split'}
+                {todayRoutine?.focus ?? 'Pick a split'}
               </div>
               <div className="num" style={{ fontSize: 10, color: 'var(--tx2)', marginTop: 4 }}>
-                {blocks.length || todayRoutine?.exercises.length || 0} exercises · {totalSets} sets
-                {session ? ` · ${session.minutes} min` : ''}
+                {exerciseCount} exercises · {plannedSets} sets · about {estMinutes} min
               </div>
             </div>
           </div>
@@ -199,21 +228,23 @@ export default function GymPage() {
         {/* Volume, rest and what is next — one strip, split by a hairline. */}
         <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <AsciiBar
-            value={Math.min(100, (weekVol.now / weekVol.target) * 100)}
+            value={weekVol.comparable ? Math.min(100, (weekVol.now / weekVol.target) * 100) : 0}
             hue={HUE}
-            text={`Week volume · ${lbs(weekVol.now).toLocaleString()} lbs`}
+            text={weekVol.comparable
+              ? `Week volume ${Math.round(Math.min(100, (weekVol.now / weekVol.target) * 100))}% · ${lbs(weekVol.now).toLocaleString()} lbs`
+              : `Week volume · ${lbs(weekVol.now).toLocaleString()} lbs`}
             label="Volume this week against last"
           />
           <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={KICKER}>Sets</span>
-                <span className="num" style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>
-                  {doneSets} / {totalSets || 0}
+                <span style={KICKER}>Rest</span>
+                <span className="num" style={{ fontSize: 10.5, fontWeight: 700, color: rest > 0 ? PAL.amber : 'var(--tx3)' }}>
+                  {rest > 0 ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}` : '—'}
                 </span>
               </div>
-              <AsciiBar shape="slim" value={totalSets ? (doneSets / totalSets) * 100 : 0}
-                hue={PAL.amber} showValue={false} label="Sets done" />
+              <AsciiBar shape="slim" value={(rest / REST_S) * 100}
+                hue={PAL.amber} showValue={false} label="Rest remaining" />
             </div>
             <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />
             <div style={{ flex: 1.15, minWidth: 0 }}>
