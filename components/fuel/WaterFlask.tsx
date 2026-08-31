@@ -1,12 +1,13 @@
 'use client';
 
 import { usePrefs } from '@/lib/prefs';
+import { Icon } from '@/components/Icon';
 import {
   hydration, fillPct, goalPct, GOAL_MARK, GOAL_ML, CUP_ML, type Hydration,
 } from '@/lib/hydration';
 
 /**
- * Water Flask & Dashboard Card matching Canva layout.
+ * Water Flask & Dashboard Card matching Canva layout with error prevention & backtracking.
  *
  * Left: Visual cylinder tank with 2.5L STOP ceiling line and dynamic fluid.
  * Right: Pace chip, big stat, coaching copy, 10 interactive cup icons, and matrix progress bar.
@@ -143,11 +144,11 @@ export function FlaskCups({
           <button
             key={i}
             onClick={() => onSet(i + 1 === count ? i : i + 1)}
-            aria-label={`${i + 1} of ${goal} cups`}
+            aria-label={`${i + 1} of ${goal} cups (tap to backtrack)`}
             aria-pressed={active}
             className="k-squish"
             style={{
-              height: 26,
+              height: 28,
               padding: 0,
               borderRadius: '4px 4px 8px 8px',
               border: `1.5px solid ${active ? hue : 'rgba(255,255,255,0.18)'}`,
@@ -163,7 +164,7 @@ export function FlaskCups({
             <span
               style={{
                 width: '60%',
-                height: 2,
+                height: 2.5,
                 borderRadius: 1,
                 background: active ? '#0B0A13' : 'rgba(255,255,255,0.3)',
                 transform: 'translateY(-2px)',
@@ -176,19 +177,23 @@ export function FlaskCups({
   );
 }
 
-/** Complete Water Card with Tank, coaching message, cups, and progress bar */
+/** Complete Water Card with Tank, coaching message, cups, progress bar, and backtrack toolbar */
 export function FuelWaterCard({
   total,
   lastHour,
   hour,
+  hasSips = false,
   onSetCups,
   onAddSip,
+  onUndoLastSip,
 }: {
   total: number;
   lastHour: number;
   hour: number;
+  hasSips?: boolean;
   onSetCups: (n: number) => void;
   onAddSip: (ml: number) => void;
+  onUndoLastSip?: () => void;
 }) {
   const s = hydration(total, lastHour, hour);
   const cups = Math.round(total / CUP_ML);
@@ -204,7 +209,7 @@ export function FuelWaterCard({
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
       }}
     >
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
@@ -213,23 +218,49 @@ export function FuelWaterCard({
 
         {/* Right: Readout & Controls */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Status pill */}
-          <div
-            style={{
-              alignSelf: 'flex-start',
-              padding: '4px 12px',
-              borderRadius: 999,
-              border: `1px solid color-mix(in srgb, ${s.hue} 50%, transparent)`,
-              background: `color-mix(in srgb, ${s.hue} 16%, transparent)`,
-              color: s.hue,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: '.08em',
-              textTransform: 'uppercase',
-            }}
-          >
-            {s.label}
+          {/* Status row with Backtrack indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div
+              style={{
+                padding: '4px 12px',
+                borderRadius: 999,
+                border: `1px solid color-mix(in srgb, ${s.hue} 50%, transparent)`,
+                background: `color-mix(in srgb, ${s.hue} 16%, transparent)`,
+                color: s.hue,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {s.label}
+            </div>
+
+            {hasSips && onUndoLastSip && (
+              <button
+                onClick={onUndoLastSip}
+                className="hov k-squish"
+                title="Undo last logged water sip"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid var(--line2)',
+                  background: 'var(--card2)',
+                  color: 'var(--tx2)',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="undo" size={12} color="var(--tx3)" />
+                Undo last sip
+              </button>
+            )}
           </div>
 
           {/* Large Number */}
@@ -272,7 +303,7 @@ export function FuelWaterCard({
             {s.why} {s.act}
           </p>
 
-          {/* 10 Interactive Cup icons */}
+          {/* 10 Interactive Cup icons (tap to increment or backtrack) */}
           <div style={{ marginTop: 4 }}>
             <FlaskCups count={cups} hue={s.hue} onSet={onSetCups} />
           </div>
@@ -315,43 +346,35 @@ export function FuelWaterCard({
             />
           </div>
 
-          {/* Quick Increment Shortcut buttons */}
-          <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+          {/* Action Toolbar with Increment & Backtrack buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 1fr', gap: 6, marginTop: 2 }}>
             <button
               onClick={() => onAddSip(250)}
               className="hov k-squish"
-              style={{
-                flex: 1,
-                padding: '6px 8px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                color: 'var(--tx2)',
-                fontSize: 10.5,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                cursor: 'pointer',
-              }}
+              style={BTN_MINI}
             >
               +1 Cup (250ml)
             </button>
             <button
               onClick={() => onAddSip(500)}
               className="hov k-squish"
-              style={{
-                flex: 1,
-                padding: '6px 8px',
-                borderRadius: 8,
-                border: '1px solid var(--line2)',
-                background: 'var(--card2)',
-                color: 'var(--tx2)',
-                fontSize: 10.5,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                cursor: 'pointer',
-              }}
+              style={BTN_MINI}
             >
               +500ml Bottle
+            </button>
+            <button
+              onClick={() => onSetCups(Math.max(0, cups - 1))}
+              disabled={cups === 0}
+              className="hov k-squish"
+              style={{
+                ...BTN_MINI,
+                color: cups === 0 ? 'var(--tx3)' : '#FF8585',
+                borderColor: cups === 0 ? 'var(--line2)' : 'rgba(255, 107, 107, 0.3)',
+                cursor: cups === 0 ? 'not-allowed' : 'pointer',
+                opacity: cups === 0 ? 0.4 : 1,
+              }}
+            >
+              -1 Cup
             </button>
           </div>
         </div>
@@ -359,3 +382,16 @@ export function FuelWaterCard({
     </div>
   );
 }
+
+const BTN_MINI: React.CSSProperties = {
+  padding: '7px 6px',
+  borderRadius: 8,
+  border: '1px solid var(--line2)',
+  background: 'var(--card2)',
+  color: 'var(--tx2)',
+  fontSize: 10.5,
+  fontWeight: 700,
+  fontFamily: 'var(--font-mono)',
+  cursor: 'pointer',
+  textAlign: 'center',
+};

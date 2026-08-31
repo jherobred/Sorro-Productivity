@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { usePrefs } from '@/lib/prefs';
+import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
+import { Icon } from '@/components/Icon';
 import { ExerciseArt } from '@/components/body/ExerciseArt';
 import { shotOf, artOf, gearOf, workedOf } from '@/lib/lift';
 import { formOf } from '@/lib/liftForm';
@@ -33,6 +35,7 @@ export function MovementSheet({
   onClose: () => void;
 }) {
   const { prefs } = usePrefs();
+  const { phone } = useLayout();
   useOverlayBack(true, onClose);
 
   const id = shotOf(exercise);
@@ -53,16 +56,40 @@ export function MovementSheet({
       onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(6,5,11,.74)',
-        backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        backdropFilter: 'blur(4px)', display: 'flex',
+        alignItems: phone ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        padding: phone ? 0 : 20,
       }}
     >
-      <div className="rise" style={{
-        width: '100%', maxWidth: 460, maxHeight: '90dvh', overflowY: 'auto',
-        background: 'var(--panel)', border: '1px solid var(--line2)', borderBottom: 'none',
-        borderRadius: '18px 18px 0 0', padding: '10px 15px calc(18px + env(safe-area-inset-bottom))',
-        display: 'flex', flexDirection: 'column', gap: 10,
+      <div className={phone ? 'rise' : 'k-bloom'} style={{
+        width: 500, maxWidth: '100%', maxHeight: phone ? '90dvh' : '86dvh', overflowY: 'auto',
+        background: 'var(--panel)', border: '1px solid var(--line2)',
+        borderRadius: phone ? '18px 18px 0 0' : 20,
+        padding: phone ? '10px 15px calc(18px + env(safe-area-inset-bottom))' : '16px 20px 20px',
+        display: 'flex', flexDirection: 'column', gap: 12,
+        boxShadow: phone ? 'none' : '0 24px 64px rgba(0, 0, 0, 0.75)',
       }}>
-        <div style={{ width: 34, height: 3.5, borderRadius: 2, background: 'var(--line2)', margin: '0 auto 2px' }} />
+        {phone ? (
+          <div style={{ width: 34, height: 3.5, borderRadius: 2, background: 'var(--line2)', margin: '0 auto 2px' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -2 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+              Movement Details
+            </span>
+            <button
+              onClick={onClose}
+              className="hov k-squish"
+              aria-label="Close"
+              style={{
+                width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center',
+                background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer',
+              }}
+            >
+              <Icon name="close" size={13} color="var(--tx2)" />
+            </button>
+          </div>
+        )}
 
         <div style={{
           position: 'relative', width: '100%', aspectRatio: '3/2', borderRadius: 12,

@@ -7,6 +7,7 @@ import { ExerciseShot } from './ExerciseShot';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { usePrefs } from '@/lib/prefs';
+import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { ymd } from '@/lib/series';
 import { useSets, useSetActions } from '@/lib/gym';

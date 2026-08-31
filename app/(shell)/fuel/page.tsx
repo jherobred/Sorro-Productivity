@@ -13,7 +13,7 @@ import { toast } from '@/lib/toast';
 import { ask } from '@/lib/ask';
 import { ymd } from '@/lib/series';
 import { hourOf, CUP_ML } from '@/lib/hydration';
-import { useWater, useWaterActions, waterTotals, setCups } from '@/lib/water';
+import { useWater, useWaterActions, waterTotals, setCups, type Sip } from '@/lib/water';
 import {
   useBodyDays, useMeals, useBodyActions, sleepHours, dayOf, GOALS, type Meal,
 } from '@/lib/body';
@@ -37,6 +37,7 @@ export default function FuelPage() {
   const [editing, setEditing] = useState<Meal | undefined>(undefined);
   const [scanning, setScanning] = useState(false);
   const [sleeping, setSleeping] = useState(false);
+  const [backtrackingSip, setBacktrackingSip] = useState<Sip | null>(null);
 
   const day = dayOf(days, today);
   const steps = day?.steps ?? 0;
@@ -76,6 +77,22 @@ export default function FuelPage() {
     toast(`+${ml} ml water logged`);
   };
 
+  /** Undo the most recent water sip */
+  const undoLastSip = () => {
+    if (!sips.length) return;
+    const sorted = [...sips].sort((a, b) => b.at.localeCompare(a.at));
+    const latest = sorted[0];
+    W.remove.mutate({ id: latest.id });
+    toast(`Removed ${latest.ml} ml water sip`);
+  };
+
+  /** Delete a specific water sip */
+  const deleteSip = (id: string, ml: number) => {
+    W.remove.mutate({ id });
+    toast(`Removed ${ml} ml water log`);
+    setBacktrackingSip(null);
+  };
+
   /** Quick re-log meal from presets */
   const logPresetMeal = (p: FoodPreset) => {
     const newMeal: Meal = {
@@ -98,16 +115,20 @@ export default function FuelPage() {
   const timeline = useMemo(() => {
     const rows = [
       ...sips.map((s) => ({
+        id: s.id,
         at: s.at,
         kind: 'water' as const,
         ml: s.ml,
         meal: null,
+        sip: s,
       })),
       ...meals.map((m) => ({
+        id: m.id,
         at: `${m.on_date}T12:00:00`,
         kind: 'meal' as const,
         ml: 0,
         meal: m,
+        sip: null,
       })),
     ];
     return rows.sort((a, b) => a.at.localeCompare(b.at));
@@ -115,12 +136,12 @@ export default function FuelPage() {
 
   // Fallback demo timeline items when today is freshly opened
   const displayTimeline = timeline.length > 0 ? timeline : [
-    { at: `${today}T07:10:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd1', name: 'Silog', kcal: 520, protein: 38, carbs: 62, fat: 18, on_date: today, slot: 'Breakfast', photo_path: '/food/silog.svg', place: null } },
-    { at: `${today}T07:40:00`, kind: 'water' as const, ml: 500, meal: null },
-    { at: `${today}T10:05:00`, kind: 'water' as const, ml: 250, meal: null },
-    { at: `${today}T12:20:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd2', name: 'Sinigang', kcal: 310, protein: 22, carbs: 30, fat: 9, on_date: today, slot: 'Lunch', photo_path: '/food/sinigang.svg', place: null } },
-    { at: `${today}T15:00:00`, kind: 'water_warning' as const, ml: 1000, meal: null },
-    { at: `${today}T15:30:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd3', name: 'Isaw', kcal: 180, protein: 14, carbs: 8, fat: 10, on_date: today, slot: 'Snack', photo_path: '/food/isaw.svg', place: null } },
+    { id: 'd1', at: `${today}T07:10:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd1', name: 'Silog', kcal: 520, protein: 38, carbs: 62, fat: 18, on_date: today, slot: 'Breakfast', photo_path: '/food/silog.svg', place: null }, sip: null },
+    { id: 'dw1', at: `${today}T07:40:00`, kind: 'water' as const, ml: 500, meal: null, sip: { id: 'dw1', at: `${today}T07:40:00`, ml: 500 } },
+    { id: 'dw2', at: `${today}T10:05:00`, kind: 'water' as const, ml: 250, meal: null, sip: { id: 'dw2', at: `${today}T10:05:00`, ml: 250 } },
+    { id: 'd2', at: `${today}T12:20:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd2', name: 'Sinigang', kcal: 310, protein: 22, carbs: 30, fat: 9, on_date: today, slot: 'Lunch', photo_path: '/food/sinigang.svg', place: null }, sip: null },
+    { id: 'dw3', at: `${today}T15:00:00`, kind: 'water_warning' as const, ml: 1000, meal: null, sip: { id: 'dw3', at: `${today}T15:00:00`, ml: 1000 } },
+    { id: 'd3', at: `${today}T15:30:00`, kind: 'meal' as const, ml: 0, meal: { id: 'd3', name: 'Isaw', kcal: 180, protein: 14, carbs: 8, fat: 10, on_date: today, slot: 'Snack', photo_path: '/food/isaw.svg', place: null }, sip: null },
   ];
 
   const effectiveKcal = totalKcal > 0 ? totalKcal : 1420;
@@ -230,14 +251,16 @@ export default function FuelPage() {
       >
         {/* ================= LEFT COLUMN: Hydration & Vitals ================= */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(14px, 2vw, 22px)' }}>
-          {/* Water Flask & Hydration Card */}
+          {/* Water Flask & Hydration Card with Backtracking */}
           <div data-tour="fuel-water">
             <FuelWaterCard
               total={total > 0 ? total : 1500}
               lastHour={lastHour}
               hour={hour}
+              hasSips={sips.length > 0}
               onSetCups={(n) => setCups(sips, n, (s) => W.add.mutate(s), (id) => W.remove.mutate({ id }))}
               onAddSip={addWaterMl}
+              onUndoLastSip={undoLastSip}
             />
           </div>
 
@@ -439,7 +462,7 @@ export default function FuelPage() {
 
         {/* ================= RIGHT COLUMN: Meals & Activity Stream ================= */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(14px, 2vw, 22px)' }}>
-          {/* Today So Far Timeline Card */}
+          {/* Today So Far Timeline Card with Interactive Backtrack */}
           <div
             style={{
               background: 'var(--card)',
@@ -484,7 +507,7 @@ export default function FuelPage() {
               </span>
             </div>
 
-            {/* Timeline Stream */}
+            {/* Timeline Stream with Direct Error Prevention / Backtrack Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {displayTimeline.map((r, i) => {
                 const isWater = r.kind === 'water';
@@ -494,16 +517,14 @@ export default function FuelPage() {
                 return (
                   <div
                     key={i}
-                    onClick={() => {
-                      if (r.meal && r.meal.id && !r.meal.id.startsWith('d')) {
-                        setEditing(r.meal);
-                      }
-                    }}
                     style={{
                       display: 'flex',
                       gap: 12,
-                      alignItems: 'flex-start',
-                      cursor: r.meal ? 'pointer' : 'default',
+                      alignItems: 'center',
+                      padding: '4px 6px',
+                      borderRadius: 10,
+                      background: 'rgba(255,255,255,0.015)',
+                      transition: 'background .15s ease',
                     }}
                   >
                     {/* Timestamp */}
@@ -515,7 +536,6 @@ export default function FuelPage() {
                         color: 'var(--tx3)',
                         width: 44,
                         flex: 'none',
-                        paddingTop: 1,
                       }}
                     >
                       {timeStr}
@@ -528,14 +548,26 @@ export default function FuelPage() {
                         height: 8.5,
                         borderRadius: '50%',
                         flex: 'none',
-                        marginTop: 4,
                         background: isWarning ? '#FF6B6B' : isWater ? '#38BDF8' : HUE_LIME,
                         boxShadow: `0 0 8px ${isWarning ? '#FF6B6B' : isWater ? '#38BDF8' : HUE_LIME}88`,
                       }}
                     />
 
                     {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      onClick={() => {
+                        if (r.meal && r.meal.id && !r.meal.id.startsWith('d')) {
+                          setEditing(r.meal);
+                        } else if (r.sip && r.sip.id && !r.sip.id.startsWith('d')) {
+                          setBacktrackingSip(r.sip);
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        cursor: (r.meal || r.sip) ? 'pointer' : 'default',
+                      }}
+                    >
                       <div
                         style={{
                           fontSize: 'clamp(12.5px, 1.2vw, 14px)',
@@ -561,10 +593,37 @@ export default function FuelPage() {
                         {isWarning
                           ? '1,000 ml – above the hourly ceiling'
                           : isWater
-                            ? `${r.ml} ml`
+                            ? `${r.ml} ml (tap to backtrack)`
                             : `${r.meal?.kcal} kcal · ${r.meal?.protein}p ${r.meal?.carbs}c ${r.meal?.fat}f`}
                       </div>
                     </div>
+
+                    {/* Quick Undo / Delete Action for Water Sips */}
+                    {r.sip && r.sip.id && !r.sip.id.startsWith('d') && (
+                      <button
+                        onClick={() => deleteSip(r.sip!.id, r.sip!.ml)}
+                        className="hov k-squish"
+                        title="Remove this water log"
+                        aria-label={`Remove ${r.sip.ml}ml water`}
+                        style={{
+                          padding: '4px 6px',
+                          borderRadius: 6,
+                          border: '1px solid rgba(255,107,107,0.3)',
+                          background: 'rgba(255,107,107,0.08)',
+                          color: '#FF8585',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          flex: 'none',
+                        }}
+                      >
+                        <Icon name="trash" size={11} color="#FF8585" />
+                        Undo
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -655,6 +714,15 @@ export default function FuelPage() {
         </div>
       </div>
 
+      {/* Water Backtrack Confirmation Modal */}
+      {backtrackingSip && (
+        <WaterBacktrackModal
+          sip={backtrackingSip}
+          onClose={() => setBacktrackingSip(null)}
+          onDelete={() => deleteSip(backtrackingSip.id, backtrackingSip.ml)}
+        />
+      )}
+
       {/* Sheets & Overlays */}
       {sleeping && (
         <SleepSheet
@@ -691,6 +759,102 @@ export default function FuelPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function WaterBacktrackModal({
+  sip,
+  onClose,
+  onDelete,
+}: {
+  sip: Sip;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  useOverlayBack(true, onClose);
+  return (
+    <div
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 95,
+        background: 'rgba(6,5,11,.74)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        className="k-bloom"
+        style={{
+          width: '100%',
+          maxWidth: 360,
+          background: 'var(--panel)',
+          border: '1px solid var(--line2)',
+          borderRadius: 16,
+          padding: 18,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)' }}>Backtrack Water Sip</div>
+          <button onClick={onClose} className="hov" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <Icon name="close" size={14} color="var(--tx3)" />
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.5 }}>
+          Logged <strong style={{ color: '#38BDF8' }}>{sip.ml} ml</strong> at{' '}
+          <span className="num">{new Date(sip.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>.
+          Do you want to remove this entry to adjust your total?
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            onClick={onClose}
+            className="hov k-squish"
+            style={{
+              flex: 1,
+              minHeight: 38,
+              borderRadius: 10,
+              border: '1px solid var(--line2)',
+              background: 'var(--card2)',
+              color: 'var(--tx2)',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            className="hov k-squish"
+            style={{
+              flex: 1,
+              minHeight: 38,
+              borderRadius: 10,
+              border: '1px solid rgba(255,107,107,0.4)',
+              background: '#FF6B6B',
+              color: '#0B0A13',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            Remove sip
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
