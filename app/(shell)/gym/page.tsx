@@ -48,6 +48,23 @@ export default function GymPage() {
     return routineOf(routineId) ?? todayRoutine;
   }, [plan, selectedSlot, todayRoutine]);
 
+  // Track dynamically removed / added exercises for today's workout
+  const [removedExercises, setRemovedExercises] = useState<string[]>([]);
+  const [addedExercises, setAddedExercises] = useState<string[]>([]);
+
+  // Base routine exercises list
+  const baseExercises = useMemo(() => {
+    return activeRoutine?.exercises ?? ['Bench press', 'Incline press', 'Overhead press', 'Cable pushdown'];
+  }, [activeRoutine]);
+
+  // Combined reactive list of exercises for today
+  const displayExercises = useMemo(() => {
+    const fromMine = mine.map((s) => s.exercise);
+    const fromBlocks = blocks.map((b) => b.exercise);
+    const combined = [...new Set([...fromMine, ...fromBlocks, ...addedExercises, ...baseExercises])];
+    return combined.filter((ex) => !removedExercises.includes(ex));
+  }, [mine, blocks, addedExercises, baseExercises, removedExercises]);
+
   /** Consecutive days trained */
   const streak = useMemo(() => {
     const done = new Set(workouts.map((w) => w.on_date));
@@ -87,17 +104,18 @@ export default function GymPage() {
   /** Next set up */
   const next = useMemo(() => {
     for (const b of blocks) {
+      if (removedExercises.includes(b.exercise)) continue;
       const undone = b.sets.find((s) => !s.done);
       if (undone) return { exercise: b.exercise, set: undone, index: b.sets.indexOf(undone) + 1, of: b.sets.length };
       if (b.sets.length === 0) return { exercise: b.exercise, set: null, index: 0, of: 0 };
     }
     return null;
-  }, [blocks]);
+  }, [blocks, removedExercises]);
 
-  const totalSets = blocks.reduce((n, b) => n + b.sets.length, 0);
-  const doneSets = mine.filter((s) => s.done).length;
+  const totalSets = blocks.reduce((n, b) => (removedExercises.includes(b.exercise) ? n : n + b.sets.length), 0);
+  const doneSets = mine.filter((s) => s.done && !removedExercises.includes(s.exercise)).length;
 
-  const exerciseCount = blocks.length || activeRoutine?.exercises.length || 6;
+  const exerciseCount = displayExercises.length || activeRoutine?.exercises.length || 6;
   const plannedSets = totalSets || exerciseCount * 4;
   const estMinutes = Math.max(1, Math.round(plannedSets * 2.2));
 
@@ -133,7 +151,7 @@ export default function GymPage() {
   };
 
   /** Current Movement being performed / demonstrated */
-  const currentMovement = next?.exercise ?? blocks[0]?.exercise ?? activeRoutine?.exercises[0] ?? 'Bench press';
+  const currentMovement = next?.exercise ?? displayExercises[0] ?? 'Bench press';
   const heroShot = shotOf(currentMovement) ?? 'bench';
 
   /** Animated Movement Demo Loop (GIF demonstration of the current movement) */
@@ -163,11 +181,14 @@ export default function GymPage() {
   /** Delete Workout Handler */
   const handleDeleteWorkout = async () => {
     if (session) {
-      void T.deleteSession();
+      await T.deleteSession();
     } else {
       T.setRunning(false);
       toast('Workout cleared');
     }
+    setRemovedExercises([]);
+    setAddedExercises([]);
+    setElapsed(0);
   };
 
   // Left Column Content (Command Center)
@@ -502,45 +523,46 @@ export default function GymPage() {
             gap: 10,
           }}
         >
-          {blocks.length === 0 && (
-            (activeRoutine?.exercises ?? ['Bench press', 'Incline press', 'Overhead press', 'Cable pushdown']).slice(0, 4).map((exName, idx) => (
-              <CanvaLiftCard
-                key={exName + idx}
-                exercise={exName}
-                setsCount={4}
-                doneCount={idx < 2 ? 2 : 0}
-                weightShorthand="60×8  60×8"
-                isLive={idx === 0}
-                onOpen={() => setOpen({ exercise: exName, sub: 'Set 2 of 4 · 60 kg × 8' })}
-                onQuickLog={() => T.logSet(exName, { weight_kg: 60, reps: 8 })}
-                onEdit={() => setEditingExercise(exName)}
-                onRemove={() => T.removeExercise(exName)}
-              />
-            ))
+          {displayExercises.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '32px 14px', color: 'var(--tx3)', fontSize: 12.5,
+              background: 'var(--card2)', borderRadius: 12, border: '1px dashed var(--line2)',
+            }}>
+              No exercises left in this workout. Click &ldquo;+ Add Exercise&rdquo; to add one.
+            </div>
+          ) : (
+            displayExercises.map((exName, idx) => {
+              const b = blocks.find((x) => x.exercise === exName);
+              const exSets = b?.sets ?? mine.filter((s) => s.exercise === exName);
+              const doneCount = exSets.filter((s) => s.done).length;
+              const setsCount = exSets.length || 4;
+              const isLive = (next?.exercise === exName && !!session) || (idx === 0 && !next && !session);
+              const shorthand = exSets.length > 0
+                ? exSets.filter((s) => s.done).map((s) => `${s.weight_kg}×${s.reps}`).join('  ') || `${exSets[0]?.weight_kg ?? 60}×${exSets[0]?.reps ?? 8}`
+                : previously[exName]
+                  ? `${previously[exName].weight_kg}×${previously[exName].reps}`
+                  : '4 sets planned';
+
+              return (
+                <CanvaLiftCard
+                  key={exName}
+                  exercise={exName}
+                  setsCount={setsCount}
+                  doneCount={doneCount}
+                  weightShorthand={shorthand}
+                  isLive={isLive}
+                  onOpen={() => setOpen({ exercise: exName, sub: `${doneCount} of ${setsCount} sets done` })}
+                  onQuickLog={() => T.logSet(exName)}
+                  onEdit={() => setEditingExercise(exName)}
+                  onRemove={() => {
+                    setRemovedExercises((r) => [...r, exName]);
+                    setAddedExercises((a) => a.filter((x) => x !== exName));
+                    T.removeExercise(exName);
+                  }}
+                />
+              );
+            })
           )}
-
-          {blocks.map((b) => {
-            const doneCount = b.sets.filter((s) => s.done).length;
-            const live = next?.exercise === b.exercise && !!session;
-            const shorthand = b.sets.length
-              ? b.sets.filter((s) => s.done).map((s) => `${s.weight_kg}×${s.reps}`).join('  ') || `${b.sets[0]?.weight_kg ?? 60}×${b.sets[0]?.reps ?? 8}`
-              : previously[b.exercise] ? `${previously[b.exercise].weight_kg}×${previously[b.exercise].reps}` : '60×8  60×8';
-
-            return (
-              <CanvaLiftCard
-                key={b.exercise}
-                exercise={b.exercise}
-                setsCount={b.sets.length || 4}
-                doneCount={doneCount}
-                weightShorthand={shorthand}
-                isLive={live}
-                onOpen={() => setOpen({ exercise: b.exercise, sub: `${doneCount} of ${b.sets.length || 4} sets done` })}
-                onQuickLog={() => T.logSet(b.exercise)}
-                onEdit={() => setEditingExercise(b.exercise)}
-                onRemove={() => T.removeExercise(b.exercise)}
-              />
-            );
-          })}
         </div>
       </div>
 

@@ -125,11 +125,19 @@ export function useTraining({
   };
 
   const logSet = (exercise: string, seed?: { weight_kg: number; reps: number }) => {
-    if (!session) return;
+    let workoutId = session?.id;
+    if (!workoutId) {
+      workoutId = crypto.randomUUID();
+      addWorkout({
+        id: workoutId, on_date: today,
+        name: todayRoutine?.name ?? 'Workout', groups: [], minutes: 0,
+      });
+      setRunning(true);
+    }
     const inSession = [...mine].reverse().find((s) => s.exercise === exercise);
     const v = seed ?? nextSet(inSession ?? previously[exercise], kindOf(exercise));
     const row: WorkoutSet = {
-      id: crypto.randomUUID(), workout_id: session.id, exercise,
+      id: crypto.randomUUID(), workout_id: workoutId, exercise,
       position: mine.length, done: false, ...v,
     };
     S.addSet.mutate(row);
@@ -200,6 +208,9 @@ export function useTraining({
       danger: true,
     });
     if (yes) {
+      for (const s of mine) {
+        S.delSet.mutate({ id: s.id });
+      }
       delWorkout(session.id);
       setPending([]);
       setRunning(false);
