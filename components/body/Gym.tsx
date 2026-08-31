@@ -316,20 +316,28 @@ export function TrainingOverlays({ T }: { T: Training }) {
 function Sheet({
   title, onClose, children,
 }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { phone } = useLayout();
   useOverlayBack(true, onClose);
 
   const body = (
     <div onClick={onClose} className="ogym" style={{
-      position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.5)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: 97, background: 'rgba(0,0,0,.6)',
+      backdropFilter: 'blur(3px)',
+      display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center',
+      padding: phone ? 0 : 20,
     }}>
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}
+        className={phone ? 'rise' : 'k-bloom'}
         style={{
-          width: '100%', maxWidth: 620, maxHeight: '88dvh', display: 'flex', flexDirection: 'column',
-          background: 'var(--og-bg-el)', borderRadius: 'var(--og-r-xl) var(--og-r-xl) 0 0',
-          padding: '8px 16px calc(20px + env(safe-area-inset-bottom))',
+          width: '100%', maxWidth: 640, maxHeight: phone ? '88dvh' : '84dvh', display: 'flex', flexDirection: 'column',
+          background: 'var(--og-bg-el)', borderRadius: phone ? 'var(--og-r-xl) var(--og-r-xl) 0 0' : 20,
+          border: '1px solid var(--line2)',
+          padding: phone ? '8px 16px calc(20px + env(safe-area-inset-bottom))' : '16px 20px 20px',
+          boxShadow: phone ? 'none' : '0 24px 64px rgba(0, 0, 0, 0.75)',
         }}>
-        <span aria-hidden style={{ width: 36, height: 5, borderRadius: 99, background: 'var(--og-label-4)', margin: '6px auto 12px' }} />
+        {phone && (
+          <span aria-hidden style={{ width: 36, height: 5, borderRadius: 99, background: 'var(--og-label-4)', margin: '6px auto 12px' }} />
+        )}
         <div className="og-row og-between" style={{ marginBottom: 12 }}>
           <h3 style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-.021em' }}>{title}</h3>
           <button className="og-iconbtn" onClick={onClose} aria-label="Close">
@@ -873,6 +881,7 @@ function ExercisesView({
 
 /** The exercise sheet, openGym's shape: a grabber, a search, a list. */
 function Picker({ onClose, onPick }: { onClose: () => void; onPick: (name: string) => void }) {
+  const { phone } = useLayout();
   const [q, setQ] = useState('');
   const box = useRef<HTMLInputElement>(null);
   useEffect(() => { box.current?.focus(); }, []);
@@ -883,17 +892,31 @@ function Picker({ onClose, onPick }: { onClose: () => void; onPick: (name: strin
 
   return (
     <div onClick={onClose} className="ogym" style={{
-      position: 'fixed', inset: 0, zIndex: 98, background: 'rgba(0,0,0,.4)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      position: 'fixed', inset: 0, zIndex: 98, background: 'rgba(0,0,0,.6)',
+      backdropFilter: 'blur(3px)',
+      display: 'flex', alignItems: phone ? 'flex-end' : 'center', justifyContent: 'center',
+      padding: phone ? 0 : 20,
     }}>
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Add an exercise"
+        className={phone ? 'rise' : 'k-bloom'}
         style={{
-          width: '100%', maxWidth: 560, maxHeight: '86dvh', display: 'flex', flexDirection: 'column',
-          background: 'var(--og-bg-el)', borderRadius: 'var(--og-r-xl) var(--og-r-xl) 0 0',
-          padding: '8px 16px 20px',
+          width: '100%', maxWidth: 580, maxHeight: phone ? '86dvh' : '82dvh', display: 'flex', flexDirection: 'column',
+          background: 'var(--og-bg-el)', borderRadius: phone ? 'var(--og-r-xl) var(--og-r-xl) 0 0' : 20,
+          border: '1px solid var(--line2)',
+          padding: phone ? '8px 16px 20px' : '16px 20px 22px',
+          boxShadow: phone ? 'none' : '0 24px 64px rgba(0, 0, 0, 0.75)',
         }}>
-        <span aria-hidden style={{ width: 36, height: 5, borderRadius: 99, background: 'var(--og-label-4)', margin: '6px auto 14px' }} />
-        <h3 style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-.021em', marginBottom: 12 }}>Add an exercise</h3>
+        {phone ? (
+          <span aria-hidden style={{ width: 36, height: 5, borderRadius: 99, background: 'var(--og-label-4)', margin: '6px auto 14px' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.021em', margin: 0 }}>Add an exercise</h3>
+            <button className="og-iconbtn" onClick={onClose} aria-label="Close" style={{ width: 28, height: 28 }}>
+              <Icon name="close" size={13} color="currentColor" />
+            </button>
+          </div>
+        )}
+        {phone && <h3 style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-.021em', marginBottom: 12 }}>Add an exercise</h3>}
         <input ref={box} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search, or type your own"
           aria-label="Search exercises" style={FIELD} />
         <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7 }}>

@@ -761,16 +761,9 @@ function Grid({
 
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
-  const daysSpanned = Math.max(1, Math.min(7, days));
-  const dayIndices = Array.from({ length: daysSpanned }, (_, i) => i);
-  const dayDates = dayIndices.map((i) => {
-    const d = new Date(ws);
-    d.setDate(d.getDate() + dayOffset + i);
-    return d;
-  });
 
-  const isToday = (d: Date) => d.toDateString() === new Date().toDateString();
-  const sameDay = (iso: string, d: Date) => new Date(iso).toDateString() === d.toDateString();
+  const isToday = (d?: Date | null) => Boolean(d && typeof d.toDateString === 'function' && d.toDateString() === new Date().toDateString());
+  const sameDay = (iso: string, d?: Date | null) => Boolean(d && typeof d.toDateString === 'function' && new Date(iso).toDateString() === d.toDateString());
 
   /**
    * Multi-day runs, drawn as one bar rather than N chips.
@@ -1169,7 +1162,8 @@ function Grid({
 
                 {/* Vacant / free time intervals with bidirectional arrow & countdown unto next event */}
                 {showVacant && (() => {
-                  const colDate = dayDates[idx];
+                  const colDate = new Date(ws);
+                  colDate.setDate(colDate.getDate() + idx);
                   const isColToday = isToday(colDate);
                   const nowHour = new Date(nowMs).getHours() + new Date(nowMs).getMinutes() / 60 + new Date(nowMs).getSeconds() / 3600;
 
