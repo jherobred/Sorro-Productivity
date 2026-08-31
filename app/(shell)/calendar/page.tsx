@@ -1071,18 +1071,28 @@ function Grid({
                   const isColToday = isToday(colDate);
                   const nowHour = new Date(nowMs).getHours() + new Date(nowMs).getMinutes() / 60 + new Date(nowMs).getSeconds() / 3600;
 
-                  const dayEvents = events
-                    .filter((e) => !e.all_day && !e.deleted_at && dayIndex(e.starts_at, ws) === idx)
-                    .map((e) => ({
-                      id: e.id,
-                      title: e.title,
-                      start: hoursOf(e.starts_at),
-                      end: hoursOf(e.ends_at),
-                      starts_at: e.starts_at,
-                      ends_at: e.ends_at,
-                    }));
+                  const dayItems = [
+                    ...events
+                      .filter((e) => !e.all_day && !e.deleted_at && dayIndex(e.starts_at, ws) === idx)
+                      .map((e) => ({
+                        id: e.id,
+                        title: e.title,
+                        start: hoursOf(e.starts_at),
+                        end: hoursOf(e.ends_at),
+                        starts_at: e.starts_at,
+                        ends_at: e.ends_at,
+                      })),
+                    ...slotTasks(idx).map((t) => ({
+                      id: t.id,
+                      title: t.title,
+                      start: hoursOf(t.due_at!),
+                      end: hoursOf(t.due_at!) + 1.0,
+                      starts_at: t.due_at!,
+                      ends_at: new Date(new Date(t.due_at!).getTime() + 3600000).toISOString(),
+                    })),
+                  ];
 
-                  const vacantList = computeVacantIntervals(dayEvents, isColToday, nowHour, nextEventId, GRID_START, GRID_END);
+                  const vacantList = computeVacantIntervals(dayItems, isColToday, nowHour, nextEventId, GRID_START, GRID_END);
 
                   return vacantList.map((v) => (
                     <VacantTimeIndicator
@@ -1097,58 +1107,96 @@ function Grid({
                   ));
                 })()}
 
-                {/* Events for this day, packed into non-obstructing sub-columns if overlapping */}
+                {/* Events and timed tasks for this day, packed together into non-obstructing sub-columns */}
                 {(() => {
+                  type ScheduleItem =
+                    | { kind: 'event'; ev: Ev; id: string }
+                    | { kind: 'task'; task: Task; id: string };
+
                   const dayColEvents = events
-                    .filter((e) => !e.all_day
+                    .filter((e) => !e.all_day && !e.deleted_at
                       && (dayIndex(e.starts_at, ws) === idx || (drag?.id === e.id && drag.day === idx)))
                     .map((e) => {
                       const isDrag = drag?.id === e.id;
                       const isResize = resize?.id === e.id;
                       const start = isDrag ? drag.hour : hoursOf(e.starts_at);
                       const end = isResize ? resize.end : isDrag ? drag.hour + (hoursOf(e.ends_at) - hoursOf(e.starts_at)) : hoursOf(e.ends_at);
-                      return { ev: e, start, end };
+                      return {
+                        ev: { kind: 'event' as const, ev: e, id: e.id },
+                        start,
+                        end,
+                      };
                     });
 
-                  const positioned = layoutOverlappingEvents(dayColEvents);
+                  const dayColTasks = slotTasks(idx).map((t) => {
+                    const isTDrag = taskDrag?.task.id === t.id && taskDrag.day === idx && taskDrag.hour !== null;
+                    const start = isTDrag ? taskDrag.hour! : hoursOf(t.due_at!);
+                    const end = start + 1.0;
+                    return {
+                      ev: { kind: 'task' as const, task: t, id: t.id },
+                      start,
+                      end,
+                    };
+                  });
+
+                  const allItems = [...dayColEvents, ...dayColTasks];
+                  const positioned = layoutOverlappingEvents<ScheduleItem>(allItems);
 
                   return positioned.map((pos) => {
-                    const isDrag = drag?.id === pos.ev.id;
-                    const isResize = resize?.id === pos.ev.id;
-                    if (isDrag && drag.day !== idx) return null;
-
+                    const item = pos.ev;
                     const leftPct = (pos.colIndex / pos.totalCols) * 100;
                     const widthPct = (1 / pos.totalCols) * 100;
                     const leftStyle = pos.totalCols > 1 ? `calc(${leftPct}% + 2px)` : '3px';
                     const widthStyle = pos.totalCols > 1 ? `calc(${widthPct}% - 4px)` : 'calc(100% - 6px)';
 
-                    return (
-                      <EventChip key={pos.ev.id} ev={pos.ev} top={pct(pos.start)} height={Math.max((0.5 / SPAN) * 100, pct(pos.end) - pct(pos.start))}
-                        left={leftStyle} width={widthStyle}
-                        label={hhmm(pos.start)} lifted={isDrag || isResize} selected={sel === pos.ev.id}
-                        isNext={pos.ev.id === nextEventId}
-                        onPointerDown={(p) => press(p, pos.ev, 'move')}
-                        onResize={(p) => press(p, pos.ev, 'resize')}
-                        dark={dark}
-                        nowMs={nowMs}
-                        onOpen={(p) => openEvent(pos.ev, p.clientX, p.clientY)} />
-                    );
+                    if (item.kind === 'event') {
+                      const e = item.ev;
+                      const isDrag = drag?.id === e.id;
+                      const isResize = resize?.id === e.id;
+                      if (isDrag && drag.day !== idx) return null;
+
+                      return (
+                        <EventChip
+                          key={`ev-${e.id}`}
+                          ev={e}
+                          top={pct(pos.start)}
+                          height={Math.max((0.5 / SPAN) * 100, pct(pos.end) - pct(pos.start))}
+                          left={leftStyle}
+                          width={widthStyle}
+                          label={hhmm(pos.start)}
+                          lifted={isDrag || isResize}
+                          selected={sel === e.id}
+                          isNext={e.id === nextEventId}
+                          onPointerDown={(p) => press(p, e, 'move')}
+                          onResize={(p) => press(p, e, 'resize')}
+                          dark={dark}
+                          nowMs={nowMs}
+                          onOpen={(p) => openEvent(e, p.clientX, p.clientY)}
+                        />
+                      );
+                    } else {
+                      const t = item.task;
+                      const ghost = taskDrag?.task.id === t.id;
+                      return (
+                        <TaskChip
+                          key={`task-${t.id}`}
+                          task={t}
+                          onPointerDown={(p) => pressTask(p, t, false)}
+                          compact={pos.totalCols > 1}
+                          style={{
+                            position: 'absolute',
+                            left: leftStyle,
+                            width: widthStyle,
+                            top: `${pct(pos.start)}%`,
+                            height: `${(1.25 / SPAN) * 100}%`,
+                            opacity: ghost ? 0.4 : 1,
+                            zIndex: 2,
+                          }}
+                        />
+                      );
+                    }
                   });
                 })()}
-
-                {/* Tasks with a time render dashed */}
-                {slotTasks(idx).map((t) => {
-                  const h = hoursOf(t.due_at!);
-                  const ghost = taskDrag?.task.id === t.id;
-                  return (
-                    <TaskChip key={t.id} task={t}
-                      onPointerDown={(p) => pressTask(p, t, false)}
-                      style={{
-                        position: 'absolute', left: 3, right: 3, top: `${pct(h)}%`, height: `${(1.5 / SPAN) * 100}%`,
-                        opacity: ghost ? 0.4 : 1,
-                      }} />
-                  );
-                })}
 
                 {taskDrag && taskDrag.hour !== null && taskDrag.day === idx && (
                   <div aria-hidden style={{
