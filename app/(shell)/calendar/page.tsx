@@ -1183,21 +1183,37 @@ function EventChip({
   const ink = chipInk(ev, dark);
   const cd = isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
 
+  const isRed = Boolean(
+    ev.color && (
+      ev.color.toLowerCase().includes('ff6b6b') ||
+      ev.color.toLowerCase().includes('coral') ||
+      ev.color.toLowerCase().includes('red') ||
+      ev.color.toLowerCase().includes('crimson') ||
+      ev.color === '#FF5252' ||
+      ev.color === '#EF4444' ||
+      ev.color === '#DC2626' ||
+      ev.color === '#FF4B4B' ||
+      ev.color === '#FF6FA8'
+    )
+  );
+
   return (
     <div
       onPointerDown={onPointerDown}
       onClick={onOpen}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      className={selected ? 'pop' : undefined}
+      className={`${selected ? 'pop' : ''} ${isRed ? 'red-alert-pulse' : ''}`.trim() || undefined}
       style={{
         position: 'absolute', left, width, top: `${top}%`, height: `${height}%`,
         borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
-        background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
-        borderLeft: `2px solid ${ev.color}`,
-        color: ink,
+        background: isRed
+          ? 'color-mix(in srgb, var(--pal-coral, #FF6B6B) 34%, var(--card))'
+          : `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
+        borderLeft: isRed ? '3.5px solid #FF4D4D' : `2px solid ${ev.color}`,
+        color: isRed ? '#FFFFFF' : ink,
         boxShadow: lifted ? 'var(--shl)' : undefined,
         transform: lifted ? 'scale(1.02)' : undefined,
-        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : 1,
+        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : isRed ? 2 : 1,
         outline: selected ? `1px solid ${ev.color}` : undefined,
         userSelect: 'none',
         WebkitUserSelect: 'none',
@@ -1207,11 +1223,31 @@ function EventChip({
         justifyContent: 'space-between',
       }}>
       <div>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
-          {locked && <Icon name="lock" size={9} color={ink} />}
+        <span style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          fontSize: 11,
+          fontWeight: 800,
+          lineHeight: 1.25,
+          overflow: 'hidden',
+          color: isRed ? '#FFFFFF' : ink,
+          textShadow: isRed ? '0 1px 2px rgba(0,0,0,0.7)' : undefined,
+        }}>
+          {locked && <Icon name="lock" size={9} color={isRed ? '#FFFFFF' : ink} />}
+          {isRed && <span style={{ fontSize: 10, flex: 'none' }}>🚨</span>}
           {ev.title?.trim() || '(No title)'}
         </span>
-        <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{
+          display: 'block',
+          fontSize: 9.5,
+          opacity: isRed ? 0.95 : 0.72,
+          marginTop: 1,
+          fontWeight: isRed ? 700 : 500,
+          color: isRed ? '#FFFFFF' : undefined,
+          textShadow: isRed ? '0 1px 1px rgba(0,0,0,0.55)' : undefined,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
           {label} {ev.location}
         </span>
       </div>
@@ -1222,24 +1258,31 @@ function EventChip({
           marginTop: 'auto',
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 3,
-          fontSize: 8.5,
-          fontWeight: 800,
+          gap: 3.5,
+          fontSize: isRed ? 9.5 : 8.5,
+          fontWeight: 900,
           fontVariantNumeric: 'tabular-nums',
-          padding: '1px 5px',
-          borderRadius: 4,
-          background: cd.status === 'ongoing'
-            ? 'color-mix(in srgb, var(--pal-mint) 28%, var(--card))'
-            : 'color-mix(in srgb, var(--pal-sky) 26%, var(--card))',
-          color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
-          border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 45%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 45%, transparent)'}`,
+          padding: isRed ? '2px 7px' : '1px 5px',
+          borderRadius: isRed ? 6 : 4,
+          background: isRed
+            ? (cd.status === 'ongoing' ? '#10B981' : '#FFFFFF')
+            : (cd.status === 'ongoing'
+              ? 'color-mix(in srgb, var(--pal-mint) 28%, var(--card))'
+              : 'color-mix(in srgb, var(--pal-sky) 26%, var(--card))'),
+          color: isRed
+            ? (cd.status === 'ongoing' ? '#FFFFFF' : '#DC2626')
+            : (cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)'),
+          border: isRed
+            ? (cd.status === 'ongoing' ? '1px solid #059669' : '1px solid rgba(255,255,255,0.95)')
+            : (cd.status === 'ongoing' ? '1px solid color-mix(in srgb, var(--pal-mint) 45%, transparent)' : '1px solid color-mix(in srgb, var(--pal-sky) 45%, transparent)'),
+          boxShadow: isRed ? '0 2px 8px rgba(0,0,0,0.4)' : undefined,
           width: 'fit-content',
           maxWidth: '100%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}>
-          <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+          <span>{cd.status === 'ongoing' ? '🟢' : isRed ? '⏱️' : '⏱️'}</span>
           <span>{cd.badge}</span>
         </div>
       )}
@@ -1653,25 +1696,49 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEv
               {items.slice(0, 3).map((it, n) => {
                 const isNext = it.id === nextEventId;
                 const cd = isNext && it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
+                const isRed = Boolean(
+                  it.color && (
+                    it.color.toLowerCase().includes('ff6b6b') ||
+                    it.color.toLowerCase().includes('coral') ||
+                    it.color.toLowerCase().includes('red') ||
+                    it.color.toLowerCase().includes('crimson') ||
+                    it.color === '#FF5252' ||
+                    it.color === '#EF4444' ||
+                    it.color === '#DC2626' ||
+                    it.color === '#FF4B4B' ||
+                    it.color === '#FF6FA8'
+                  )
+                );
+
                 return (
-                  <span key={n} style={{
-                    fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
-                    background: `color-mix(in srgb, ${it.color} 22%, transparent)`,
-                    border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : undefined,
-                    color: 'var(--tx2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 3,
-                  }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
+                  <span key={n}
+                    className={isRed ? 'red-alert-pulse' : undefined}
+                    style={{
+                      fontSize: 9, fontWeight: isRed ? 800 : 700, padding: '1px 5px', borderRadius: 4,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+                      background: isRed
+                        ? 'color-mix(in srgb, var(--pal-coral, #FF6B6B) 35%, var(--card))'
+                        : `color-mix(in srgb, ${it.color} 22%, transparent)`,
+                      border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : isRed ? '1px solid #FF5252' : undefined,
+                      color: isRed ? '#FFFFFF' : 'var(--tx2)',
+                      textShadow: isRed ? '0 1px 1px rgba(0,0,0,0.6)' : undefined,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 3,
+                    }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {isRed && '🚨 '}{it.title}
+                    </span>
                     {cd && cd.status !== 'past' && (
                       <span style={{
                         fontSize: 8,
-                        fontWeight: 800,
+                        fontWeight: 900,
                         flex: 'none',
-                        color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+                        color: isRed ? (cd.status === 'ongoing' ? '#FFFFFF' : '#DC2626') : (cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)'),
+                        background: isRed ? (cd.status === 'ongoing' ? '#10B981' : '#FFFFFF') : undefined,
+                        padding: isRed ? '1px 4px' : undefined,
+                        borderRadius: isRed ? 4 : undefined,
                         fontVariantNumeric: 'tabular-nums',
                       }}>
                         {cd.status === 'ongoing' ? '🟢' : '⏱️'}{cd.text}
@@ -1743,33 +1810,59 @@ function Agenda({ ws, events, tasks, nowMs = Date.now(), nextEventId }: { ws: Da
             {items.map((a) => {
               const isNext = a.id === nextEventId;
               const cd = isNext && a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
+              const isRed = Boolean(
+                a.color && (
+                  a.color.toLowerCase().includes('ff6b6b') ||
+                  a.color.toLowerCase().includes('coral') ||
+                  a.color.toLowerCase().includes('red') ||
+                  a.color.toLowerCase().includes('crimson') ||
+                  a.color === '#FF5252' ||
+                  a.color === '#EF4444' ||
+                  a.color === '#DC2626' ||
+                  a.color === '#FF4B4B' ||
+                  a.color === '#FF6FA8'
+                )
+              );
+
               return (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
-                  <span style={{
-                    width: 3, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, flex: 'none',
-                    background: a.color, opacity: a.task ? 0.6 : 1,
-                  }} />
+                  <span
+                    className={isRed ? 'red-alert-pulse' : undefined}
+                    style={{
+                      width: 3.5, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, flex: 'none',
+                      background: isRed ? '#FF4D4D' : a.color, opacity: a.task ? 0.6 : 1,
+                    }}
+                  />
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
                     {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{a.title}</span>
+                    <span style={{ fontSize: 13, fontWeight: isRed ? 700 : 600, color: isRed ? 'var(--pal-coral, #FF6B6B)' : 'var(--tx)' }}>
+                      {isRed && '🚨 '}{a.title}
+                    </span>
                     {cd && cd.status !== 'past' && (
                       <span style={{
                         flex: 'none',
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 3,
-                        padding: '1px 7px',
+                        padding: isRed ? '2px 8px' : '1px 7px',
                         borderRadius: 5,
                         fontSize: 9.5,
-                        fontWeight: 800,
+                        fontWeight: 900,
                         fontVariantNumeric: 'tabular-nums',
-                        background: cd.status === 'ongoing'
-                          ? 'color-mix(in srgb, var(--pal-mint) 20%, var(--card2))'
-                          : 'color-mix(in srgb, var(--pal-sky) 18%, var(--card2))',
-                        border: `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 40%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 40%, transparent)'}`,
-                        color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
+                        background: isRed
+                          ? (cd.status === 'ongoing' ? '#10B981' : '#FFFFFF')
+                          : (cd.status === 'ongoing'
+                            ? 'color-mix(in srgb, var(--pal-mint) 20%, var(--card2))'
+                            : 'color-mix(in srgb, var(--pal-sky) 18%, var(--card2))'),
+                        border: isRed
+                          ? (cd.status === 'ongoing' ? '1px solid #059669' : '1px solid rgba(255,255,255,0.95)')
+                          : (cd.status === 'ongoing' ? '1px solid color-mix(in srgb, var(--pal-mint) 40%, transparent)' : '1px solid color-mix(in srgb, var(--pal-sky) 40%, transparent)'),
+                        color: isRed
+                          ? (cd.status === 'ongoing' ? '#FFFFFF' : '#DC2626')
+                          : (cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)'),
+                        boxShadow: isRed ? '0 1px 4px rgba(0,0,0,0.18)' : undefined,
                       }}>
                         <span>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
                         <span>{cd.badge}</span>
