@@ -9,8 +9,11 @@ import { useLayout } from '@/lib/useLayout';
 import { ymd } from '@/lib/series';
 import { useTap } from '@/hooks/useTap';
 import { PAL } from '@/lib/pal';
+import { ask, confirmAsk } from '@/lib/ask';
+import { toast } from '@/lib/toast';
 import {
-  routineOf, slotFor, shotOf, lbs, volumeOf, ROUTINES, type Routine, type WorkoutSet,
+  routineOf, slotFor, shotOf, lbs, volumeOf, ROUTINES, workedOf, gearOf,
+  type Routine, type WorkoutSet,
 } from '@/lib/lift';
 import { useWorkouts, useBodyActions } from '@/lib/body';
 
@@ -24,6 +27,7 @@ export default function GymPage() {
   const { phone } = useLayout();
   const today = ymd(new Date());
   const [open, setOpen] = useState<{ exercise: string; sub: string } | null>(null);
+  const [editingExercise, setEditingExercise] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<number>(() => slotFor(new Date().getDay()));
 
   const { data: workouts = [] } = useWorkouts(28);
@@ -128,8 +132,43 @@ export default function GymPage() {
     return `00:${String(mins).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const heroExercise = blocks[0]?.exercise ?? activeRoutine?.exercises[0] ?? 'Bench press';
-  const heroShot = shotOf(heroExercise) ?? 'bench';
+  /** Current Movement being performed / demonstrated */
+  const currentMovement = next?.exercise ?? blocks[0]?.exercise ?? activeRoutine?.exercises[0] ?? 'Bench press';
+  const heroShot = shotOf(currentMovement) ?? 'bench';
+
+  /** Animated Movement Demo Loop (GIF demonstration of the current movement) */
+  const [heroFrame, setHeroFrame] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setHeroFrame((f) => (f === 0 ? 1 : 0)), 1400);
+    return () => clearInterval(timer);
+  }, [heroShot]);
+
+  /** Rename Workout Handler */
+  const handleRenameWorkout = async () => {
+    const initial = session?.name ?? activeRoutine?.name ?? 'Workout';
+    const name = await ask('Workout name', { initial, placeholder: 'e.g. Heavy Push Day' });
+    if (name) {
+      if (session) {
+        T.editWorkout(session.id, { name });
+      } else {
+        T.addWorkout({
+          id: crypto.randomUUID(), on_date: today,
+          name, groups: [], minutes: 0,
+        });
+      }
+      toast(`Workout named "${name}"`);
+    }
+  };
+
+  /** Delete Workout Handler */
+  const handleDeleteWorkout = async () => {
+    if (session) {
+      void T.deleteSession();
+    } else {
+      T.setRunning(false);
+      toast('Workout cleared');
+    }
+  };
 
   // Left Column Content (Command Center)
   const LeftColumn = (
@@ -155,11 +194,24 @@ export default function GymPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800,
-              letterSpacing: '.13em', textTransform: 'uppercase', color: HUE,
-            }}>
-              {session || running ? `${session?.name ?? activeRoutine?.name ?? 'Workout'} · Running` : `${activeRoutine?.name?.toUpperCase() ?? 'PUSH DAY'} · RUNNING`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800,
+                letterSpacing: '.13em', textTransform: 'uppercase', color: HUE,
+              }}>
+                {session || running ? `${session?.name ?? activeRoutine?.name ?? 'Workout'} · Running` : `${activeRoutine?.name?.toUpperCase() ?? 'PUSH DAY'} · RUNNING`}
+              </span>
+              <button
+                onClick={handleRenameWorkout}
+                title="Rename workout"
+                className="hov k-squish"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                  display: 'inline-flex', alignItems: 'center', color: 'var(--tx3)',
+                }}
+              >
+                <Icon name="edit" size={11} color="currentColor" />
+              </button>
             </div>
             <div style={{
               fontFamily: 'var(--font-mono)', fontSize: 'clamp(30px, 3.4vw, 42px)', fontWeight: 900,
@@ -169,20 +221,36 @@ export default function GymPage() {
               {formatClock(elapsed)}
             </div>
           </div>
-          <button
-            onClick={() => {
-              if (session) void T.finish();
-              else T.setRunning(false);
-            }}
-            className="k-squish"
-            style={{
-              padding: '8px 18px', borderRadius: 10, border: '1px solid var(--line2)',
-              background: 'var(--card2)', color: 'var(--tx)', fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', transition: 'all 0.15s ease',
-            }}
-          >
-            End
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {session && (
+              <button
+                onClick={handleDeleteWorkout}
+                title="Delete workout"
+                className="k-squish"
+                style={{
+                  padding: '8px 12px', borderRadius: 10, border: '1px solid var(--line2)',
+                  background: 'var(--card2)', color: 'var(--pal-orange, #FF5555)', fontSize: 12.5, fontWeight: 700,
+                  cursor: 'pointer', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <Icon name="trash" size={13} color="currentColor" />
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (session) void T.finish();
+                else T.setRunning(false);
+              }}
+              className="k-squish"
+              style={{
+                padding: '8px 18px', borderRadius: 10, border: '1px solid var(--line2)',
+                background: 'var(--card2)', color: 'var(--tx)', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', transition: 'all 0.15s ease',
+              }}
+            >
+              End
+            </button>
+          </div>
         </div>
 
         {/* Sets Progress Bar */}
@@ -234,40 +302,103 @@ export default function GymPage() {
         })}
       </div>
 
-      {/* Hero Workout Card */}
-      <div style={{
-        position: 'relative', borderRadius: 18, overflow: 'hidden',
-        background: 'var(--card2)', padding: 'clamp(16px, 2.2vw, 24px) clamp(14px, 2vw, 20px)',
-        minHeight: 'clamp(180px, 22vw, 250px)',
-        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        border: '1px solid var(--line)',
-      }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/ex/${heroShot}-0.jpg`}
-          alt=""
-          aria-hidden
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        />
+      {/* Hero Workout Card with Animated Movement Demonstration Loop */}
+      <div
+        onClick={() => setOpen({ exercise: currentMovement, sub: 'Movement demonstration & form coaching' })}
+        style={{
+          position: 'relative', borderRadius: 18, overflow: 'hidden',
+          background: '#0B0A13', padding: 'clamp(16px, 2.2vw, 24px) clamp(14px, 2vw, 20px)',
+          minHeight: 'clamp(190px, 23vw, 260px)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          border: '1px solid var(--line2)', cursor: 'pointer',
+        }}
+      >
+        {/* Animated 2-Frame Crossfade Movement Loop */}
+        {[0, 1].map((n) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={n}
+            src={`/ex/${heroShot}-${n}.jpg`}
+            alt={`${currentMovement} demonstration`}
+            aria-hidden
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+              opacity: heroFrame === n ? 1 : 0,
+              transition: 'opacity 0.6s ease-in-out',
+            }}
+            onError={(e) => {
+              if (n === 1) (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        ))}
+
+        {/* Ambient Dark Gradient Protection */}
         <span aria-hidden style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(8,7,14,.2) 10%, rgba(8,7,14,.92) 80%)',
+          background: 'linear-gradient(180deg, rgba(8,7,14,0.45) 0%, rgba(8,7,14,0.2) 40%, rgba(8,7,14,0.92) 88%)',
         }} />
+
+        {/* Top Tag Strip: Live Movement Indicator & Cues Button */}
+        <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(11, 10, 19, 0.78)', backdropFilter: 'blur(6px)',
+            padding: '4px 9px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)',
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: '50%', background: HUE,
+              boxShadow: `0 0 8px ${HUE}`, display: 'inline-block',
+            }} />
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800,
+              letterSpacing: '.09em', textTransform: 'uppercase', color: '#FFFFFF',
+            }}>
+              LIVE DEMO · {heroFrame === 0 ? 'START' : 'FINISH'}
+            </span>
+          </div>
+
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+            background: 'rgba(11, 10, 19, 0.78)', color: 'var(--tx2)',
+            padding: '4px 8px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(6px)',
+          }}>
+            Cues & Steps ↗
+          </span>
+        </div>
+
+        {/* Bottom Details */}
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, letterSpacing: '.13em',
             textTransform: 'uppercase', color: HUE,
           }}>
-            {selectedSlot === currentDaySlot ? 'TODAY' : DAYS[selectedSlot]} · {activeRoutine?.name?.toUpperCase() ?? 'PUSH DAY'}
+            {selectedSlot === currentDaySlot ? 'TODAY' : DAYS[selectedSlot]} · {currentMovement.toUpperCase()}
           </div>
           <div style={{
             fontSize: 'clamp(20px, 2.3vw, 27px)', fontWeight: 800, letterSpacing: '-.025em',
             lineHeight: 1.15, color: '#FFFFFF',
           }}>
-            {activeRoutine?.focus ?? 'Chest · Shoulders · Triceps'}
+            {currentMovement}
           </div>
-          <div className="num" style={{ fontSize: 'clamp(10.5px, 1.1vw, 12px)', color: 'rgba(240, 240, 250, 0.78)', marginTop: 2 }}>
-            {exerciseCount} exercises · {plannedSets} sets · about {estMinutes} min
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
+              color: 'var(--accTx)', background: 'color-mix(in srgb, var(--accTx) 20%, rgba(0,0,0,0.6))',
+              padding: '2px 7px', borderRadius: 5,
+            }}>
+              {workedOf(currentMovement)}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
+              color: 'rgba(240, 240, 250, 0.85)', background: 'rgba(255,255,255,0.12)',
+              padding: '2px 7px', borderRadius: 5,
+            }}>
+              {gearOf(currentMovement)}
+            </span>
+            <span className="num" style={{ fontSize: 'clamp(10.5px, 1.1vw, 12px)', color: 'rgba(240, 240, 250, 0.78)' }}>
+              {exerciseCount} exercises · {plannedSets} sets · ~{estMinutes} min
+            </span>
           </div>
         </div>
       </div>
@@ -340,12 +471,26 @@ export default function GymPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ ...KICKER, color: 'var(--tx2)' }}>DONE SO FAR</div>
-          <span className="num" style={{
-            fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, color: MINT,
-            background: `color-mix(in srgb, ${MINT} 16%, transparent)`, padding: '3px 8px', borderRadius: 6,
-          }}>
-            {doneSets} / {totalSets || 4} SETS
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Add Exercise Quick Button */}
+            <button
+              onClick={() => T.setSheet('exercises')}
+              className="k-squish"
+              style={{
+                padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)',
+                background: 'var(--card2)', color: HUE, fontSize: 11, fontWeight: 800,
+                display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+              }}
+            >
+              <Icon name="plus" size={11} color={HUE} /> Add Exercise
+            </button>
+            <span className="num" style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, color: MINT,
+              background: `color-mix(in srgb, ${MINT} 16%, transparent)`, padding: '3px 8px', borderRadius: 6,
+            }}>
+              {doneSets} / {totalSets || 4} SETS
+            </span>
+          </div>
         </div>
 
         {/* Exercises List Stack / Bento Grid on Large Screens */}
@@ -368,6 +513,8 @@ export default function GymPage() {
                 isLive={idx === 0}
                 onOpen={() => setOpen({ exercise: exName, sub: 'Set 2 of 4 · 60 kg × 8' })}
                 onQuickLog={() => T.logSet(exName, { weight_kg: 60, reps: 8 })}
+                onEdit={() => setEditingExercise(exName)}
+                onRemove={() => T.removeExercise(exName)}
               />
             ))
           )}
@@ -389,13 +536,15 @@ export default function GymPage() {
                 isLive={live}
                 onOpen={() => setOpen({ exercise: b.exercise, sub: `${doneCount} of ${b.sets.length || 4} sets done` })}
                 onQuickLog={() => T.logSet(b.exercise)}
+                onEdit={() => setEditingExercise(b.exercise)}
+                onRemove={() => T.removeExercise(b.exercise)}
               />
             );
           })}
         </div>
       </div>
 
-      {/* Bottom Action Button: List of Workouts */}
+      {/* Bottom Action Button: List of Workouts / Exercise Catalog */}
       <button
         onClick={() => T.setSheet('exercises')}
         className="k-squish"
@@ -407,7 +556,7 @@ export default function GymPage() {
         }}
       >
         <Icon name="gym" size={18} color="#0B0A13" />
-        List of Workouts
+        List of Workouts & Exercises
       </button>
 
       {/* Secondary Controls: Weekly Plan & Body Weight */}
@@ -493,6 +642,21 @@ export default function GymPage() {
       {open && (
         <MovementSheet exercise={open.exercise} subtitle={open.sub} onClose={() => setOpen(null)} />
       )}
+
+      {editingExercise && (
+        <ExerciseEditModal
+          exercise={editingExercise}
+          sets={mine.filter((s) => s.exercise === editingExercise)}
+          onClose={() => setEditingExercise(null)}
+          onAddSet={() => T.logSet(editingExercise)}
+          onChangeSet={(set, patch) => T.change(set, patch)}
+          onDropSet={(set) => T.drop(set)}
+          onRemoveExercise={() => {
+            T.removeExercise(editingExercise);
+            setEditingExercise(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -508,6 +672,8 @@ function CanvaLiftCard({
   isLive,
   onOpen,
   onQuickLog,
+  onEdit,
+  onRemove,
 }: {
   exercise: string;
   setsCount: number;
@@ -516,6 +682,8 @@ function CanvaLiftCard({
   isLive: boolean;
   onOpen: () => void;
   onQuickLog: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
 }) {
   const shot = shotOf(exercise) ?? 'bench';
   const tap = useTap(onOpen);
@@ -525,72 +693,306 @@ function CanvaLiftCard({
   return (
     <div
       style={{
-        borderRadius: 12,
+        borderRadius: 14,
         background: isLive
           ? `color-mix(in srgb, ${HUE} 8%, var(--card2))`
           : 'var(--card2)',
         border: `1.2px solid ${isLive ? `color-mix(in srgb, ${HUE} 50%, var(--line2))` : 'var(--line2)'}`,
         overflow: 'hidden',
         boxShadow: isLive ? `0 0 16px color-mix(in srgb, ${HUE} 16%, transparent)` : 'none',
+        display: 'flex', flexDirection: 'column',
       }}
     >
-      <button
-        {...tap}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-          padding: '8px 10px', background: 'transparent', border: 'none',
-          textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit',
-        }}
-      >
-        {/* Exercise Thumbnail */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/ex/${shot}-0.jpg`}
-          alt=""
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px' }}>
+        <button
+          {...tap}
           style={{
-            width: 44, height: 44, borderRadius: 8, objectFit: 'cover',
-            flex: 'none', border: '1px solid var(--line2)',
+            display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
+            background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer',
+            font: 'inherit', color: 'inherit', padding: 0,
           }}
-          onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
-          }}
-        />
+        >
+          {/* Exercise Thumbnail */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/ex/${shot}-0.jpg`}
+            alt=""
+            style={{
+              width: 44, height: 44, borderRadius: 8, objectFit: 'cover',
+              flex: 'none', border: '1px solid var(--line2)',
+            }}
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
 
-        {/* Title & Set Details */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, color: 'var(--tx)' }}>
-            {exercise}
+          {/* Title & Set Details */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, color: 'var(--tx)' }}>
+              {exercise}
+            </div>
+            <div className="num" style={{
+              fontSize: 10, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center',
+            }}>
+              <span>{weightShorthand}</span>
+            </div>
           </div>
-          <div className="num" style={{
-            fontSize: 10, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center',
+
+          {/* Status Tag "now" */}
+          {isLive && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800,
+              color: '#FF5C98', textTransform: 'lowercase', letterSpacing: '.04em',
+              marginRight: 4,
+            }}>
+              now
+            </span>
+          )}
+
+          {/* Completion Fraction: e.g. 2/4 in Mint Green */}
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800,
+            color: MINT, letterSpacing: '-.02em', flex: 'none', marginRight: 6,
           }}>
-            <span>{weightShorthand}</span>
+            {fraction}
           </div>
+        </button>
+
+        {/* Quick Action Controls on the Card */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 'none' }}>
+          <button
+            onClick={onQuickLog}
+            title="Log set"
+            className="k-squish"
+            style={{
+              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
+              background: 'var(--card)', color: HUE, display: 'grid', placeItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="plus" size={12} color={HUE} />
+          </button>
+          <button
+            onClick={onEdit}
+            title="Edit sets and reps"
+            className="hov k-squish"
+            style={{
+              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
+              background: 'var(--card)', color: 'var(--tx2)', display: 'grid', placeItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="edit" size={11} color="currentColor" />
+          </button>
+          <button
+            onClick={async () => {
+              const yes = await confirmAsk(`Remove ${exercise}?`, {
+                message: 'This will remove the exercise and its sets from this workout.',
+                confirmLabel: 'Remove', danger: true,
+              });
+              if (yes) onRemove();
+            }}
+            title="Remove exercise"
+            className="hov k-squish"
+            style={{
+              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
+              background: 'var(--card)', color: 'var(--tx3)', display: 'grid', placeItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="trash" size={11} color="currentColor" />
+          </button>
         </div>
+      </div>
 
-        {/* Status Tag "now" */}
-        {isLive && (
-          <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800,
-            color: '#FF5C98', textTransform: 'lowercase', letterSpacing: '.04em',
-            marginRight: 6,
-          }}>
-            now
-          </span>
-        )}
-
-        {/* Completion Fraction: e.g. 2/4 in Mint Green */}
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800,
-          color: PAL.mint, letterSpacing: '-.02em', flex: 'none',
-        }}>
-          {fraction}
-        </div>
-      </button>
-
-      {/* Pink Filled / Patterned Progress Bar */}
+      {/* Pink Filled Progress Bar */}
       <div style={{ padding: '0 10px 8px' }}>
         <AsciiBar shape="slim" value={pct} hue={HUE} showValue={false} label={`${exercise} progress`} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Exercise Edit Modal: Allows adjusting weights, reps, marking complete, or adding/deleting sets
+ */
+function ExerciseEditModal({
+  exercise,
+  sets,
+  onClose,
+  onAddSet,
+  onChangeSet,
+  onDropSet,
+  onRemoveExercise,
+}: {
+  exercise: string;
+  sets: WorkoutSet[];
+  onClose: () => void;
+  onAddSet: () => void;
+  onChangeSet: (set: WorkoutSet, patch: Partial<WorkoutSet>) => void;
+  onDropSet: (set: WorkoutSet) => void;
+  onRemoveExercise: () => void;
+}) {
+  const { phone } = useLayout();
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(6,5,11,.76)',
+        backdropFilter: 'blur(4px)', display: 'flex',
+        alignItems: phone ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        padding: phone ? 0 : 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        className={phone ? 'rise' : 'k-bloom'}
+        style={{
+          width: 480, maxWidth: '100%', maxHeight: phone ? '88dvh' : '82dvh', overflowY: 'auto',
+          background: 'var(--panel)', border: '1px solid var(--line2)',
+          borderRadius: phone ? '18px 18px 0 0' : 20, padding: 18,
+          boxShadow: phone ? 'none' : '0 24px 64px rgba(0,0,0,0.75)',
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+              Edit Sets · {exercise}
+            </h3>
+            <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+              {sets.length} {sets.length === 1 ? 'set' : 'sets'} logged
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="hov k-squish"
+            aria-label="Close"
+            style={{
+              width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center',
+              background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer',
+            }}
+          >
+            <Icon name="close" size={13} color="var(--tx2)" />
+          </button>
+        </div>
+
+        {/* Sets Rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sets.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--tx3)', fontSize: 12 }}>
+              No sets recorded yet. Click below to add your first set.
+            </div>
+          )}
+
+          {sets.map((s, idx) => (
+            <div
+              key={s.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                background: 'var(--card2)', borderRadius: 10, border: '1px solid var(--line)',
+              }}
+            >
+              <button
+                onClick={() => onChangeSet(s, { done: !s.done })}
+                className="k-squish"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${s.done ? MINT : 'var(--line2)'}`,
+                  background: s.done ? `color-mix(in srgb, ${MINT} 20%, transparent)` : 'transparent',
+                  color: s.done ? MINT : 'var(--tx3)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                }}
+              >
+                {s.done ? <Icon name="check" size={13} color={MINT} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{idx + 1}</span>}
+              </button>
+
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Weight Input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    value={s.weight_kg || ''}
+                    onChange={(e) => onChangeSet(s, { weight_kg: Number(e.target.value) || 0 })}
+                    style={{
+                      width: 54, padding: '4px 6px', borderRadius: 6, background: 'var(--card)',
+                      border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
+                      fontSize: 12, fontWeight: 700, textAlign: 'center',
+                    }}
+                  />
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>kg</span>
+                </div>
+
+                <span style={{ color: 'var(--line2)' }}>×</span>
+
+                {/* Reps Input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    value={s.reps || ''}
+                    onChange={(e) => onChangeSet(s, { reps: Number(e.target.value) || 0 })}
+                    style={{
+                      width: 46, padding: '4px 6px', borderRadius: 6, background: 'var(--card)',
+                      border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
+                      fontSize: 12, fontWeight: 700, textAlign: 'center',
+                    }}
+                  />
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>reps</span>
+                </div>
+              </div>
+
+              {/* Delete Set */}
+              <button
+                onClick={() => onDropSet(s)}
+                className="hov k-squish"
+                title="Delete set"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, border: 'none',
+                  background: 'transparent', color: 'var(--tx3)', display: 'grid', placeItems: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="close" size={12} color="currentColor" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Modal Bottom Verbs */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            onClick={onAddSet}
+            className="k-squish"
+            style={{
+              flex: 1, minHeight: 38, borderRadius: 10, border: `1px solid color-mix(in srgb, ${HUE} 40%, transparent)`,
+              background: `color-mix(in srgb, ${HUE} 15%, transparent)`, color: HUE,
+              fontSize: 12.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 6, cursor: 'pointer',
+            }}
+          >
+            <Icon name="plus" size={13} color={HUE} /> Add Set
+          </button>
+          <button
+            onClick={async () => {
+              const yes = await confirmAsk(`Remove ${exercise}?`, {
+                message: 'This will remove the exercise and all its sets from this workout.',
+                confirmLabel: 'Remove', danger: true,
+              });
+              if (yes) onRemoveExercise();
+            }}
+            className="k-squish"
+            style={{
+              minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)',
+              background: 'var(--card)', color: 'var(--pal-orange, #FF5555)',
+              fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 6, cursor: 'pointer',
+            }}
+          >
+            <Icon name="trash" size={13} color="currentColor" /> Remove Exercise
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -181,10 +181,37 @@ export function useTraining({
     void update({ gymPlan: next });
   };
 
+  const removeExercise = (exerciseName: string) => {
+    const exerciseSets = mine.filter((s) => s.exercise === exerciseName);
+    for (const s of exerciseSets) {
+      S.delSet.mutate({ id: s.id });
+    }
+    const remaining = mine.filter((s) => s.exercise !== exerciseName);
+    restamp(remaining);
+    setPending((p) => p.filter((x) => x !== exerciseName));
+    toast(`Removed ${exerciseName}`);
+  };
+
+  const deleteSession = async () => {
+    if (!session) return;
+    const yes = await confirmAsk(`Delete ${session.name}?`, {
+      message: 'This will remove today’s workout and all logged sets.',
+      confirmLabel: 'Delete workout',
+      danger: true,
+    });
+    if (yes) {
+      delWorkout(session.id);
+      setPending([]);
+      setRunning(false);
+      toast('Workout deleted');
+    }
+  };
+
   return {
     today, workouts, sets, days, session, mine, previously, bests, blocks, plan, todayRoutine,
     doneDays, weekOff, setWeekOff, running, setRunning, sheet, setSheet, setPending,
-    start, logSet, change, drop, finish, logWeight, addExercise, setPlanDay, editWorkout,
+    start, logSet, change, drop, finish, logWeight, addExercise, removeExercise, deleteSession,
+    setPlanDay, addWorkout, editWorkout, delWorkout,
   };
 }
 
