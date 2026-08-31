@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
+import { triggerFireworks } from './fireworks';
 
 export type Task = {
   id: string;
@@ -422,8 +423,12 @@ export function useTaskActions() {
 
   const complete = useMutation({
     mutationKey: COMPLETE,
-    onMutate: (v: { id: string; done: boolean }) =>
-      optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done } : t))),
+    onMutate: (v: { id: string; done: boolean }) => {
+      if (v.done) {
+        triggerFireworks();
+      }
+      return optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done } : t)));
+    },
     onError: rollback,
     onSettled: settle,
   });

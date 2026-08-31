@@ -20,6 +20,7 @@ import { ContextMenu } from '@/components/ContextMenu';
 import { SwipeableRow } from '@/components/SwipeableRow';
 
 import { TaskDatePicker } from '@/components/TaskDatePicker';
+import { triggerFireworks } from '@/lib/fireworks';
 
 /**
  * Ported from Basedly.dc.html and redesigned to match Google Tasks UX & aesthetic:
@@ -167,8 +168,10 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, rows, order, lists]);
 
-  const complete = (r: Row) => {
+  const complete = (r: Row, e?: React.MouseEvent) => {
     if (leaving.has(r.task.id)) return;
+    if (e) triggerFireworks(e.clientX, e.clientY);
+    else triggerFireworks();
     setLeaving((s) => new Set(s).add(r.task.id));
     setTimeout(() => {
       A.complete.mutate({ id: r.task.id, done: true });

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './Icon';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
+import { FireworksHost } from './FireworksHost';
 import { MessengerDock } from './MessengerDock';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
@@ -1060,6 +1061,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <MessengerDock />
       <ToastHost />
       <AskHost />
+      <FireworksHost />
     </div>
   );
 }
