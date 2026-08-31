@@ -34,6 +34,7 @@ export const ICONS = {
   trash: 'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6',
   edit: 'M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17z',
   undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12H9',
+  redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h5',
   sort: 'M7 4v16M7 4 4 7.5M7 4l3 3.5M17 20V4M17 20l-3-3.5M17 20l3-3.5',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5',
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',

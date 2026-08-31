@@ -69,20 +69,28 @@ export function parse(body: string): Line[] {
       continue;
     }
 
-    if (raw.startsWith('$$')) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('$$') || trimmed.startsWith('\\[')) {
       const start = i;
-      // If single line $$...$$
-      if (raw.endsWith('$$') && raw.length > 2 && raw.slice(2, -2).trim()) {
-        out.push({ i: start, kind: 'math', text: raw.slice(2, -2).trim(), done: false, n: 0 });
-        counter = 0;
-        continue;
+      const isBracket = trimmed.startsWith('\\[');
+      const closeMarker = isBracket ? '\\]' : '$$';
+      // Single line math block
+      if (trimmed.endsWith(closeMarker) && trimmed.length > (isBracket ? 4 : 2)) {
+        const mathContent = trimmed.slice(isBracket ? 2 : 2, isBracket ? -2 : -2).trim();
+        if (mathContent) {
+          out.push({ i: start, kind: 'math', text: mathContent, done: false, n: 0 });
+          counter = 0;
+          continue;
+        }
       }
       const buf: string[] = [];
-      const firstLineContent = raw.slice(2).trim();
-      if (firstLineContent) buf.push(firstLineContent);
+      const firstLineContent = trimmed.slice(2).trim();
+      if (firstLineContent && firstLineContent !== closeMarker) buf.push(firstLineContent);
       i++;
-      while (i < src.length && !src[i].startsWith('$$')) buf.push(src[i++]);
-      out.push({ i: start, kind: 'math', text: buf.join('\n'), done: false, n: 0 });
+      while (i < src.length && !src[i].trim().startsWith(closeMarker) && !src[i].trim().endsWith(closeMarker)) {
+        buf.push(src[i++]);
+      }
+      out.push({ i: start, kind: 'math', text: buf.join('\n').trim(), done: false, n: 0 });
       counter = 0;
       continue;
     }
@@ -132,7 +140,7 @@ export type Span =
 /** Inline marks inside one line including inline LaTeX math ($...$). */
 export function spans(text: string): Span[] {
   const out: Span[] = [];
-  const re = /!\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\]|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`|\$([^\$]+)\$/g;
+  const re = /!\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\]|\\\((.+?)\\\)|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`|(?<!\\)\$([^$\n]+)(?<!\\)\$/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push({ s: 'text', text: text.slice(last, m.index) });
@@ -141,13 +149,15 @@ export function spans(text: string): Span[] {
     } else if (m[3] !== undefined) {
       out.push({ s: 'link', text: m[3].trim() });
     } else if (m[4] !== undefined) {
-      out.push({ s: 'bold', text: m[4] });
+      out.push({ s: 'math', text: m[4] });
     } else if (m[5] !== undefined) {
-      out.push({ s: 'italic', text: m[5] });
+      out.push({ s: 'bold', text: m[5] });
     } else if (m[6] !== undefined) {
-      out.push({ s: 'code', text: m[6] });
+      out.push({ s: 'italic', text: m[6] });
     } else if (m[7] !== undefined) {
-      out.push({ s: 'math', text: m[7] });
+      out.push({ s: 'code', text: m[7] });
+    } else if (m[8] !== undefined) {
+      out.push({ s: 'math', text: m[8] });
     }
     last = m.index! + m[0].length;
   }

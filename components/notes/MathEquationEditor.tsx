@@ -41,6 +41,12 @@ export function MathEquationEditor({
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (initialFormula) {
+      setFormula(initialFormula);
+    }
+  }, [initialFormula]);
+
+  useEffect(() => {
     try {
       const html = katex.renderToString(formula, {
         displayMode: true,

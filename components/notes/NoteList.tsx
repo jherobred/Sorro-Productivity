@@ -113,16 +113,7 @@ export function NoteList({
         </div>
         <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 'none' }}>{notes.length}</span>
 
-        <button onClick={onNew} className="hov tap" title="New note" aria-label="New note"
-          style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
-          <Icon name="bookPlus" size={16} color="var(--acc)" />
-        </button>
-        {onNewMathNote && (
-          <button onClick={onNewMathNote} className="hov tap" title="New Math Equation Note" aria-label="New Math Equation Note"
-            style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 800, color: 'var(--accTx)' }}>
-            ∑
-          </button>
-        )}
+        <span style={{ marginLeft: 'auto' }} />
         <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY, label: 'Sort', items: sortMenu() })}
           className="hov tap" title="Sort" aria-label="Sort notes"
           style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
@@ -145,6 +136,34 @@ export function NoteList({
           </button>
         )}
       </label>
+
+      {/* Highlighted Create Note Button */}
+      <button
+        onClick={onNew}
+        className="hov k-squish"
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          padding: '11px 14px',
+          borderRadius: 12,
+          background: 'color-mix(in srgb, var(--acc) 16%, var(--card))',
+          border: '1.5px solid var(--acc)',
+          color: 'var(--accTx, var(--tx))',
+          fontSize: 13,
+          fontWeight: 800,
+          letterSpacing: '-.01em',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px color-mix(in srgb, var(--acc) 18%, transparent)',
+          flex: 'none',
+          transition: 'all .16s ease',
+        }}
+      >
+        <Icon name="plus" size={15} color="currentColor" />
+        <span>Create Note</span>
+      </button>
 
       {allTags.length > 0 && (
         <div className="hbar" style={{ display: 'flex', gap: 5, overflowX: 'auto', flex: 'none', paddingBottom: 2 }}>
