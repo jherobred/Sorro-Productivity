@@ -18,6 +18,7 @@ export type OsintData = {
   networks?: string[]; // domains, IPs, WHOIS
   emails?: string[];
   phones?: string[];
+  course_taught?: string;
   canvas_course_url?: string;
   dossier_notes?: string;
   confidence?: 'confirmed' | 'probable' | 'unverified';
@@ -236,6 +237,8 @@ export function PersonCard({
 
   const usernameQuery = (person.basedly_handle || osint.aliases?.[0] || person.name.toLowerCase().replace(/\s+/g, '')).replace(/^@/, '');
 
+  const isProf = person.category === 'Prof' || person.category.toLowerCase().includes('prof') || person.category.toLowerCase().includes('teacher') || person.category.toLowerCase().includes('instructor');
+
   return (
     <div style={{
       background: 'var(--card)', borderRadius: 16, padding: phone ? '16px 14px 24px' : '22px 24px 32px',
@@ -259,29 +262,22 @@ export function PersonCard({
           })();
         }} />
 
-      {/* TOP HEADER: Avatar, Name, Category & Actions */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-          <div style={{ position: 'relative', flex: 'none' }}>
-            <div style={{
-              width: phone ? 54 : 64, height: phone ? 54 : 64, borderRadius: '50%', display: 'grid', placeItems: 'center',
-              overflow: 'hidden',
-              background: photoUrl ? 'var(--card2)' : `color-mix(in srgb, ${person.color} 28%, var(--card2))`,
-              color: person.color, fontSize: phone ? 17 : 20, fontWeight: 800,
-            }}>
-              {photoUrl
-                ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : initials}
-            </div>
-            <button onClick={() => photoInput.current?.click()} disabled={busy}
-              className="hov k-squish" title="Choose a photo" aria-label="Choose a photo"
-              style={{
-                position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: '50%',
-                border: '1px solid var(--line2)', background: 'var(--card2)', display: 'grid', placeItems: 'center', cursor: 'pointer',
-              }}>
-              <Icon name={busy ? 'refresh' : 'image'} size={12} color="var(--tx2)" />
-            </button>
-          </div>
+      {/* Header Profile Row */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            onClick={() => photoInput.current?.click()}
+            disabled={busy}
+            title="Change photo"
+            style={{
+              width: phone ? 58 : 72, height: phone ? 58 : 72, borderRadius: '50%', flex: 'none',
+              background: photoUrl ? `url(${photoUrl}) center / cover` : `color-mix(in srgb, ${person.color || 'var(--pal-indigo)'} 30%, var(--card2))`,
+              display: 'grid', placeItems: 'center', border: `2px solid ${photoUrl ? 'var(--line2)' : person.color || 'var(--pal-indigo)'}`,
+              fontSize: phone ? 20 : 26, fontWeight: 800, color: 'var(--tx)', cursor: 'pointer', position: 'relative',
+            }}
+          >
+            {!photoUrl && initials}
+          </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             {editingName ? (
@@ -305,8 +301,18 @@ export function PersonCard({
                 {person.name || 'Untitled Person'}
               </button>
             )}
-            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span>{person.category}</span>
+              {isProf && osint.course_taught && (
+                <span style={{
+                  fontSize: 10.5, fontWeight: 700, color: 'var(--pal-indigo)',
+                  background: 'color-mix(in srgb, var(--pal-indigo) 14%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--pal-indigo) 25%, transparent)',
+                  padding: '1px 6px', borderRadius: 5,
+                }}>
+                  {osint.course_taught}
+                </span>
+              )}
               {osint.confidence && (
                 <span style={{
                   fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4,
@@ -325,10 +331,10 @@ export function PersonCard({
               style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', border: '1px solid var(--line2)', background: 'var(--card2)', cursor: 'pointer' }}>
               <Icon name="photo" size={14} color="var(--tx2)" />
             </button>
-            <button onClick={() => void confirmAsk(`Move ${person.name} to Trash?`, {
-              message: 'You can restore them anytime from the Trash archive.', confirmLabel: 'Move to Trash', danger: true,
+            <button onClick={() => void confirmAsk(`Move ${person.name} to Trash & Archive?`, {
+              message: 'You can restore them anytime from the Trash & Archive tab.', confirmLabel: 'Move to Archive', danger: true,
             }).then((yes) => { if (yes) onDelete(); })}
-              className="hov k-squish" title="Delete" aria-label={`Delete ${person.name}`}
+              className="hov k-squish" title="Move to Trash & Archive" aria-label={`Delete ${person.name}`}
               style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', border: '1px solid var(--line2)', background: 'var(--card2)', cursor: 'pointer' }}>
               <Icon name="trash" size={14} color="var(--pal-coral)" />
             </button>
@@ -337,28 +343,35 @@ export function PersonCard({
 
         {/* Action buttons & Category Pills */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-            <button onClick={onOpenProfile} className="hov k-squish" style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
-              border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', cursor: 'pointer',
-            }}>
-              <Icon name="people" size={12} color="var(--accTx)" />Profile
-            </button>
-            <button onClick={follow.toggle} className="acc k-squish" style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
-              background: follow.on ? 'var(--card2)' : 'var(--acc)',
-              color: follow.on ? 'var(--tx)' : 'var(--ink)',
-              border: follow.on ? '1px solid var(--line2)' : 'none', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
-            }}>{follow.on ? 'Following ✓' : 'Follow +'}</button>
-            <button onClick={onMessage} className="hov k-squish" style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
-              border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', cursor: 'pointer',
-            }}>
-              <Icon name="send" size={12} color="var(--accTx)" />Message
-            </button>
-          </div>
+          {!isProf ? (
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <button onClick={onOpenProfile} className="hov k-squish" style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+                border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', cursor: 'pointer',
+              }}>
+                <Icon name="people" size={12} color="var(--accTx)" />Profile
+              </button>
+              <button onClick={follow.toggle} className="acc k-squish" style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+                background: follow.on ? 'var(--card2)' : 'var(--acc)',
+                color: follow.on ? 'var(--tx)' : 'var(--ink)',
+                border: follow.on ? '1px solid var(--line2)' : 'none', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
+              }}>{follow.on ? 'Following ✓' : 'Follow +'}</button>
+              <button onClick={onMessage} className="hov k-squish" style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+                border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', cursor: 'pointer',
+              }}>
+                <Icon name="send" size={12} color="var(--accTx)" />Message
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)' }}>
+              <Icon name="book" size={13} color="var(--pal-indigo)" />
+              <span>Faculty Instructor</span>
+            </div>
+          )}
 
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginLeft: isProf ? 0 : 'auto' }}>
             {cats.map((c) => (
               <button key={c} onClick={() => onPatch({ category: c, color: hueFor(c) })} style={{
                 padding: '4px 9px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
@@ -381,6 +394,34 @@ export function PersonCard({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {/* Professor / Teacher specific: Course / Subject Taught */}
+          {isProf && (
+            <InlineField
+              label="Course / Subject Taught"
+              icon="book"
+              value={osint.course_taught ?? ''}
+              placeholder="e.g. CS 101: Introduction to Computer Science"
+              onSave={(v) => patchOsint({ course_taught: v.trim() || undefined })}
+            />
+          )}
+
+          {/* Professor / Teacher specific: Canvas Course Site Link */}
+          {isProf && (
+            <InlineField
+              label="Canvas Course Site"
+              icon="link"
+              value={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || ''}
+              placeholder="https://canvas.instructure.com/courses/..."
+              type="url"
+              href={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || undefined}
+              onSave={(v) => {
+                const normalized = v.trim() ? (v.trim().startsWith('http') ? v.trim() : `https://${v.trim()}`) : '';
+                updateSocialLink('Canvas Course Site', normalized, (val) => val);
+                patchOsint({ canvas_course_url: normalized || undefined });
+              }}
+            />
+          )}
+
           <InlineField
             label="Email Address"
             icon="send"
@@ -399,28 +440,14 @@ export function PersonCard({
             href={person.phone ? `tel:${person.phone.replace(/\s+/g, '')}` : undefined}
             onSave={(v) => onPatch({ phone: v })}
           />
-          <InlineField
-            label="Basedly Profile"
-            icon="focus"
-            value={person.basedly_handle ?? ''}
-            placeholder="@handle"
-            href={person.basedly_handle ? `/profile/?u=${encodeURIComponent(person.basedly_handle.replace(/^@/, ''))}` : undefined}
-            onSave={(v) => onPatch({ basedly_handle: v.replace(/^@/, '') })}
-          />
-          {/* Professor / Teacher specific: Canvas Course Site Link */}
-          {(person.category === 'Prof' || person.category.toLowerCase().includes('prof') || person.category.toLowerCase().includes('teacher') || person.category.toLowerCase().includes('instructor')) && (
+          {!isProf && (
             <InlineField
-              label="Canvas Course Site"
-              icon="book"
-              value={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || ''}
-              placeholder="https://canvas.instructure.com/courses/..."
-              type="url"
-              href={getSocialValue('Canvas Course Site') || getSocialValue('Canvas') || osint.canvas_course_url || undefined}
-              onSave={(v) => {
-                const normalized = v.trim() ? (v.trim().startsWith('http') ? v.trim() : `https://${v.trim()}`) : '';
-                updateSocialLink('Canvas Course Site', normalized, (val) => val);
-                patchOsint({ canvas_course_url: normalized || undefined });
-              }}
+              label="Basedly Profile"
+              icon="focus"
+              value={person.basedly_handle ?? ''}
+              placeholder="@handle"
+              href={person.basedly_handle ? `/profile/?u=${encodeURIComponent(person.basedly_handle.replace(/^@/, ''))}` : undefined}
+              onSave={(v) => onPatch({ basedly_handle: v.replace(/^@/, '') })}
             />
           )}
         </div>
