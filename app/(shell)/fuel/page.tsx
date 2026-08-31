@@ -20,6 +20,8 @@ import {
 
 const HUE_LIME = '#A3E635';
 const HUE_SLEEP = '#FFC24B';
+const HUE_CYAN = '#38BDF8';
+const HUE_PINK = '#F472B6';
 
 export default function FuelPage() {
   const { phone } = useLayout();
@@ -122,31 +124,37 @@ export default function FuelPage() {
   ];
 
   const effectiveKcal = totalKcal > 0 ? totalKcal : 1420;
+  const effectiveProtein = totalProtein > 0 ? totalProtein : 74;
+  const effectiveCarbs = totalCarbs > 0 ? totalCarbs : 100;
+  const effectiveFat = totalFat > 0 ? totalFat : 37;
   const effectiveWaterL = total > 0 ? (total / 1000).toFixed(2) : '2.30';
 
   return (
     <div
       style={{
-        padding: phone ? '16px 16px 36px' : '28px 36px 48px',
-        maxWidth: 1080,
+        padding: phone ? '14px 14px 32px' : 'clamp(20px, 2.5vw, 36px) clamp(24px, 3.5vw, 56px) 56px',
+        maxWidth: 1400,
         marginInline: 'auto',
         color: 'var(--tx)',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
-      {/* 1. Header with Title, Date, and Top-Right Calories Pill */}
+      {/* 1. Header with Title, Date, and Top Nutrition Dashboard */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          flexDirection: phone ? 'column' : 'row',
+          alignItems: phone ? 'flex-start' : 'center',
           justifyContent: 'space-between',
           gap: 16,
-          marginBottom: 18,
+          marginBottom: 'clamp(16px, 2.2vw, 24px)',
         }}
       >
         <div>
           <h1
             style={{
-              fontSize: phone ? 30 : 34,
+              fontSize: 'clamp(28px, 3.2vw, 40px)',
               fontWeight: 800,
               letterSpacing: '-.035em',
               lineHeight: 1,
@@ -157,7 +165,7 @@ export default function FuelPage() {
           </h1>
           <div
             style={{
-              fontSize: phone ? 13 : 14,
+              fontSize: 'clamp(12px, 1.2vw, 14.5px)',
               fontWeight: 600,
               color: 'var(--tx3)',
               marginTop: 6,
@@ -167,52 +175,61 @@ export default function FuelPage() {
           </div>
         </div>
 
-        {/* Top-Right Calorie Badge & Macro Split */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+        {/* Top-Right Calorie Badge & Macro Summary Cockpit */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 10,
+            background: 'var(--card)',
+            border: '1px solid var(--line)',
+            borderRadius: 14,
+            padding: '8px 14px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          }}
+        >
+          {/* Main Calorie Badge */}
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 11.5,
               fontWeight: 800,
               letterSpacing: '.08em',
               textTransform: 'uppercase',
-              padding: '5px 12px',
+              padding: '6px 12px',
               borderRadius: 8,
               background: `color-mix(in srgb, ${HUE_LIME} 18%, transparent)`,
               color: HUE_LIME,
-              border: `1.5px solid color-mix(in srgb, ${HUE_LIME} 40%, transparent)`,
+              border: `1.5px solid color-mix(in srgb, ${HUE_LIME} 42%, transparent)`,
               boxShadow: `0 0 14px color-mix(in srgb, ${HUE_LIME} 25%, transparent)`,
             }}
           >
             {effectiveKcal.toLocaleString()} KCAL
           </div>
-          {totalProtein > 0 && (
-            <div
-              className="num"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9.5,
-                color: 'var(--tx3)',
-                fontWeight: 700,
-              }}
-            >
-              {totalProtein}p · {totalCarbs}c · {totalFat}f
-            </div>
-          )}
+
+          {/* Macro Mini Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MacroPill label="Protein" val={`${effectiveProtein}g`} hue={HUE_LIME} />
+            <MacroPill label="Carbs" val={`${effectiveCarbs}g`} hue={HUE_CYAN} />
+            <MacroPill label="Fat" val={`${effectiveFat}g`} hue={HUE_PINK} />
+          </div>
         </div>
       </div>
 
-      {/* Main Responsive Grid Layout (1 col mobile, 2 col desktop) */}
+      {/* Main Responsive Grid Layout (Fluid scaling across screen sizes) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: phone ? '1fr' : 'minmax(320px, 1.05fr) minmax(360px, 1.25fr)',
-          gap: phone ? 14 : 22,
+          gridTemplateColumns: phone
+            ? '1fr'
+            : 'minmax(340px, 1fr) minmax(380px, 1.25fr)',
+          gap: 'clamp(14px, 2vw, 24px)',
           alignItems: 'start',
         }}
       >
-        {/* ================= LEFT COLUMN ================= */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ================= LEFT COLUMN: Hydration & Vitals ================= */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(14px, 2vw, 22px)' }}>
           {/* Water Flask & Hydration Card */}
           <div data-tour="fuel-water">
             <FuelWaterCard
@@ -230,11 +247,11 @@ export default function FuelPage() {
               background: 'var(--card)',
               border: '1px solid var(--line)',
               borderRadius: 16,
-              padding: '16px 18px',
+              padding: 'clamp(14px, 1.8vw, 20px)',
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
             }}
           >
             {/* Header */}
@@ -242,7 +259,7 @@ export default function FuelPage() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 800,
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
@@ -254,7 +271,7 @@ export default function FuelPage() {
               <span
                 className="num"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: 'clamp(13px, 1.3vw, 15px)',
                   fontWeight: 800,
                   letterSpacing: '-.02em',
                   color: 'var(--tx)',
@@ -269,8 +286,8 @@ export default function FuelPage() {
               style={{
                 position: 'relative',
                 width: '100%',
-                height: 16,
-                borderRadius: 5,
+                height: 18,
+                borderRadius: 6,
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid var(--line2)',
                 overflow: 'hidden',
@@ -294,7 +311,7 @@ export default function FuelPage() {
                   top: 0,
                   bottom: 0,
                   width: `${Math.min(100, ((steps || 6240) / GOALS.steps) * 100)}%`,
-                  borderRadius: 4,
+                  borderRadius: 5,
                   background: `linear-gradient(90deg, color-mix(in srgb, ${HUE_LIME} 70%, transparent) 0%, ${HUE_LIME} 100%)`,
                   boxShadow: `0 0 12px color-mix(in srgb, ${HUE_LIME} 55%, transparent)`,
                   transition: 'width .6s cubic-bezier(.16,1,.3,1)',
@@ -346,12 +363,12 @@ export default function FuelPage() {
               background: 'var(--card)',
               border: '1px solid var(--line)',
               borderRadius: 16,
-              padding: '16px 18px',
+              padding: 'clamp(14px, 1.8vw, 20px)',
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
               cursor: 'pointer',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
               textAlign: 'left',
             }}
           >
@@ -360,7 +377,7 @@ export default function FuelPage() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 800,
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
@@ -372,13 +389,13 @@ export default function FuelPage() {
               <span
                 className="num"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: 'clamp(13px, 1.3vw, 15px)',
                   fontWeight: 800,
                   letterSpacing: '-.02em',
                   color: 'var(--tx)',
                 }}
               >
-                {slept} <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 600 }}>h · {from} – {to}</span>
+                {slept} <span style={{ fontSize: 11.5, color: 'var(--tx3)', fontWeight: 600 }}>h · {from} – {to}</span>
               </span>
             </div>
 
@@ -387,8 +404,8 @@ export default function FuelPage() {
               style={{
                 position: 'relative',
                 width: '100%',
-                height: 16,
-                borderRadius: 5,
+                height: 18,
+                borderRadius: 6,
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid var(--line2)',
                 overflow: 'hidden',
@@ -410,7 +427,7 @@ export default function FuelPage() {
                   top: 0,
                   bottom: 0,
                   width: `${Math.min(100, (slept / GOALS.sleep) * 100)}%`,
-                  borderRadius: 4,
+                  borderRadius: 5,
                   background: `linear-gradient(90deg, color-mix(in srgb, ${HUE_SLEEP} 70%, transparent) 0%, ${HUE_SLEEP} 100%)`,
                   boxShadow: `0 0 12px color-mix(in srgb, ${HUE_SLEEP} 55%, transparent)`,
                   transition: 'width .6s cubic-bezier(.16,1,.3,1)',
@@ -420,16 +437,16 @@ export default function FuelPage() {
           </div>
         </div>
 
-        {/* ================= RIGHT COLUMN ================= */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ================= RIGHT COLUMN: Meals & Activity Stream ================= */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(14px, 2vw, 22px)' }}>
           {/* Today So Far Timeline Card */}
           <div
             style={{
               background: 'var(--card)',
               border: '1px solid var(--line)',
               borderRadius: 16,
-              padding: '16px 18px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+              padding: 'clamp(14px, 1.8vw, 20px)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.22)',
             }}
           >
             <div
@@ -445,7 +462,7 @@ export default function FuelPage() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 800,
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
@@ -458,7 +475,7 @@ export default function FuelPage() {
                 className="num"
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 700,
                   color: 'var(--tx3)',
                 }}
@@ -468,7 +485,7 @@ export default function FuelPage() {
             </div>
 
             {/* Timeline Stream */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {displayTimeline.map((r, i) => {
                 const isWater = r.kind === 'water';
                 const isWarning = r.kind === 'water_warning';
@@ -494,9 +511,9 @@ export default function FuelPage() {
                       className="num"
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
+                        fontSize: 11.5,
                         color: 'var(--tx3)',
-                        width: 42,
+                        width: 44,
                         flex: 'none',
                         paddingTop: 1,
                       }}
@@ -507,8 +524,8 @@ export default function FuelPage() {
                     {/* Status Dot */}
                     <span
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 8.5,
+                        height: 8.5,
                         borderRadius: '50%',
                         flex: 'none',
                         marginTop: 4,
@@ -521,7 +538,7 @@ export default function FuelPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          fontSize: 12.5,
+                          fontSize: 'clamp(12.5px, 1.2vw, 14px)',
                           fontWeight: 700,
                           color: isWarning ? '#FF8585' : 'var(--tx)',
                           lineHeight: 1.25,
@@ -567,7 +584,7 @@ export default function FuelPage() {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 800,
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
@@ -580,7 +597,7 @@ export default function FuelPage() {
                 className="num"
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 700,
                   color: 'var(--tx3)',
                 }}
@@ -589,13 +606,13 @@ export default function FuelPage() {
               </span>
             </div>
 
-            {/* 2x3 Photo Grid */}
+            {/* Responsive Photo Grid (auto-fits up to desktop) */}
             <div
               data-tour="fuel-meals"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 8,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+                gap: 'clamp(8px, 1.2vw, 12px)',
               }}
             >
               {DEFAULT_PRESETS.map((p) => (
@@ -616,23 +633,23 @@ export default function FuelPage() {
             className="k-squish"
             style={{
               width: '100%',
-              minHeight: 50,
+              minHeight: 52,
               borderRadius: 14,
               background: HUE_LIME,
               color: '#0B0A13',
-              fontSize: 14.5,
+              fontSize: 'clamp(14px, 1.4vw, 16px)',
               fontWeight: 800,
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
-              boxShadow: `0 4px 18px color-mix(in srgb, ${HUE_LIME} 40%, transparent)`,
+              gap: 9,
+              boxShadow: `0 4px 20px color-mix(in srgb, ${HUE_LIME} 45%, transparent)`,
               transition: 'transform .15s ease, filter .15s ease',
             }}
           >
-            <Icon name="photo" size={19} color="#0B0A13" />
+            <Icon name="photo" size={20} color="#0B0A13" />
             Photograph a plate
           </button>
         </div>
@@ -674,6 +691,29 @@ export default function FuelPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function MacroPill({ label, val, hue }: { label: string; val: string; hue: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 8px',
+        borderRadius: 6,
+        background: 'var(--card2)',
+        border: '1px solid var(--line2)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        fontWeight: 700,
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: hue }} />
+      <span style={{ color: 'var(--tx3)' }}>{label}:</span>
+      <span style={{ color: 'var(--tx)' }}>{val}</span>
     </div>
   );
 }

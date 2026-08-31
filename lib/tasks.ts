@@ -364,16 +364,55 @@ const CREATE = defineMutation('task.create', async (v: NewTask) => {
   if (error) throw error;
 });
 
+const VALID_DB_TASK_COLS = new Set([
+  'list_id',
+  'title',
+  'notes',
+  'done',
+  'due_on',
+  'due_at',
+  'priority',
+  'stars',
+  'position',
+  'deleted_at',
+  'completed_at',
+]);
+
 const UPDATE = defineMutation('task.update', async (v: { id: string; patch: Partial<Task> }) => {
-  const sanitizedPatch: Record<string, unknown> = { ...v.patch };
-  if ('listId' in sanitizedPatch && !('list_id' in sanitizedPatch)) {
-    sanitizedPatch.list_id = (sanitizedPatch as Record<string, unknown>).listId;
-    delete (sanitizedPatch as Record<string, unknown>).listId;
+  const rawPatch: Record<string, unknown> = { ...v.patch };
+  if ('listId' in rawPatch && !('list_id' in rawPatch)) {
+    rawPatch.list_id = rawPatch.listId;
+    delete rawPatch.listId;
   }
-  if (sanitizedPatch.list_id === '') sanitizedPatch.list_id = null;
-  if (sanitizedPatch.due_on === '') sanitizedPatch.due_on = null;
-  if (sanitizedPatch.due_at === '') sanitizedPatch.due_at = null;
-  if (sanitizedPatch.priority === '') sanitizedPatch.priority = null;
+
+  let newNotes = typeof rawPatch.notes === 'string' ? rawPatch.notes : undefined;
+  if ('course' in rawPatch && newNotes === undefined) {
+    const currentTasks = queryClient.getQueryData<Task[]>(TASKS_KEY) ?? [];
+    const currentTask = currentTasks.find((t) => t.id === v.id);
+    if (currentTask) {
+      const parsed = parseTaskLinks(currentTask.notes ?? '');
+      newNotes = serializeTaskWithLinks(
+        parsed.cleanNotes,
+        parsed.submissionLink,
+        parsed.googleDocsLink,
+        parsed.customLinks,
+        typeof rawPatch.course === 'string' ? rawPatch.course : null
+      );
+    }
+  }
+
+  const sanitizedPatch: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(rawPatch)) {
+    if (VALID_DB_TASK_COLS.has(k)) {
+      sanitizedPatch[k] = val === '' ? null : val;
+    }
+  }
+
+  if (newNotes !== undefined) {
+    sanitizedPatch.notes = newNotes;
+  }
+
+  if (Object.keys(sanitizedPatch).length === 0) return;
 
   const { error } = await supabase.from('bd_tasks').update(sanitizedPatch).eq('id', v.id);
   if (error) throw error;
@@ -447,8 +486,24 @@ export function useTaskActions() {
 
   const update = useMutation({
     mutationKey: UPDATE,
-    onMutate: (v: { id: string; patch: Partial<Task> }) =>
-      optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, ...v.patch } : t))),
+    onMutate: (v: { id: string; patch: Partial<Task> }) => {
+      const p = { ...v.patch };
+      if ('listId' in p && !('list_id' in p)) {
+        p.list_id = (p as Record<string, unknown>).listId as string | null;
+        delete (p as Record<string, unknown>).listId;
+      }
+      return optimistic((prev) =>
+        prev.map((t) => {
+          if (t.id !== v.id) return t;
+          const merged = { ...t, ...p };
+          if (p.notes !== undefined) {
+            const parsed = parseTaskLinks(p.notes);
+            merged.course = p.course !== undefined ? p.course : (parsed.course || null);
+          }
+          return merged;
+        })
+      );
+    },
     onError: (err, _v, ctx) => {
       rollback(err, _v, ctx);
       toast(err instanceof Error ? err.message : 'Could not update task');

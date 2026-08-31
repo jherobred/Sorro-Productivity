@@ -561,8 +561,10 @@ function TaskRow({
   const [titleVal, setTitleVal] = useState(row.task.title);
 
   useEffect(() => {
-    setTitleVal(row.task.title);
-  }, [row.task.title]);
+    if (!editing) {
+      setTitleVal(row.task.title);
+    }
+  }, [row.task.title, editing]);
 
   const handleCommitEdit = () => {
     setLocalEditing(false);
@@ -1105,7 +1107,7 @@ function TaskEditSidepanel({
       setGoogleDocsLink(p.googleDocsLink);
       setCustomLinks(p.customLinks);
     }
-  }, [task.id, task.title, task.notes, task.course]);
+  }, [task.id]);
 
   const patchWithLatest = useCallback((extraPatch: Partial<Task> = {}) => {
     const currentTitle = titleRef.current.trim();
@@ -1122,9 +1124,6 @@ function TaskEditSidepanel({
     if (currentTitle && currentTitle !== task.title) {
       combined.title = currentTitle;
     }
-    if (currentCourse !== (task.course || '')) {
-      combined.course = currentCourse || null;
-    }
     if (finalNotes !== (task.notes ?? '')) {
       combined.notes = finalNotes;
     }
@@ -1132,7 +1131,7 @@ function TaskEditSidepanel({
     if (Object.keys(combined).length > 0) {
       onPatch(combined);
     }
-  }, [task.title, task.notes, task.course, onPatch]);
+  }, [task.title, task.notes, onPatch]);
 
   // Debounced auto-save for title, course, notes, and links
   useEffect(() => {
@@ -1147,18 +1146,16 @@ function TaskEditSidepanel({
         currentCourse
       );
       const needsTitleUpdate = trimmed && trimmed !== task.title;
-      const needsCourseUpdate = currentCourse !== (task.course || '');
       const needsNotesUpdate = finalNotes !== (task.notes ?? '');
-      if (needsTitleUpdate || needsCourseUpdate || needsNotesUpdate) {
+      if (needsTitleUpdate || needsNotesUpdate) {
         onPatch({
           ...(needsTitleUpdate ? { title: trimmed } : {}),
-          ...(needsCourseUpdate ? { course: currentCourse || null } : {}),
           ...(needsNotesUpdate ? { notes: finalNotes } : {}),
         });
       }
     }, 600);
     return () => clearTimeout(timer);
-  }, [title, course, cleanNotes, submissionLink, googleDocsLink, customLinks, task.title, task.course, task.notes, onPatch]);
+  }, [title, course, cleanNotes, submissionLink, googleDocsLink, customLinks, task.title, task.notes, onPatch]);
 
   const handleClose = useCallback(() => {
     patchWithLatest();
