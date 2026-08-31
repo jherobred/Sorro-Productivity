@@ -756,17 +756,43 @@ export function computeVacantIntervals(
 
   const result: VacantInterval[] = [];
 
-  for (let i = 0; i < busy.length; i++) {
-    const prevEnd = i === 0
-      ? (isToday ? Math.max(dayStartHour, Math.floor(Math.min(nowHour, busy[0].start))) : (busy[0].start > 6 ? 6 : dayStartHour))
-      : busy[i - 1].end;
+  // Case 1: No events on this day -> entire day is vacant (0:00 to 24:00)
+  if (busy.length === 0) {
+    result.push({
+      id: `vacant-fullday-${dayStartHour.toFixed(2)}-${dayEndHour.toFixed(2)}`,
+      startHour: dayStartHour,
+      endHour: dayEndHour,
+      durationHours: dayEndHour - dayStartHour,
+      isNext: false,
+    });
+    return result;
+  }
+
+  // Case 2: Morning vacant block (from midnight / dayStartHour to first event)
+  if (busy[0].start - dayStartHour >= 0.35) {
+    const firstEv = busy[0].events[0];
+    const isNext = (firstEv.id === nextEventId || busy[0].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= busy[0].start : true);
+    result.push({
+      id: `vacant-morning-${dayStartHour.toFixed(2)}-${busy[0].start.toFixed(2)}`,
+      startHour: dayStartHour,
+      endHour: busy[0].start,
+      durationHours: busy[0].start - dayStartHour,
+      isNext,
+      targetEventTitle: firstEv.title,
+      targetStartsAt: firstEv.starts_at,
+    });
+  }
+
+  // Case 3: Mid-day gaps between consecutive events
+  for (let i = 1; i < busy.length; i++) {
+    const prevEnd = busy[i - 1].end;
     const nextStart = busy[i].start;
     const targetEv = busy[i].events[0];
 
-    if (nextStart - prevEnd >= 0.4) {
-      const isNext = targetEv.id === nextEventId || busy[i].events.some((e) => e.id === nextEventId);
+    if (nextStart - prevEnd >= 0.35) {
+      const isNext = (targetEv.id === nextEventId || busy[i].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= nextStart : true);
       result.push({
-        id: `vacant-${prevEnd.toFixed(2)}-${nextStart.toFixed(2)}`,
+        id: `vacant-mid-${prevEnd.toFixed(2)}-${nextStart.toFixed(2)}`,
         startHour: prevEnd,
         endHour: nextStart,
         durationHours: nextStart - prevEnd,
@@ -777,6 +803,19 @@ export function computeVacantIntervals(
     }
   }
 
+  // Case 4: Afternoon / Evening / Night vacant block (from last event to midnight / dayEndHour)
+  const lastEnd = busy[busy.length - 1].end;
+  if (dayEndHour - lastEnd >= 0.35) {
+    result.push({
+      id: `vacant-night-${lastEnd.toFixed(2)}-${dayEndHour.toFixed(2)}`,
+      startHour: lastEnd,
+      endHour: dayEndHour,
+      durationHours: dayEndHour - lastEnd,
+      isNext: false,
+    });
+  }
+
   return result;
 }
+
 

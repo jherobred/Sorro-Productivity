@@ -1256,34 +1256,36 @@ function EventChip({
       {cd && cd.status !== 'past' && (
         <div style={{
           marginTop: 'auto',
-          display: 'inline-flex',
+          display: 'flex',
           alignItems: 'center',
-          gap: 3.5,
-          fontSize: isRed ? 9.5 : 8.5,
+          justifyContent: 'center',
+          gap: 4.5,
+          width: '100%',
+          boxSizing: 'border-box',
+          fontSize: isRed ? 10.5 : 9.5,
           fontWeight: 900,
           fontVariantNumeric: 'tabular-nums',
-          padding: isRed ? '2px 7px' : '1px 5px',
-          borderRadius: isRed ? 6 : 4,
+          padding: isRed ? '3px 8px' : '2.5px 6px',
+          borderRadius: 6,
           background: isRed
             ? (cd.status === 'ongoing' ? '#10B981' : '#FFFFFF')
             : (cd.status === 'ongoing'
-              ? 'color-mix(in srgb, var(--pal-mint) 28%, var(--card))'
-              : 'color-mix(in srgb, var(--pal-sky) 26%, var(--card))'),
+              ? 'color-mix(in srgb, var(--pal-mint) 34%, var(--card))'
+              : 'color-mix(in srgb, var(--pal-sky) 32%, var(--card))'),
           color: isRed
             ? (cd.status === 'ongoing' ? '#FFFFFF' : '#DC2626')
             : (cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)'),
           border: isRed
             ? (cd.status === 'ongoing' ? '1px solid #059669' : '1px solid rgba(255,255,255,0.95)')
-            : (cd.status === 'ongoing' ? '1px solid color-mix(in srgb, var(--pal-mint) 45%, transparent)' : '1px solid color-mix(in srgb, var(--pal-sky) 45%, transparent)'),
-          boxShadow: isRed ? '0 2px 8px rgba(0,0,0,0.4)' : undefined,
-          width: 'fit-content',
-          maxWidth: '100%',
+            : `1px solid ${cd.status === 'ongoing' ? 'color-mix(in srgb, var(--pal-mint) 65%, transparent)' : 'color-mix(in srgb, var(--pal-sky) 65%, transparent)'}`,
+          boxShadow: isRed ? '0 2px 8px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.18)',
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          textAlign: 'center',
         }}>
-          <span>{cd.status === 'ongoing' ? '🟢' : isRed ? '⏱️' : '⏱️'}</span>
-          <span>{cd.badge}</span>
+          <span style={{ fontSize: 11, flex: 'none', lineHeight: 1 }}>{cd.status === 'ongoing' ? '🟢' : '⏱️'}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 900 }}>{cd.badge}</span>
         </div>
       )}
 
