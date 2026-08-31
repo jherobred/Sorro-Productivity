@@ -100,6 +100,25 @@ export default function CalendarPage() {
     return upcoming?.id ?? null;
   }, [events, nowMs]);
 
+  const [showVacant, setShowVacant] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('cal_show_vacant');
+      if (saved !== null) return saved === 'true';
+    }
+    return true;
+  });
+
+  const toggleVacant = useCallback(() => {
+    setShowVacant((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cal_show_vacant', String(next));
+      }
+      toast(next ? 'Vacant slots visible' : 'Vacant slots hidden');
+      return next;
+    });
+  }, []);
+
   const setCalView = useCallback((v: View) => {
     setView(v);
     void update({ calView: v });
@@ -349,6 +368,29 @@ export default function CalendarPage() {
             <Icon name="lock" size={15} color={prefs.lockEvents ? 'var(--accTx)' : 'var(--tx3)'} />
           </button>
 
+          {/* Button to toggle showing / hiding vacant time slots */}
+          <button
+            onClick={toggleVacant}
+            className="hov k-squish"
+            aria-pressed={showVacant}
+            title={showVacant ? 'Hide vacant time intervals' : 'Show vacant time intervals'}
+            aria-label={showVacant ? 'Hide vacant time' : 'Show vacant time'}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              display: 'grid',
+              placeItems: 'center',
+              border: `1px solid ${showVacant ? 'var(--pal-sky)' : 'var(--line2)'}`,
+              background: showVacant ? 'color-mix(in srgb, var(--pal-sky) 18%, transparent)' : 'transparent',
+              color: showVacant ? 'var(--pal-sky)' : 'var(--tx3)',
+              fontSize: 14,
+              fontWeight: 800,
+            }}
+          >
+            ↕
+          </button>
+
           {/* A timetable arrives as a photograph far more often than as a
               calendar file. This reads one and shows you what it read. */}
           <button onClick={() => setImporting(true)} className="hov k-squish"
@@ -379,7 +421,7 @@ export default function CalendarPage() {
                   width: phone ? 30 : 34, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center',
                   background: view === v ? 'var(--acc)' : 'transparent',
                 }}>
-                <Icon name={VIEW_ICON[v]} size={15} color={view === v ? 'var(--ink)' : 'var(--tx3)'} />
+                  <Icon name={VIEW_ICON[v]} size={15} color={view === v ? 'var(--ink)' : 'var(--tx3)'} />
               </button>
             ))}
           </div>
@@ -403,13 +445,13 @@ export default function CalendarPage() {
             </div>
           )}
           {!isPending && view === 'week' && (
-            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId}
+            <Grid days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId} showVacant={showVacant}
               sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
           )}
           {!isPending && view === 'day' && (
             <>
               <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
-              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId}
+              <Grid days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId} showVacant={showVacant}
                 sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} />
             </>
           )}
@@ -559,7 +601,7 @@ export default function CalendarPage() {
 /* ---------------------------------------------------------------- week/day */
 
 function Grid({
-  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, nowMs = Date.now(), nextEventId,
+  days, dayOffset = 0, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, nowMs = Date.now(), nextEventId, showVacant = true,
 }: {
   days: number;
   dayOffset?: number;
@@ -576,6 +618,7 @@ function Grid({
   onSchedule: (t: Task, day: number, hour: number | null) => void;
   nowMs?: number;
   nextEventId?: string | null;
+  showVacant?: boolean;
 }) {
   const { prefs } = usePrefs();
   const dark = prefs.theme === 'dark';
@@ -1066,7 +1109,7 @@ function Grid({
                 ))}
 
                 {/* Vacant / free time intervals with bidirectional arrow & countdown unto next event */}
-                {(() => {
+                {showVacant && (() => {
                   const colDate = dayDates[idx];
                   const isColToday = isToday(colDate);
                   const nowHour = new Date(nowMs).getHours() + new Date(nowMs).getMinutes() / 60 + new Date(nowMs).getSeconds() / 3600;
