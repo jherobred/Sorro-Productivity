@@ -697,3 +697,86 @@ export function layoutOverlappingEvents<T = Ev>(
 
   return result;
 }
+
+export type VacantInterval = {
+  id: string;
+  startHour: number;
+  endHour: number;
+  durationHours: number;
+  isNext: boolean;
+  targetEventTitle?: string;
+  targetStartsAt?: string;
+};
+
+export function formatVacantCountdown(targetIso: string, nowMs: number): string {
+  const diff = new Date(targetIso).getTime() - nowMs;
+  if (diff <= 0) return 'Starting now';
+  const totalSecs = Math.floor(diff / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0) return `Starts in ${h}h ${m}m ${s}s`;
+  if (m > 0) return `Starts in ${m}m ${s}s`;
+  return `Starts in ${s}s`;
+}
+
+export function formatDurationHours(hours: number): string {
+  const totalMins = Math.round(hours * 60);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+export function computeVacantIntervals(
+  dayEvents: { id: string; title: string; start: number; end: number; starts_at: string; ends_at: string }[],
+  isToday: boolean,
+  nowHour: number,
+  nextEventId?: string | null,
+  dayStartHour = 0,
+  dayEndHour = 24
+): VacantInterval[] {
+  const sorted = [...dayEvents].sort((a, b) => a.start - b.start);
+  const busy: { start: number; end: number; events: typeof sorted }[] = [];
+
+  for (const ev of sorted) {
+    if (!busy.length) {
+      busy.push({ start: ev.start, end: ev.end, events: [ev] });
+    } else {
+      const last = busy[busy.length - 1];
+      if (ev.start < last.end) {
+        last.end = Math.max(last.end, ev.end);
+        last.events.push(ev);
+      } else {
+        busy.push({ start: ev.start, end: ev.end, events: [ev] });
+      }
+    }
+  }
+
+  const result: VacantInterval[] = [];
+
+  for (let i = 0; i < busy.length; i++) {
+    const prevEnd = i === 0
+      ? (isToday ? Math.max(dayStartHour, Math.floor(Math.min(nowHour, busy[0].start))) : (busy[0].start > 6 ? 6 : dayStartHour))
+      : busy[i - 1].end;
+    const nextStart = busy[i].start;
+    const targetEv = busy[i].events[0];
+
+    if (nextStart - prevEnd >= 0.4) {
+      const isNext = targetEv.id === nextEventId || busy[i].events.some((e) => e.id === nextEventId);
+      result.push({
+        id: `vacant-${prevEnd.toFixed(2)}-${nextStart.toFixed(2)}`,
+        startHour: prevEnd,
+        endHour: nextStart,
+        durationHours: nextStart - prevEnd,
+        isNext,
+        targetEventTitle: targetEv.title,
+        targetStartsAt: targetEv.starts_at,
+      });
+    }
+  }
+
+  return result;
+}
+

@@ -16,7 +16,8 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
-  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents, type Ev, type Span,
+  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
+  computeVacantIntervals, formatVacantCountdown, formatDurationHours, type Ev, type Span,
 } from '@/lib/events';
 
 /**
@@ -1064,6 +1065,38 @@ function Grid({
                   />
                 ))}
 
+                {/* Vacant / free time intervals with bidirectional arrow & countdown unto next event */}
+                {(() => {
+                  const colDate = dayDates[idx];
+                  const isColToday = isToday(colDate);
+                  const nowHour = new Date(nowMs).getHours() + new Date(nowMs).getMinutes() / 60 + new Date(nowMs).getSeconds() / 3600;
+
+                  const dayEvents = events
+                    .filter((e) => !e.all_day && !e.deleted_at && dayIndex(e.starts_at, ws) === idx)
+                    .map((e) => ({
+                      id: e.id,
+                      title: e.title,
+                      start: hoursOf(e.starts_at),
+                      end: hoursOf(e.ends_at),
+                      starts_at: e.starts_at,
+                      ends_at: e.ends_at,
+                    }));
+
+                  const vacantList = computeVacantIntervals(dayEvents, isColToday, nowHour, nextEventId, GRID_START, GRID_END);
+
+                  return vacantList.map((v) => (
+                    <VacantTimeIndicator
+                      key={v.id}
+                      startHour={v.startHour}
+                      endHour={v.endHour}
+                      nowMs={nowMs}
+                      targetStartsAt={v.targetStartsAt}
+                      isNext={v.isNext}
+                      dark={dark}
+                    />
+                  ));
+                })()}
+
                 {/* Events for this day, packed into non-obstructing sub-columns if overlapping */}
                 {(() => {
                   const dayColEvents = events
@@ -1216,6 +1249,144 @@ function EventChip({
         <div onPointerDown={onResize}
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 8, cursor: 'ns-resize', touchAction: 'none' }} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Visual indicator for vacant / free time between events with a vertical bidirectional arrow
+ * and a live countdown timer unto the next upcoming event.
+ */
+function VacantTimeIndicator({
+  startHour,
+  endHour,
+  nowMs,
+  targetStartsAt,
+  isNext,
+  dark,
+}: {
+  startHour: number;
+  endHour: number;
+  nowMs: number;
+  targetStartsAt?: string;
+  isNext: boolean;
+  dark: boolean;
+}) {
+  const topPct = pct(startHour);
+  const heightPct = pct(endHour) - topPct;
+  const durationHours = endHour - startHour;
+  if (durationHours <= 0.25) return null;
+  const durationText = formatDurationHours(durationHours);
+  const countdownText = targetStartsAt && isNext ? formatVacantCountdown(targetStartsAt, nowMs) : null;
+  const accent = isNext ? 'var(--pal-sky)' : 'var(--tx3)';
+
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        left: 4,
+        right: 4,
+        top: `${topPct}%`,
+        height: `${heightPct}%`,
+        pointerEvents: 'none',
+        zIndex: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* Background dashed zone */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 8,
+          border: `1.5px dashed color-mix(in srgb, ${accent} ${isNext ? '34%' : '14%'}, transparent)`,
+          background: `color-mix(in srgb, ${accent} ${isNext ? '6%' : '1.5%'}, transparent)`,
+        }}
+      />
+
+      {/* Vertical center bidirectional arrow line */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 6,
+          bottom: 6,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 1.5,
+          background: `color-mix(in srgb, ${accent} ${isNext ? '50%' : '22%'}, transparent)`,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        {/* Top arrow head pointing up */}
+        <svg width="8" height="6" viewBox="0 0 8 6" style={{ marginTop: -3, flex: 'none' }}>
+          <path d="M4 0L8 6H0L4 0Z" fill={accent} opacity={isNext ? 0.95 : 0.45} />
+        </svg>
+
+        {/* Bottom arrow head pointing down */}
+        <svg width="8" height="6" viewBox="0 0 8 6" style={{ marginBottom: -3, flex: 'none' }}>
+          <path d="M4 6L0 0H8L4 6Z" fill={accent} opacity={isNext ? 0.95 : 0.45} />
+        </svg>
+      </div>
+
+      {/* Floating Center Badge */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 3,
+          display: 'inline-flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1.5,
+          padding: isNext ? '4px 10px' : '2px 8px',
+          borderRadius: 16,
+          background: 'var(--card)',
+          border: `1px solid color-mix(in srgb, ${accent} ${isNext ? '55%' : '25%'}, var(--line))`,
+          boxShadow: isNext ? 'var(--sh)' : '0 1px 4px rgba(0,0,0,0.1)',
+          maxWidth: '92%',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: isNext ? 10.5 : 9.5,
+            fontWeight: 800,
+            color: accent,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ fontSize: 11, lineHeight: 1 }}>↕</span>
+          <span>{durationText} vacant</span>
+        </div>
+
+        {countdownText && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 9.5,
+              fontWeight: 800,
+              color: 'var(--tx2)',
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span>⏱️</span>
+            <span>{countdownText}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
