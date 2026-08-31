@@ -451,7 +451,7 @@ function Crumbs({
     fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', minWidth: 0,
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   };
-  if (inTrash) return <div style={s}>Trash</div>;
+  if (inTrash) return <div style={s}>Bin</div>;
   if (!notebook) return <div style={s}>All notebooks</div>;
   return (
     <div style={{ ...s, display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -476,7 +476,7 @@ function TrashList({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, flex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>
-          Trash & Archive ({notes.length} deleted note{notes.length === 1 ? '' : 's'}, {archivedNotebooks.length} archived notebook{archivedNotebooks.length === 1 ? '' : 's'})
+          Bin ({notes.length} deleted note{notes.length === 1 ? '' : 's'}, {archivedNotebooks.length} archived notebook{archivedNotebooks.length === 1 ? '' : 's'})
         </div>
         {notes.length > 0 && (
           <button onClick={onEmpty} className="hov k-squish" style={{

@@ -54,7 +54,10 @@ const overlayPeople = (rows: Person[]): Person[] => {
         category: patch.category || CATS[0],
         color: patch.color || hueFor(CATS[0]),
         email: patch.email || '',
+        phone: patch.phone || null,
         note: patch.note || '',
+        photo_path: patch.photo_path || null,
+        basedly_handle: patch.basedly_handle || null,
         links: patch.links || [],
         gallery: patch.gallery || [],
         osint: patch.osint || {},
@@ -73,7 +76,10 @@ const ADD = defineMutation('people.add', async (v: { id: string; name: string; c
   const { error } = await supabase.from('bd_people').upsert({
     ...v,
     user_id,
+    phone: null,
     note: '',
+    photo_path: null,
+    basedly_handle: null,
     links: [],
     gallery: [],
     osint: {},
@@ -84,14 +90,35 @@ const ADD = defineMutation('people.add', async (v: { id: string; name: string; c
 });
 
 const SAVE = defineMutation('people.save', async (v: { id: string; patch: Partial<Person> }) => {
-  const user_id = await currentUserId();
   markPendingPerson(v.id, v.patch);
-  const { error } = await supabase.from('bd_people').upsert({
-    id: v.id,
-    user_id,
-    ...v.patch,
-  }, { onConflict: 'id' });
+  // Perform an atomic update on existing row so ONLY changed fields are modified without resetting photo_path or defaults
+  const { data, error } = await supabase.from('bd_people').update(v.patch).eq('id', v.id).select('id');
   if (error) throw error;
+
+  // Fallback: If row doesn't exist on server yet (e.g. offline created), upsert the full merged cache record
+  if (!data || data.length === 0) {
+    const user_id = await currentUserId();
+    const prev = queryClient.getQueryData<Person[]>(KEY) ?? [];
+    const full = prev.find((p) => p.id === v.id);
+    const { error: insErr } = await supabase.from('bd_people').upsert({
+      id: v.id,
+      user_id,
+      name: full?.name || 'Untitled Person',
+      category: full?.category || CATS[0],
+      color: full?.color || hueFor(CATS[0]),
+      email: full?.email || '',
+      phone: full?.phone || null,
+      note: full?.note || '',
+      photo_path: full?.photo_path || null,
+      basedly_handle: full?.basedly_handle || null,
+      links: full?.links || [],
+      gallery: full?.gallery || [],
+      osint: full?.osint || {},
+      deleted_at: full?.deleted_at || null,
+      ...v.patch,
+    }, { onConflict: 'id' });
+    if (insErr) throw insErr;
+  }
   clearPendingPerson(v.id);
 });
 
@@ -155,7 +182,20 @@ export default function PeoplePage() {
     onMutate: (v) => {
       markPendingPerson(v.id, v);
       const prev = queryClient.getQueryData<Person[]>(KEY) ?? [];
-      queryClient.setQueryData<Person[]>(KEY, [...prev, { ...v, note: '', links: [], gallery: [], osint: {}, deleted_at: null }]);
+      queryClient.setQueryData<Person[]>(KEY, [
+        ...prev,
+        {
+          ...v,
+          phone: null,
+          note: '',
+          photo_path: null,
+          basedly_handle: null,
+          links: [],
+          gallery: [],
+          osint: {},
+          deleted_at: null,
+        },
+      ]);
     },
     onSettled: settle,
   });
@@ -236,7 +276,7 @@ export default function PeoplePage() {
       const remaining = activePeople.filter((item) => item.id !== p.id);
       setSel(remaining.length ? remaining[0].id : null);
     }
-    toast(`Moved ${p.name} to Trash / Archive`, () => restore.mutate({ id: p.id }));
+    toast(`Moved ${p.name} to Bin`, () => restore.mutate({ id: p.id }));
   };
 
   const filteredPeople = activePeople.filter((p) => {
@@ -292,12 +332,12 @@ export default function PeoplePage() {
       {
         items: [
           {
-            label: 'Move to Trash & Archive',
+            label: 'Move to Bin',
             icon: 'trash',
             danger: true,
-            run: () => void confirmAsk(`Move “${p.name}” to Trash / Archive?`, {
-              message: 'You can restore them anytime from the Trash & Archive tab.',
-              confirmLabel: 'Move to Archive / Trash',
+            run: () => void confirmAsk(`Move “${p.name}” to Bin?`, {
+              message: 'You can restore them anytime from the Bin tab.',
+              confirmLabel: 'Move to Bin',
               danger: true,
             }).then((yes) => { if (yes) deleteWithUndo(p); }),
           },
@@ -310,7 +350,7 @@ export default function PeoplePage() {
     <RowsSkeleton rows={6} label="Loading your people" lead="circle" />
   ) : (
     <div data-tour="people-roster" style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      {/* Top Segment: All People vs Trash & Archive */}
+      {/* Top Segment: All People vs Bin */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 4, padding: 3, borderRadius: 9, background: 'var(--card2)',
         border: '1px solid var(--line2)', marginBottom: 8,
@@ -344,7 +384,7 @@ export default function PeoplePage() {
           }}
         >
           <Icon name="trash" size={12} color={viewTab === 'trash' ? 'var(--pal-coral)' : 'var(--tx3)'} />
-          <span>Trash & Archive ({trashedPeople.length})</span>
+          <span>Bin ({trashedPeople.length})</span>
         </button>
 
         <button onClick={create} className="hov k-squish" aria-label="Add someone" title="Add someone"
@@ -398,7 +438,7 @@ export default function PeoplePage() {
         );
       })}
 
-      {/* If search query matches contacts in trash, allow instant 1-click restore */}
+      {/* If search query matches contacts in bin, allow instant 1-click restore */}
       {q.trim() && trashedPeople.some((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) && (
         <div style={{
           marginTop: 6, marginBottom: 8, padding: '10px 12px', borderRadius: 10,
@@ -407,7 +447,7 @@ export default function PeoplePage() {
           display: 'flex', flexDirection: 'column', gap: 6,
         }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--pal-coral)', letterSpacing: '.06em' }}>
-            Found in Trash & Archive:
+            Found in Bin:
           </div>
           {trashedPeople.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())).map((tp) => (
             <div key={tp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -468,21 +508,21 @@ export default function PeoplePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="trash" size={16} color="var(--pal-coral)" />
           <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--tx)' }}>
-            Trash & Archive ({trashedPeople.length})
+            Bin ({trashedPeople.length})
           </span>
         </div>
 
         {trashedPeople.length > 0 && (
           <button
             type="button"
-            onClick={() => void confirmAsk('Empty all people in Trash & Archive?', {
-              message: 'This will permanently remove all trashed/archived contacts.',
-              confirmLabel: 'Empty Trash & Archive',
+            onClick={() => void confirmAsk('Empty all people in Bin?', {
+              message: 'This will permanently remove all deleted contacts in the bin.',
+              confirmLabel: 'Empty Bin',
               danger: true,
             }).then((yes) => {
               if (yes) {
                 emptyTrash.mutate({ ids: trashedPeople.map((p) => p.id) });
-                toast('Trash emptied');
+                toast('Bin emptied');
               }
             })}
             className="hov k-squish"
@@ -491,14 +531,14 @@ export default function PeoplePage() {
               background: 'var(--card2)', color: 'var(--pal-coral)', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
             }}
           >
-            Empty Trash & Archive
+            Empty Bin
           </button>
         )}
       </div>
 
       {trashedPeople.length === 0 ? (
         <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>
-          Trash & Archive is empty. Deleted and archived contacts will appear here and can be restored anytime.
+          Bin is empty. Deleted contacts will appear here and can be restored anytime.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

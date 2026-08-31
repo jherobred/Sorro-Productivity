@@ -271,12 +271,15 @@ export function PersonCard({
             title="Change photo"
             style={{
               width: phone ? 58 : 72, height: phone ? 58 : 72, borderRadius: '50%', flex: 'none',
-              background: photoUrl ? `url(${photoUrl}) center / cover` : `color-mix(in srgb, ${person.color || 'var(--pal-indigo)'} 30%, var(--card2))`,
+              background: photoUrl ? 'var(--card2)' : `color-mix(in srgb, ${person.color || 'var(--pal-indigo)'} 30%, var(--card2))`,
               display: 'grid', placeItems: 'center', border: `2px solid ${photoUrl ? 'var(--line2)' : person.color || 'var(--pal-indigo)'}`,
               fontSize: phone ? 20 : 26, fontWeight: 800, color: 'var(--tx)', cursor: 'pointer', position: 'relative',
+              overflow: 'hidden',
             }}
           >
-            {!photoUrl && initials}
+            {photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initials}
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -331,10 +334,10 @@ export function PersonCard({
               style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', border: '1px solid var(--line2)', background: 'var(--card2)', cursor: 'pointer' }}>
               <Icon name="photo" size={14} color="var(--tx2)" />
             </button>
-            <button onClick={() => void confirmAsk(`Move ${person.name} to Trash & Archive?`, {
-              message: 'You can restore them anytime from the Trash & Archive tab.', confirmLabel: 'Move to Archive', danger: true,
+            <button onClick={() => void confirmAsk(`Move ${person.name} to Bin?`, {
+              message: 'You can restore them anytime from the Bin tab.', confirmLabel: 'Move to Bin', danger: true,
             }).then((yes) => { if (yes) onDelete(); })}
-              className="hov k-squish" title="Move to Trash & Archive" aria-label={`Delete ${person.name}`}
+              className="hov k-squish" title="Move to Bin" aria-label={`Delete ${person.name}`}
               style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', border: '1px solid var(--line2)', background: 'var(--card2)', cursor: 'pointer' }}>
               <Icon name="trash" size={14} color="var(--pal-coral)" />
             </button>

@@ -254,7 +254,7 @@ export function NoteList({
             }}
           >
             <Icon name="trash" size={13} color="var(--pal-coral, var(--tx3))" />
-            <span>Trash / Archive {typeof trashCount === 'number' && trashCount > 0 ? `(${trashCount})` : ''}</span>
+            <span>Bin {typeof trashCount === 'number' && trashCount > 0 ? `(${trashCount})` : ''}</span>
           </button>
         </div>
       )}

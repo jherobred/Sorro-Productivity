@@ -255,7 +255,7 @@ export function NotebookTable({
             }}
           >
             <Icon name="trash" size={14} color="var(--pal-coral)" />
-            <span>Trash & Archive ({trashCount} deleted note{trashCount === 1 ? '' : 's'}, {archivedNbIds?.size ?? 0} archived notebook{(archivedNbIds?.size ?? 0) === 1 ? '' : 's'})</span>
+            <span>Bin ({trashCount} deleted note{trashCount === 1 ? '' : 's'}, {archivedNbIds?.size ?? 0} archived notebook{(archivedNbIds?.size ?? 0) === 1 ? '' : 's'})</span>
           </button>
         </div>
       )}
