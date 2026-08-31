@@ -608,3 +608,92 @@ export function formatEventCountdown(
   }
 }
 
+export type PositionedEvent<T = Ev> = {
+  ev: T;
+  start: number;
+  end: number;
+  colIndex: number;
+  totalCols: number;
+};
+
+/**
+ * Packs overlapping events on a calendar day into non-obstructing sub-columns
+ * (Google Calendar / Apple Calendar layout algorithm).
+ */
+export function layoutOverlappingEvents<T = Ev>(
+  events: { ev: T; start: number; end: number }[]
+): PositionedEvent<T>[] {
+  if (!events.length) return [];
+
+  // Normalize durations and sort: start time ascending, then duration descending
+  const normalized = events.map((item) => ({
+    ...item,
+    end: Math.max(item.start + 0.25, item.end),
+  }));
+
+  const sorted = [...normalized].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return (b.end - b.start) - (a.end - a.start);
+  });
+
+  // Group into overlapping clusters (connected components)
+  const clusters: typeof sorted[] = [];
+  let currentCluster: typeof sorted = [];
+  let clusterEnd = -1;
+
+  for (const item of sorted) {
+    if (currentCluster.length === 0) {
+      currentCluster.push(item);
+      clusterEnd = item.end;
+    } else {
+      if (item.start < clusterEnd) {
+        currentCluster.push(item);
+        clusterEnd = Math.max(clusterEnd, item.end);
+      } else {
+        clusters.push(currentCluster);
+        currentCluster = [item];
+        clusterEnd = item.end;
+      }
+    }
+  }
+  if (currentCluster.length > 0) {
+    clusters.push(currentCluster);
+  }
+
+  const result: PositionedEvent<T>[] = [];
+
+  // Pack each cluster into sub-columns
+  for (const cluster of clusters) {
+    const columns: number[] = [];
+    const assignments: { ev: T; start: number; end: number; colIndex: number }[] = [];
+
+    for (const item of cluster) {
+      let placed = false;
+      for (let c = 0; c < columns.length; c++) {
+        if (columns[c] <= item.start) {
+          columns[c] = item.end;
+          assignments.push({ ...item, colIndex: c });
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        assignments.push({ ...item, colIndex: columns.length });
+        columns.push(item.end);
+      }
+    }
+
+    const totalCols = Math.max(1, columns.length);
+    for (const a of assignments) {
+      result.push({
+        ev: a.ev,
+        start: a.start,
+        end: a.end,
+        colIndex: a.colIndex,
+        totalCols,
+      });
+    }
+  }
+
+  return result;
+}

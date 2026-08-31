@@ -16,7 +16,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
-  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, type Ev, type Span,
+  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents, type Ev, type Span,
 } from '@/lib/events';
 
 /**
@@ -1049,25 +1049,43 @@ function Grid({
                   />
                 ))}
 
-                {events
-                  .filter((e) => !e.all_day && !spanned.has(e.id)
-                    && (dayIndex(e.starts_at, ws) === idx || (drag?.id === e.id && drag.day === idx)))
-                  .map((e) => {
-                    const isDrag = drag?.id === e.id;
-                    const isResize = resize?.id === e.id;
+                {/* Events for this day, packed into non-obstructing sub-columns if overlapping */}
+                {(() => {
+                  const dayColEvents = events
+                    .filter((e) => !e.all_day && !spanned.has(e.id)
+                      && (dayIndex(e.starts_at, ws) === idx || (drag?.id === e.id && drag.day === idx)))
+                    .map((e) => {
+                      const isDrag = drag?.id === e.id;
+                      const isResize = resize?.id === e.id;
+                      const start = isDrag ? drag.hour : hoursOf(e.starts_at);
+                      const end = isResize ? resize.end : isDrag ? drag.hour + (hoursOf(e.ends_at) - hoursOf(e.starts_at)) : hoursOf(e.ends_at);
+                      return { ev: e, start, end };
+                    });
+
+                  const positioned = layoutOverlappingEvents(dayColEvents);
+
+                  return positioned.map((pos) => {
+                    const isDrag = drag?.id === pos.ev.id;
+                    const isResize = resize?.id === pos.ev.id;
                     if (isDrag && drag.day !== idx) return null;
-                    const start = isDrag ? drag.hour : hoursOf(e.starts_at);
-                    const end = isResize ? resize.end : isDrag ? drag.hour + (hoursOf(e.ends_at) - hoursOf(e.starts_at)) : hoursOf(e.ends_at);
+
+                    const leftPct = (pos.colIndex / pos.totalCols) * 100;
+                    const widthPct = (1 / pos.totalCols) * 100;
+                    const leftStyle = pos.totalCols > 1 ? `calc(${leftPct}% + 2px)` : '3px';
+                    const widthStyle = pos.totalCols > 1 ? `calc(${widthPct}% - 4px)` : 'calc(100% - 6px)';
+
                     return (
-                      <EventChip key={e.id} ev={e} top={pct(start)} height={Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}
-                        label={hhmm(start)} lifted={isDrag || isResize} selected={sel === e.id}
-                        onPointerDown={(p) => press(p, e, 'move')}
-                        onResize={(p) => press(p, e, 'resize')}
+                      <EventChip key={pos.ev.id} ev={pos.ev} top={pct(pos.start)} height={Math.max((0.5 / SPAN) * 100, pct(pos.end) - pct(pos.start))}
+                        left={leftStyle} width={widthStyle}
+                        label={hhmm(pos.start)} lifted={isDrag || isResize} selected={sel === pos.ev.id}
+                        onPointerDown={(p) => press(p, pos.ev, 'move')}
+                        onResize={(p) => press(p, pos.ev, 'resize')}
                         dark={dark}
                         nowMs={nowMs}
-                        onOpen={(p) => openEvent(e, p.clientX, p.clientY)} />
+                        onOpen={(p) => openEvent(pos.ev, p.clientX, p.clientY)} />
                     );
-                  })}
+                  });
+                })()}
 
                 {/* Tasks with a time render dashed */}
                 {slotTasks(idx).map((t) => {
@@ -1115,9 +1133,9 @@ function Grid({
 }
 
 function EventChip({
-  ev, top, height, label, lifted, selected, dark, nowMs = Date.now(), onPointerDown, onResize, onOpen,
+  ev, top, height, left = '3px', width = 'calc(100% - 6px)', label, lifted, selected, dark, nowMs = Date.now(), onPointerDown, onResize, onOpen,
 }: {
-  ev: Ev; top: number; height: number; label: string; lifted: boolean; selected: boolean;
+  ev: Ev; top: number; height: number; left?: string | number; width?: string | number; label: string; lifted: boolean; selected: boolean;
   dark: boolean; nowMs?: number;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
@@ -1134,7 +1152,7 @@ function EventChip({
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       className={selected ? 'pop' : undefined}
       style={{
-        position: 'absolute', left: 3, right: 3, top: `${top}%`, height: `${height}%`,
+        position: 'absolute', left, width, top: `${top}%`, height: `${height}%`,
         borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
         background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
         borderLeft: `2px solid ${ev.color}`,
