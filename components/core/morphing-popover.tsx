@@ -6,6 +6,7 @@ import React, {
   useState,
   useId,
   useRef,
+  useMemo,
   type ReactNode,
   type CSSProperties,
 } from 'react';
@@ -48,9 +49,14 @@ export function MorphingPopover({
     onOpenChange?.(val);
   };
 
+  const contextValue = useMemo(
+    () => ({ isOpen, setIsOpen, uniqueId, transition }),
+    [isOpen, setIsOpen, uniqueId, transition]
+  );
+
   return (
     <MorphingPopoverContext.Provider
-      value={{ isOpen, setIsOpen, uniqueId, transition }}
+      value={contextValue}
     >
       <div className="relative inline-block">{children}</div>
     </MorphingPopoverContext.Provider>

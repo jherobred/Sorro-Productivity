@@ -102,7 +102,12 @@ export default function FilesPage() {
     queryFn: async (): Promise<FileRow[]> => {
       const { data, error } = await supabase.from('bd_files')
         .select('id,name,kind,size_bytes,storage_path,folder_id,starred,created_at')
-        .is('deleted_at', null).order('created_at', { ascending: false });
+        // Must match lib/prefetch.ts's warm query for ['files'] exactly. The
+        // prefetch writes this same key on pointerdown, and a shorter limit
+        // there would seed the cache with a truncated list this query then
+        // never refetches, because the key is already fresh.
+        // ponytail: newest 500. Paginate if anyone actually stores more.
+        .is('deleted_at', null).order('created_at', { ascending: false }).limit(500);
       if (error) throw error;
       return data ?? [];
     },

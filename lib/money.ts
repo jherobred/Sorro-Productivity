@@ -110,7 +110,8 @@ export function useToBuy() {
         .from('bd_to_buy')
         .select('id,name,amount_centavos,bought_at')
         .is('bought_at', null)
-        .order('created_at');
+        .order('created_at')
+        .limit(300);
       if (error) throw error;
       return data ?? [];
     },

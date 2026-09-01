@@ -79,7 +79,7 @@ export function useNotes() {
     queryKey: NOTE_KEY,
     queryFn: async (): Promise<Note[]> => {
       const { data, error } = await supabase.from('bd_notes')
-        .select(NOTE_COLS).is('deleted_at', null).order('updated_at', { ascending: false });
+        .select(NOTE_COLS).is('deleted_at', null).order('updated_at', { ascending: false }).limit(500);
       if (error) throw error;
       return overlay((data ?? []) as Note[]);
     },
@@ -92,7 +92,7 @@ export function useTrash() {
     queryKey: TRASH_KEY,
     queryFn: async (): Promise<Note[]> => {
       const { data, error } = await supabase.from('bd_notes')
-        .select(NOTE_COLS).not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+        .select(NOTE_COLS).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(200);
       if (error) throw error;
       return (data ?? []) as Note[];
     },
@@ -104,7 +104,7 @@ export function useTags() {
   return useQuery({
     queryKey: TAG_KEY,
     queryFn: async (): Promise<Record<string, string[]>> => {
-      const { data, error } = await supabase.from('bd_note_tags').select('note_id,tag').order('tag');
+      const { data, error } = await supabase.from('bd_note_tags').select('note_id,tag').order('tag').limit(10000);
       if (error) throw error;
       const out: Record<string, string[]> = {};
       for (const r of data ?? []) (out[r.note_id] ??= []).push(r.tag);

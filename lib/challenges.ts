@@ -69,7 +69,7 @@ export function useChallenges() {
     queryFn: async (): Promise<Challenge[]> => {
       const { data, error } = await supabase.from('bd_challenges')
         .select('id,owner_id,name,description,habit_label,metric,rule,target,unit,starts_on,ends_on,color,visibility,join_code,ranked,settled_at,winner_id,stake_rp')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }).limit(500);
       if (error) throw error;
       return (data ?? []) as Challenge[];
     },

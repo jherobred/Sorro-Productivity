@@ -6,6 +6,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   Children,
   type ReactNode,
 } from 'react';
@@ -66,18 +67,23 @@ export function Carousel({
     return () => clearInterval(timer);
   }, [total, isPaused, autoPlayInterval, next]);
 
+  const contextValue = useMemo(
+    () => ({
+      index,
+      setIndex,
+      total,
+      setTotal,
+      next,
+      prev,
+      isPaused,
+      setIsPaused,
+    }),
+    [index, setIndex, total, setTotal, next, prev, isPaused, setIsPaused]
+  );
+
   return (
     <CarouselContext.Provider
-      value={{
-        index,
-        setIndex,
-        total,
-        setTotal,
-        next,
-        prev,
-        isPaused,
-        setIsPaused,
-      }}
+      value={contextValue}
     >
       <div
         className={`relative overflow-hidden ${className}`}
