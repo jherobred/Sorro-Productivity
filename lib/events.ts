@@ -8,6 +8,19 @@ import { K } from './pal';
 import { fixture } from './devFixtures';
 import { settler } from './settle';
 
+export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom';
+
+export type RecurrenceRule = {
+  freq: RecurrenceFreq;
+  interval?: number; // e.g. every 2 weeks
+  byDay?: RecurrenceDay[]; // e.g. ['MO', 'WE', 'FR']
+  endType?: 'never' | 'until' | 'count';
+  until?: string | null; // YYYY-MM-DD
+  count?: number | null; // e.g. 10 occurrences
+  exceptions?: string[]; // Array of YYYY-MM-DD strings excluded or altered
+};
+
 export type Ev = {
   id: string;
   title: string;
@@ -30,11 +43,22 @@ export type Ev = {
   remind_minutes: number | null;
   snoozed_until: string | null;
   deleted_at: string | null;
+  /** Google Calendar style recurrence rule */
+  recurrence?: RecurrenceRule | null;
+  /** ID of the master recurring event series */
+  master_id?: string;
+  /** Flag identifying generated recurrence instances */
+  is_recurring_instance?: boolean;
 };
 
 const EVENT_META_KEY = 'bd_events_local_meta';
 
-export function getEventMetaMap(): Record<string, { short_name?: string }> {
+export type EventLocalMeta = {
+  short_name?: string;
+  recurrence?: RecurrenceRule | null;
+};
+
+export function getEventMetaMap(): Record<string, EventLocalMeta> {
   if (typeof window === 'undefined') return {};
   try {
     return JSON.parse(localStorage.getItem(EVENT_META_KEY) || '{}');
@@ -43,13 +67,13 @@ export function getEventMetaMap(): Record<string, { short_name?: string }> {
   }
 }
 
-export function setEventMeta(id: string, meta: { short_name?: string | null }) {
+export function setEventMeta(id: string, meta: Partial<EventLocalMeta>) {
   if (typeof window === 'undefined') return;
   try {
     const cur = getEventMetaMap();
-    if (meta.short_name !== undefined) {
-      cur[id] = { ...cur[id], short_name: meta.short_name?.trim() || undefined };
-    }
+    cur[id] = { ...cur[id], ...meta };
+    if (meta.short_name === null) delete cur[id].short_name;
+    if (meta.recurrence === null) delete cur[id].recurrence;
     localStorage.setItem(EVENT_META_KEY, JSON.stringify(cur));
   } catch {}
 }
@@ -59,6 +83,229 @@ export function getEventShortName(e: { title: string; short_name?: string | null
   const title = e.title.trim();
   if (!title || title === '(No title)') return 'Event';
   return title;
+}
+
+export const DOW_MAP: Record<RecurrenceDay, number> = {
+  SU: 0,
+  MO: 1,
+  TU: 2,
+  WE: 3,
+  TH: 4,
+  FR: 5,
+  SA: 6,
+};
+export const DOW_NAMES: RecurrenceDay[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+export function getWeekNumber(d: Date): number {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+}
+
+export function formatRecurrenceLabel(rule: RecurrenceRule | null | undefined, startDate?: Date): string {
+  if (!rule || !rule.freq) return 'Does not repeat';
+  const interval = rule.interval ?? 1;
+
+  if (rule.freq === 'daily') {
+    return interval === 1 ? 'Daily' : `Every ${interval} days`;
+  }
+  if (rule.freq === 'weekdays') {
+    return 'Every weekday (Monday to Friday)';
+  }
+  if (rule.freq === 'weekly') {
+    if (rule.byDay && rule.byDay.length > 0) {
+      const days = rule.byDay.map((d) => d[0] + d.slice(1).toLowerCase()).join(', ');
+      return interval === 1 ? `Weekly on ${days}` : `Every ${interval} weeks on ${days}`;
+    }
+    const dayName = startDate ? startDate.toLocaleDateString(undefined, { weekday: 'long' }) : 'week';
+    return interval === 1 ? `Weekly on ${dayName}` : `Every ${interval} weeks on ${dayName}`;
+  }
+  if (rule.freq === 'monthly') {
+    const dayOfMonth = startDate ? startDate.getDate() : 'day';
+    return interval === 1 ? `Monthly on day ${dayOfMonth}` : `Every ${interval} months on day ${dayOfMonth}`;
+  }
+  if (rule.freq === 'yearly') {
+    const dateStr = startDate ? startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'year';
+    return interval === 1 ? `Annually on ${dateStr}` : `Every ${interval} years on ${dateStr}`;
+  }
+  return 'Custom recurrence';
+}
+
+/**
+ * Expands recurring events within a given date window [from, to]
+ */
+export function expandRecurringEvents(events: Ev[], from: Date, to: Date): Ev[] {
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+  const result: Ev[] = [];
+
+  for (const ev of events) {
+    if (!ev.recurrence || !ev.recurrence.freq) {
+      const evStartMs = new Date(ev.starts_at).getTime();
+      const evEndMs = new Date(ev.ends_at).getTime();
+      if (evEndMs >= fromMs && evStartMs < toMs) {
+        result.push(ev);
+      }
+      continue;
+    }
+
+    const rule = ev.recurrence;
+    const evStart = new Date(ev.starts_at);
+    const evEnd = new Date(ev.ends_at);
+    const durationMs = Math.max(1800000, evEnd.getTime() - evStart.getTime());
+
+    const interval = Math.max(1, rule.interval ?? 1);
+    const exceptions = new Set(rule.exceptions ?? []);
+    const untilMs = rule.until ? new Date(`${rule.until}T23:59:59.999`).getTime() : Infinity;
+    const maxCount = rule.endType === 'count' && rule.count ? rule.count : Infinity;
+
+    let count = 0;
+    const cursor = new Date(evStart);
+    cursor.setHours(0, 0, 0, 0);
+
+    const hardLimitMs = Math.min(toMs + 86400000 * 2, new Date(evStart).setFullYear(evStart.getFullYear() + 3));
+
+    if (rule.freq === 'daily') {
+      while (cursor.getTime() <= hardLimitMs && cursor.getTime() <= untilMs && count < maxCount) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        if (!exceptions.has(dateStr)) {
+          count++;
+          const instStart = new Date(cursor);
+          instStart.setHours(evStart.getHours(), evStart.getMinutes(), evStart.getSeconds(), evStart.getMilliseconds());
+          const instEnd = new Date(instStart.getTime() + durationMs);
+
+          if (instEnd.getTime() >= fromMs && instStart.getTime() < toMs) {
+            result.push({
+              ...ev,
+              id: `${ev.id}__rec__${dateStr}`,
+              starts_at: instStart.toISOString(),
+              ends_at: instEnd.toISOString(),
+              master_id: ev.id,
+              is_recurring_instance: true,
+            });
+          }
+        }
+        cursor.setDate(cursor.getDate() + interval);
+      }
+    } else if (rule.freq === 'weekdays') {
+      while (cursor.getTime() <= hardLimitMs && cursor.getTime() <= untilMs && count < maxCount) {
+        const dow = cursor.getDay();
+        if (dow >= 1 && dow <= 5) {
+          const dateStr = cursor.toISOString().slice(0, 10);
+          if (!exceptions.has(dateStr)) {
+            count++;
+            const instStart = new Date(cursor);
+            instStart.setHours(evStart.getHours(), evStart.getMinutes(), evStart.getSeconds(), evStart.getMilliseconds());
+            const instEnd = new Date(instStart.getTime() + durationMs);
+
+            if (instEnd.getTime() >= fromMs && instStart.getTime() < toMs) {
+              result.push({
+                ...ev,
+                id: `${ev.id}__rec__${dateStr}`,
+                starts_at: instStart.toISOString(),
+                ends_at: instEnd.toISOString(),
+                master_id: ev.id,
+                is_recurring_instance: true,
+              });
+            }
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else if (rule.freq === 'weekly') {
+      const byDays = (rule.byDay && rule.byDay.length > 0)
+        ? rule.byDay.map((d) => DOW_MAP[d])
+        : [evStart.getDay()];
+
+      const currentWeekStart = new Date(cursor);
+      const dowOffset = currentWeekStart.getDay();
+      currentWeekStart.setDate(currentWeekStart.getDate() - dowOffset);
+
+      const evStartDayMs = new Date(evStart).setHours(0, 0, 0, 0);
+
+      while (currentWeekStart.getTime() <= hardLimitMs && currentWeekStart.getTime() <= untilMs && count < maxCount) {
+        for (const targetDow of byDays) {
+          const dayDate = new Date(currentWeekStart);
+          dayDate.setDate(dayDate.getDate() + targetDow);
+
+          if (dayDate.getTime() < evStartDayMs) continue;
+          if (dayDate.getTime() > hardLimitMs || dayDate.getTime() > untilMs || count >= maxCount) break;
+
+          const dateStr = dayDate.toISOString().slice(0, 10);
+          if (!exceptions.has(dateStr)) {
+            count++;
+            const instStart = new Date(dayDate);
+            instStart.setHours(evStart.getHours(), evStart.getMinutes(), evStart.getSeconds(), evStart.getMilliseconds());
+            const instEnd = new Date(instStart.getTime() + durationMs);
+
+            if (instEnd.getTime() >= fromMs && instStart.getTime() < toMs) {
+              result.push({
+                ...ev,
+                id: `${ev.id}__rec__${dateStr}`,
+                starts_at: instStart.toISOString(),
+                ends_at: instEnd.toISOString(),
+                master_id: ev.id,
+                is_recurring_instance: true,
+              });
+            }
+          }
+        }
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7 * interval);
+      }
+    } else if (rule.freq === 'monthly') {
+      while (cursor.getTime() <= hardLimitMs && cursor.getTime() <= untilMs && count < maxCount) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        if (!exceptions.has(dateStr)) {
+          count++;
+          const instStart = new Date(cursor);
+          instStart.setHours(evStart.getHours(), evStart.getMinutes(), evStart.getSeconds(), evStart.getMilliseconds());
+          const instEnd = new Date(instStart.getTime() + durationMs);
+
+          if (instEnd.getTime() >= fromMs && instStart.getTime() < toMs) {
+            result.push({
+              ...ev,
+              id: `${ev.id}__rec__${dateStr}`,
+              starts_at: instStart.toISOString(),
+              ends_at: instEnd.toISOString(),
+              master_id: ev.id,
+              is_recurring_instance: true,
+            });
+          }
+        }
+        cursor.setMonth(cursor.getMonth() + interval);
+      }
+    } else if (rule.freq === 'yearly') {
+      while (cursor.getTime() <= hardLimitMs && cursor.getTime() <= untilMs && count < maxCount) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        if (!exceptions.has(dateStr)) {
+          count++;
+          const instStart = new Date(cursor);
+          instStart.setHours(evStart.getHours(), evStart.getMinutes(), evStart.getSeconds(), evStart.getMilliseconds());
+          const instEnd = new Date(instStart.getTime() + durationMs);
+
+          if (instEnd.getTime() >= fromMs && instStart.getTime() < toMs) {
+            result.push({
+              ...ev,
+              id: `${ev.id}__rec__${dateStr}`,
+              starts_at: instStart.toISOString(),
+              ends_at: instEnd.toISOString(),
+              master_id: ev.id,
+              is_recurring_instance: true,
+            });
+          }
+        }
+        cursor.setFullYear(cursor.getFullYear() + interval);
+      }
+    }
+  }
+
+  return result.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 }
 
 /** Synced events belong to the other calendar; editing them here would diverge. */
@@ -162,21 +409,21 @@ export function useEvents(ws: Date, days = 7) {
       // Dev preview: the window is computed, so there is no fixed key to seed.
       // Compiled out of production along with the rest of devFixtures.
       const fx = fixture<Ev[]>('events');
-      if (fx) return fx;
+      if (fx) return expandRecurringEvents(fx, from, to);
 
       const { data, error } = await supabase
         .from('bd_events')
         .select('id,title,starts_at,ends_at,all_day,location,color,text_color,source,remind_minutes,snoozed_until,deleted_at')
         .is('deleted_at', null)
-        .gte('starts_at', from.toISOString())
-        .lt('starts_at', to.toISOString())
         .order('starts_at');
       if (error) throw error;
       const meta = getEventMetaMap();
-      return (data ?? []).map((e) => ({
+      const rawEvents: Ev[] = (data ?? []).map((e) => ({
         ...e,
         short_name: meta[e.id]?.short_name ?? '',
+        recurrence: meta[e.id]?.recurrence ?? null,
       })) as Ev[];
+      return expandRecurringEvents(rawEvents, from, to);
     },
   });
 }
@@ -261,10 +508,26 @@ export function chipInk(ev: Pick<Ev, 'color' | 'text_color'>, dark: boolean): st
 
 const CREATE = defineMutation(
   'event.create',
-  async (v: { id: string; title: string; short_name?: string | null; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
+  async (v: {
+    id: string;
+    title: string;
+    short_name?: string | null;
+    starts_at: string;
+    ends_at: string;
+    color: string;
+    text_color?: string | null;
+    all_day?: boolean;
+    location?: string;
+    recurrence?: RecurrenceRule | null;
+  }) => {
     const user_id = await currentUserId();
-    const { short_name, ...payload } = v;
-    if (short_name !== undefined) setEventMeta(v.id, { short_name });
+    const { short_name, recurrence, ...payload } = v;
+    if (short_name !== undefined || recurrence !== undefined) {
+      setEventMeta(v.id, {
+        short_name: short_name ?? undefined,
+        recurrence: recurrence ?? undefined,
+      });
+    }
     const { error } = await supabase.from('bd_events').insert({ ...payload, user_id });
     if (error) throw error;
   }
@@ -273,8 +536,13 @@ const CREATE = defineMutation(
 // Drag and resize both land here. Fires on drop, not per frame, and must
 // accept partials (BACKEND.md "PATCH /events/:id").
 const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Partial<Ev> }) => {
-  const { short_name, ...patch } = v.patch;
-  if (short_name !== undefined) setEventMeta(v.id, { short_name });
+  const { short_name, recurrence, master_id, is_recurring_instance, ...patch } = v.patch;
+  if (short_name !== undefined || recurrence !== undefined) {
+    setEventMeta(v.id, {
+      short_name: short_name ?? undefined,
+      recurrence: recurrence ?? undefined,
+    });
+  }
   if (Object.keys(patch).length > 0) {
     const { error } = await supabase.from('bd_events').update(patch).eq('id', v.id);
     if (error) throw error;
@@ -372,11 +640,35 @@ export function useEventActions(ws: Date) {
 
   const create = useMutation({
     mutationKey: CREATE,
-    onMutate: (v: { id: string; title: string; short_name?: string | null; starts_at: string; ends_at: string; color: string; all_day?: boolean }) => {
-      if (v.short_name !== undefined) setEventMeta(v.id, { short_name: v.short_name });
+    onMutate: (v: {
+      id: string;
+      title: string;
+      short_name?: string | null;
+      starts_at: string;
+      ends_at: string;
+      color: string;
+      text_color?: string | null;
+      all_day?: boolean;
+      location?: string;
+      recurrence?: RecurrenceRule | null;
+    }) => {
+      if (v.short_name !== undefined || v.recurrence !== undefined) {
+        setEventMeta(v.id, {
+          short_name: v.short_name ?? undefined,
+          recurrence: v.recurrence ?? undefined,
+        });
+      }
       return optimistic((prev) => [
         ...prev,
-        { ...v, all_day: v.all_day ?? false, location: '', remind_minutes: null, snoozed_until: null, deleted_at: null },
+        {
+          ...v,
+          all_day: v.all_day ?? false,
+          location: v.location ?? '',
+          recurrence: v.recurrence ?? null,
+          remind_minutes: null,
+          snoozed_until: null,
+          deleted_at: null,
+        },
       ]);
     },
     onError: rollback,
@@ -386,7 +678,12 @@ export function useEventActions(ws: Date) {
   const update = useMutation({
     mutationKey: UPDATE,
     onMutate: (v: { id: string; patch: Partial<Ev> }) => {
-      if (v.patch.short_name !== undefined) setEventMeta(v.id, { short_name: v.patch.short_name });
+      if (v.patch.short_name !== undefined || v.patch.recurrence !== undefined) {
+        setEventMeta(v.id, {
+          short_name: v.patch.short_name ?? undefined,
+          recurrence: v.patch.recurrence ?? undefined,
+        });
+      }
       return optimistic((prev) => prev.map((e) => (e.id === v.id ? { ...e, ...v.patch } : e)));
     },
     onError: rollback,
@@ -735,8 +1032,12 @@ export function computeVacantIntervals(
   nowHour: number,
   nextEventId?: string | null,
   dayStartHour = 0,
-  dayEndHour = 24
+  dayEndHour = 24,
+  isPastDay = false
 ): VacantInterval[] {
+  // If the whole day is in the past, do not draw vacant indicators or arrows
+  if (isPastDay) return [];
+
   const sorted = [...dayEvents].sort((a, b) => a.start - b.start);
   const busy: { start: number; end: number; events: typeof sorted }[] = [];
 
@@ -754,65 +1055,62 @@ export function computeVacantIntervals(
     }
   }
 
-  const result: VacantInterval[] = [];
+  const rawIntervals: { start: number; end: number; isNext: boolean; targetEv?: (typeof sorted)[0] }[] = [];
 
   // Case 1: No events on this day -> entire day is vacant (0:00 to 24:00)
   if (busy.length === 0) {
-    result.push({
-      id: `vacant-fullday-${dayStartHour.toFixed(2)}-${dayEndHour.toFixed(2)}`,
-      startHour: dayStartHour,
-      endHour: dayEndHour,
-      durationHours: dayEndHour - dayStartHour,
-      isNext: false,
-    });
-    return result;
-  }
+    rawIntervals.push({ start: dayStartHour, end: dayEndHour, isNext: false });
+  } else {
+    // Case 2: Morning vacant block (from midnight / dayStartHour to first event)
+    if (busy[0].start - dayStartHour >= 0.35) {
+      const firstEv = busy[0].events[0];
+      const isNext = (firstEv.id === nextEventId || busy[0].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= busy[0].start : true);
+      rawIntervals.push({ start: dayStartHour, end: busy[0].start, isNext, targetEv: firstEv });
+    }
 
-  // Case 2: Morning vacant block (from midnight / dayStartHour to first event)
-  if (busy[0].start - dayStartHour >= 0.35) {
-    const firstEv = busy[0].events[0];
-    const isNext = (firstEv.id === nextEventId || busy[0].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= busy[0].start : true);
-    result.push({
-      id: `vacant-morning-${dayStartHour.toFixed(2)}-${busy[0].start.toFixed(2)}`,
-      startHour: dayStartHour,
-      endHour: busy[0].start,
-      durationHours: busy[0].start - dayStartHour,
-      isNext,
-      targetEventTitle: firstEv.title,
-      targetStartsAt: firstEv.starts_at,
-    });
-  }
+    // Case 3: Mid-day gaps between consecutive events
+    for (let i = 1; i < busy.length; i++) {
+      const prevEnd = busy[i - 1].end;
+      const nextStart = busy[i].start;
+      const targetEv = busy[i].events[0];
 
-  // Case 3: Mid-day gaps between consecutive events
-  for (let i = 1; i < busy.length; i++) {
-    const prevEnd = busy[i - 1].end;
-    const nextStart = busy[i].start;
-    const targetEv = busy[i].events[0];
+      if (nextStart - prevEnd >= 0.35) {
+        const isNext = (targetEv.id === nextEventId || busy[i].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= nextStart : true);
+        rawIntervals.push({ start: prevEnd, end: nextStart, isNext, targetEv });
+      }
+    }
 
-    if (nextStart - prevEnd >= 0.35) {
-      const isNext = (targetEv.id === nextEventId || busy[i].events.some((e) => e.id === nextEventId)) && (isToday ? nowHour <= nextStart : true);
-      result.push({
-        id: `vacant-mid-${prevEnd.toFixed(2)}-${nextStart.toFixed(2)}`,
-        startHour: prevEnd,
-        endHour: nextStart,
-        durationHours: nextStart - prevEnd,
-        isNext,
-        targetEventTitle: targetEv.title,
-        targetStartsAt: targetEv.starts_at,
-      });
+    // Case 4: Afternoon / Evening / Night vacant block (from last event to midnight / dayEndHour)
+    const lastEnd = busy[busy.length - 1].end;
+    if (dayEndHour - lastEnd >= 0.35) {
+      rawIntervals.push({ start: lastEnd, end: dayEndHour, isNext: false });
     }
   }
 
-  // Case 4: Afternoon / Evening / Night vacant block (from last event to midnight / dayEndHour)
-  const lastEnd = busy[busy.length - 1].end;
-  if (dayEndHour - lastEnd >= 0.35) {
-    result.push({
-      id: `vacant-night-${lastEnd.toFixed(2)}-${dayEndHour.toFixed(2)}`,
-      startHour: lastEnd,
-      endHour: dayEndHour,
-      durationHours: dayEndHour - lastEnd,
-      isNext: false,
-    });
+  const result: VacantInterval[] = [];
+
+  for (const interval of rawIntervals) {
+    let s = interval.start;
+    const e = interval.end;
+
+    // If today, filter out past intervals and clamp current interval to nowHour
+    if (isToday) {
+      if (e <= nowHour) continue; // Entire interval is in past
+      if (s < nowHour) s = nowHour; // Clamp start to present moment
+    }
+
+    const duration = e - s;
+    if (duration >= 0.3) {
+      result.push({
+        id: `vacant-${s.toFixed(2)}-${e.toFixed(2)}`,
+        startHour: s,
+        endHour: e,
+        durationHours: duration,
+        isNext: interval.isNext,
+        targetEventTitle: interval.targetEv?.title,
+        targetStartsAt: interval.targetEv?.starts_at,
+      });
+    }
   }
 
   return result;

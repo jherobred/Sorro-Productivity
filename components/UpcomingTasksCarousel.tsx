@@ -36,10 +36,26 @@ function extractLinks(text: string): string[] {
 }
 
 function extractTags(title: string, notes: string): string[] {
-  const combined = `${title || ''} ${notes || ''}`;
-  const tagRegex = /#([a-zA-Z0-9_\-]+)/g;
-  const matches = combined.match(tagRegex);
-  return matches ? Array.from(new Set(matches)) : [];
+  if (!title && !notes) return [];
+  // Strip markdown headings (e.g. "# Heading", "## Section", "### Item") and list numbers
+  const strippedNotes = (notes || '').replace(/^#{1,6}\s+.*$/gm, '');
+  const strippedTitle = (title || '').replace(/^#{1,6}\s+.*$/gm, '');
+  const combined = `${strippedTitle} ${strippedNotes}`;
+
+  // Match real hashtags starting with a letter e.g. #exam, #project, #homework
+  const tagRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_\-]*)/g;
+  const tags: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = tagRegex.exec(combined)) !== null) {
+    if (m[1]) {
+      const t = m[1].toLowerCase();
+      // Ignore common non-tag markdown keywords
+      if (!['heading', 'title', 'note', 'task', 'undefined', 'null'].includes(t)) {
+        tags.push(`#${m[1]}`);
+      }
+    }
+  }
+  return Array.from(new Set(tags));
 }
 
 /**
@@ -498,12 +514,24 @@ export function UpcomingTasksCarousel({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.25}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.x < -30 || info.velocity.x < -250) {
+                    handleNext();
+                  } else if (info.offset.x > 30 || info.velocity.x > 250) {
+                    handlePrev();
+                  }
+                }}
                 style={{
                   width: '100%',
                   display: 'grid',
                   gridTemplateColumns: phone ? 'minmax(116px, 1fr) 2.2fr' : 'minmax(120px, 1fr) 2.6fr',
                   gap: 12,
                   alignItems: 'stretch',
+                  touchAction: 'pan-y',
+                  cursor: 'grab',
                 }}
               >
                 {/* Left Column: Metadata (1/4) */}

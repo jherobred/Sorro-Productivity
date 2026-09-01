@@ -17,7 +17,8 @@ import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task 
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
-  computeVacantIntervals, formatVacantCountdown, formatDurationHours, type Ev, type Span,
+  computeVacantIntervals, formatVacantCountdown, formatDurationHours, getWeekNumber, formatRecurrenceLabel,
+  DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
 
 /**
@@ -67,6 +68,11 @@ export default function CalendarPage() {
     | { kind: 'slot'; day: number; hour: number; endHour?: number; allDay: boolean; initialTab?: 'event' | 'task'; x: number; y: number }
     | null>(null);
   const [edit, setEdit] = useState<Ev | null>(null);
+  const [recModal, setRecModal] = useState<{
+    action: 'edit' | 'delete';
+    ev: Ev;
+    patch?: Partial<Ev>;
+  } | null>(null);
 
   // Week is the desktop default, Day the phone-portrait default.
   const [view, setView] = useState<View>(prefs.calView);
@@ -406,6 +412,29 @@ export default function CalendarPage() {
                   <Icon name="back" size={14} color="var(--tx2)" style={{ transform: 'scaleX(-1)' }} />
                 </button>
               </div>
+
+              {/* Week Number Badge */}
+              <div
+                title={`Week ${getWeekNumber(ws)} of ${ws.getFullYear()}`}
+                style={{
+                  height: 30,
+                  padding: '0 8px',
+                  borderRadius: 8,
+                  background: 'var(--card2)',
+                  border: '1px solid var(--line2)',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: 'var(--pal-sky)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  userSelect: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span>W{getWeekNumber(ws)}</span>
+              </div>
+
               {!phone && <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 4px' }} />}
             </>
           )}
@@ -537,7 +566,14 @@ export default function CalendarPage() {
           onClose={() => setPop(null)}
           onEdit={() => { setEdit(pop.ev); setPop(null); }}
           onDuplicate={() => { A.duplicate(pop.ev); setPop(null); }}
-          onDelete={() => { A.removeWithUndo(pop.ev); setPop(null); }}
+          onDelete={() => {
+            if (pop.ev.is_recurring_instance || pop.ev.recurrence) {
+              setRecModal({ action: 'delete', ev: pop.ev });
+            } else {
+              A.removeWithUndo(pop.ev);
+            }
+            setPop(null);
+          }}
           onDeleteRun={() => {
             const run = pop.span;
             if (!run) return;
@@ -545,7 +581,8 @@ export default function CalendarPage() {
             setPop(null);
           }}
           onUpdateTitle={(title) => {
-            A.update.mutate({ id: pop.ev.id, patch: { title } });
+            const targetId = pop.ev.master_id || pop.ev.id;
+            A.update.mutate({ id: targetId, patch: { title } });
             setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, title } } : prev);
           }}
         />
@@ -593,7 +630,7 @@ export default function CalendarPage() {
             });
             setPop(null);
           }}
-          onCreate={(title, loc, desc, sName) => {
+          onCreate={(title, loc, desc, sName, rec) => {
             const id = crypto.randomUUID();
             const eH = pop.allDay ? 23.98 : (pop.endHour !== undefined ? pop.endHour : pop.hour + 1);
             A.create.mutate({
@@ -604,6 +641,8 @@ export default function CalendarPage() {
               ends_at: at(ws, pop.day, eH),
               all_day: pop.allDay,
               color: prefs.accent,
+              location: loc || '',
+              recurrence: rec,
             });
             toast(pop.allDay ? 'New all-day item' : `New event: ${hhmm(pop.hour)} – ${hhmm(eH)}`);
             setPop(null);
@@ -635,6 +674,11 @@ export default function CalendarPage() {
           ev={edit}
           onClose={() => setEdit(null)}
           onSave={(patch) => {
+            if (edit.is_recurring_instance) {
+              setRecModal({ action: 'edit', ev: edit, patch });
+              setEdit(null);
+              return;
+            }
             const exists = events.some((e) => e.id === edit.id);
             if (exists) {
               A.update.mutate({ id: edit.id, patch });
@@ -647,9 +691,100 @@ export default function CalendarPage() {
                 ends_at: patch.ends_at || edit.ends_at,
                 color: patch.color || edit.color,
                 all_day: patch.all_day ?? edit.all_day,
+                location: patch.location || '',
+                recurrence: patch.recurrence,
               });
             }
             setEdit(null);
+          }}
+        />
+      )}
+
+      {recModal && (
+        <RecurrenceChoiceModal
+          action={recModal.action}
+          onClose={() => setRecModal(null)}
+          onChoose={(choice) => {
+            const { action, ev, patch } = recModal;
+            const masterId = ev.master_id || ev.id;
+            const masterEv = events.find((e) => e.id === masterId) || ev;
+            const dateStr = ev.starts_at.slice(0, 10);
+
+            if (action === 'delete') {
+              if (choice === 'this') {
+                const curRule = masterEv.recurrence || { freq: 'daily' };
+                const exceptions = [...(curRule.exceptions ?? []), dateStr];
+                A.update.mutate({
+                  id: masterId,
+                  patch: { recurrence: { ...curRule, exceptions } },
+                });
+                toast('Deleted this recurring occurrence');
+              } else if (choice === 'following') {
+                const prevDay = new Date(ev.starts_at);
+                prevDay.setDate(prevDay.getDate() - 1);
+                const untilStr = `${prevDay.getFullYear()}-${String(prevDay.getMonth() + 1).padStart(2, '0')}-${String(prevDay.getDate()).padStart(2, '0')}`;
+                const curRule = masterEv.recurrence || { freq: 'daily' };
+                A.update.mutate({
+                  id: masterId,
+                  patch: { recurrence: { ...curRule, endType: 'until', until: untilStr } },
+                });
+                toast('Deleted this and all following events');
+              } else if (choice === 'all') {
+                A.removeWithUndo(masterEv);
+              }
+            } else if (action === 'edit' && patch) {
+              if (choice === 'this') {
+                const curRule = masterEv.recurrence || { freq: 'daily' };
+                const exceptions = [...(curRule.exceptions ?? []), dateStr];
+                A.update.mutate({
+                  id: masterId,
+                  patch: { recurrence: { ...curRule, exceptions } },
+                });
+                const newId = crypto.randomUUID();
+                A.create.mutate({
+                  id: newId,
+                  title: patch.title ?? ev.title,
+                  short_name: patch.short_name !== undefined ? patch.short_name : ev.short_name,
+                  location: patch.location ?? ev.location,
+                  color: patch.color ?? ev.color,
+                  text_color: patch.text_color !== undefined ? patch.text_color : ev.text_color,
+                  starts_at: patch.starts_at ?? ev.starts_at,
+                  ends_at: patch.ends_at ?? ev.ends_at,
+                  all_day: patch.all_day ?? ev.all_day,
+                });
+                toast('Updated this event');
+              } else if (choice === 'following') {
+                const prevDay = new Date(ev.starts_at);
+                prevDay.setDate(prevDay.getDate() - 1);
+                const untilStr = `${prevDay.getFullYear()}-${String(prevDay.getMonth() + 1).padStart(2, '0')}-${String(prevDay.getDate()).padStart(2, '0')}`;
+                const curRule = masterEv.recurrence || { freq: 'daily' };
+                A.update.mutate({
+                  id: masterId,
+                  patch: { recurrence: { ...curRule, endType: 'until', until: untilStr } },
+                });
+                const newSeriesId = crypto.randomUUID();
+                A.create.mutate({
+                  id: newSeriesId,
+                  title: patch.title ?? ev.title,
+                  short_name: patch.short_name !== undefined ? patch.short_name : ev.short_name,
+                  location: patch.location ?? ev.location,
+                  color: patch.color ?? ev.color,
+                  text_color: patch.text_color !== undefined ? patch.text_color : ev.text_color,
+                  starts_at: patch.starts_at ?? ev.starts_at,
+                  ends_at: patch.ends_at ?? ev.ends_at,
+                  all_day: patch.all_day ?? ev.all_day,
+                  recurrence: patch.recurrence || curRule,
+                });
+                toast('Updated this and all following events');
+              } else if (choice === 'all') {
+                A.update.mutate({
+                  id: masterId,
+                  patch,
+                });
+                toast('Updated all recurring events');
+              }
+            }
+            setRecModal(null);
           }}
         />
       )}
@@ -693,6 +828,7 @@ function Grid({
     startX: number;
     startY: number;
   } | null>(null);
+  const slotDragRef = useRef<{ day: number; startHour: number; currentHour: number; startX: number; startY: number } | null>(null);
   /** A whole run being dragged, as an offset in days and hours from where it is. */
   /** Which *one* day of a run is being dragged, and by how much. */
   const [spanDrag, setSpanDrag] = useState<
@@ -712,33 +848,38 @@ function Grid({
     const startY = e.clientY;
     const snapHour = Math.floor(rawStartHour * 2) / 2;
 
-    setSlotDrag({
+    const initDrag = {
       day,
       startHour: snapHour,
       currentHour: snapHour + 1,
       startX,
       startY,
-    });
+    };
+    slotDragRef.current = initDrag;
+    setSlotDrag(initDrag);
 
     const onMove = (m: PointerEvent) => {
       const rawH = GRID_START + ((m.clientY - rect.top) / rect.height) * SPAN;
       const snappedH = Math.max(GRID_START, Math.min(GRID_END, Math.round(rawH * 2) / 2));
-      setSlotDrag((prev) => (prev ? { ...prev, currentHour: snappedH } : null));
+      const nextDrag = { day, startHour: snapHour, currentHour: snappedH, startX, startY };
+      slotDragRef.current = nextDrag;
+      setSlotDrag(nextDrag);
     };
 
     const onUp = (m: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
 
-      setSlotDrag((curr) => {
-        if (!curr) return null;
+      const curr = slotDragRef.current;
+      slotDragRef.current = null;
+      setSlotDrag(null);
+
+      if (curr) {
         const s = Math.min(curr.startHour, curr.currentHour);
         const rawE = Math.max(curr.startHour, curr.currentHour);
         const eHour = (rawE === s || Math.abs(rawE - s) < 0.25) ? s + 1 : Math.max(s + 0.5, rawE);
-
         openSlot(curr.day, s, m.clientX, m.clientY, false, eHour);
-        return null;
-      });
+      }
     };
 
     window.addEventListener('pointermove', onMove);
@@ -1325,7 +1466,8 @@ function EventChip({
 }) {
   const locked = isReadOnly(ev);
   const ink = chipInk(ev, dark);
-  const cd = isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
+  const isPast = new Date(ev.ends_at).getTime() < nowMs;
+  const cd = !isPast && isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
 
   const isRed = Boolean(
     ev.color && (
@@ -1346,18 +1488,20 @@ function EventChip({
       onPointerDown={onPointerDown}
       onClick={onOpen}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      className={`${selected ? 'pop' : ''} ${isRed ? 'red-alert-pulse' : ''}`.trim() || undefined}
+      className={`${selected ? 'pop' : ''} ${isRed && !isPast ? 'red-alert-pulse' : ''}`.trim() || undefined}
       style={{
         position: 'absolute', left, width, top: `${top}%`, height: `${height}%`,
         borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
-        background: isRed
+        background: isRed && !isPast
           ? 'color-mix(in srgb, var(--pal-coral, #FF6B6B) 34%, var(--card))'
           : `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
-        borderLeft: isRed ? '3.5px solid #FF4D4D' : `2px solid ${ev.color}`,
-        color: isRed ? '#FFFFFF' : ink,
+        borderLeft: isRed && !isPast ? '3.5px solid #FF4D4D' : `2px solid ${ev.color}`,
+        color: isRed && !isPast ? '#FFFFFF' : ink,
+        opacity: isPast ? 0.52 : 1,
+        filter: isPast ? 'grayscale(22%)' : undefined,
         boxShadow: lifted ? 'var(--shl)' : undefined,
         transform: lifted ? 'scale(1.02)' : undefined,
-        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : isRed ? 2 : 1,
+        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : isPast ? 0 : isRed ? 2 : 1,
         outline: selected ? `1px solid ${ev.color}` : undefined,
         userSelect: 'none',
         WebkitUserSelect: 'none',
@@ -1841,7 +1985,8 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEv
               </span>
               {items.slice(0, 3).map((it, n) => {
                 const isNext = it.id === nextEventId;
-                const cd = isNext && it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
+                const isPast = it.ends_at ? new Date(it.ends_at).getTime() < nowMs : (date.getTime() + 86400000 < nowMs);
+                const cd = !isPast && isNext && it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
                 const isRed = Boolean(
                   it.color && (
                     it.color.toLowerCase().includes('ff6b6b') ||
@@ -1858,23 +2003,25 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEv
 
                 return (
                   <span key={n}
-                    className={isRed ? 'red-alert-pulse' : undefined}
+                    className={isRed && !isPast ? 'red-alert-pulse' : undefined}
                     style={{
                       fontSize: 9, fontWeight: isRed ? 800 : 700, padding: '1px 5px', borderRadius: 4,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
-                      background: isRed
+                      opacity: isPast ? 0.48 : 1,
+                      filter: isPast ? 'grayscale(20%)' : undefined,
+                      background: isRed && !isPast
                         ? 'color-mix(in srgb, var(--pal-coral, #FF6B6B) 35%, var(--card))'
                         : `color-mix(in srgb, ${it.color} 22%, transparent)`,
-                      border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : isRed ? '1px solid #FF5252' : undefined,
-                      color: isRed ? '#FFFFFF' : 'var(--tx2)',
-                      textShadow: isRed ? '0 1px 1px rgba(0,0,0,0.6)' : undefined,
+                      border: it.task ? '1px dashed color-mix(in srgb, var(--acc) 50%, transparent)' : isRed && !isPast ? '1px solid #FF5252' : undefined,
+                      color: isRed && !isPast ? '#FFFFFF' : 'var(--tx2)',
+                      textShadow: isRed && !isPast ? '0 1px 1px rgba(0,0,0,0.6)' : undefined,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: 3,
                     }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {isRed && '🚨 '}{it.title}
+                      {isRed && !isPast && '🚨 '}{it.title}
                     </span>
                     {cd && cd.status !== 'past' && (
                       <span style={{
@@ -1955,7 +2102,8 @@ function Agenda({ ws, events, tasks, nowMs = Date.now(), nextEventId }: { ws: Da
             </div>
             {items.map((a) => {
               const isNext = a.id === nextEventId;
-              const cd = isNext && a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
+              const isPast = a.ends_at ? new Date(a.ends_at).getTime() < nowMs : false;
+              const cd = !isPast && isNext && a.starts_at && a.ends_at ? formatEventCountdown(a.starts_at, a.ends_at, nowMs) : null;
               const isRed = Boolean(
                 a.color && (
                   a.color.toLowerCase().includes('ff6b6b') ||
@@ -1971,20 +2119,24 @@ function Agenda({ ws, events, tasks, nowMs = Date.now(), nextEventId }: { ws: Da
               );
 
               return (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
+                <div key={a.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0',
+                  opacity: isPast ? 0.48 : 1,
+                  filter: isPast ? 'grayscale(20%)' : undefined,
+                }}>
                   <span
-                    className={isRed ? 'red-alert-pulse' : undefined}
+                    className={isRed && !isPast ? 'red-alert-pulse' : undefined}
                     style={{
                       width: 3.5, alignSelf: 'stretch', minHeight: 22, borderRadius: 2, flex: 'none',
-                      background: isRed ? '#FF4D4D' : a.color, opacity: a.task ? 0.6 : 1,
+                      background: isRed && !isPast ? '#FF4D4D' : a.color, opacity: a.task ? 0.6 : 1,
                     }}
                   />
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
                     {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 13, fontWeight: isRed ? 700 : 600, color: isRed ? 'var(--pal-coral, #FF6B6B)' : 'var(--tx)' }}>
-                      {isRed && '🚨 '}{a.title}
+                    <span style={{ fontSize: 13, fontWeight: isRed && !isPast ? 700 : 600, color: isRed && !isPast ? 'var(--pal-coral, #FF6B6B)' : 'var(--tx)' }}>
+                      {isRed && !isPast && '🚨 '}{a.title}
                     </span>
                     {cd && cd.status !== 'past' && (
                       <span style={{
@@ -2076,6 +2228,127 @@ const timeValue = (iso: string) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+function RecurrenceChoiceModal({
+  action,
+  onChoose,
+  onClose,
+}: {
+  action: 'edit' | 'delete';
+  onChoose: (choice: 'this' | 'following' | 'all') => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<'this' | 'following' | 'all'>('this');
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 90,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        style={{
+          width: '100%',
+          maxWidth: 380,
+          background: 'var(--card)',
+          borderRadius: 16,
+          border: '1px solid var(--line2)',
+          padding: 22,
+          boxShadow: 'var(--shl)',
+        }}
+      >
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: 'var(--tx)' }}>
+          {action === 'delete' ? 'Delete recurring event' : 'Edit recurring event'}
+        </h3>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+          {[
+            { id: 'this', label: 'This event' },
+            { id: 'following', label: 'This and following events' },
+            { id: 'all', label: 'All events' },
+          ].map((opt) => (
+            <label
+              key={opt.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 12px',
+                borderRadius: 9,
+                background: selected === opt.id ? 'var(--card2)' : 'transparent',
+                border: `1px solid ${selected === opt.id ? 'var(--acc)' : 'var(--line2)'}`,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--tx)',
+              }}
+            >
+              <input
+                type="radio"
+                name="rec_choice"
+                value={opt.id}
+                checked={selected === opt.id}
+                onChange={() => setSelected(opt.id as typeof selected)}
+                style={{ width: 16, height: 16, accentColor: 'var(--acc)' }}
+              />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="hov k-squish"
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--line2)',
+              background: 'transparent',
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: 'var(--tx2)',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onChoose(selected)}
+            className="k-squish"
+            style={{
+              padding: '8px 18px',
+              borderRadius: 10,
+              border: 'none',
+              background: action === 'delete' ? 'var(--pal-coral)' : 'var(--acc)',
+              color: action === 'delete' ? '#FFFFFF' : 'var(--ink)',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSave: (p: Partial<Ev>) => void }) {
   const [title, setTitle] = useState(ev.title);
   const [shortName, setShortName] = useState(ev.short_name ?? '');
@@ -2085,6 +2358,8 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   const [from, setFrom] = useState(timeValue(ev.starts_at));
   const [to, setTo] = useState(timeValue(ev.ends_at));
   const [allDay, setAllDay] = useState(ev.all_day);
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(ev.recurrence ?? null);
+  const [showCustomRec, setShowCustomRec] = useState(Boolean(ev.recurrence?.freq === 'custom' || (ev.recurrence?.interval && ev.recurrence.interval > 1) || ev.recurrence?.until || ev.recurrence?.count));
 
   useOverlayBack(true, onClose);
 
@@ -2122,7 +2397,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
     if (ends <= starts) { toast('The end time has to be after the start'); return; }
     onSave({
       title, short_name: shortName.trim(), location, color, text_color: textColor, all_day: allDay,
-      starts_at: starts.toISOString(), ends_at: ends.toISOString(),
+      starts_at: starts.toISOString(), ends_at: ends.toISOString(), recurrence,
     });
   };
 
@@ -2134,7 +2409,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   return createPortal((
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} className="sheet" role="dialog" aria-modal="true" aria-label="Edit event"
-        style={{ width: '100%', maxWidth: 460, background: 'var(--card)', borderRadius: '14px 14px 0 0', border: '1px solid var(--line2)', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+        style={{ width: '100%', maxWidth: 460, background: 'var(--card)', borderRadius: '14px 14px 0 0', border: '1px solid var(--line2)', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', maxHeight: '90vh', overflowY: 'auto' }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em', marginBottom: 16 }}>Edit event</h2>
 
         <span style={LABEL}>Title</span>
@@ -2165,6 +2440,276 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
                 <input type="time" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...FIELD, marginBottom: 0 }} />
               </label>
             </>
+          )}
+        </div>
+
+        {/* Google Calendar Recurrence Dropdown */}
+        <span style={LABEL}>Repeat</span>
+        <div style={{ marginBottom: 14 }}>
+          <select
+            value={
+              !recurrence || !recurrence.freq
+                ? 'none'
+                : showCustomRec
+                ? 'custom'
+                : recurrence.freq === 'daily' && (recurrence.interval ?? 1) === 1
+                ? 'daily'
+                : recurrence.freq === 'weekdays'
+                ? 'weekdays'
+                : recurrence.freq === 'weekly' && (recurrence.interval ?? 1) === 1
+                ? 'weekly'
+                : recurrence.freq === 'monthly' && (recurrence.interval ?? 1) === 1
+                ? 'monthly'
+                : recurrence.freq === 'yearly' && (recurrence.interval ?? 1) === 1
+                ? 'yearly'
+                : 'custom'
+            }
+            onChange={(e) => {
+              const val = e.target.value;
+              const curDate = new Date(`${date}T00:00:00`);
+              const dow = DOW_NAMES[curDate.getDay()];
+              if (val === 'none') {
+                setRecurrence(null);
+                setShowCustomRec(false);
+              } else if (val === 'daily') {
+                setRecurrence({ freq: 'daily', interval: 1, endType: 'never' });
+                setShowCustomRec(false);
+              } else if (val === 'weekly') {
+                setRecurrence({ freq: 'weekly', interval: 1, byDay: [dow], endType: 'never' });
+                setShowCustomRec(false);
+              } else if (val === 'weekdays') {
+                setRecurrence({ freq: 'weekdays', endType: 'never' });
+                setShowCustomRec(false);
+              } else if (val === 'monthly') {
+                setRecurrence({ freq: 'monthly', interval: 1, endType: 'never' });
+                setShowCustomRec(false);
+              } else if (val === 'yearly') {
+                setRecurrence({ freq: 'yearly', interval: 1, endType: 'never' });
+                setShowCustomRec(false);
+              } else if (val === 'custom') {
+                setRecurrence((prev) => prev || { freq: 'weekly', interval: 1, byDay: [dow], endType: 'never' });
+                setShowCustomRec(true);
+              }
+            }}
+            style={{
+              ...FIELD,
+              cursor: 'pointer',
+              marginBottom: showCustomRec ? 8 : 14,
+            }}
+          >
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">
+              Weekly on {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' })}
+            </option>
+            <option value="weekdays">Every weekday (Monday to Friday)</option>
+            <option value="monthly">
+              Monthly on day {new Date(`${date}T00:00:00`).getDate()}
+            </option>
+            <option value="yearly">
+              Annually on {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </option>
+            <option value="custom">Custom...</option>
+          </select>
+
+          {/* Custom Recurrence Editor */}
+          {showCustomRec && (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: 'var(--card2)',
+                border: '1px solid var(--line2)',
+                marginBottom: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {/* Repeat every N [Unit] */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--tx)', flexWrap: 'wrap' }}>
+                <span>Repeat every</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={recurrence?.interval ?? 1}
+                  onChange={(e) => setRecurrence({
+                    freq: recurrence?.freq ?? 'weekly',
+                    ...recurrence,
+                    interval: Math.max(1, parseInt(e.target.value) || 1),
+                  })}
+                  style={{
+                    width: 54,
+                    padding: '4px 6px',
+                    borderRadius: 6,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card)',
+                    color: 'var(--tx)',
+                    textAlign: 'center',
+                    fontSize: 13,
+                  }}
+                />
+                <select
+                  value={recurrence?.freq === 'weekdays' ? 'weekly' : recurrence?.freq || 'weekly'}
+                  onChange={(e) => setRecurrence({
+                    interval: recurrence?.interval ?? 1,
+                    ...recurrence,
+                    freq: e.target.value as RecurrenceFreq,
+                  })}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card)',
+                    color: 'var(--tx)',
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="daily">day{(recurrence?.interval ?? 1) > 1 ? 's' : ''}</option>
+                  <option value="weekly">week{(recurrence?.interval ?? 1) > 1 ? 's' : ''}</option>
+                  <option value="monthly">month{(recurrence?.interval ?? 1) > 1 ? 's' : ''}</option>
+                  <option value="yearly">year{(recurrence?.interval ?? 1) > 1 ? 's' : ''}</option>
+                </select>
+              </div>
+
+              {/* Repeat on (Days of week) for weekly */}
+              {(recurrence?.freq === 'weekly' || !recurrence?.freq) && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>REPEAT ON</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {(['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as RecurrenceDay[]).map((d) => {
+                      const isSel = (recurrence?.byDay ?? []).includes(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            const cur = recurrence?.byDay ?? [];
+                            const next = isSel ? cur.filter((x) => x !== d) : [...cur, d];
+                            setRecurrence({
+                              freq: 'weekly',
+                              interval: 1,
+                              ...recurrence,
+                              byDay: next.length > 0 ? next : [d],
+                            });
+                          }}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            border: `1px solid ${isSel ? 'var(--acc)' : 'var(--line2)'}`,
+                            background: isSel ? 'var(--acc)' : 'var(--card)',
+                            color: isSel ? 'var(--ink)' : 'var(--tx2)',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Ends condition */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>ENDS</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="recurrence_end"
+                      checked={!recurrence?.endType || recurrence?.endType === 'never'}
+                      onChange={() => setRecurrence({
+                        freq: recurrence?.freq || 'weekly',
+                        ...recurrence,
+                        endType: 'never',
+                        until: null,
+                        count: null,
+                      })}
+                      style={{ accentColor: 'var(--acc)' }}
+                    />
+                    <span>Never</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="recurrence_end"
+                      checked={recurrence?.endType === 'until'}
+                      onChange={() => setRecurrence({
+                        freq: recurrence?.freq || 'weekly',
+                        ...recurrence,
+                        endType: 'until',
+                        until: recurrence?.until || date,
+                      })}
+                      style={{ accentColor: 'var(--acc)' }}
+                    />
+                    <span>On</span>
+                    <input
+                      type="date"
+                      value={recurrence?.until || date}
+                      disabled={recurrence?.endType !== 'until'}
+                      onChange={(e) => setRecurrence({
+                        freq: recurrence?.freq || 'weekly',
+                        ...recurrence,
+                        endType: 'until',
+                        until: e.target.value,
+                      })}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--line2)',
+                        background: 'var(--card)',
+                        color: 'var(--tx)',
+                        fontSize: 12,
+                      }}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="recurrence_end"
+                      checked={recurrence?.endType === 'count'}
+                      onChange={() => setRecurrence({
+                        freq: recurrence?.freq || 'weekly',
+                        ...recurrence,
+                        endType: 'count',
+                        count: recurrence?.count || 10,
+                      })}
+                      style={{ accentColor: 'var(--acc)' }}
+                    />
+                    <span>After</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={recurrence?.count || 10}
+                      disabled={recurrence?.endType !== 'count'}
+                      onChange={(e) => setRecurrence({
+                        freq: recurrence?.freq || 'weekly',
+                        ...recurrence,
+                        endType: 'count',
+                        count: parseInt(e.target.value) || 1,
+                      })}
+                      style={{
+                        width: 50,
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--line2)',
+                        background: 'var(--card)',
+                        color: 'var(--tx)',
+                        fontSize: 12,
+                        textAlign: 'center',
+                      }}
+                    />
+                    <span>occurrences</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
@@ -2347,7 +2892,7 @@ function EventPopover({
             </div>
           )}
           <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
-          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Weekly on {dayName}</div>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{formatRecurrenceLabel(ev.recurrence, start)}</div>
 
           {/* Live Countdown Badge — only for the single next upcoming event */}
           {(() => {
@@ -2621,7 +3166,7 @@ function QuickCreate({
   x: number; y: number; ws: Date; day: number; hour: number; endHour?: number; allDay: boolean;
   initialTab?: 'event' | 'task' | 'out_of_office' | 'working_location';
   accent: string; onClose: () => void;
-  onCreate: (title: string, loc?: string, desc?: string, shortName?: string) => void;
+  onCreate: (title: string, loc?: string, desc?: string, shortName?: string, recurrence?: RecurrenceRule | null) => void;
   onCreateTask?: (title: string, notes?: string) => void;
   onMoreOptions?: (title: string, shortName?: string) => void;
 }) {
@@ -2630,6 +3175,7 @@ function QuickCreate({
   const [shortName, setShortName] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(null);
   const d = new Date(ws);
   d.setDate(d.getDate() + day);
   const eH = endHour !== undefined ? endHour : hour + 1;
@@ -2641,7 +3187,7 @@ function QuickCreate({
     if (activeTab === 'task') {
       onCreateTask?.(title.trim() || '(No title)', notes);
     } else {
-      onCreate(title.trim() || '(No title)', location, notes, shortName.trim());
+      onCreate(title.trim() || '(No title)', location, notes, shortName.trim(), recurrence);
     }
   };
 
@@ -2717,13 +3263,58 @@ function QuickCreate({
         })}
       </div>
 
-      {/* Date & Time Row with Add Time pill */}
+      {/* Date & Time Row with interactive recurrence dropdown */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 }}>
           <Icon name="clock" size={15} color="var(--tx3)" style={{ marginTop: 2 }} />
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{when}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>Does not repeat</div>
+            {activeTab === 'event' && (
+              <select
+                value={
+                  !recurrence || !recurrence.freq
+                    ? 'none'
+                    : recurrence.freq === 'daily'
+                    ? 'daily'
+                    : recurrence.freq === 'weekdays'
+                    ? 'weekdays'
+                    : recurrence.freq === 'weekly'
+                    ? 'weekly'
+                    : recurrence.freq === 'monthly'
+                    ? 'monthly'
+                    : recurrence.freq === 'yearly'
+                    ? 'yearly'
+                    : 'none'
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const dow = DOW_NAMES[d.getDay()];
+                  if (val === 'none') setRecurrence(null);
+                  else if (val === 'daily') setRecurrence({ freq: 'daily', interval: 1, endType: 'never' });
+                  else if (val === 'weekly') setRecurrence({ freq: 'weekly', interval: 1, byDay: [dow], endType: 'never' });
+                  else if (val === 'weekdays') setRecurrence({ freq: 'weekdays', endType: 'never' });
+                  else if (val === 'monthly') setRecurrence({ freq: 'monthly', interval: 1, endType: 'never' });
+                  else if (val === 'yearly') setRecurrence({ freq: 'yearly', interval: 1, endType: 'never' });
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--tx3)',
+                  fontSize: 11.5,
+                  padding: 0,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  marginTop: 2,
+                }}
+              >
+                <option value="none">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly on {d.toLocaleDateString(undefined, { weekday: 'long' })}</option>
+                <option value="weekdays">Every weekday (Monday to Friday)</option>
+                <option value="monthly">Monthly on day {d.getDate()}</option>
+                <option value="yearly">Annually on {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</option>
+              </select>
+            )}
           </div>
         </div>
         {allDay && (
