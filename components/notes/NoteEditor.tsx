@@ -9,6 +9,8 @@ import { usePrefs } from '@/lib/prefs';
 import { PAL } from '@/lib/pal';
 import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
+import { uploadTo } from '@/lib/uploads';
+import { playClick } from '@/lib/audio';
 import {
   parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount,
   type Line, type LineKind,
@@ -16,14 +18,14 @@ import {
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
 
 /**
- * KaTeX and the two maths modals are loaded on demand.
+ * KaTeX and the two modals are loaded on demand.
  */
 const MathEquationEditor = dynamic(
   () => import('./MathEquationEditor').then((m) => m.MathEquationEditor),
   { ssr: false },
 );
-const MathSketchpad = dynamic(
-  () => import('./MathSketchpad').then((m) => m.MathSketchpad),
+const NoteSketchpad = dynamic(
+  () => import('./NoteSketchpad').then((m) => m.NoteSketchpad),
   { ssr: false },
 );
 
@@ -43,12 +45,12 @@ function useKatex(needed: boolean): Katex | null {
   return katexMod;
 }
 
-const SAVE_DEBOUNCE_MS = 600;
+const SAVE_DEBOUNCE_MS = 500;
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
 export type PaperStyle = 'blank' | 'lined' | 'grid' | 'dotted';
 
-function getPaperBackgroundStyle(style: PaperStyle): React.CSSProperties {
+function getPaperBackgroundStyle(style: PaperStyle, phone: boolean): React.CSSProperties {
   switch (style) {
     case 'lined':
       return {
@@ -76,6 +78,47 @@ function getPaperBackgroundStyle(style: PaperStyle): React.CSSProperties {
   }
 }
 
+/** Parse video links into embeddable iframe / player info */
+function parseVideoUrl(url: string): { type: 'youtube' | 'vimeo' | 'direct'; embedUrl: string } | null {
+  if (!url) return null;
+  const clean = url.trim();
+
+  // YouTube
+  const ytMatch = clean.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/i);
+  if (ytMatch) {
+    return {
+      type: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`,
+    };
+  }
+
+  // Vimeo
+  const vimeoMatch = clean.match(/(?:vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/(?:\d+\/)?video\/|video\/|))(\d+)/i);
+  if (vimeoMatch) {
+    return {
+      type: 'vimeo',
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`,
+    };
+  }
+
+  // Direct video
+  if (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(clean) || clean.startsWith('data:video/') || clean.startsWith('blob:')) {
+    return {
+      type: 'direct',
+      embedUrl: clean,
+    };
+  }
+
+  if (/^https?:\/\//i.test(clean)) {
+    return {
+      type: 'direct',
+      embedUrl: clean,
+    };
+  }
+
+  return null;
+}
+
 export function NoteEditor({
   note, notes, tags, phone, onSave, onDelete, onPickNote, onNewNote, onSetTags, onBack,
 }: {
@@ -93,7 +136,6 @@ export function NoteEditor({
   const { prefs } = usePrefs();
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
-  const [read, setRead] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
   const [initialMathFormula, setInitialMathFormula] = useState('');
@@ -111,9 +153,9 @@ export function NoteEditor({
   // Line numbers toggle: on / off
   const [showLineNumbers, setShowLineNumbers] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('bd_note_line_numbers') !== 'false';
+      return localStorage.getItem('bd_note_line_numbers') === 'true';
     }
-    return true;
+    return false;
   });
 
   const changePaperStyle = (style: PaperStyle) => {
@@ -131,7 +173,8 @@ export function NoteEditor({
     });
   };
 
-  const area = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const areaRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* --------------------------------------------------------------- saving */
 
@@ -197,13 +240,6 @@ export function NoteEditor({
       setTitle(snap.title);
       setBody(snap.body);
       queue(snap.title, snap.body);
-      requestAnimationFrame(() => {
-        if (area.current) {
-          area.current.focus();
-          area.current.setSelectionRange(snap.caret, snap.caret);
-          autosize(area.current);
-        }
-      });
     }
     updateUndoRedoState();
   }, [queue]);
@@ -216,13 +252,6 @@ export function NoteEditor({
       setTitle(snap.title);
       setBody(snap.body);
       queue(snap.title, snap.body);
-      requestAnimationFrame(() => {
-        if (area.current) {
-          area.current.focus();
-          area.current.setSelectionRange(snap.caret, snap.caret);
-          autosize(area.current);
-        }
-      });
     }
     updateUndoRedoState();
   }, [queue]);
@@ -240,13 +269,13 @@ export function NoteEditor({
   const setTitleAndQueue = (t: string) => {
     setTitle(t);
     queue(t, body);
-    recordHistory(t, body, area.current?.selectionStart || 0);
+    recordHistory(t, body, 0);
   };
 
   const setBodyAndQueue = (b: string) => {
     setBody(b);
     queue(title, b);
-    recordHistory(title, b, area.current?.selectionStart || 0);
+    recordHistory(title, b, 0);
   };
 
   /* --------------------------------------------------------------- links */
@@ -273,299 +302,144 @@ export function NoteEditor({
     if (make) onNewNote(make);
   };
 
-  /* ------------------------------------------------------------- toolbar */
+  /* ------------------------------------------------------------- insert helpers */
 
-  const edit = (fn: (b: string, from: number, to: number) => { body: string; from: number; to: number }) => {
-    const el = area.current;
-    if (!el) return;
-    const r = fn(body, el.selectionStart, el.selectionEnd);
-    setBodyAndQueue(r.body);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(r.from, r.to);
-      autosize(el);
-    });
+  const insertBlockAtEnd = (blockText: string) => {
+    const nextBody = body.trimEnd() ? `${body.trimEnd()}\n\n${blockText}\n` : `${blockText}\n`;
+    setBodyAndQueue(nextBody);
   };
 
-  const kind = (k: LineKind) => edit((b, f, t) => applyKind(b, f, t, k));
-  const mark = (m: string) => edit((b, f, t) => wrap(b, f, t, m));
-
   const insertLatexBlock = (latex: string) => {
-    edit((b, f, t) => {
-      const block = `\n$$\n${latex}\n$$\n`;
-      return { body: `${b.slice(0, f)}${block}${b.slice(t)}`, from: f + block.length, to: f + block.length };
-    });
+    const block = `\n$$\n${latex}\n$$\n`;
+    insertBlockAtEnd(block);
     setMathEditorOpen(false);
     toast('Equation inserted');
   };
 
   const insertSketch = (dataUrl: string) => {
-    edit((b, f, t) => {
-      const sketchMarkdown = `\n![math-sketch](${dataUrl})\n`;
-      return { body: `${b.slice(0, f)}${sketchMarkdown}${b.slice(t)}`, from: f + sketchMarkdown.length, to: f + sketchMarkdown.length };
-    });
+    const sketchMarkdown = `\n![sketch](${dataUrl})\n`;
+    insertBlockAtEnd(sketchMarkdown);
     setSketchpadOpen(false);
-    toast('Math sketch inserted');
+    toast('Sketch drawing inserted');
   };
 
-  const applyTextColor = (colorVar: string) => {
-    edit((b, f, t) => {
-      const inner = b.slice(f, t) || 'colored text';
-      const replacement = `<span style="color: ${colorVar}">${inner}</span>`;
-      return { body: `${b.slice(0, f)}${replacement}${b.slice(t)}`, from: f + replacement.length, to: f + replacement.length };
+  const insertImageFile = async (file: File) => {
+    try {
+      toast('Uploading image…');
+      let url = '';
+      try {
+        const path = await uploadTo('bd-files', file);
+        url = path;
+      } catch {
+        // Fallback: Read as data URL
+        url = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+      insertBlockAtEnd(`![image](${url})`);
+      toast('Image inserted');
+    } catch (err) {
+      toast('Failed to upload image');
+    }
+  };
+
+  const insertImageUrl = async () => {
+    const url = await ask('Insert Image URL', { placeholder: 'https://images.unsplash.com/...' });
+    if (url && url.trim()) {
+      insertBlockAtEnd(`![image](${url.trim()})`);
+      toast('Image inserted');
+    }
+  };
+
+  const insertVideoEmbed = async () => {
+    const url = await ask('Embed Video', {
+      placeholder: 'YouTube, Vimeo, or MP4 URL (e.g. https://www.youtube.com/watch?v=...)',
+      confirmLabel: 'Embed Video',
     });
-  };
-
-  const applyHighlight = (bgVar: string) => {
-    edit((b, f, t) => {
-      const inner = b.slice(f, t) || 'highlighted text';
-      const replacement = `<mark style="background: ${bgVar}; padding: 1px 4px; border-radius: 4px;">${inner}</mark>`;
-      return { body: `${b.slice(0, f)}${replacement}${b.slice(t)}`, from: f + replacement.length, to: f + replacement.length };
-    });
-  };
-
-  const [wikiLinkOpen, setWikiLinkOpen] = useState(false);
-  const [wikiLinkQuery, setWikiLinkQuery] = useState('');
-  const [wikiLinkIndex, setWikiLinkIndex] = useState(0);
-
-  const checkWikiLink = useCallback((text: string, caret: number) => {
-    const before = text.slice(0, caret);
-    const match = before.match(/\[\[([^\]\n]*)$/);
-    if (match) {
-      setWikiLinkOpen(true);
-      setWikiLinkQuery(match[1]);
-    } else {
-      setWikiLinkOpen(false);
-    }
-  }, []);
-
-  const filteredWikiNotes = useMemo(() => {
-    if (!wikiLinkOpen) return [];
-    const q = wikiLinkQuery.toLowerCase();
-    return notes.filter(n => (n.title || 'Untitled').toLowerCase().includes(q)).slice(0, 10);
-  }, [notes, wikiLinkQuery, wikiLinkOpen]);
-
-  const insertWikiLink = (noteTitle?: string) => {
-    const targetTitle = noteTitle ?? (filteredWikiNotes[wikiLinkIndex]?.title || 'Untitled');
-    edit((b, f, t) => {
-      const before = b.slice(0, f);
-      const match = before.match(/\[\[([^\]\n]*)$/);
-      if (!match) return { body: b, from: f, to: t };
-      const start = f - match[0].length;
-      const insert = `[[${targetTitle}]]`;
-      return { body: b.slice(0, start) + insert + b.slice(t), from: start + insert.length, to: start + insert.length };
-    });
-    setWikiLinkOpen(false);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const el = e.currentTarget;
-
-    if (wikiLinkOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setWikiLinkIndex(i => (i + 1) % (filteredWikiNotes.length || 1)); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setWikiLinkIndex(i => (i - 1 + filteredWikiNotes.length) % (filteredWikiNotes.length || 1)); return; }
-      if (e.key === 'Enter') { e.preventDefault(); insertWikiLink(); return; }
-      if (e.key === 'Escape') { e.preventDefault(); setWikiLinkOpen(false); return; }
-    }
-
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
-      const key = e.key.toLowerCase();
-      if (key === 'z') { e.preventDefault(); handleUndo(); return; }
-      if (key === 'y') { e.preventDefault(); handleRedo(); return; }
-      if (key === 'b') { e.preventDefault(); mark('**'); return; }
-      if (key === 'i') { e.preventDefault(); mark('*'); return; }
-      if (key === 'm') { e.preventDefault(); mark('$'); return; }
-      if (key === 'e') { e.preventDefault(); setRead((v) => !v); return; }
-    }
-
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      handleRedo();
-      return;
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey && el.selectionStart === el.selectionEnd) {
-      e.preventDefault();
-      const r = newline(body, el.selectionStart);
-      setBodyAndQueue(r.body);
-      requestAnimationFrame(() => { el.setSelectionRange(r.caret, r.caret); autosize(el); });
-      return;
-    }
-
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const at = el.selectionStart;
-      setBodyAndQueue(body.slice(0, at) + '  ' + body.slice(el.selectionEnd));
-      requestAnimationFrame(() => el.setSelectionRange(at + 2, at + 2));
+    if (url && url.trim()) {
+      insertBlockAtEnd(`![video](${url.trim()})`);
+      toast('Video embedded');
     }
   };
 
-  /* -------------------------------------------------------- context menu */
+  const insertTableBlock = (cols: number = 3, rows: number = 3) => {
+    const headers = Array.from({ length: cols }, (_, i) => `Header ${i + 1}`).join(' | ');
+    const sep = Array.from({ length: cols }, () => '---').join(' | ');
+    const dataRows = Array.from({ length: rows - 1 }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => `Item ${r + 1}.${c + 1}`).join(' | ')
+    ).map((r) => `| ${r} |`).join('\n');
 
-  const getEditorContextMenu = (e: React.MouseEvent): CtxGroup[] => {
-    const el = area.current;
-    const selText = el ? el.value.slice(el.selectionStart, el.selectionEnd) : '';
-    const hasSelection = selText.length > 0;
-
-    return [
-      {
-        label: 'Undo / Redo',
-        items: [
-          { label: 'Undo', icon: 'undo', shortcut: 'Ctrl+Z', disabled: !canUndo, run: handleUndo },
-          { label: 'Redo', icon: 'redo', shortcut: 'Ctrl+Y', disabled: !canRedo, run: handleRedo },
-        ],
-      },
-      {
-        label: 'Format & Headings',
-        items: [
-          { label: 'Heading 1', icon: 'heading', shortcut: '#', run: () => kind('h1') },
-          { label: 'Heading 2', icon: 'heading', shortcut: '##', run: () => kind('h2') },
-          { label: 'Heading 3', icon: 'heading', shortcut: '###', run: () => kind('h3') },
-          { label: 'Bold', icon: 'text', shortcut: 'Ctrl+B', run: () => mark('**') },
-          { label: 'Italic', icon: 'text', shortcut: 'Ctrl+I', run: () => mark('*') },
-          { label: 'Inline Code', icon: 'code', shortcut: '`', run: () => mark('`') },
-          {
-            label: 'Code Block', icon: 'code', shortcut: '```',
-            run: () => edit((b, f, t) => {
-              const inner = b.slice(f, t) || 'code';
-              const res = `\n\`\`\`\n${inner}\n\`\`\`\n`;
-              return { body: b.slice(0, f) + res + b.slice(t), from: f + res.length, to: f + res.length };
-            }),
-          },
-          { label: 'Quote', icon: 'quote', shortcut: '>', run: () => kind('quote') },
-          { label: 'Callout Box', icon: 'flag', shortcut: '||', run: () => kind('callout') },
-        ],
-      },
-      {
-        label: 'Math & Formulas',
-        items: [
-          {
-            label: 'Edit / Insert LaTeX Math', icon: 'spark', shortcut: '$$',
-            run: () => {
-              setInitialMathFormula(selText.replace(/^\$\$|\$\$$/g, '').trim() || '');
-              setMathEditorOpen(true);
-            },
-          },
-          { label: 'Inline Math ($..$)', icon: 'spark', shortcut: '$', run: () => mark('$') },
-          { label: 'Draw Math Sketchpad', icon: 'pen', run: () => setSketchpadOpen(true) },
-        ],
-      },
-      {
-        label: 'Lists & Layout',
-        items: [
-          { label: 'Bulleted List', icon: 'list', shortcut: '-', run: () => kind('bullet') },
-          { label: 'Numbered List', icon: 'sort', shortcut: '1.', run: () => kind('number') },
-          { label: 'Checklist Task', icon: 'check', shortcut: '- [ ]', run: () => kind('todo') },
-          {
-            label: 'Insert 2-Column Table', icon: 'grid',
-            run: () => edit((b, f) => {
-              const table = `\n| Column 1 | Column 2 |\n| :--- | :--- |\n| Item 1 | Item 2 |\n`;
-              return { body: b.slice(0, f) + table + b.slice(f), from: f + table.length, to: f + table.length };
-            }),
-          },
-          {
-            label: 'Insert 3-Column Table', icon: 'grid',
-            run: () => edit((b, f) => {
-              const table = `\n| Col 1 | Col 2 | Col 3 |\n| :--- | :--- | :--- |\n| Val 1 | Val 2 | Val 3 |\n`;
-              return { body: b.slice(0, f) + table + b.slice(f), from: f + table.length, to: f + table.length };
-            }),
-          },
-          { label: 'Divider Line', icon: 'minus', shortcut: '---', run: () => edit((b, f) => ({ body: `${b.slice(0, f)}\n---\n${b.slice(f)}`, from: f + 5, to: f + 5 })) },
-        ],
-      },
-      {
-        label: 'Text Colors & Highlight',
-        items: [
-          {
-            label: 'Text Color',
-            icon: 'palette',
-            items: [
-              { label: 'Coral / Red', icon: 'palette', run: () => applyTextColor('var(--pal-coral, #FF6B6B)') },
-              { label: 'Amber / Orange', icon: 'palette', run: () => applyTextColor('var(--pal-amber, #FFC24B)') },
-              { label: 'Mint / Green', icon: 'palette', run: () => applyTextColor('var(--pal-mint, #34D9A0)') },
-              { label: 'Sky / Blue', icon: 'palette', run: () => applyTextColor('var(--pal-sky, #38BDF8)') },
-              { label: 'Violet / Purple', icon: 'palette', run: () => applyTextColor('var(--pal-violet, #B07CFF)') },
-            ],
-          },
-          {
-            label: 'Highlight Color',
-            icon: 'pen',
-            items: [
-              { label: 'Yellow Glow', icon: 'spark', run: () => applyHighlight('rgba(255, 194, 75, 0.28)') },
-              { label: 'Mint Glow', icon: 'spark', run: () => applyHighlight('rgba(52, 217, 160, 0.28)') },
-              { label: 'Coral Glow', icon: 'spark', run: () => applyHighlight('rgba(255, 107, 107, 0.28)') },
-              { label: 'Sky Glow', icon: 'spark', run: () => applyHighlight('rgba(56, 189, 248, 0.28)') },
-              { label: 'Violet Glow', icon: 'spark', run: () => applyHighlight('rgba(176, 124, 255, 0.28)') },
-            ],
-          },
-        ],
-      },
-      {
-        label: 'Links & Media',
-        items: [
-          {
-            label: 'Link to Note', icon: 'link', shortcut: '[[ ]]',
-            run: () => edit((b, f, t) => {
-              const inner = b.slice(f, t) || '';
-              return { body: `${b.slice(0, f)}[[${inner}]]${b.slice(t)}`, from: f + 2 + inner.length, to: f + 2 + inner.length };
-            }),
-          },
-          {
-            label: 'Insert Web Link', icon: 'link',
-            run: () => void ask('Insert Link URL', { placeholder: 'https://example.com' }).then((url) => {
-              if (!url) return;
-              edit((b, f, t) => {
-                const inner = b.slice(f, t) || 'link';
-                const md = `[${inner}](${url.trim()})`;
-                return { body: `${b.slice(0, f)}${md}${b.slice(t)}`, from: f + md.length, to: f + md.length };
-              });
-            }),
-          },
-          {
-            label: 'Insert Image URL', icon: 'photo',
-            run: () => void ask('Insert Image URL', { placeholder: 'https://...' }).then((url) => {
-              if (!url) return;
-              edit((b, f) => {
-                const md = `\n![image](${url.trim()})\n`;
-                return { body: `${b.slice(0, f)}${md}${b.slice(f)}`, from: f + md.length, to: f + md.length };
-              });
-            }),
-          },
-        ],
-      },
-      {
-        label: 'Transform & Clipboard',
-        items: [
-          ...(hasSelection ? [
-            { label: 'UPPERCASE', icon: 'text' as IconName, run: () => edit((b, f, t) => ({ body: b.slice(0, f) + b.slice(f, t).toUpperCase() + b.slice(t), from: f, to: t })) },
-            { label: 'lowercase', icon: 'text' as IconName, run: () => edit((b, f, t) => ({ body: b.slice(0, f) + b.slice(f, t).toLowerCase() + b.slice(t), from: f, to: t })) },
-            { label: 'Title Case', icon: 'text' as IconName, run: () => edit((b, f, t) => ({ body: b.slice(0, f) + b.slice(f, t).replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.substring(1).toLowerCase()) + b.slice(t), from: f, to: t })) },
-            { label: 'Copy Selection', icon: 'copy' as IconName, run: () => { void navigator.clipboard?.writeText(selText); toast('Copied'); } },
-          ] : [
-            { label: 'Select All', icon: 'text' as IconName, shortcut: 'Ctrl+A', run: () => { el?.focus(); el?.select(); } },
-            { label: 'Copy Full Note', icon: 'copy' as IconName, run: () => { void navigator.clipboard?.writeText(`${title}\n\n${body}`); toast('Note copied'); } },
-          ]),
-        ],
-      },
-      {
-        label: 'View & Paper Style',
-        items: [
-          { label: `Line Numbers (${showLineNumbers ? 'ON' : 'OFF'})`, icon: 'list', checked: showLineNumbers, run: toggleLineNumbers },
-          {
-            label: 'Paper Background Look',
-            icon: 'grid',
-            items: [
-              { label: 'Blank Card', icon: 'grid', checked: paperStyle === 'blank', run: () => changePaperStyle('blank') },
-              { label: 'Lined Notebook', icon: 'text', checked: paperStyle === 'lined', run: () => changePaperStyle('lined') },
-              { label: 'Graph Grid', icon: 'grid', checked: paperStyle === 'grid', run: () => changePaperStyle('grid') },
-              { label: 'Dotted Grid', icon: 'dots', checked: paperStyle === 'dotted', run: () => changePaperStyle('dotted') },
-            ],
-          },
-          { label: read ? 'Switch to Write Mode' : 'Switch to Read Mode', icon: read ? 'pen' : 'eye', run: () => setRead(!read) },
-        ],
-      },
-    ];
+    const tableMd = `\n| ${headers} |\n| ${sep} |\n${dataRows}\n`;
+    insertBlockAtEnd(tableMd);
+    toast(`Inserted ${cols}x${rows} Table`);
   };
+
+  const insertColumnsBlock = (numCols: 2 | 3 = 2) => {
+    const colsMd = numCols === 2
+      ? `\n:::columns 2\n**Column 1**\nLeft column notes...\n:::\n**Column 2**\nRight column notes...\n:::\n`
+      : `\n:::columns 3\n**Column 1**\nLeft notes...\n:::\n**Column 2**\nMiddle notes...\n:::\n**Column 3**\nRight notes...\n:::\n`;
+    insertBlockAtEnd(colsMd);
+    toast(`Inserted ${numCols}-Column Layout`);
+  };
+
+  const insertDivider = () => {
+    insertBlockAtEnd('---');
+    toast('Divider line inserted');
+  };
+
+  const insertWikiLinkPrompt = async () => {
+    const noteName = await ask('Link to Note', { placeholder: 'Type note title (e.g. Chemistry Notes)' });
+    if (noteName && noteName.trim()) {
+      insertBlockAtEnd(`[[${noteName.trim()}]]`);
+      toast(`Linked to [[${noteName.trim()}]]`);
+    }
+  };
+
+  /* --------------------------------------------------- formatting & colors */
+
+  const applyTextColor = (colorHex: string) => {
+    const tag = `<span style="color: ${colorHex}">colored text</span>`;
+    insertBlockAtEnd(tag);
+    toast('Color styling applied');
+  };
+
+  const applyHighlight = (bgHex: string) => {
+    const tag = `<mark style="background: ${bgHex}; padding: 1px 6px; border-radius: 4px;">highlighted text</mark>`;
+    insertBlockAtEnd(tag);
+    toast('Highlight applied');
+  };
+
+  const applyLineFormat = (k: LineKind) => {
+    if (k === 'h1') insertBlockAtEnd('# Heading 1');
+    else if (k === 'h2') insertBlockAtEnd('## Heading 2');
+    else if (k === 'h3') insertBlockAtEnd('### Heading 3');
+    else if (k === 'bullet') insertBlockAtEnd('- Bullet item');
+    else if (k === 'number') insertBlockAtEnd('1. Numbered item');
+    else if (k === 'todo') insertBlockAtEnd('- [ ] New task');
+    else if (k === 'quote') insertBlockAtEnd('> Quoted note or insight');
+    else if (k === 'callout') insertBlockAtEnd('|| Important highlight or alert');
+    else if (k === 'code') insertBlockAtEnd('```\n// Code snippet\n```');
+  };
+
+  /* ------------------------------------------------- clipboard paste handler */
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) void insertImageFile(file);
+        return;
+      }
+    }
+  };
+
+  /* ------------------------------------------------------------- context menu */
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -573,17 +447,59 @@ export function NoteEditor({
       x: e.clientX,
       y: e.clientY,
       label: 'Note Editor',
-      items: getEditorContextMenu(e),
+      items: [
+        {
+          label: 'Undo / Redo',
+          items: [
+            { label: 'Undo', icon: 'undo', shortcut: 'Ctrl+Z', disabled: !canUndo, run: handleUndo },
+            { label: 'Redo', icon: 'redo', shortcut: 'Ctrl+Y', disabled: !canRedo, run: handleRedo },
+          ],
+        },
+        {
+          label: 'Insert Media & Layout',
+          items: [
+            { label: 'Draw Paint & Sketch', icon: 'pen', run: () => setSketchpadOpen(true) },
+            { label: 'Insert Image (Upload)', icon: 'photo', run: () => fileInputRef.current?.click() },
+            { label: 'Insert Image (URL)', icon: 'photo', run: insertImageUrl },
+            { label: 'Embed Video (YouTube / MP4)', icon: 'spark', run: insertVideoEmbed },
+            { label: 'Insert 3-Column Table', icon: 'grid', run: () => insertTableBlock(3, 3) },
+            { label: 'Insert 2-Column Layout', icon: 'grid', run: () => insertColumnsBlock(2) },
+            { label: 'Divider Line', icon: 'minus', run: insertDivider },
+            { label: 'LaTeX Math Equation', icon: 'spark', run: () => setMathEditorOpen(true) },
+          ],
+        },
+        {
+          label: 'Text Formatting',
+          items: [
+            { label: 'Heading 1', icon: 'heading', run: () => applyLineFormat('h1') },
+            { label: 'Heading 2', icon: 'heading', run: () => applyLineFormat('h2') },
+            { label: 'Heading 3', icon: 'heading', run: () => applyLineFormat('h3') },
+            { label: 'Bulleted List', icon: 'list', run: () => applyLineFormat('bullet') },
+            { label: 'Numbered List', icon: 'sort', run: () => applyLineFormat('number') },
+            { label: 'Checklist Task', icon: 'check', run: () => applyLineFormat('todo') },
+            { label: 'Quote', icon: 'quote', run: () => applyLineFormat('quote') },
+            { label: 'Callout Box', icon: 'flag', run: () => applyLineFormat('callout') },
+          ],
+        },
+        {
+          label: 'Colors',
+          items: [
+            { label: 'Coral Red Text', icon: 'palette', run: () => applyTextColor('#FF6B6B') },
+            { label: 'Amber Orange Text', icon: 'palette', run: () => applyTextColor('#FFC24B') },
+            { label: 'Mint Green Text', icon: 'palette', run: () => applyTextColor('#34D9A0') },
+            { label: 'Sky Blue Text', icon: 'palette', run: () => applyTextColor('#38BDF8') },
+            { label: 'Violet Purple Text', icon: 'palette', run: () => applyTextColor('#B07CFF') },
+            { label: 'Yellow Glow Highlight', icon: 'spark', run: () => applyHighlight('rgba(255, 194, 75, 0.35)') },
+            { label: 'Mint Glow Highlight', icon: 'spark', run: () => applyHighlight('rgba(52, 217, 160, 0.35)') },
+          ],
+        },
+      ],
     });
   };
 
   /* --------------------------------------------------------------- render */
 
   const lines = useMemo(() => parse(body), [body]);
-  const lineCount = useMemo(() => {
-    if (!body) return 1;
-    return body.split('\n').length;
-  }, [body]);
   const words = wordCount(body);
   const t = taskCount(body);
 
@@ -592,10 +508,34 @@ export function NoteEditor({
     [lines],
   );
 
-  const linePx = phone ? 25.52 : 27.28;
-
   return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        minHeight: 0,
+        height: '100%',
+        width: '100%',
+        maxWidth: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
+      {/* Hidden File Input for Image Uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void insertImageFile(file);
+          e.target.value = '';
+        }}
+      />
+
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -609,9 +549,9 @@ export function NoteEditor({
         />
       )}
 
+      {/* Unified Live WYSIWYG Toolbar */}
       <Toolbar
         phone={phone}
-        read={read}
         dirty={dirty}
         canUndo={canUndo}
         canRedo={canRedo}
@@ -620,45 +560,47 @@ export function NoteEditor({
         onBack={onBack}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        onToggleRead={() => setRead((v) => !v)}
         onToggleLineNumbers={toggleLineNumbers}
         onChangePaperStyle={changePaperStyle}
-        onKind={kind}
-        onMark={mark}
-        onOpenMath={() => {
-          const el = area.current;
-          const sel = el ? el.value.slice(el.selectionStart, el.selectionEnd) : '';
-          setInitialMathFormula(sel.replace(/^\$\$|\$\$$/g, '').trim() || '');
-          setMathEditorOpen(true);
-        }}
+        onLineFormat={applyLineFormat}
+        onTextColor={applyTextColor}
+        onHighlight={applyHighlight}
+        onOpenMath={() => setMathEditorOpen(true)}
         onOpenSketch={() => setSketchpadOpen(true)}
-        onDivider={() => edit((b, f) => ({ body: `${b.slice(0, f)}\n---\n${b.slice(f)}`, from: f + 5, to: f + 5 }))}
-        onLink={() => edit((b, f, t) => {
-          const inner = b.slice(f, t) || '';
-          return { body: `${b.slice(0, f)}[[${inner}]]${b.slice(t)}`, from: f + 2 + inner.length, to: f + 2 + inner.length };
-        })}
+        onInsertImageUpload={() => fileInputRef.current?.click()}
+        onInsertImageUrl={insertImageUrl}
+        onInsertVideo={insertVideoEmbed}
+        onInsertTable={insertTableBlock}
+        onInsertColumns={insertColumnsBlock}
+        onDivider={insertDivider}
+        onLink={insertWikiLinkPrompt}
         onDelete={onDelete}
       />
 
+      {/* Main Document Living Surface */}
       <div
         className="navsb"
         onContextMenu={handleContextMenu}
+        onPaste={handlePaste}
         style={{
           flex: 1,
           minHeight: 0,
           height: '100%',
           width: '100%',
+          maxWidth: '100%',
           overflowY: 'auto',
-          borderRadius: 16,
-          boxShadow: 'var(--sh)',
-          padding: phone ? '16px 14px 48px' : '24px 28px 64px',
-          ...getPaperBackgroundStyle(paperStyle),
+          overflowX: 'hidden',
+          borderRadius: phone ? 0 : 16,
+          border: phone ? 'none' : '1px solid var(--line2)',
+          boxShadow: phone ? 'none' : 'var(--sh)',
+          padding: phone ? '12px 14px 60px' : '24px 28px 64px',
+          ...getPaperBackgroundStyle(paperStyle, phone),
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
         }}
       >
-        <div style={{ width: '100%', minHeight: '100%', position: 'relative', display: 'flex', flexDirection: 'column', flex: 1 }}>
+        <div style={{ width: '100%', maxWidth: '100%', minHeight: '100%', position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, boxSizing: 'border-box' }}>
           {/* Note Metadata Header */}
           <div className="kicker" style={{ color: 'var(--accTx)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>Edited {whenLabel(note.updated_at)}</span>
@@ -670,20 +612,17 @@ export function NoteEditor({
             )}
           </div>
 
-          {/* Note Title - Seamless, zero-border input */}
+          {/* Note Title Input */}
           <textarea
-            ref={(el) => { if (el) autosize(el); }}
             value={title}
-            onChange={(e) => { setTitleAndQueue(e.target.value.replace(/\n/g, '')); autosize(e.target); }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); area.current?.focus(); }
-            }}
+            onChange={(e) => setTitleAndQueue(e.target.value.replace(/\n/g, ''))}
             placeholder="Untitled Note"
             aria-label="Note title"
             rows={1}
             className="note-editor-clean-input"
             style={{
               width: '100%',
+              maxWidth: '100%',
               resize: 'none',
               overflow: 'hidden',
               fontFamily: 'inherit',
@@ -699,55 +638,50 @@ export function NoteEditor({
               padding: '4px 0 6px',
               margin: '0 0 4px',
               display: 'block',
+              boxSizing: 'border-box',
             }}
           />
 
           {/* Tags */}
-          {tags.length > 0 && (
-            <div style={{ fontSize: 12.5, color: 'var(--tx3)', margin: '0 0 10px' }}>
-              {tags.join(' · ')}
-            </div>
-          )}
           <TagRow tags={tags} onSet={onSetTags} />
 
-          {/* Note Body or Formatted Read View with Optional Line Numbers */}
+          {/* Live WYSIWYG Note Content Container */}
           <div style={{
             display: 'flex',
             alignItems: 'stretch',
             flex: '1 1 auto',
             minHeight: phone ? 280 : 360,
             width: '100%',
+            maxWidth: '100%',
             marginBottom: 20,
             position: 'relative',
+            boxSizing: 'border-box',
           }}>
-            {/* Left Line Numbers Gutter (Notepad++ style) */}
-            {showLineNumbers && !read && (
+            {/* Optional Left Line Numbers Gutter */}
+            {showLineNumbers && (
               <div
                 aria-hidden
                 style={{
                   flex: 'none',
-                  minWidth: phone ? 26 : 36,
-                  maxWidth: 48,
-                  padding: '8px 8px 8px 0',
+                  minWidth: phone ? 24 : 32,
+                  padding: '8px 6px 8px 0',
                   textAlign: 'right',
                   fontFamily: MONO,
                   userSelect: 'none',
                   borderRight: '1px solid var(--line2)',
-                  marginRight: 12,
+                  marginRight: 10,
                   boxSizing: 'border-box',
-                  overflow: 'hidden',
                 }}
               >
-                {Array.from({ length: lineCount }, (_, idx) => (
+                {Array.from({ length: Math.max(1, lines.length) }, (_, idx) => (
                   <div
                     key={idx + 1}
                     style={{
-                      height: linePx,
-                      lineHeight: `${linePx}px`,
-                      fontVariantNumeric: 'tabular-nums',
-                      fontSize: phone ? 11.5 : 12.5,
+                      height: 26,
+                      lineHeight: '26px',
+                      fontSize: phone ? 11 : 12,
                       color: 'var(--tx3)',
-                      opacity: 0.55,
+                      opacity: 0.5,
                     }}
                   >
                     {idx + 1}
@@ -756,80 +690,20 @@ export function NoteEditor({
               </div>
             )}
 
-            <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-              {read ? (
-                <ReadView
-                  lines={lines}
-                  onToggle={(i) => setBodyAndQueue(toggleTask(body, i))}
-                  onLink={(n) => void openLink(n)}
-                  known={(n) => !!linkTargets(n)}
-                  onEditMath={(formulaText) => {
-                    setInitialMathFormula(formulaText);
-                    setMathEditorOpen(true);
-                  }}
-                />
-              ) : (
-                <>
-                  <textarea
-                    ref={(el) => { area.current = el; if (el) autosize(el); }}
-                    value={body}
-                    onChange={(e) => {
-                      setBodyAndQueue(e.target.value);
-                      autosize(e.target);
-                      checkWikiLink(e.target.value, e.target.selectionStart);
-                    }}
-                    onClick={(e) => checkWikiLink(e.currentTarget.value, e.currentTarget.selectionStart)}
-                    onKeyUp={(e) => checkWikiLink(e.currentTarget.value, e.currentTarget.selectionStart)}
-                    onKeyDown={onKeyDown}
-                    placeholder="Start writing… Type $$ for math blocks, $..$ for inline equations, [[ ]] to link notes."
-                    aria-label="Note body"
-                    rows={lineCount}
-                    className="note-editor-clean-input"
-                    style={{
-                      width: '100%',
-                      minHeight: phone ? 280 : 360,
-                      resize: 'none',
-                      overflow: 'hidden',
-                      fontSize: phone ? 14.5 : 15.5,
-                      lineHeight: `${linePx}px`,
-                      letterSpacing: '-.01em',
-                      color: 'var(--tx)',
-                      fontFamily: 'inherit',
-                      border: 'none',
-                      outline: 'none',
-                      boxShadow: 'none',
-                      background: 'transparent',
-                      padding: '8px 0',
-                      margin: 0,
-                      display: 'block',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-
-                  {wikiLinkOpen && (
-                    <div className="rise" style={{
-                      position: 'absolute', top: 60, left: 0, right: 0, margin: '0 auto', maxWidth: 400, zIndex: 10,
-                      background: 'var(--card)', borderRadius: 12, boxShadow: 'var(--shl)', padding: 6,
-                      border: '1px solid var(--line)',
-                    }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Link to Note</div>
-                      {filteredWikiNotes.length === 0 ? (
-                        <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--tx3)' }}>No matching notes. Press Enter to create "[[{wikiLinkQuery}]]"</div>
-                      ) : (
-                        filteredWikiNotes.map((n, i) => (
-                          <button key={n.id} onClick={() => insertWikiLink(n.title)} className="hov lensrow" style={{
-                            display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 8,
-                            background: wikiLinkIndex === i ? 'var(--card2)' : 'transparent',
-                            fontSize: 13.5, fontWeight: wikiLinkIndex === i ? 700 : 500, color: 'var(--tx)', border: 'none', cursor: 'pointer',
-                          }}>
-                            <Icon name="book" size={12} color="var(--tx3)" /> <span style={{ marginLeft: 6 }}>{n.title || 'Untitled'}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+            {/* Combined Live WYSIWYG Interactive Document */}
+            <div style={{ flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+              <WYSIWYGDocument
+                body={body}
+                lines={lines}
+                onChangeBody={setBodyAndQueue}
+                onLink={(n) => void openLink(n)}
+                known={(n) => !!linkTargets(n)}
+                onEditMath={(formula) => {
+                  setInitialMathFormula(formula);
+                  setMathEditorOpen(true);
+                }}
+                onEditSketch={() => setSketchpadOpen(true)}
+              />
             </div>
           </div>
 
@@ -840,7 +714,7 @@ export function NoteEditor({
             flex: 'none', width: '100%',
           }}>
             <span>{words} word{words === 1 ? '' : 's'}</span>
-            <span>{lineCount} line{lineCount === 1 ? '' : 's'}</span>
+            <span>{lines.length} block{lines.length === 1 ? '' : 's'}</span>
             {t.total > 0 && <span>{t.done}/{t.total} tasks completed</span>}
             <span style={{ marginLeft: 'auto', fontWeight: 600, color: dirty ? 'var(--accTx)' : 'var(--tx3)' }}>
               {dirty ? 'Saving…' : 'Saved'}
@@ -867,7 +741,7 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Math LaTeX Formula Composer Modal */}
+      {/* LaTeX Formula Composer Modal */}
       {mathEditorOpen && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <MathEquationEditor
@@ -878,10 +752,10 @@ export function NoteEditor({
         </div>, document.body
       )}
 
-      {/* Interactive Math Sketchpad Modal */}
+      {/* Paint & Sketch Studio Modal */}
       {sketchpadOpen && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
-          <MathSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
+          <NoteSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
         </div>, document.body
       )}
     </div>
@@ -891,12 +765,13 @@ export function NoteEditor({
 /* ------------------------------------------------------------------ toolbar */
 
 function Toolbar({
-  phone, read, dirty, canUndo, canRedo, paperStyle, showLineNumbers,
-  onBack, onUndo, onRedo, onToggleRead, onToggleLineNumbers, onChangePaperStyle,
-  onKind, onMark, onOpenMath, onOpenSketch, onDivider, onLink, onDelete,
+  phone, dirty, canUndo, canRedo, paperStyle, showLineNumbers,
+  onBack, onUndo, onRedo, onToggleLineNumbers, onChangePaperStyle,
+  onLineFormat, onTextColor, onHighlight, onOpenMath, onOpenSketch,
+  onInsertImageUpload, onInsertImageUrl, onInsertVideo, onInsertTable, onInsertColumns,
+  onDivider, onLink, onDelete,
 }: {
   phone: boolean;
-  read: boolean;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -905,44 +780,54 @@ function Toolbar({
   onBack?: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onToggleRead: () => void;
   onToggleLineNumbers: () => void;
   onChangePaperStyle: (style: PaperStyle) => void;
-  onKind: (k: LineKind) => void;
-  onMark: (m: string) => void;
+  onLineFormat: (k: LineKind) => void;
+  onTextColor: (colorHex: string) => void;
+  onHighlight: (bgHex: string) => void;
   onOpenMath: () => void;
   onOpenSketch: () => void;
+  onInsertImageUpload: () => void;
+  onInsertImageUrl: () => void;
+  onInsertVideo: () => void;
+  onInsertTable: (cols: number, rows: number) => void;
+  onInsertColumns: (numCols: 2 | 3) => void;
   onDivider: () => void;
   onLink: () => void;
   onDelete: () => void;
 }) {
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [paperMenuOpen, setPaperMenuOpen] = useState(false);
 
-  const btn = (label: string, icon: IconName, run: () => void, text?: string, disabled: boolean = read) => (
+  const btn = (label: string, icon: IconName, run: () => void, text?: string, active?: boolean, disabled?: boolean) => (
     <button
       key={label}
-      onClick={run}
+      onClick={() => { run(); playClick(); }}
       className="hov tap"
       title={label}
       aria-label={label}
       disabled={disabled}
       style={{
-        width: 28,
         height: 28,
+        minWidth: 28,
+        padding: text ? '0 7px' : '0 5px',
         flex: 'none',
         borderRadius: 7,
-        display: 'grid',
-        placeItems: 'center',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 3,
         opacity: disabled ? 0.35 : 1,
         fontSize: 11,
         fontWeight: 800,
-        color: 'var(--tx2)',
+        color: active ? 'var(--accTx, #FFFFFF)' : 'var(--tx2)',
         cursor: disabled ? 'default' : 'pointer',
-        background: 'transparent',
-        border: 'none',
+        background: active ? 'color-mix(in srgb, var(--acc) 18%, transparent)' : 'transparent',
+        border: active ? '1px solid var(--acc)' : 'none',
       }}
     >
-      {text ?? <Icon name={icon} size={13.5} color="var(--tx2)" />}
+      {text ? <span>{text}</span> : <Icon name={icon} size={13.5} color={active ? 'var(--accTx, #FFFFFF)' : 'var(--tx2)'} />}
     </button>
   );
 
@@ -951,65 +836,243 @@ function Toolbar({
   return (
     <div className="hbar" style={{
       display: 'flex', alignItems: 'center', gap: 2, overflowX: 'auto', flex: 'none',
-      padding: '0 2px 8px', minHeight: 38,
+      padding: '0 2px 8px', minHeight: 38, width: '100%', maxWidth: '100%', boxSizing: 'border-box',
     }}>
+      {/* Modern Back Button for Phone Navigation */}
       {phone && onBack && (
-        <button onClick={onBack} className="hov tap" aria-label="Back to the note list"
-          style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', marginRight: 4, background: 'transparent', border: 'none', cursor: 'pointer' }}>
-          <Icon name="back" size={14} color="var(--tx2)" />
+        <button
+          onClick={onBack}
+          className="hov k-squish"
+          aria-label="Back to note list"
+          style={{
+            height: 28,
+            padding: '0 8px',
+            flex: 'none',
+            borderRadius: 7,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            marginRight: 4,
+            background: 'var(--card2)',
+            border: '1px solid var(--line2)',
+            color: 'var(--tx)',
+            fontSize: 11.5,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="back" size={13} color="var(--tx2)" />
+          <span>Back</span>
         </button>
       )}
 
-      {/* Redo & Undo Buttons */}
-      {btn('Undo (Ctrl+Z)', 'undo', onUndo, undefined, !canUndo || read)}
-      {btn('Redo (Ctrl+Y)', 'redo', onRedo, undefined, !canRedo || read)}
+      {/* Undo & Redo */}
+      {btn('Undo (Ctrl+Z)', 'undo', onUndo, undefined, false, !canUndo)}
+      {btn('Redo (Ctrl+Y)', 'redo', onRedo, undefined, false, !canRedo)}
       {rule}
 
       {/* Headings */}
-      {btn('Heading 1', 'heading', () => onKind('h1'), 'H1')}
-      {btn('Heading 2', 'heading', () => onKind('h2'), 'H2')}
-      {btn('Heading 3', 'heading', () => onKind('h3'), 'H3')}
+      {btn('Heading 1', 'heading', () => onLineFormat('h1'), 'H1')}
+      {btn('Heading 2', 'heading', () => onLineFormat('h2'), 'H2')}
+      {btn('Heading 3', 'heading', () => onLineFormat('h3'), 'H3')}
       {rule}
 
-      {/* Text Styles */}
-      {btn('Bold', 'text', () => onMark('**'), 'B')}
-      {btn('Italic', 'text', () => onMark('*'), 'I')}
-      {btn('Code', 'code', () => onMark('`'))}
+      {/* Colors & Highlight Menu */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { setColorMenuOpen(!colorMenuOpen); setInsertMenuOpen(false); }}
+          className="hov k-squish"
+          title="Text Colors & Highlight"
+          style={{
+            height: 28,
+            padding: '0 7px',
+            borderRadius: 7,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 700,
+            background: colorMenuOpen ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
+            border: `1px solid ${colorMenuOpen ? 'var(--acc)' : 'var(--line2)'}`,
+            color: 'var(--tx)',
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="palette" size={12} color="#FF6B6B" />
+          <span>Color</span>
+        </button>
+
+        {colorMenuOpen && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setColorMenuOpen(false)} />
+            <div style={{
+              position: 'absolute', top: 34, left: 0, zIndex: 41,
+              background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 12,
+              boxShadow: 'var(--shl)', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 170,
+            }}>
+              <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Text Color</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
+                {[
+                  { name: 'Coral Red', hex: '#FF6B6B' },
+                  { name: 'Amber', hex: '#FFC24B' },
+                  { name: 'Mint', hex: '#34D9A0' },
+                  { name: 'Sky', hex: '#38BDF8' },
+                  { name: 'Violet', hex: '#B07CFF' },
+                  { name: 'Rose', hex: '#F472B6' },
+                  { name: 'Orange', hex: '#FF9A3C' },
+                  { name: 'Emerald', hex: '#10B981' },
+                  { name: 'Blue', hex: '#3B82F6' },
+                  { name: 'White', hex: '#FFFFFF' },
+                ].map((c) => (
+                  <button
+                    key={c.hex}
+                    onClick={() => { onTextColor(c.hex); setColorMenuOpen(false); }}
+                    title={c.name}
+                    style={{
+                      width: 24, height: 24, borderRadius: 6, background: c.hex, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.06em', marginTop: 4 }}>Highlight Glow</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[
+                  { name: 'Yellow', hex: 'rgba(255, 194, 75, 0.35)' },
+                  { name: 'Mint', hex: 'rgba(52, 217, 160, 0.35)' },
+                  { name: 'Coral', hex: 'rgba(255, 107, 107, 0.35)' },
+                  { name: 'Sky', hex: 'rgba(56, 189, 248, 0.35)' },
+                  { name: 'Violet', hex: 'rgba(176, 124, 255, 0.35)' },
+                ].map((h) => (
+                  <button
+                    key={h.name}
+                    onClick={() => { onHighlight(h.hex); setColorMenuOpen(false); }}
+                    title={`${h.name} glow`}
+                    style={{
+                      flex: 1, height: 22, borderRadius: 5, background: h.hex, border: '1px solid var(--line2)', cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {rule}
 
-      {/* Math Features */}
-      {btn('Insert LaTeX Math ($$)', 'spark', onOpenMath, '∑')}
-      {btn('Inline Math ($)', 'spark', () => onMark('$'), '$')}
-      {btn('Draw Math Sketch', 'pen', onOpenSketch)}
+      {/* Lists */}
+      {btn('Bulleted list', 'list', () => onLineFormat('bullet'))}
+      {btn('Numbered list', 'sort', () => onLineFormat('number'), '1.')}
+      {btn('Checklist task', 'check', () => onLineFormat('todo'))}
+      {btn('Quote', 'quote', () => onLineFormat('quote'))}
+      {btn('Callout box', 'flag', () => onLineFormat('callout'))}
       {rule}
 
-      {/* Lists & Layout */}
-      {btn('Bulleted list', 'list', () => onKind('bullet'))}
-      {btn('Numbered list', 'sort', () => onKind('number'), '1.')}
-      {btn('Checklist', 'check', () => onKind('todo'))}
-      {btn('Quote', 'quote', () => onKind('quote'))}
-      {btn('Callout', 'flag', () => onKind('callout'))}
+      {/* Insert Menu (Images, Tables, Columns, Video, Sketch, Math, Divider) */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { setInsertMenuOpen(!insertMenuOpen); setColorMenuOpen(false); }}
+          className="hov k-squish"
+          title="Insert Media, Tables & Layout"
+          style={{
+            height: 28,
+            padding: '0 7px',
+            borderRadius: 7,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 700,
+            background: insertMenuOpen ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
+            border: `1px solid ${insertMenuOpen ? 'var(--acc)' : 'var(--line2)'}`,
+            color: 'var(--tx)',
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="plus" size={11} color="var(--accTx, #38BDF8)" />
+          <span>Insert</span>
+        </button>
+
+        {insertMenuOpen && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setInsertMenuOpen(false)} />
+            <div style={{
+              position: 'absolute', top: 34, left: 0, zIndex: 41,
+              background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 12,
+              boxShadow: 'var(--shl)', padding: 6, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 190,
+            }}>
+              <button onClick={() => { onOpenSketch(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="pen" size={13} color="var(--accTx, #38BDF8)" />
+                <span>Draw Sketch / Paint</span>
+              </button>
+              <button onClick={() => { onInsertImageUpload(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="photo" size={13} color="var(--pal-mint, #34D9A0)" />
+                <span>Upload Image File</span>
+              </button>
+              <button onClick={() => { onInsertImageUrl(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="photo" size={13} color="var(--tx2)" />
+                <span>Insert Image by URL</span>
+              </button>
+              <button onClick={() => { onInsertVideo(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="spark" size={13} color="var(--pal-coral, #FF6B6B)" />
+                <span>Embed Video (YouTube / MP4)</span>
+              </button>
+              <button onClick={() => { onInsertTable(3, 3); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="grid" size={13} color="var(--pal-sky, #38BDF8)" />
+                <span>Insert 3x3 Table</span>
+              </button>
+              <button onClick={() => { onInsertColumns(2); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="grid" size={13} color="var(--tx2)" />
+                <span>2-Column Layout</span>
+              </button>
+              <button onClick={() => { onInsertColumns(3); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="grid" size={13} color="var(--tx2)" />
+                <span>3-Column Layout</span>
+              </button>
+              <button onClick={() => { onOpenMath(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="spark" size={13} color="var(--pal-amber, #FFC24B)" />
+                <span>LaTeX Math Formula ($$)</span>
+              </button>
+              <button onClick={() => { onDivider(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="minus" size={13} color="var(--tx3)" />
+                <span>Full-Width Divider</span>
+              </button>
+              <button onClick={() => { onLink(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+                <Icon name="link" size={13} color="var(--accTx, #7C6CFF)" />
+                <span>Link to Note ([[ ]])</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {rule}
 
-      {/* Structure */}
-      {btn('Divider', 'minus', onDivider)}
-      {btn('Link a note', 'link', onLink)}
-      {rule}
+      {/* Quick Media Direct Buttons */}
+      {btn('Draw Paint & Sketch', 'pen', onOpenSketch)}
+      {btn('Upload Image', 'photo', onInsertImageUpload)}
+      {btn('Embed Video', 'spark', onInsertVideo)}
+      {btn('Insert Table', 'grid', () => onInsertTable(3, 3))}
+      {btn('LaTeX Math ($$)', 'spark', onOpenMath, '∑')}
+      {btn('Divider Line', 'minus', onDivider)}
+
+      <span style={{ marginLeft: 'auto' }} />
 
       {/* Paper Style Selector */}
       <div style={{ position: 'relative' }}>
         <button
           onClick={() => setPaperMenuOpen(!paperMenuOpen)}
           className="hov k-squish"
-          title="Change Paper Background Style"
+          title="Paper Look"
           style={{
             height: 26,
-            padding: '0 7px',
+            padding: '0 6px',
             borderRadius: 6,
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            fontSize: 10.5,
+            gap: 3,
+            fontSize: 10,
             fontWeight: 700,
             background: 'var(--card2)',
             border: '1px solid var(--line2)',
@@ -1018,7 +1081,7 @@ function Toolbar({
             textTransform: 'capitalize',
           }}
         >
-          <Icon name="grid" size={11} color="var(--tx3)" />
+          <Icon name="grid" size={10} color="var(--tx3)" />
           <span>{paperStyle}</span>
         </button>
 
@@ -1026,9 +1089,9 @@ function Toolbar({
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setPaperMenuOpen(false)} />
             <div style={{
-              position: 'absolute', top: 32, left: 0, zIndex: 41,
+              position: 'absolute', top: 32, right: 0, zIndex: 41,
               background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 10,
-              boxShadow: 'var(--shl)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 120,
+              boxShadow: 'var(--shl)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 110,
             }}>
               {(['blank', 'lined', 'grid', 'dotted'] as PaperStyle[]).map((ps) => (
                 <button
@@ -1036,19 +1099,13 @@ function Toolbar({
                   onClick={() => { onChangePaperStyle(ps); setPaperMenuOpen(false); }}
                   className="hov"
                   style={{
-                    padding: '6px 10px',
-                    borderRadius: 6,
-                    border: 'none',
+                    padding: '5px 8px', borderRadius: 6, border: 'none',
                     background: paperStyle === ps ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent',
                     color: paperStyle === ps ? 'var(--accTx)' : 'var(--tx)',
-                    fontSize: 11.5,
-                    fontWeight: paperStyle === ps ? 800 : 500,
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    textTransform: 'capitalize',
+                    fontSize: 11, fontWeight: paperStyle === ps ? 800 : 500, textAlign: 'left', cursor: 'pointer', textTransform: 'capitalize',
                   }}
                 >
-                  {ps} paper
+                  {ps}
                 </button>
               ))}
             </div>
@@ -1056,71 +1113,7 @@ function Toolbar({
         )}
       </div>
 
-      {/* Line Numbers Toggle Button */}
-      <button
-        onClick={onToggleLineNumbers}
-        className="hov k-squish"
-        title={showLineNumbers ? 'Hide Line Numbers' : 'Show Line Numbers (Notepad++)'}
-        style={{
-          height: 26,
-          padding: '0 6px',
-          borderRadius: 6,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 3,
-          fontSize: 10,
-          fontWeight: 800,
-          background: showLineNumbers ? 'color-mix(in srgb, var(--acc) 14%, var(--card2))' : 'var(--card2)',
-          border: `1px solid ${showLineNumbers ? 'color-mix(in srgb, var(--acc) 40%, transparent)' : 'var(--line2)'}`,
-          color: showLineNumbers ? 'var(--accTx)' : 'var(--tx3)',
-          cursor: 'pointer',
-        }}
-      >
-        <span>#</span>
-        <span>{showLineNumbers ? 'ON' : 'OFF'}</span>
-      </button>
-
-      <span style={{ marginLeft: 'auto' }} />
-
-      <span style={{ fontSize: 11, fontWeight: 600, color: dirty ? 'var(--accTx)' : 'var(--tx3)', marginRight: 10 }}>
-        {dirty ? 'Saving…' : 'Saved'}
-      </span>
-
-      {/* Segmented Mode Switch (Write / Read) */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', height: 28, padding: 2,
-        borderRadius: 8, background: 'var(--card2)', gap: 2, marginRight: 4,
-      }}>
-        <button
-          onClick={() => { if (read) onToggleRead(); }}
-          className="k-squish"
-          style={{
-            height: 24, padding: '0 8px', borderRadius: 6,
-            background: !read ? 'var(--card)' : 'transparent',
-            color: !read ? 'var(--tx)' : 'var(--tx3)',
-            fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
-            boxShadow: !read ? 'var(--sh)' : 'none',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          <Icon name="pen" size={11} color={!read ? 'var(--tx)' : 'var(--tx3)'} />Write
-        </button>
-        <button
-          onClick={() => { if (!read) onToggleRead(); }}
-          className="k-squish"
-          style={{
-            height: 24, padding: '0 8px', borderRadius: 6,
-            background: read ? 'var(--card)' : 'transparent',
-            color: read ? 'var(--accTx)' : 'var(--tx3)',
-            fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
-            boxShadow: read ? 'var(--sh)' : 'none',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          <Icon name="eye" size={11} color={read ? 'var(--accTx)' : 'var(--tx3)'} />Read
-        </button>
-      </div>
-
+      {/* Delete Note */}
       <button
         onClick={() => void confirmAsk('Move this note to Trash?', {
           message: 'This note will be safely moved to the Trash archive where you can restore it anytime.',
@@ -1130,13 +1123,381 @@ function Toolbar({
         className="hov tap"
         title="Delete note"
         aria-label="Delete note"
-        style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        style={{ width: 28, height: 28, flex: 'none', borderRadius: 7, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 2 }}
       >
-        <Icon name="trash" size={13.5} color="var(--pal-coral, var(--tx3))" />
+        <Icon name="trash" size={13.5} color="var(--pal-coral, #FF6B6B)" />
       </button>
     </div>
   );
 }
+
+const MENU_ITEM: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '7px 10px',
+  borderRadius: 7,
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--tx)',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  textAlign: 'left',
+  width: '100%',
+};
+
+/* --------------------------------------------------- living wysiwyg document */
+
+function WYSIWYGDocument({
+  body, lines, onChangeBody, onLink, known, onEditMath, onEditSketch,
+}: {
+  body: string;
+  lines: Line[];
+  onChangeBody: (nextBody: string) => void;
+  onLink: (name: string) => void;
+  known: (name: string) => boolean;
+  onEditMath?: (formula: string) => void;
+  onEditSketch?: () => void;
+}) {
+  const hasMath = useMemo(
+    () => lines.some((l) => l.kind === 'math' || l.text.includes('$') || l.text.includes('\\(')),
+    [lines],
+  );
+  const katex = useKatex(hasMath);
+
+  // Toggle task checkbox
+  const handleToggleTask = (idx: number) => {
+    onChangeBody(toggleTask(body, idx));
+  };
+
+  // Replace a line's text
+  const updateLine = (lineIdx: number, newText: string) => {
+    const rawLines = body.split('\n');
+    rawLines[lineIdx] = newText;
+    onChangeBody(rawLines.join('\n'));
+  };
+
+  // Delete a block line
+  const deleteBlock = (lineIdx: number) => {
+    const rawLines = body.split('\n');
+    rawLines.splice(lineIdx, 1);
+    onChangeBody(rawLines.join('\n'));
+  };
+
+  const renderInline = (text: string) => spans(text).map((s, i) => {
+    if (s.s === 'link') {
+      return (
+        <button key={i} onClick={() => onLink(s.text)} className="k-underline" style={{
+          display: 'inline', font: 'inherit', padding: '0 3px',
+          color: known(s.text) ? 'var(--accTx, #7C6CFF)' : PAL.coral,
+          fontWeight: 700, background: 'color-mix(in srgb, var(--acc) 10%, transparent)',
+          borderRadius: 4, border: 'none', cursor: 'pointer',
+        }}>
+          [[{s.text}]]
+        </button>
+      );
+    }
+    if (s.s === 'bold') return <strong key={i} style={{ fontWeight: 800 }}>{s.text}</strong>;
+    if (s.s === 'italic') return <em key={i}>{s.text}</em>;
+    if (s.s === 'code') return (
+      <code key={i} style={{ fontFamily: MONO, fontSize: '.92em', padding: '1px 5px', borderRadius: 5, background: 'var(--card2)', color: 'var(--tx)' }}>
+        {s.text}
+      </code>
+    );
+    if (s.s === 'math') {
+      if (!katex) return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
+      try {
+        const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
+        return (
+          <span
+            key={i}
+            onClick={() => onEditMath?.(s.text)}
+            title="Click to edit formula"
+            style={{ padding: '0 2px', cursor: 'pointer' }}
+            dangerouslySetInnerHTML={{ __html: mathHtml }}
+          />
+        );
+      } catch {
+        return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
+      }
+    }
+    if (s.s === 'video') {
+      const v = parseVideoUrl(s.url);
+      return (
+        <div key={i} className="note-video-embed">
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+            {v?.type === 'youtube' || v?.type === 'vimeo' ? (
+              <iframe
+                src={v.embedUrl}
+                title="Video embed"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                style={{ width: '100%', height: '100%', border: 0 }}
+              />
+            ) : (
+              <video src={s.url} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            )}
+          </div>
+        </div>
+      );
+    }
+    if (s.s === 'image') {
+      return (
+        <span key={i} style={{ display: 'block', margin: '14px 0', textAlign: 'center' }}>
+          <img loading="lazy" decoding="async" src={s.url} alt={s.alt || 'Note visual'} style={{ maxWidth: '100%', maxHeight: 420, borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
+        </span>
+      );
+    }
+    if (s.text.includes('<span') || s.text.includes('<mark')) {
+      return <span key={i} dangerouslySetInnerHTML={{ __html: s.text }} />;
+    }
+    return <span key={i}>{s.text}</span>;
+  });
+
+  return (
+    <div style={{ minHeight: 360, paddingTop: 4, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+      {lines.map((l, i) => {
+        if (l.kind === 'blank') return <div key={i} style={{ height: 12 }} />;
+
+        if (l.kind === 'divider') {
+          return (
+            <div key={i} style={{ position: 'relative', margin: '20px 0' }}>
+              <hr className="note-hr-divider" />
+            </div>
+          );
+        }
+
+        if (l.kind === 'video') {
+          const v = parseVideoUrl(l.text);
+          return (
+            <div key={i} className="note-video-embed">
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+                {v?.type === 'youtube' || v?.type === 'vimeo' ? (
+                  <iframe
+                    src={v.embedUrl}
+                    title="Video player"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ width: '100%', height: '100%', border: 0 }}
+                  />
+                ) : (
+                  <video src={l.text} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        if (l.kind === 'sketch') {
+          return (
+            <div key={i} style={{ margin: '16px 0', textAlign: 'center', position: 'relative' }}>
+              <img
+                loading="lazy"
+                decoding="async"
+                src={l.text}
+                alt="Note sketch"
+                onClick={onEditSketch}
+                title="Click to draw / edit sketch"
+                style={{ maxWidth: '100%', maxHeight: 420, borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--card2)', cursor: 'pointer' }}
+              />
+            </div>
+          );
+        }
+
+        if (l.kind === 'table') {
+          const rawRows = l.text.split('\n').filter((r) => r.trim());
+          const headerRow = rawRows[0] ? rawRows[0].split('|').map((c) => c.trim()).filter(Boolean) : [];
+          const dataRows = rawRows.slice(2).map((r) => r.split('|').map((c) => c.trim()).filter(Boolean));
+
+          return (
+            <div key={i} style={{ margin: '14px 0', overflowX: 'auto', maxWidth: '100%' }}>
+              <table className="note-table">
+                {headerRow.length > 0 && (
+                  <thead>
+                    <tr>
+                      {headerRow.map((h, hi) => (
+                        <th key={hi}>{renderInline(h)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody>
+                  {dataRows.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td key={ci}>{renderInline(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        if (l.kind === 'columns') {
+          const parts = l.text.split(':::').map((p) => p.trim()).filter(Boolean);
+          const colCount = parts.length > 2 ? 3 : 2;
+          return (
+            <div key={i} className={`note-columns note-cols-${colCount}`}>
+              {parts.map((part, pi) => (
+                <div key={pi} className="note-col">
+                  {part.split('\n').map((line, li) => (
+                    <div key={li} style={{ margin: '3px 0', fontSize: 14 }}>{renderInline(line)}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        if (l.kind === 'math') {
+          if (!katex) return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--tx3)', borderRadius: 8 }}>{`$$\n${l.text}\n$$`}</pre>;
+          try {
+            const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
+            return (
+              <div
+                key={i}
+                onClick={() => onEditMath?.(l.text)}
+                title="Click to edit LaTeX math formula"
+                className="k-math-block hov"
+                style={{
+                  margin: '16px 0',
+                  padding: '16px 12px',
+                  borderRadius: 12,
+                  background: 'color-mix(in srgb, var(--acc) 6%, transparent)',
+                  border: '1px dashed color-mix(in srgb, var(--acc) 25%, transparent)',
+                  overflowX: 'auto',
+                  textAlign: 'center',
+                  fontSize: 17,
+                  color: 'var(--tx)',
+                  cursor: 'pointer',
+                  transition: 'all .16s ease',
+                }}
+                dangerouslySetInnerHTML={{ __html: blockHtml }}
+              />
+            );
+          } catch {
+            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)', borderRadius: 8 }}>{`$$\n${l.text}\n$$`}</pre>;
+          }
+        }
+
+        if (l.kind === 'code') {
+          return (
+            <pre key={i} className="navsb" style={{
+              margin: '10px 0', padding: '12px 14px', borderRadius: 10, overflowX: 'auto',
+              background: 'var(--card2)', border: 'none',
+              fontFamily: MONO, fontSize: 12.5, lineHeight: 1.65, color: 'var(--tx)',
+            }}>{l.text}</pre>
+          );
+        }
+
+        if (l.kind === 'todo') {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '3px 0' }}>
+              <button onClick={() => handleToggleTask(l.i)} role="checkbox" aria-checked={l.done}
+                aria-label={l.text || 'To-do'} className="k-squish"
+                style={{
+                  width: 17, height: 17, flex: 'none', marginTop: 4, borderRadius: 5,
+                  border: `1.25px solid ${l.done ? 'var(--acc)' : 'var(--line2)'}`,
+                  background: l.done ? 'var(--acc)' : 'transparent', display: 'grid', placeItems: 'center',
+                  cursor: 'pointer', outline: 'none',
+                }}>
+                {l.done && <Icon name="check" size={11} color="#FFFFFF" />}
+              </button>
+              <span style={{
+                fontSize: 15, lineHeight: 1.74,
+                ...(l.done ? { textDecoration: 'line-through', color: 'var(--tx3)' } : { color: 'var(--tx)' }),
+              }}>{renderInline(l.text)}</span>
+            </div>
+          );
+        }
+
+        if (l.kind === 'bullet' || l.kind === 'number') {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '2px 0' }}>
+              {l.kind === 'bullet'
+                ? <span aria-hidden style={{ width: 5.5, height: 5.5, flex: 'none', borderRadius: 3, background: 'var(--tx3)', marginTop: 9 }} />
+                : <span aria-hidden style={{ flex: 'none', fontSize: 13.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{l.n}.</span>}
+              <span style={{ fontSize: 15, lineHeight: 1.74, color: 'var(--tx)' }}>{renderInline(l.text)}</span>
+            </div>
+          );
+        }
+
+        if (l.kind === 'quote') {
+          return (
+            <blockquote key={i} style={{
+              margin: '8px 0', paddingLeft: 14, borderLeft: '3px solid var(--acc)',
+              fontSize: 14.5, lineHeight: 1.75, fontStyle: 'italic', color: 'var(--tx2)',
+            }}>{renderInline(l.text)}</blockquote>
+          );
+        }
+
+        if (l.kind === 'callout') {
+          return (
+            <div key={i} style={{
+              margin: '10px 0', padding: '12px 14px', borderRadius: 10, fontSize: 14, lineHeight: 1.68,
+              background: 'color-mix(in srgb, var(--acc) 9%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--acc) 22%, transparent)', color: 'var(--tx)',
+            }}>{renderInline(l.text)}</div>
+          );
+        }
+
+        const h = HEADING[l.kind];
+        if (h) return <div key={i} style={{ ...h, color: 'var(--tx)' }}>{renderInline(l.text)}</div>;
+
+        return (
+          <p
+            key={i}
+            style={{
+              fontSize: 15,
+              lineHeight: 1.76,
+              color: 'var(--tx)',
+              margin: '4px 0',
+              wordBreak: 'break-word',
+            }}
+          >
+            {renderInline(l.text)}
+          </p>
+        );
+      })}
+
+      {/* Direct ContentEditable input zone for seamless continuous writing */}
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        onInput={(e) => {
+          const text = e.currentTarget.innerText;
+          if (text.trim()) {
+            onChangeBody(body ? `${body}\n${text}` : text);
+            e.currentTarget.innerText = '';
+          }
+        }}
+        data-placeholder="Click here to continue writing…"
+        style={{
+          minHeight: 120,
+          marginTop: 8,
+          outline: 'none',
+          fontSize: 15,
+          lineHeight: 1.76,
+          color: 'var(--tx)',
+          cursor: 'text',
+        }}
+      />
+    </div>
+  );
+}
+
+const HEADING: Partial<Record<LineKind, React.CSSProperties>> = {
+  h1: { fontSize: 23, fontWeight: 800, letterSpacing: '-.026em', lineHeight: 1.3, margin: '24px 0 8px' },
+  h2: { fontSize: 18.5, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.35, margin: '18px 0 6px' },
+  h3: { fontSize: 15.5, fontWeight: 700, letterSpacing: '-.014em', lineHeight: 1.4, margin: '14px 0 4px' },
+};
+
+const KICKER: React.CSSProperties = {
+  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
+};
 
 /* --------------------------------------------------------------------- tags */
 
@@ -1173,195 +1534,4 @@ function TagRow({ tags, onSet }: { tags: string[]; onSet: (t: string[]) => void 
       </button>
     </div>
   );
-}
-
-/* --------------------------------------------------------------- read mode */
-
-function ReadView({
-  lines, onToggle, onLink, known, onEditMath,
-}: {
-  lines: Line[];
-  onToggle: (sourceLine: number) => void;
-  onLink: (name: string) => void;
-  known: (name: string) => boolean;
-  onEditMath?: (formula: string) => void;
-}) {
-  const hasMath = useMemo(
-    () => lines.some((l) => l.kind === 'math' || l.text.includes('$') || l.text.includes('\\(')),
-    [lines],
-  );
-  const katex = useKatex(hasMath);
-
-  const inline = (text: string) => spans(text).map((s, i) => {
-    if (s.s === 'link') {
-      return (
-        <button key={i} onClick={() => onLink(s.text)} className="k-underline" style={{
-          display: 'inline', font: 'inherit', padding: '0 2px',
-          color: known(s.text) ? 'var(--accTx)' : PAL.coral,
-          fontWeight: 600,
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-        }}>{s.text}</button>
-      );
-    }
-    if (s.s === 'bold') return <strong key={i} style={{ fontWeight: 800 }}>{s.text}</strong>;
-    if (s.s === 'italic') return <em key={i}>{s.text}</em>;
-    if (s.s === 'code') return (
-      <code key={i} style={{ fontFamily: MONO, fontSize: '.92em', padding: '1px 5px', borderRadius: 5, background: 'var(--card2)', color: 'var(--tx)' }}>
-        {s.text}
-      </code>
-    );
-    if (s.s === 'math') {
-      if (!katex) return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
-      try {
-        const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
-        return (
-          <span
-            key={i}
-            onClick={() => onEditMath?.(s.text)}
-            title="Click to edit formula"
-            style={{ padding: '0 2px', cursor: 'pointer' }}
-            dangerouslySetInnerHTML={{ __html: mathHtml }}
-          />
-        );
-      } catch {
-        return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
-      }
-    }
-    if (s.s === 'image') {
-      return (
-        <span key={i} style={{ display: 'block', margin: '14px 0', textAlign: 'center' }}>
-          <img loading="lazy" decoding="async" src={s.url} alt={s.alt || 'Math sketch'} style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
-        </span>
-      );
-    }
-    if (s.text.includes('<span') || s.text.includes('<mark')) {
-      return <span key={i} dangerouslySetInnerHTML={{ __html: s.text }} />;
-    }
-    return <span key={i}>{s.text}</span>;
-  });
-
-  return (
-    <div style={{ minHeight: 360, paddingTop: 4, width: '100%' }}>
-      {lines.map((l, i) => {
-        if (l.kind === 'blank') return <div key={i} style={{ height: 12 }} />;
-        if (l.kind === 'divider') return <hr key={i} style={{ border: 0, borderTop: '1px solid var(--line)', margin: '18px 0' }} />;
-        if (l.kind === 'math') {
-          if (!katex) return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--tx3)', borderRadius: 8 }}>{`$$
-${l.text}
-$$`}</pre>;
-          try {
-            const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
-            return (
-              <div
-                key={i}
-                onClick={() => onEditMath?.(l.text)}
-                title="Click to edit LaTeX math formula"
-                className="k-math-block hov"
-                style={{
-                  margin: '16px 0',
-                  padding: '16px 12px',
-                  borderRadius: 12,
-                  background: 'color-mix(in srgb, var(--acc) 6%, transparent)',
-                  border: '1px dashed color-mix(in srgb, var(--acc) 25%, transparent)',
-                  overflowX: 'auto',
-                  textAlign: 'center',
-                  fontSize: 17,
-                  color: 'var(--tx)',
-                  cursor: 'pointer',
-                  transition: 'all .16s ease',
-                }}
-                dangerouslySetInnerHTML={{ __html: blockHtml }}
-              />
-            );
-          } catch {
-            return <pre key={i} style={{ padding: 10, background: 'var(--card2)', color: 'var(--pal-coral)', borderRadius: 8 }}>{`$$\n${l.text}\n$$`}</pre>;
-          }
-        }
-        if (l.kind === 'sketch') {
-          return (
-            <div key={i} style={{ margin: '16px 0', textAlign: 'center' }}>
-              <img loading="lazy" decoding="async" src={l.text} alt="Math Sketch" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--card2)' }} />
-            </div>
-          );
-        }
-        if (l.kind === 'code') {
-          return (
-            <pre key={i} className="navsb" style={{
-              margin: '10px 0', padding: '12px 14px', borderRadius: 10, overflowX: 'auto',
-              background: 'var(--card2)', border: 'none',
-              fontFamily: MONO, fontSize: 12.5, lineHeight: 1.65, color: 'var(--tx)',
-            }}>{l.text}</pre>
-          );
-        }
-        if (l.kind === 'todo') {
-          return (
-            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '3px 0' }}>
-              <button onClick={() => onToggle(l.i)} role="checkbox" aria-checked={l.done}
-                aria-label={l.text || 'To-do'} className="k-squish"
-                style={{
-                  width: 16, height: 16, flex: 'none', marginTop: 4, borderRadius: 4,
-                  border: `1.25px solid ${l.done ? 'var(--acc)' : 'var(--line2)'}`,
-                  background: l.done ? 'var(--acc)' : 'transparent', display: 'grid', placeItems: 'center',
-                  cursor: 'pointer', outline: 'none',
-                }}>
-                {l.done && <Icon name="check" size={10.5} color="var(--ink)" />}
-              </button>
-              <span style={{
-                fontSize: 15, lineHeight: 1.74,
-                ...(l.done ? { textDecoration: 'line-through', color: 'var(--tx3)' } : { color: 'var(--tx)' }),
-              }}>{inline(l.text)}</span>
-            </div>
-          );
-        }
-        if (l.kind === 'bullet' || l.kind === 'number') {
-          return (
-            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '2px 0' }}>
-              {l.kind === 'bullet'
-                ? <span aria-hidden style={{ width: 5.5, height: 5.5, flex: 'none', borderRadius: 3, background: 'var(--tx3)', marginTop: 9 }} />
-                : <span aria-hidden style={{ flex: 'none', fontSize: 13.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{l.n}.</span>}
-              <span style={{ fontSize: 15, lineHeight: 1.74, color: 'var(--tx)' }}>{inline(l.text)}</span>
-            </div>
-          );
-        }
-        if (l.kind === 'quote') {
-          return (
-            <blockquote key={i} style={{
-              margin: '8px 0', paddingLeft: 14, borderLeft: '3px solid var(--acc)',
-              fontSize: 14.5, lineHeight: 1.75, fontStyle: 'italic', color: 'var(--tx2)',
-            }}>{inline(l.text)}</blockquote>
-          );
-        }
-        if (l.kind === 'callout') {
-          return (
-            <div key={i} style={{
-              margin: '10px 0', padding: '12px 14px', borderRadius: 10, fontSize: 14, lineHeight: 1.68,
-              background: 'color-mix(in srgb, var(--acc) 9%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--acc) 22%, transparent)', color: 'var(--tx)',
-            }}>{inline(l.text)}</div>
-          );
-        }
-        const h = HEADING[l.kind];
-        if (h) return <div key={i} style={{ ...h, color: 'var(--tx)' }}>{inline(l.text)}</div>;
-        return <p key={i} style={{ fontSize: 15, lineHeight: 1.76, color: 'var(--tx)', margin: '4px 0' }}>{inline(l.text)}</p>;
-      })}
-    </div>
-  );
-}
-
-const HEADING: Partial<Record<LineKind, React.CSSProperties>> = {
-  h1: { fontSize: 23, fontWeight: 800, letterSpacing: '-.026em', lineHeight: 1.3, margin: '26px 0 8px' },
-  h2: { fontSize: 18.5, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.35, margin: '20px 0 6px' },
-  h3: { fontSize: 15.5, fontWeight: 700, letterSpacing: '-.014em', lineHeight: 1.4, margin: '16px 0 4px' },
-};
-
-const KICKER: React.CSSProperties = {
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)',
-};
-
-/** Grow a textarea to fit, so the note never scrolls inside its own field. */
-function autosize(el: HTMLTextAreaElement) {
-  el.style.height = 'auto';
-  el.style.height = `${el.scrollHeight}px`;
 }

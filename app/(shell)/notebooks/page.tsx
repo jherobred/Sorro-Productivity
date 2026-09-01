@@ -253,50 +253,74 @@ $$
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
-        display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
-      }}>
-        {/* Back out of wherever you are, one step at a time: the open note,
-            then the notebook, then the shelf. The mouse's side button does the
-            same thing; this is the one you can see. */}
-        {canGoBack && (
-          <button onClick={stepBack} className="hov k-squish" aria-label="Back"
-            style={{
-              flex: 'none', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center',
-              border: '1px solid var(--line2)', marginRight: 2,
-            }}>
-            <Icon name="back" size={15} color="var(--tx2)" />
-          </button>
-        )}
-
-        <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
-
-        {!phone && tab === 'notebooks' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>
-            <Crumbs
-              notebook={notebook?.name ?? null}
-              note={note?.title ?? null}
-              inTrash={inTrash}
-              onRoot={() => { setNbId(null); setNoteId(null); setInTrash(false); }} />
-            <button onClick={() => { setInTrash((v) => !v); setNbId(null); }} className="hov"
-              aria-pressed={inTrash} title="Trash & Archive"
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
+      {/* Top Header Navigation */}
+      {!(phone && note) ? (
+        <div style={{
+          flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
+          display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
+        }}>
+          {canGoBack && (
+            <button onClick={stepBack} className="hov k-squish" aria-label="Back"
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
-                borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
-                fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
+                flex: 'none', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center',
+                border: '1px solid var(--line2)', marginRight: 6, background: 'var(--card2)', cursor: 'pointer',
               }}>
-              <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
-              Trash & Archive{trash.length ? ` ${trash.length}` : ''}
+              <Icon name="back" size={15} color="var(--tx2)" />
             </button>
-          </div>
-        )}
-      </div>
+          )}
+
+          <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
+
+          {!phone && tab === 'notebooks' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>
+              <Crumbs
+                notebook={notebook?.name ?? null}
+                note={note?.title ?? null}
+                inTrash={inTrash}
+                onRoot={() => { setNbId(null); setNoteId(null); setInTrash(false); }} />
+              <button onClick={() => { setInTrash((v) => !v); setNbId(null); }} className="hov"
+                aria-pressed={inTrash} title="Trash & Archive"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
+                  borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
+                  fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
+                }}>
+                <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
+                Trash & Archive{trash.length ? ` ${trash.length}` : ''}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Phone Active Note Top Navigation Bar */
+        <div style={{
+          flex: 'none', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderBottom: '1px solid var(--line2)', background: 'var(--card)', width: '100%', boxSizing: 'border-box',
+        }}>
+          <button
+            onClick={() => setNoteId(null)}
+            className="hov k-squish"
+            aria-label="Back to note list"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+              background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx)',
+              fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <Icon name="back" size={14} color="var(--tx2)" />
+            <span>{notebook?.name || 'Notes'}</span>
+          </button>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)', maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {note.title || 'Untitled Note'}
+          </span>
+        </div>
+      )}
 
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        padding: phone ? '0 14px 20px' : '0 22px 20px',
+        padding: phone ? (note ? '0' : '0 14px 20px') : '0 22px 20px',
+        width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden',
       }}>
         {tab === 'shelf' && (
           <GlobalShelf

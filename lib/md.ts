@@ -20,7 +20,7 @@
 export type LineKind =
   | 'p' | 'h1' | 'h2' | 'h3'
   | 'bullet' | 'number' | 'todo'
-  | 'quote' | 'callout' | 'code' | 'math' | 'sketch' | 'divider' | 'blank';
+  | 'quote' | 'callout' | 'code' | 'math' | 'sketch' | 'table' | 'columns' | 'video' | 'divider' | 'blank';
 
 export type Line = {
   /** Index into the source array — what an edit writes back to. */
@@ -44,12 +44,13 @@ const RULES: [RegExp, LineKind][] = [
   [/^\d+\. /, 'number'],
   [/^> /, 'quote'],
   [/^\|\| /, 'callout'],
-  [/^(---|\*\*\*)\s*$/, 'divider'],
+  [/^(---|\*\*\*|___)\s*$/, 'divider'],
 ];
 
 /**
  * Split a document into rendered lines. Fenced code collapses into a single
- * `code` line holding the run, and block math ($$...$$) collapses into a `math` line.
+ * `code` line holding the run, block math ($$...$$) collapses into a `math` line,
+ * tables collapse into `table` lines, and multi-columns into `columns` lines.
  */
 export function parse(body: string): Line[] {
   const src = body.split('\n');
@@ -65,6 +66,32 @@ export function parse(body: string): Line[] {
       i++;
       while (i < src.length && !src[i].startsWith('```')) buf.push(src[i++]);
       out.push({ i: start, kind: 'code', text: buf.join('\n'), done: false, n: 0 });
+      counter = 0;
+      continue;
+    }
+
+    // Multi-column blocks
+    if (raw.startsWith(':::columns') || raw.startsWith(':::col')) {
+      const start = i;
+      const buf: string[] = [];
+      i++;
+      while (i < src.length && !src[i].startsWith(':::end') && !(src[i].startsWith(':::') && buf.length > 2 && src[i] === ':::')) {
+        buf.push(src[i++]);
+      }
+      out.push({ i: start, kind: 'columns', text: buf.join('\n'), done: false, n: 0 });
+      counter = 0;
+      continue;
+    }
+
+    // Markdown Table blocks: contiguous lines starting and ending with |
+    if (raw.trim().startsWith('|') && raw.trim().endsWith('|') && raw.trim().length > 2) {
+      const start = i;
+      const buf: string[] = [raw.trim()];
+      while (i + 1 < src.length && src[i + 1].trim().startsWith('|') && src[i + 1].trim().endsWith('|')) {
+        i++;
+        buf.push(src[i].trim());
+      }
+      out.push({ i: start, kind: 'table', text: buf.join('\n'), done: false, n: 0 });
       counter = 0;
       continue;
     }
@@ -95,10 +122,21 @@ export function parse(body: string): Line[] {
       continue;
     }
 
+    // Sketches
     if (raw.startsWith('![math-sketch](') || raw.startsWith('![sketch](')) {
       const match = raw.match(/!\[([^\]]*)\]\(([^)]+)\)/);
       if (match) {
         out.push({ i, kind: 'sketch', text: match[2], done: false, n: 0 });
+        counter = 0;
+        continue;
+      }
+    }
+
+    // Video embeds: ![video](url) or direct video URL lines
+    if (raw.startsWith('![video](')) {
+      const match = raw.match(/!\[video\]\(([^)]+)\)/);
+      if (match) {
+        out.push({ i, kind: 'video', text: match[1], done: false, n: 0 });
         counter = 0;
         continue;
       }
@@ -135,29 +173,32 @@ export type Span =
   | { s: 'code'; text: string }
   | { s: 'math'; text: string }
   | { s: 'image'; text: string; alt: string; url: string }
+  | { s: 'video'; text: string; url: string }
   | { s: 'link'; text: string };
 
 /** Inline marks inside one line including inline LaTeX math ($...$). */
 export function spans(text: string): Span[] {
   const out: Span[] = [];
-  const re = /!\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\]|\\\((.+?)\\\)|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`|(?<!\\)\$([^$\n]+)(?<!\\)\$/g;
+  const re = /!\[video\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\]|\\\((.+?)\\\)|\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)|`([^`]+)`|(?<!\\)\$([^$\n]+)(?<!\\)\$/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push({ s: 'text', text: text.slice(last, m.index) });
-    if (m[1] !== undefined && m[2] !== undefined) {
-      out.push({ s: 'image', text: m[1], alt: m[1], url: m[2] });
-    } else if (m[3] !== undefined) {
-      out.push({ s: 'link', text: m[3].trim() });
+    if (m[1] !== undefined) {
+      out.push({ s: 'video', text: 'video', url: m[1] });
+    } else if (m[2] !== undefined && m[3] !== undefined) {
+      out.push({ s: 'image', text: m[2], alt: m[2], url: m[3] });
     } else if (m[4] !== undefined) {
-      out.push({ s: 'math', text: m[4] });
+      out.push({ s: 'link', text: m[4].trim() });
     } else if (m[5] !== undefined) {
-      out.push({ s: 'bold', text: m[5] });
+      out.push({ s: 'math', text: m[5] });
     } else if (m[6] !== undefined) {
-      out.push({ s: 'italic', text: m[6] });
+      out.push({ s: 'bold', text: m[6] });
     } else if (m[7] !== undefined) {
-      out.push({ s: 'code', text: m[7] });
+      out.push({ s: 'italic', text: m[7] });
     } else if (m[8] !== undefined) {
-      out.push({ s: 'math', text: m[8] });
+      out.push({ s: 'code', text: m[8] });
+    } else if (m[9] !== undefined) {
+      out.push({ s: 'math', text: m[9] });
     }
     last = m.index! + m[0].length;
   }
