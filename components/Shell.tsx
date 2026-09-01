@@ -198,14 +198,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useAlwaysFullscreen(phone);
 
   /**
-   * Ctrl/Cmd+\ cycles the sidebar modes: open -> compact -> hidden -> open.
+   * Ctrl/Cmd+\ or clicking logo toggles between full ('open') and partial ('compact').
    */
   const layout = prefs.shellLayout ?? 'L3';
   /** Two of the five have no sidebar at all, and L1's is always the rail. */
   const hasSidebar = HAS_SIDEBAR[layout];
 
-  const chosenSidebar: 'open' | 'compact' | 'hidden' =
-    prefs.sidebar === 'compact' ? 'compact' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'hidden' : 'open');
+  const chosenSidebar: 'open' | 'compact' =
+    prefs.sidebar === 'compact' ? 'compact' : 'open';
 
   // L1 is the rail by definition — its width is what pays for the context
   // pane, so letting the user open it back to 236px would leave no room for
@@ -220,7 +220,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const cycleSidebarMode = useCallback(() => {
     if (!hasSidebar || layout === 'L1') return;
-    setSidebarMode(sidebarMode === 'open' ? 'compact' : (sidebarMode === 'compact' ? 'hidden' : 'open'));
+    setSidebarMode(sidebarMode === 'open' ? 'compact' : 'open');
   }, [hasSidebar, layout, sidebarMode, setSidebarMode]);
 
   useEffect(() => {
@@ -477,7 +477,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             : 'inset -1px 0 0 rgba(38,32,54,.05), inset 1px 0 0 rgba(255,255,255,.95)'),
         }}>
           {sidebarMode === 'open' ? (
-            /* Open Mode Header - 1 click partial collapses to icons */
+            /* Open Mode Header - click shrinks to partial (compact icons) */
             <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 16px 18px', minWidth: 236 }}>
               <button
                 onClick={() => setSidebarMode('compact')}
@@ -490,8 +490,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   padding: 0,
                   outline: 'none',
                 }}
-                title="Click to partial collapse (icons only)"
-                aria-label="Click to partial collapse"
+                title="Click to shrink to compact navigation"
+                aria-label="Click to shrink to compact navigation"
               >
                 <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
                   basedly
@@ -499,10 +499,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            /* Compact Icon-Only Mode Header - 2nd click fully collapses */
+            /* Compact Icon-Only Mode Header - click expands back to full navigation */
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0 14px', width: 64 }}>
               <button
-                onClick={() => setSidebarMode('hidden')}
+                onClick={() => setSidebarMode('open')}
                 className="k-squish"
                 style={{
                   width: 40,
@@ -516,8 +516,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   display: 'grid',
                   placeItems: 'center',
                 }}
-                title="Click to fully collapse sidebar"
-                aria-label="Click to fully collapse sidebar"
+                title="Click to expand to full navigation"
+                aria-label="Click to expand to full navigation"
               >
                 <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: '-.04em', color: 'var(--tx)', lineHeight: 1 }}>
                   b
