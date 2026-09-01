@@ -1,10 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdkbnsjczanvmmpsovhm.supabase.co';
+const SUPABASE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_dFRyCNdg39_7Ee3OiObwHw_5CQK5szk';
+
 // Publishable key is safe in the client — RLS is what protects the data.
 // Every bd_* table has user_id = auth.uid() policies; see the basedly_v1_schema migration.
 export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+  SUPABASE_URL,
+  SUPABASE_KEY,
   {
     auth: {
       // PKCE is required for the Capacitor shell: the OAuth round-trip leaves
