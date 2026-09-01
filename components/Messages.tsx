@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ import {
   type Conversation, type Member, type Message, type Attachment, type DriveFile, type ReportReason,
 } from '@/lib/messages';
 import { usePosts, useThreads, type Kind } from '@/lib/community';
-import { PostPickerModal } from './community/PostPickerModal';
+const PostPickerModal = dynamic(() => import('./community/PostPickerModal').then((m) => m.PostPickerModal), { ssr: false });
 import {
   parseRpMessage,
   sendRp,

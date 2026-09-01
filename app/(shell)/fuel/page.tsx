@@ -1,11 +1,12 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { FuelWaterCard } from '@/components/fuel/WaterFlask';
 import { FoodPhotoCard, DEFAULT_PRESETS, type FoodPreset } from '@/components/fuel/FoodPhotoCard';
 import { MealEditor } from '@/components/fuel/MealEditor';
-import { MealSheet } from '@/components/body/MealSheet';
+const MealSheet = dynamic(() => import('@/components/body/MealSheet').then((m) => m.MealSheet), { ssr: false });
 import { SleepArc } from '@/components/body/Instruments';
 import { useOverlayBack } from '@/lib/nav';
 import { useLayout } from '@/lib/useLayout';

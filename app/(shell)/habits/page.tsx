@@ -24,9 +24,9 @@ import { Buddy } from '@/components/Buddy';
 import { HabitCard } from '@/components/habits/HabitCard';
 /* Only on screen while you are making or editing a habit. */
 const HabitCreatorModal = dynamic(() => import('@/components/habits/HabitCreatorModal').then((m) => m.HabitCreatorModal), { ssr: false });
-import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
-import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
-import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';
+const HabitTimerModal = dynamic(() => import('@/components/habits/HabitTimerModal').then((m) => m.HabitTimerModal), { ssr: false });
+const HabitDetailModal = dynamic(() => import('@/components/habits/HabitDetailModal').then((m) => m.HabitDetailModal), { ssr: false });
+const HabitsAnalytics = dynamic(() => import('@/components/habits/HabitsAnalytics').then((m) => m.HabitsAnalytics), { ssr: false });
 import { HabitStats } from '@/components/habits/HabitStats';
 import { AsciiBar } from '@/components/AsciiBar';
 

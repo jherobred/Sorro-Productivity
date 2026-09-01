@@ -8,10 +8,10 @@ import {
   type Highlight, type StorySlide,
   deleteHighlight,
 } from '@/lib/stories';
-import { HighlightEditorModal } from './HighlightEditorModal';
 /* Only mounts once a highlight is tapped, so it has no business in the profile
    chunk that every visit to a profile downloads. */
 const StoryViewer = dynamic(() => import('./StoryViewer').then((m) => m.StoryViewer), { ssr: false });
+const HighlightEditorModal = dynamic(() => import('./HighlightEditorModal').then((m) => m.HighlightEditorModal), { ssr: false });
 
 export function HighlightsTray({
   userId,

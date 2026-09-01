@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -16,11 +17,11 @@ import { InlineForm, AddButton, RowActions, toCentavos, fromCentavos } from '@/c
 import { TabRail } from '@/components/TabRail';
 import { Stacks, colourOf } from '@/components/money/Instruments';
 import { Jar, type JarRow } from '@/components/money/Jars';
-import { JarPage } from '@/components/money/JarPage';
+const JarPage = dynamic(() => import('@/components/money/JarPage').then((m) => m.JarPage), { ssr: false });
 import { MoneyPad } from '@/components/money/MoneyPad';
-import { LogSheet } from '@/components/money/LogSheet';
+const LogSheet = dynamic(() => import('@/components/money/LogSheet').then((m) => m.LogSheet), { ssr: false });
 import { logDay } from '@/lib/logday';
-import { QuickAdd } from '@/components/money/QuickAdd';
+const QuickAdd = dynamic(() => import('@/components/money/QuickAdd').then((m) => m.QuickAdd), { ssr: false });
 import { burnPerDay, runwayDays, runwayFill, byCategory, monthStart } from '@/lib/runway';
 import { toast } from '@/lib/toast';
 import { AsciiBar } from '@/components/AsciiBar';

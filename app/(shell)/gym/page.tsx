@@ -1,9 +1,10 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
-import { MovementSheet } from '@/components/gym/MovementSheet';
+const MovementSheet = dynamic(() => import('@/components/gym/MovementSheet').then((m) => m.MovementSheet), { ssr: false });
 import { useTraining, TrainingOverlays } from '@/components/body/Gym';
 import { useLayout } from '@/lib/useLayout';
 import { ymd } from '@/lib/series';
