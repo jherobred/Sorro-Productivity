@@ -27,10 +27,12 @@ import type { Meal } from '@/lib/body';
 const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 
 export function MealSheet({
-  on, slot: initialSlot, onClose, onSave,
+  on, slot: initialSlot, currentPhotoCount = 0, maxPhotos = 20, onClose, onSave,
 }: {
   on: string;
   slot?: string;
+  currentPhotoCount?: number;
+  maxPhotos?: number;
   onClose: () => void;
   onSave: (m: Meal) => void;
 }) {
@@ -48,7 +50,13 @@ export function MealSheet({
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
 
+  const isLimitReached = currentPhotoCount >= maxPhotos;
+
   const scan = async (f: File) => {
+    if (isLimitReached) {
+      toast(`Maximum ${maxPhotos} photos reached for this day (${currentPhotoCount}/${maxPhotos})`);
+      return;
+    }
     setBusy(true);
     setFile(f);
     try {
@@ -71,7 +79,7 @@ export function MealSheet({
     try {
       // The photo is uploaded only once you keep the meal — a scan you
       // abandoned should not leave a file in the bucket.
-      const photo_path = file ? await uploadTo('bd-feed', file) : null;
+      const photo_path = file && !isLimitReached ? await uploadTo('bd-feed', file) : null;
       onSave({
         id: crypto.randomUUID(), on_date: on, name: name.trim() || 'Meal', slot,
         kcal: num(kcal), protein: num(protein), carbs: num(carbs), fat: num(fat), photo_path,
@@ -115,22 +123,35 @@ export function MealSheet({
           </button>
         </div>
 
+        {isLimitReached && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 10, background: 'rgba(255,107,107,0.12)',
+            border: '1px solid rgba(255,107,107,0.3)', color: '#FF8585', fontSize: 11.5,
+            fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 7,
+          }}>
+            <span>⚠️</span>
+            <span>Daily photograph limit reached ({maxPhotos}/{maxPhotos} photos). You can still log meal nutrition by entering details below.</span>
+          </div>
+        )}
+
         {preview ? (
           <img loading="lazy" decoding="async" src={preview} alt="" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 13, marginBottom: 12 }} />
         ) : (
           <label style={{
             display: 'grid', placeItems: 'center', gap: 7, padding: '26px 16px', marginBottom: 12,
-            border: '1.5px dashed var(--line2)', borderRadius: 14, cursor: 'pointer', textAlign: 'center',
-            opacity: busy ? 0.5 : 1,
+            border: `1.5px dashed ${isLimitReached ? 'rgba(255,107,107,0.3)' : 'var(--line2)'}`,
+            borderRadius: 14, cursor: isLimitReached ? 'not-allowed' : 'pointer', textAlign: 'center',
+            opacity: busy ? 0.5 : isLimitReached ? 0.6 : 1,
+            background: isLimitReached ? 'rgba(255,255,255,0.01)' : 'transparent',
           }}>
-            <Icon name="photo" size={20} color="var(--tx3)" />
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
-              {busy ? 'Reading it…' : 'Photograph the plate'}
+            <Icon name="photo" size={20} color={isLimitReached ? '#FF8585' : 'var(--tx3)'} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: isLimitReached ? '#FF8585' : 'var(--tx2)' }}>
+              {busy ? 'Reading it…' : isLimitReached ? `Daily photo limit reached (${maxPhotos}/${maxPhotos})` : 'Photograph the plate'}
             </span>
             <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
-              It estimates the numbers; you check them before anything is saved.
+              {isLimitReached ? 'Max 20 photos allowed per day. Log details manually below.' : 'It estimates the numbers; you check them before anything is saved.'}
             </span>
-            <input type="file" accept="image/*" capture="environment" hidden
+            <input type="file" accept="image/*" capture="environment" hidden disabled={isLimitReached}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void scan(f); e.target.value = ''; }} />
           </label>
         )}

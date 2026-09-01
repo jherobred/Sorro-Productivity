@@ -23,6 +23,8 @@ const HUE_SLEEP = '#FFC24B';
 const HUE_CYAN = '#38BDF8';
 const HUE_PINK = '#F472B6';
 
+const MAX_DAY_PHOTOS = 20;
+
 export default function FuelPage() {
   const { phone } = useLayout();
   const today = ymd(new Date());
@@ -47,6 +49,11 @@ export default function FuelPage() {
 
   const { total, lastHour } = useMemo(() => waterTotals(sips, now), [sips, now]);
   const hour = hourOf(now);
+
+  // Photos stored today
+  const dayMealsWithPhotos = useMemo(() => meals.filter((m) => Boolean(m.photo_path)), [meals]);
+  const photoCount = dayMealsWithPhotos.length;
+  const isPhotoLimitReached = photoCount >= MAX_DAY_PHOTOS;
 
   // Total macros and calories today
   const { totalKcal, totalProtein, totalCarbs, totalFat } = useMemo(() => {
@@ -95,6 +102,23 @@ export default function FuelPage() {
 
   /** Quick re-log meal from presets */
   const logPresetMeal = (p: FoodPreset) => {
+    if (p.photo_path && photoCount >= MAX_DAY_PHOTOS) {
+      toast(`Photo limit reached (${photoCount}/${MAX_DAY_PHOTOS} today). Logged without photo.`);
+      const newMeal: Meal = {
+        id: crypto.randomUUID(),
+        on_date: today,
+        name: p.name,
+        slot: p.slot,
+        kcal: p.kcal,
+        protein: p.protein,
+        carbs: p.carbs,
+        fat: p.fat,
+        photo_path: null,
+        place: null,
+      };
+      A.addMeal.mutate(newMeal);
+      return;
+    }
     const newMeal: Meal = {
       id: crypto.randomUUID(),
       on_date: today,
@@ -630,7 +654,7 @@ export default function FuelPage() {
             </div>
           </div>
 
-          {/* Meals Photo Grid ("MEALS — TAP TO LOG AGAIN") */}
+          {/* Meals Photo Grid ("PHOTOGRAPHS GALLERY — MEALS") */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div
               style={{
@@ -650,7 +674,7 @@ export default function FuelPage() {
                   color: 'var(--tx3)',
                 }}
               >
-                MEALS — TAP TO LOG AGAIN
+                PHOTOGRAPHS GALLERY — MEALS
               </span>
               <span
                 className="num"
@@ -658,10 +682,27 @@ export default function FuelPage() {
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10.5,
                   fontWeight: 700,
-                  color: 'var(--tx3)',
+                  color: isPhotoLimitReached ? '#FF6B6B' : 'var(--tx3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
                 }}
               >
-                {meals.length > 0 ? `${meals.length} TODAY` : '5 TODAY'}
+                <span>{photoCount} / {MAX_DAY_PHOTOS} PHOTOS TODAY</span>
+                {isPhotoLimitReached && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      padding: '1px 5px',
+                      borderRadius: 4,
+                      background: 'rgba(255,107,107,0.15)',
+                      color: '#FF6B6B',
+                      fontWeight: 800,
+                    }}
+                  >
+                    MAX
+                  </span>
+                )}
               </span>
             </div>
 
@@ -674,9 +715,23 @@ export default function FuelPage() {
                 gap: 'clamp(8px, 1.2vw, 12px)',
               }}
             >
+              {/* 1. Today's Logged Meal Photos (up to 20 max) */}
+              {dayMealsWithPhotos.map((m) => (
+                <FoodPhotoCard
+                  key={m.id}
+                  name={m.name}
+                  kcal={m.kcal}
+                  photo_path={m.photo_path!}
+                  isLoggedToday
+                  slot={m.slot}
+                  onLogAgain={() => setEditing(m)}
+                />
+              ))}
+
+              {/* 2. Preset Meal Photos */}
               {DEFAULT_PRESETS.map((p) => (
                 <FoodPhotoCard
-                  key={p.name}
+                  key={`preset-${p.name}`}
                   name={p.name}
                   kcal={p.kcal}
                   photo_path={p.photo_path}
@@ -688,28 +743,34 @@ export default function FuelPage() {
 
           {/* 5. Primary Action Button: "Photograph a plate" */}
           <button
-            onClick={() => setScanning(true)}
+            onClick={() => {
+              if (isPhotoLimitReached) {
+                toast(`Maximum ${MAX_DAY_PHOTOS} photographs reached for today (${photoCount}/${MAX_DAY_PHOTOS}). Remove or edit a meal photo to add more.`);
+                return;
+              }
+              setScanning(true);
+            }}
             className="k-squish"
             style={{
               width: '100%',
               minHeight: 52,
               borderRadius: 14,
-              background: HUE_LIME,
-              color: '#0B0A13',
+              background: isPhotoLimitReached ? 'rgba(255,255,255,0.08)' : HUE_LIME,
+              color: isPhotoLimitReached ? 'var(--tx2)' : '#0B0A13',
               fontSize: 'clamp(14px, 1.4vw, 16px)',
               fontWeight: 800,
-              border: 'none',
+              border: isPhotoLimitReached ? '1px solid var(--line2)' : 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 9,
-              boxShadow: `0 4px 20px color-mix(in srgb, ${HUE_LIME} 45%, transparent)`,
+              boxShadow: isPhotoLimitReached ? undefined : `0 4px 20px color-mix(in srgb, ${HUE_LIME} 45%, transparent)`,
               transition: 'transform .15s ease, filter .15s ease',
             }}
           >
-            <Icon name="photo" size={20} color="#0B0A13" />
-            Photograph a plate
+            <Icon name="photo" size={20} color={isPhotoLimitReached ? 'var(--tx2)' : '#0B0A13'} />
+            {isPhotoLimitReached ? `Daily photo limit reached (${MAX_DAY_PHOTOS}/${MAX_DAY_PHOTOS})` : 'Photograph a plate'}
           </button>
         </div>
       </div>
@@ -736,8 +797,14 @@ export default function FuelPage() {
       {scanning && (
         <MealSheet
           on={today}
+          currentPhotoCount={photoCount}
+          maxPhotos={MAX_DAY_PHOTOS}
           onClose={() => setScanning(false)}
           onSave={(m) => {
+            if (m.photo_path && photoCount >= MAX_DAY_PHOTOS) {
+              toast(`Daily limit of ${MAX_DAY_PHOTOS} photos reached.`);
+              return;
+            }
             A.addMeal.mutate(m);
             toast(`${m.name} added`);
           }}
@@ -750,6 +817,10 @@ export default function FuelPage() {
           on={today}
           onClose={() => setEditing(undefined)}
           onSave={(m) => {
+            if (m.photo_path && !editing?.photo_path && photoCount >= MAX_DAY_PHOTOS) {
+              toast(`Daily limit of ${MAX_DAY_PHOTOS} photos reached.`);
+              return;
+            }
             A.editMeal.mutate({ id: m.id, patch: m });
             toast(`${m.name} saved`);
           }}

@@ -23,6 +23,8 @@ import { MUSCLES, type Muscle } from './lift';
  * dated log with muscle groups rather than a weekly plan with tick boxes.
  */
 
+export const MAX_DAY_MEAL_PHOTOS = 20;
+
 export type Day = {
   on_date: string;
   sleep_h: number | null;

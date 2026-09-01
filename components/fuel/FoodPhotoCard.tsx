@@ -29,12 +29,16 @@ export function FoodPhotoCard({
   name,
   kcal,
   photo_path,
+  isLoggedToday,
+  slot,
   onLogAgain,
   onEdit,
 }: {
   name: string;
   kcal: number;
   photo_path: string;
+  isLoggedToday?: boolean;
+  slot?: string;
   onLogAgain: () => void;
   onEdit?: () => void;
 }) {
@@ -51,7 +55,7 @@ export function FoodPhotoCard({
         overflow: 'hidden',
         aspectRatio: '1 / 0.84',
         background: 'var(--card2)',
-        border: '1px solid var(--line2)',
+        border: `1px solid ${isLoggedToday ? 'color-mix(in srgb, var(--acc) 50%, var(--line2))' : 'var(--line2)'}`,
         cursor: 'pointer',
         padding: 0,
         textAlign: 'left',
@@ -73,6 +77,30 @@ export function FoodPhotoCard({
           display: 'block',
         }}
       />
+
+      {/* Top Tag when logged today */}
+      {isLoggedToday && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            padding: '2px 6px',
+            borderRadius: 6,
+            background: 'rgba(11,10,19,0.82)',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid var(--acc)',
+            color: 'var(--accTx, #FFFFFF)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 8.5,
+            fontWeight: 800,
+            letterSpacing: '.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {slot || 'Today'}
+        </span>
+      )}
 
       {/* Bottom Gradient and Info Overlay */}
       <span
