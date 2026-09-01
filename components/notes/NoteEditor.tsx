@@ -15,6 +15,11 @@ import {
 } from '@/lib/md';
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
 
+/* KaTeX's stylesheet used to sit at the top of globals.css, which made 41 KB of
+   render-blocking CSS that every route paid for so that one tab could render
+   maths. It rides with this editor now, which is itself loaded on demand. */
+import 'katex/dist/katex.min.css';
+
 /**
  * KaTeX and the two maths modals are loaded on demand.
  */

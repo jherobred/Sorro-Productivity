@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation } from './offline';
 import { settler } from './settle';
+import { dueKinds, AUTO_SYNC_MS } from './syncDue';
 
 /**
  * Third-party connections.
@@ -75,8 +76,6 @@ export async function runSync(kind: Integration['kind']): Promise<SyncResult> {
   return data ?? { ok: false, imported: 0, message: 'No response' };
 }
 
-const AUTO_SYNC_MS = 30 * 60_000;   // half an hour is plenty for a class timetable
-
 /**
  * Keep connected integrations fresh without anyone pressing anything.
  *
@@ -88,27 +87,31 @@ export function useAutoSync() {
   const qc = useQueryClient();
   const { data: rows = [] } = useIntegrations();
   const running = useRef(false);
+  /** When each kind was last *attempted*, success or not. See dueKinds. */
+  const tried = useRef<Record<string, number>>({});
 
   const active = rows.filter((r) => r.enabled).map((r) => r.kind).join(',');
 
   useEffect(() => {
     if (!active) return;
 
-    const due = () => rows.filter((r) => {
-      if (!r.enabled) return false;
-      if (!r.last_sync_at) return true;                    // never synced
-      return Date.now() - new Date(r.last_sync_at).getTime() > AUTO_SYNC_MS;
-    });
-
     const run = async () => {
       if (running.current || document.hidden) return;
-      const todo = due();
+      // Read the cache, not the `rows` this effect closed over: the effect only
+      // re-runs when `active` changes, so the captured rows keep the
+      // `last_sync_at` they had when the connection was first switched on —
+      // frozen, always stale, always due. That is what made a three-second
+      // app-switch fire a full Canvas and Calendar sync, every time.
+      const todo = dueKinds(qc.getQueryData<Integration[]>(KEY) ?? [], tried.current, Date.now());
       if (!todo.length) return;
       running.current = true;
       try {
         // Sequential on purpose: two Edge Function invocations at once from a
         // phone on campus wifi is how you get one of them timing out.
-        for (const r of todo) await runSync(r.kind);
+        for (const kind of todo) {
+          tried.current[kind] = Date.now();
+          await runSync(kind as Integration['kind']);
+        }
         for (const k of ['tasks', 'events', 'notifications', 'integrations']) {
           void qc.invalidateQueries({ queryKey: [k] });
         }
@@ -127,7 +130,10 @@ export function useAutoSync() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-    // `active` is the stable signal — `rows` is a new array on every render.
+    // `active` is the stable signal — `rows` is a new array on every render,
+    // and `run` reads the live rows out of the cache rather than closing over
+    // them, so this effect only needs to restart when a connection is switched
+    // on or off.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 }

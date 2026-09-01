@@ -2,8 +2,6 @@
    Lifted verbatim from Basedly.dc.html <helmet>. Every number here is a spec
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
-@import 'katex/dist/katex.min.css';
-
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
    its own inline styles. README calls that link inert, but the browser applies
    it — and the reference screenshots were rendered with it in the cascade. So
@@ -419,7 +417,9 @@ body {
               max-width .28s cubic-bezier(0.16, 1, 0.3, 1),
               transform .28s cubic-bezier(0.16, 1, 0.3, 1),
               opacity .22s ease;
-  will-change: width, min-width;
+  /* `will-change: width` bought nothing — width is laid out, never composited,
+     so there is no layer the hint can prepare. All it did was keep the glass
+     sidebar (backdrop-filter and all) promoted for the whole session. */
 }
 .nomo .bd-rail { transition: none !important; }
 
@@ -551,9 +551,13 @@ body {
   outline-offset: 2px;
 }
 
+/* No `will-change: transform` here. `k-squish` is on 500+ buttons at once, and
+   the hint is a promise the element is *about* to move — the browser answers it
+   by giving every one of them its own compositor layer and holding it forever.
+   On the Android WebView that is hundreds of live layers of GPU memory and
+   raster work for a 160ms :active squish the compositor handles unaided. */
 .k-squish {
   transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
 }
 .k-squish:active {
   transform: scale(0.96);

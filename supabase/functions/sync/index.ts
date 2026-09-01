@@ -41,16 +41,22 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: auth } } },
   );
 
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (!user) return fail('Not signed in', 401);
-
   let kind = '';
   try { kind = (await req.json()).kind ?? ''; } catch { /* empty body */ }
   if (kind !== 'canvas_lms' && kind !== 'gcal_ics') return fail('Unknown integration');
 
-  const { data: row } = await supabase
-    .from('bd_integrations').select('config,enabled').eq('kind', kind).maybeSingle();
+  // Together, not one after the other. Validating the JWT and reading the
+  // settings row are two round trips out of this function that do not depend
+  // on each other, and the caller is waiting through both. The read is safe to
+  // start before the user is known: RLS scopes it to whoever the JWT says it
+  // is, so an invalid token returns nothing and the check below still refuses.
+  const [{ data: userData }, { data: row }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from('bd_integrations').select('config,enabled').eq('kind', kind).maybeSingle(),
+  ]);
+
+  const user = userData?.user;
+  if (!user) return fail('Not signed in', 401);
   if (!row) return fail('Not connected');
   if (!row.enabled) return fail('Turned off in settings');
 
@@ -76,7 +82,8 @@ Deno.serve(async (req) => {
 /* ------------------------------------------------------------------ Canvas */
 
 type Course = { id: number; name: string };
-type Announcement = { id: number; title: string; message: string; posted_at: string; html_url: string; context_code: string };
+/** `posted_at` is null while an announcement is scheduled but not yet released. */
+type Announcement = { id: number; title: string; message: string; posted_at: string | null; html_url: string; context_code: string };
 type Assignment = { id: number; name: string; due_at: string | null; html_url: string; description: string };
 
 async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<string, string>) {
@@ -106,7 +113,23 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
   const nameOf = new Map(courses.map((c) => [`course_${c.id}`, c.name]));
 
   // Announcements → the bell and the Home pane.
-  const anns = await get<Announcement[]>(`/announcements?${codes}&start_date=${since}&per_page=50`);
+  // Assignments with a due date → tasks, so they group with everything else.
+  //
+  // One leg, not two. Both only need `courses`, and neither reads the other, so
+  // awaiting the announcements first bought nothing and cost a whole extra
+  // Canvas round trip — on a campus network, in a function the phone is
+  // blocked on. Everything below still runs to the same list.
+  const [anns, perCourse] = await Promise.all([
+    get<Announcement[]>(`/announcements?${codes}&start_date=${since}&per_page=50`),
+    Promise.all(
+      courses.map((c) =>
+        get<Assignment[]>(`/courses/${c.id}/assignments?bucket=upcoming&per_page=50`)
+          .then((list) => list.map((a) => ({ a, course: c.name })))
+          // One broken course must not sink the whole sync.
+          .catch(() => [] as { a: Assignment; course: string }[])),
+    ),
+  ]);
+
   const notifs = anns.map((a) => ({
     user_id,
     kind: 'canvas',
@@ -115,17 +138,11 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
     href: a.html_url,
     source: 'canvas_lms',
     external_id: `ann_${a.id}`,
-    created_at: a.posted_at,
+    // An announcement scheduled but not yet released has no posted_at, and a
+    // null in this column takes the whole batch down with it — one unposted
+    // announcement would have failed every sync until somebody released it.
+    created_at: a.posted_at ?? new Date().toISOString(),
   }));
-
-  // Assignments with a due date → tasks, so they group with everything else.
-  const perCourse = await Promise.all(
-    courses.map((c) =>
-      get<Assignment[]>(`/courses/${c.id}/assignments?bucket=upcoming&per_page=50`)
-        .then((list) => list.map((a) => ({ a, course: c.name })))
-        // One broken course must not sink the whole sync.
-        .catch(() => [] as { a: Assignment; course: string }[])),
-  );
 
   const tasks = perCourse.flat()
     .filter(({ a }) => a.due_at)

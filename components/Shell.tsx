@@ -43,7 +43,10 @@ import { useMyIdentity } from '@/lib/people';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 import { useTabOnboarding } from '@/lib/useTabOnboarding';
-import { SpotlightOverlay } from './SpotlightOverlay';
+/* The tour overlay and its mascot are ~930 lines that only ever render the
+   first time you open a tab. It was in the shell chunk, so every route paid
+   for it on every visit forever after. */
+const SpotlightOverlay = dynamic(() => import('./SpotlightOverlay').then((m) => m.SpotlightOverlay), { ssr: false });
 import { useRanked } from '@/lib/challenges';
 import { BirdMascot } from './BasedlyLogo';
 import { GROUP_HUE, GROUP_ORDER, HAS_SIDEBAR, SECTION_GROUP, type GroupName } from '@/lib/shellLayouts';

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Icon, type IconName } from '@/components/Icon';
 import { RowsSkeleton } from '@/components/Skeleton';
 import { useLayout } from '@/lib/useLayout';
@@ -21,7 +22,8 @@ import {
 } from '@/lib/habits';
 import { Buddy } from '@/components/Buddy';
 import { HabitCard } from '@/components/habits/HabitCard';
-import { HabitCreatorModal } from '@/components/habits/HabitCreatorModal';
+/* Only on screen while you are making or editing a habit. */
+const HabitCreatorModal = dynamic(() => import('@/components/habits/HabitCreatorModal').then((m) => m.HabitCreatorModal), { ssr: false });
 import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
 import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
 import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';

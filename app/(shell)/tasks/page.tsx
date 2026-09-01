@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/Icon';
@@ -19,7 +20,9 @@ import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
 import { SwipeableRow } from '@/components/SwipeableRow';
 
-import { TaskDatePicker } from '@/components/TaskDatePicker';
+/* Only on screen once you tap a due date. The inline composer above it stays
+   static - it is the first thing on the page. */
+const TaskDatePicker = dynamic(() => import('@/components/TaskDatePicker').then((m) => m.TaskDatePicker), { ssr: false });
 import { triggerFireworks } from '@/lib/fireworks';
 
 /**
@@ -44,6 +47,128 @@ type Row = {
 };
 
 const PRI_COL: Record<Row['pri'], string> = { High: PAL.coral, Med: PAL.amber, Low: 'var(--tx3)' };
+
+/**
+ * One timer for every live countdown on the page, and the digits are the only
+ * thing subscribed to it.
+ *
+ * This was `setNowMs(Date.now())` on a 1s interval in TasksPage, threaded down
+ * as a prop, so once a second the page re-rendered every row, every group
+ * header, the completed shelf and the open detail panel — with a text field in
+ * it someone might be typing into — to move two digits. Same shape as
+ * UpNextCountdown on Home and PhoneCountdown on the phone home.
+ *
+ * One shared interval rather than one per row: fifty rows meant fifty timers
+ * firing at fifty different moments, which is fifty separate render passes a
+ * second instead of one batched one.
+ */
+const secondSubs = new Set<(ms: number) => void>();
+let secondTimer: ReturnType<typeof setInterval> | null = null;
+
+function useSecond(): number {
+  const [ms, setMs] = useState(() => Date.now());
+  useEffect(() => {
+    secondSubs.add(setMs);
+    secondTimer ??= setInterval(() => {
+      const now = Date.now();
+      for (const f of secondSubs) f(now);
+    }, 1000);
+    return () => {
+      secondSubs.delete(setMs);
+      if (!secondSubs.size && secondTimer) { clearInterval(secondTimer); secondTimer = null; }
+    };
+  }, []);
+  return ms;
+}
+
+/** The countdown pill on a row. Overdue always implies a red alert tier. */
+function RowCountdown({ task, tier }: { task: Task; tier?: 'red' | 'orange' | 'yellow' }) {
+  const countdown = formatTaskCountdown(task, useSecond());
+  if (!countdown) return null;
+  return (
+    <span
+      style={{
+        fontSize: 10.5,
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        padding: '1px 5px',
+        borderRadius: 6,
+        background: countdown.isOverdue || tier === 'red'
+          ? 'color-mix(in srgb, var(--pal-coral) 25%, transparent)'
+          : tier === 'orange'
+          ? 'color-mix(in srgb, #FF9A3C 25%, transparent)'
+          : 'color-mix(in srgb, var(--pal-amber) 20%, transparent)',
+        marginLeft: 4,
+      }}
+    >
+      ⏱️ {countdown.text}
+    </span>
+  );
+}
+
+/** The same countdown, card-sized, for the detail panel. */
+function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof getTaskAlert> }) {
+  const countdown = formatTaskCountdown(task, useSecond());
+  if (!countdown) return null;
+  const hot = countdown.isOverdue || alert?.tier === 'red';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        borderRadius: 14,
+        marginBottom: 18,
+        background: hot
+          ? 'color-mix(in srgb, var(--pal-coral) 16%, var(--card2))'
+          : alert?.tier === 'orange'
+          ? 'color-mix(in srgb, #FF9A3C 14%, var(--card2))'
+          : 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
+        border: `1px solid ${
+          hot ? 'var(--pal-coral)' : alert?.tier === 'orange' ? '#FF9A3C' : 'var(--pal-amber)'
+        }`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className="task-alarm-emoji" style={{ fontSize: 20 }}>
+          {alert?.emoji || '⏱️'}
+        </span>
+        <div>
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 800,
+              letterSpacing: '-.02em',
+              fontVariantNumeric: 'tabular-nums',
+              color: hot ? 'var(--pal-coral)' : 'var(--tx)',
+            }}
+          >
+            {countdown.text}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
+            {countdown.isOverdue ? 'Passed deadline' : 'Live deadline countdown'}
+          </div>
+        </div>
+      </div>
+
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 800,
+          textTransform: 'uppercase',
+          padding: '4px 9px',
+          borderRadius: 8,
+          background: 'var(--card)',
+          color: hot ? 'var(--pal-coral)' : 'var(--tx2)',
+          border: '1px solid var(--line2)',
+        }}
+      >
+        {alert?.label || 'Deadline'}
+      </span>
+    </div>
+  );
+}
 
 /** High sorts above Med above Low. */
 const PRI_RANK: Record<Row['pri'], number> = { High: 3, Med: 2, Low: 1 };
@@ -70,13 +195,6 @@ export default function TasksPage() {
   const { data: lists = [] } = useLists();
   const { data: tasks = [], isPending } = useTasks();
   const A = useTaskActions();
-
-  // 1-second interval ticker for live real-time countdowns
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
   const searchParams = useSearchParams();
@@ -275,7 +393,6 @@ export default function TasksPage() {
               <TaskRow
                 key={r.task.id}
                 row={r}
-                nowMs={nowMs}
                 phone={phone}
                 accent={prefs.accent}
                 leaving={leaving.has(r.task.id)}
@@ -522,7 +639,6 @@ export default function TasksPage() {
         <TaskEditSidepanel
           task={detailTask}
           lists={lists}
-          nowMs={nowMs}
           phone={phone}
           onClose={() => setDetail(null)}
           onPatch={(patch) => A.update.mutate({ id: detailTask.id, patch })}
@@ -535,12 +651,11 @@ export default function TasksPage() {
 }
 
 function TaskRow({
-  row, nowMs, phone, accent, leaving,
+  row, phone, accent, leaving,
   onCheck, onOpen, onDelete, onPatch, onStar, onOpenMenu, onOpenDatePicker, lp,
   isEditingInline, onStartInlineEdit, onEndInlineEdit,
 }: {
   row: Row;
-  nowMs: number;
   phone: boolean;
   accent: string;
   leaving: boolean;
@@ -580,7 +695,6 @@ function TaskRow({
 
   const alert = getTaskAlert(row.task);
   const alertClass = alert ? `task-alert-${alert.tier}` : '';
-  const countdown = formatTaskCountdown(row.task, nowMs);
 
   return (
     <div className={leaving ? 'leaving' : ''} style={{ position: 'relative' }}>
@@ -906,25 +1020,7 @@ function TaskRow({
                         }
                       />
                       <span>{row.dueLabel || row.task.due_on}</span>
-                      {countdown && (
-                        <span
-                          style={{
-                            fontSize: 10.5,
-                            fontWeight: 700,
-                            fontVariantNumeric: 'tabular-nums',
-                            padding: '1px 5px',
-                            borderRadius: 6,
-                            background: countdown.isOverdue || alert?.tier === 'red'
-                              ? 'color-mix(in srgb, var(--pal-coral) 25%, transparent)'
-                              : alert?.tier === 'orange'
-                              ? 'color-mix(in srgb, #FF9A3C 25%, transparent)'
-                              : 'color-mix(in srgb, var(--pal-amber) 20%, transparent)',
-                            marginLeft: 4,
-                          }}
-                        >
-                          ⏱️ {countdown.text}
-                        </span>
-                      )}
+                      <RowCountdown task={row.task} tier={alert?.tier} />
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1048,11 +1144,10 @@ const CHIP = (on: boolean): React.CSSProperties => ({
 });
 
 function TaskEditSidepanel({
-  task, lists, nowMs, phone, onClose, onPatch, onDelete, onComplete,
+  task, lists, phone, onClose, onPatch, onDelete, onComplete,
 }: {
   task: Task;
   lists: List[];
-  nowMs: number;
   phone: boolean;
   onClose: () => void;
   onPatch: (p: Partial<Task>) => void;
@@ -1093,7 +1188,6 @@ function TaskEditSidepanel({
 
   const stars = task.stars || 0;
   const alert = getTaskAlert(task);
-  const countdown = formatTaskCountdown(task, nowMs);
 
   // Sync only when opening a different task
   useEffect(() => {
@@ -1284,68 +1378,9 @@ function TaskEditSidepanel({
           </div>
         </div>
 
-        {/* Live Countdown Timer Card */}
-        {countdown && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              borderRadius: 14,
-              marginBottom: 18,
-              background: alert?.tier === 'red' || countdown.isOverdue
-                ? 'color-mix(in srgb, var(--pal-coral) 16%, var(--card2))'
-                : alert?.tier === 'orange'
-                ? 'color-mix(in srgb, #FF9A3C 14%, var(--card2))'
-                : 'color-mix(in srgb, var(--pal-amber) 12%, var(--card2))',
-              border: `1px solid ${
-                alert?.tier === 'red' || countdown.isOverdue
-                  ? 'var(--pal-coral)'
-                  : alert?.tier === 'orange'
-                  ? '#FF9A3C'
-                  : 'var(--pal-amber)'
-              }`,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="task-alarm-emoji" style={{ fontSize: 20 }}>
-                {alert?.emoji || '⏱️'}
-              </span>
-              <div>
-                <div
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 800,
-                    letterSpacing: '-.02em',
-                    fontVariantNumeric: 'tabular-nums',
-                    color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx)',
-                  }}
-                >
-                  {countdown.text}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
-                  {countdown.isOverdue ? 'Passed deadline' : 'Live deadline countdown'}
-                </div>
-              </div>
-            </div>
-
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                padding: '4px 9px',
-                borderRadius: 8,
-                background: 'var(--card)',
-                color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx2)',
-                border: '1px solid var(--line2)',
-              }}
-            >
-              {alert?.label || 'Deadline'}
-            </span>
-          </div>
-        )}
+        {/* Live Countdown Timer Card — its own timer, so the seconds do not
+            re-render the panel's title field while you are typing in it. */}
+        <DeadlineCard task={task} alert={alert} />
 
         {/* Title Input */}
         <div style={{ marginBottom: 18 }}>

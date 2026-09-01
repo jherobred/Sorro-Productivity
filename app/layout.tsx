@@ -30,6 +30,8 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
 };
 
+const SUPABASE_ORIGIN = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+
 export const viewport: Viewport = {
   themeColor: '#0B0A13',
   width: 'device-width',
@@ -44,6 +46,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="dark" suppressHydrationWarning
       className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <head>
+        {/* Every screen's first job is a Supabase call, and ~65% of that first
+            round trip is DNS + TCP + TLS, not the query. Opening the socket
+            while the bundle is still parsing takes that off the critical path.
+            `crossOrigin` is required: Supabase requests are CORS, and a
+            preconnect in the wrong credentials mode is not reused. The URL is
+            read from env so it stays a single source of truth — under
+            `output: export` it is inlined at build time. */}
+        {SUPABASE_ORIGIN && (
+          <>
+            <link rel="preconnect" href={SUPABASE_ORIGIN} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={SUPABASE_ORIGIN} />
+          </>
+        )}
         {/* Paint the stored theme/accent before first frame so there is no flash.
             The real values are reconciled from bd_profiles.prefs once signed in. */}
         <script
