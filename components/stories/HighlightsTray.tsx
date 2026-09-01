@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Icon } from '@/components/Icon';
 import {
   useHighlights, useAllStories,
@@ -8,7 +9,9 @@ import {
   deleteHighlight,
 } from '@/lib/stories';
 import { HighlightEditorModal } from './HighlightEditorModal';
-import { StoryViewer } from './StoryViewer';
+/* Only mounts once a highlight is tapped, so it has no business in the profile
+   chunk that every visit to a profile downloads. */
+const StoryViewer = dynamic(() => import('./StoryViewer').then((m) => m.StoryViewer), { ssr: false });
 
 export function HighlightsTray({
   userId,
