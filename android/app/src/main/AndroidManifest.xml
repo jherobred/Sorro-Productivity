@@ -32,6 +32,16 @@
                 <data android:scheme="com.basedly.app" android:host="auth" />
             </intent-filter>
 
+            <!-- Home-screen widgets land here. Same scheme, different host, so
+                 lib/widgetIntent.ts and lib/nativeAuth.ts can tell their own
+                 links apart on one listener. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.basedly.app" android:host="log" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -43,6 +53,55 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Widgets. Each one is a broadcast receiver the launcher talks to;
+             exported because the launcher is another app. They carry no data of
+             their own — everything they draw comes from Snap.java. -->
+        <receiver
+            android:name=".TodayWidget"
+            android:label="@string/bd_today_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.basedly.app.WIDGET_TAP" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bd_today_info" />
+        </receiver>
+
+        <receiver
+            android:name=".QuickWidget"
+            android:label="@string/bd_quick_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.basedly.app.WIDGET_TAP" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bd_quick_info" />
+        </receiver>
+
+        <receiver
+            android:name=".HabitsWidget"
+            android:label="@string/bd_habits_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.basedly.app.WIDGET_TAP" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bd_habits_info" />
+        </receiver>
+
+        <!-- The habit rows. BIND_REMOTEVIEWS is what stops any app but the
+             system from binding to it. -->
+        <service
+            android:name=".HabitsService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stat tile, one step lighter than the card so it reads as raised, not cut in. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/bd_card2" />
+    <corners android:radius="14dp" />
+</shape>

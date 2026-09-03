@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one bar, ported.
+
+  components/AsciiBar.tsx draws a dotted track with a fill that fades in from
+  78% of the hue to full. A ProgressBar's layer-list is the RemoteViews-safe
+  shape of the same thing: a track at the line2 hue over card2, and a clipped
+  gradient fill. The glow AsciiBar adds with a box-shadow has no equivalent in
+  a shape drawable and is dropped rather than faked.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bd_card2" />
+            <stroke android:width="1dp" android:color="@color/bd_line2" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <gradient
+                    android:startColor="#B08B7CFF"
+                    android:endColor="@color/bd_acc"
+                    android:angle="0" />
+                <corners android:radius="6dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

@@ -33,6 +33,7 @@ const SettingsModal = dynamic(() => import('./SettingsModal').then((m) => m.Sett
 import { ContextMenu, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
+import { useWidgetBridge } from '@/lib/widget';
 import { useAutoSync } from '@/lib/integrations';
 import { watchAccounts } from '@/lib/accounts';
 import { AccountSheet, Face } from './AccountSheet';
@@ -187,6 +188,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   // Back — mouse side button, browser gesture, Android key — stays inside the app.
   useBackGuard();
+  // Home-screen widgets: push today out, replay what was tapped on them, and
+  // land their three typing actions on the sheet the + button already opens.
+  useWidgetBridge(setSheet);
   // Canvas LMS and Google Calendar pull themselves in; see useAutoSync.
   useAutoSync();
   // One socket for every table, owned by the session rather than by a screen.
