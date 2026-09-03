@@ -5,6 +5,7 @@ import React, {
   useContext,
   useState,
   useId,
+  useMemo,
   type ReactNode,
   type CSSProperties,
 } from 'react';
@@ -38,9 +39,14 @@ export function MorphingDialog({
   const [isOpen, setIsOpen] = useState(false);
   const uniqueId = useId();
 
+  const contextValue = useMemo(
+    () => ({ isOpen, setIsOpen, uniqueId, transition }),
+    [isOpen, setIsOpen, uniqueId, transition]
+  );
+
   return (
     <MorphingDialogContext.Provider
-      value={{ isOpen, setIsOpen, uniqueId, transition }}
+      value={contextValue}
     >
       {children}
     </MorphingDialogContext.Provider>

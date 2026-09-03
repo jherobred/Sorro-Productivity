@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Icon, type IconName } from '@/components/Icon';
 import { CalendarSkeleton } from '@/components/Skeleton';
-import { ScheduleImport } from '@/components/ScheduleImport';
+/* Behind the Import button — nothing draws it until you press that. */
+const ScheduleImport = dynamic(() => import('@/components/ScheduleImport').then((m) => m.ScheduleImport), { ssr: false });
 import { CalPopover, PopoverActions } from '@/components/CalPopover';
 import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
 import { K, SECHUE } from '@/lib/pal';
@@ -54,12 +56,34 @@ const VIEW_LABEL: Record<View, string> = {
   month: 'Month', week: 'Week', day: 'Day', agenda: 'Agenda', countdown: 'Next',
 };
 
+const secondSubs = new Set<(ms: number) => void>();
+let secondTimer: ReturnType<typeof setInterval> | null = null;
+
+function useSecond(): number {
+  const [ms, setMs] = useState(() => Date.now());
+  useEffect(() => {
+    secondSubs.add(setMs);
+    secondTimer ??= setInterval(() => {
+      const now = Date.now();
+      for (const f of secondSubs) f(now);
+    }, 1000);
+    return () => {
+      secondSubs.delete(setMs);
+      if (!secondSubs.size && secondTimer) { clearInterval(secondTimer); secondTimer = null; }
+    };
+  }, []);
+  return ms;
+}
+
+
 export default function CalendarPage() {
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
+  // 15s, not 1s. See useSecond above for what this pays for and what it does
+  // not: the seconds are rendered by the badges, which own their own timer.
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    const t = setInterval(() => setNowMs(Date.now()), 15_000);
     return () => clearInterval(t);
   }, []);
 
@@ -497,6 +521,7 @@ export default function CalendarPage() {
               // real month. ws+6 days always lands inside it.
               month={new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + 6).getMonth()}
               events={events} tasks={windowTasks} nowMs={nowMs} nextEventId={nextEventId}
+
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The
                 // old version reused the current week and only moved the
@@ -507,13 +532,13 @@ export default function CalendarPage() {
                 setCalView('day');
               }} />
           )}
-          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nowMs={nowMs} nextEventId={nextEventId} />}
+          {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nextEventId={nextEventId} />}
           {!isPending && view === 'countdown' && <Countdown events={events} A={A} />}
         </div>
       </div>
 
       {pop?.kind === 'event' && (
-        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nowMs={nowMs} nextEventId={nextEventId}
+        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nextEventId={nextEventId}
           runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
           onClose={closePop}
           onEdit={() => { commitDraft(); setEdit(pop.ev); setPop(null); }}
@@ -890,7 +915,8 @@ function Grid({
       const snappedH = Math.max(GRID_START, Math.min(GRID_END, Math.round(rawH * 2) / 2));
       const nextDrag = { day, startHour: snapHour, currentHour: snappedH, startX, startY };
       slotDragRef.current = nextDrag;
-      setSlotDrag(nextDrag);
+      setSlotDrag((prev) => (prev && prev.currentHour !== snappedH ? nextDrag : prev));
+
     };
 
     const onUp = (m: PointerEvent) => {
@@ -958,6 +984,12 @@ function Grid({
     }
     e.stopPropagation();
     setSel(ev.id);
+    // Measured once, on press, the way onSlotPointerDown already does it.
+    // Reading it inside onMove forced a synchronous layout on every pointer
+    // frame, right after the previous frame had written the chip's `top` — the
+    // textbook read-after-write thrash. Only .left/.width are used, and the
+    // grid does not move sideways mid-drag.
+    const rect = bodyRef.current?.getBoundingClientRect();
     const startX = e.clientX;
     const startY = e.clientY;
     const origDay = dayIndex(ev.starts_at, ws);
@@ -998,10 +1030,7 @@ function Grid({
         moved = true;
       }
 
-      if (locked) return;
-
-      const rect = bodyRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      if (locked || !rect) return;
 
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
 
@@ -1009,11 +1038,13 @@ function Grid({
         const d = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor(((m.clientX - rect.left) / rect.width) * days)));
         const rawH = origHour + steps * 0.5;
         const h = Math.max(GRID_START, Math.min(GRID_END - len, Math.round(rawH * 2) / 2));
-        setDrag({ id: ev.id, day: d, hour: h });
+        // Both values are snapped, so most pointer frames land on the square
+        // the last one did. Bail out rather than hand React a new object.
+        setDrag((p) => (p && p.id === ev.id && p.day === d && p.hour === h ? p : { id: ev.id, day: d, hour: h }));
       } else {
         const rawE = origEnd + steps * 0.5;
         const end = Math.max(origHour + 0.5, Math.min(GRID_END, Math.round(rawE * 2) / 2));
-        setResize({ id: ev.id, end });
+        setResize((p) => (p && p.id === ev.id && p.end === end ? p : { id: ev.id, end }));
       }
     };
 
@@ -1107,7 +1138,9 @@ function Grid({
 
       const steps = Math.round(dy / (GRID_H / SPAN / 2));
       const dayStep = Math.max(-origDay, Math.min(days - 1 - origDay, Math.round(dx / colW)));
-      setSpanDrag({ key: s.key, id: ev.id, fromDay: origDay, day: dayStep, hour: steps * 0.5 });
+      const hour = steps * 0.5;
+      setSpanDrag((p) => (p && p.key === s.key && p.day === dayStep && p.hour === hour
+        ? p : { key: s.key, id: ev.id, fromDay: origDay, day: dayStep, hour }));
     };
 
     const onUp = (m: PointerEvent) => {
@@ -1159,7 +1192,7 @@ function Grid({
       const hour = inside
         ? Math.round(((GRID_START + ((m.clientY - r.top) / r.height) * SPAN) * 2)) / 2
         : null;
-      setTaskDrag({ task: t, day, hour });
+      setTaskDrag((p) => (p && p.task === t && p.day === day && p.hour === hour ? p : { task: t, day, hour }));
     };
 
     const onUp = (m: PointerEvent) => {
@@ -1369,7 +1402,6 @@ function Grid({
                       key={v.id}
                       startHour={v.startHour}
                       endHour={v.endHour}
-                      nowMs={nowMs}
                       targetStartsAt={v.targetStartsAt}
                       isNext={v.isNext}
                     />
@@ -1450,7 +1482,6 @@ function Grid({
                           onPointerDown={(p) => press(p, e, 'move')}
                           onResize={(p) => press(p, e, 'resize')}
                           dark={dark}
-                          nowMs={nowMs}
                           onOpen={(p) => openEvent(e, p.clientX, p.clientY)}
                           onContext={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
                         />
@@ -1558,6 +1589,7 @@ function EventChip({
   // fits without stealing the title's room.
   const tall = height >= 9;
 
+
   return (
     <div
       onPointerDown={onPointerDown}
@@ -1641,6 +1673,7 @@ function EventChip({
   );
 }
 
+
 /**
  * Visual indicator for vacant / free time between events with a vertical bidirectional arrow
  * and a live countdown timer unto the next upcoming event.
@@ -1648,13 +1681,11 @@ function EventChip({
 function VacantTimeIndicator({
   startHour,
   endHour,
-  nowMs,
   targetStartsAt,
   isNext,
 }: {
   startHour: number;
   endHour: number;
-  nowMs: number;
   targetStartsAt?: string;
   isNext: boolean;
 }) {
@@ -1663,7 +1694,6 @@ function VacantTimeIndicator({
   const durationHours = endHour - startHour;
   if (durationHours <= 0.25) return null;
   const durationText = formatDurationHours(durationHours);
-  const countdownText = targetStartsAt && isNext ? formatVacantCountdown(targetStartsAt, nowMs) : null;
   const accent = isNext ? 'var(--pal-sky)' : 'var(--tx3)';
 
   return (
@@ -1754,23 +1784,32 @@ function VacantTimeIndicator({
           <span>{durationText} vacant</span>
         </div>
 
-        {countdownText && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-              fontSize: 9.5,
-              fontWeight: 800,
-              color: 'var(--tx2)',
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span>{countdownText}</span>
-          </div>
-        )}
+        {isNext && targetStartsAt && <VacantCountdown targetStartsAt={targetStartsAt} />}
+
       </div>
+    </div>
+  );
+}
+
+/** The countdown on the one vacant block before the next event. Its own timer. */
+function VacantCountdown({ targetStartsAt }: { targetStartsAt: string }) {
+  const text = formatVacantCountdown(targetStartsAt, useSecond());
+  if (!text) return null;
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        fontSize: 9.5,
+        fontWeight: 800,
+        color: 'var(--tx2)',
+        fontVariantNumeric: 'tabular-nums',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span>⏱️</span>
+      <span>{text}</span>
     </div>
   );
 }
@@ -1977,10 +2016,13 @@ function DayStrip({ ws, focus, onPick, onJump }: {
 }
 
 /** Six weeks from `ws`, with the days outside `month` dimmed. */
-function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEventId }: {
-  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void; nowMs?: number; nextEventId?: string | null;
+function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
+  ws: Date; month: number; events: Ev[]; tasks: Task[]; onPickDay: (d: Date) => void; nextEventId?: string | null;
 }) {
   const { prefs } = usePrefs();
+  // Only one cell in the grid carries a countdown, so the seconds stop here
+  // rather than at the page: 42 cells a second beats the whole calendar.
+  const nowMs = useSecond();
 
   const byDay = useMemo(() => {
     const m = new Map<string, { id?: string; title: string; short_name?: string | null; color: string; starts_at?: string; ends_at?: string; task?: boolean }[]>();
@@ -2071,7 +2113,8 @@ function Month({ ws, month, events, tasks, onPickDay, nowMs = Date.now(), nextEv
 }
 
 /** Agenda — one block per day, each row a colour bar, 44px time, title, location. */
-function Agenda({ ws, events, tasks, nowMs = Date.now(), nextEventId }: { ws: Date; events: Ev[]; tasks: Task[]; nowMs?: number; nextEventId?: string | null }) {
+function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; tasks: Task[]; nextEventId?: string | null }) {
+  const nowMs = useSecond();
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(ws);
     d.setDate(d.getDate() + i);
@@ -2793,7 +2836,7 @@ const LABEL: React.CSSProperties = {
 /* ------------------------------------------------------------- the bubbles */
 
 function EventPopover({
-  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nowMs = Date.now(), nextEventId,
+  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nextEventId,
 }: {
   ev: Ev; x: number; y: number;
   /** How many days this event's run covers, or 0 when it stands alone. */
@@ -2801,9 +2844,9 @@ function EventPopover({
   onClose: () => void; onEdit: () => void; onDuplicate: () => void;
   onDelete: () => void; onDeleteRun: () => void;
   onUpdateTitle?: (title: string) => void;
-  nowMs?: number;
   nextEventId?: string | null;
 }) {
+  const nowMs = useSecond();
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at);
   const end = new Date(ev.ends_at);

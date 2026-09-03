@@ -60,13 +60,13 @@ export function SpotlightOverlay({
     const timer2 = setTimeout(updateRect, 350);
 
     window.addEventListener('resize', updateRect);
-    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('scroll', updateRect, { capture: true, passive: true } as EventListenerOptions);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       window.removeEventListener('resize', updateRect);
-      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('scroll', updateRect, { capture: true, passive: true } as EventListenerOptions);
     };
   }, [currentStep, updateRect]);
 

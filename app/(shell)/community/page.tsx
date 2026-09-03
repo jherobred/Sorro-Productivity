@@ -1,15 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { TabRail } from '@/components/TabRail';
 import { Composer } from '@/components/Composer';
-import { Challenges } from '@/components/Challenges';
 import { MediaFrame } from '@/components/MediaFrame';
-import { PostView } from '@/components/PostView';
 import { ShareSheet } from '@/components/ShareSheet';
-import { Messages } from '@/components/Messages';
 import { RowActions } from '@/components/MoneyRows';
 import { FacebookReactionButton } from '@/components/FacebookReactions';
 import { currentUserId } from '@/lib/supabase';
@@ -24,8 +22,6 @@ import { useReposts } from '@/lib/reposts';
 import { useBookmarks, toggleBookmark } from '@/lib/bookmarks';
 import { usePostViews, recordPostView } from '@/lib/views';
 import { StoriesTray } from '@/components/stories/StoriesTray';
-import { StoryViewer } from '@/components/stories/StoryViewer';
-import { StoryCreator } from '@/components/stories/StoryCreator';
 import {
   useFeed, useFeedPending, useLikes, useVotes, useCommentCounts, useComments, useCommunityActions,
   key, type Filter, type Item, type Sort, TAGS, MAX_IMAGES,
@@ -33,6 +29,20 @@ import {
 import { FeedSkeleton } from '@/components/Skeleton';
 import { playCelebration, playClick } from '@/lib/audio';
 import { useFollows } from '@/lib/follows';
+
+/**
+ * You land on the feed. Messages, Challenges, the post lightbox and both story
+ * surfaces are ~5,700 lines behind a tab or a tap, and all of it used to ship
+ * in the chunk this route downloads before it can draw one post. The two tabs
+ * fall back to the feed skeleton this file already uses; the three overlays
+ * render nothing while they load, which is what a modal that has not opened
+ * yet already looks like.
+ */
+const Messages = dynamic(() => import('@/components/Messages').then((m) => m.Messages), { ssr: false, loading: () => <FeedSkeleton /> });
+const Challenges = dynamic(() => import('@/components/Challenges').then((m) => m.Challenges), { ssr: false, loading: () => <FeedSkeleton /> });
+const PostView = dynamic(() => import('@/components/PostView').then((m) => m.PostView), { ssr: false });
+const StoryViewer = dynamic(() => import('@/components/stories/StoryViewer').then((m) => m.StoryViewer), { ssr: false });
+const StoryCreator = dynamic(() => import('@/components/stories/StoryCreator').then((m) => m.StoryCreator), { ssr: false });
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'new', label: 'Latest' },

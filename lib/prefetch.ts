@@ -37,7 +37,7 @@ const WARM: Record<string, Warm> = {
     run: async () => {
       const { data } = await supabase.from('bd_tasks')
         .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at')
-        .is('deleted_at', null).order('position');
+        .is('deleted_at', null).order('position').limit(500);
       return data ?? [];
     },
   },
@@ -64,7 +64,7 @@ const WARM: Record<string, Warm> = {
     run: async () => {
       const { data } = await supabase.from('bd_files')
         .select('id,name,kind,size_bytes,storage_path,folder_id,starred,created_at')
-        .is('deleted_at', null).order('created_at', { ascending: false });
+        .is('deleted_at', null).order('created_at', { ascending: false }).limit(500);
       return data ?? [];
     },
   },

@@ -18,7 +18,8 @@ import { SECHUE, PAL } from '@/lib/pal';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { onlineManager } from '@tanstack/react-query';
 import { lg, ON_ACCENT } from '@/lib/glass';
-import { CaptureSheet, type CaptureKind } from './CaptureSheet';
+import type { CaptureKind } from './CaptureSheet';
+const CaptureSheet = dynamic(() => import('./CaptureSheet').then((m) => m.CaptureSheet), { ssr: false });
 import { SearchPalette } from './SearchPalette';
 import { ShortcutsModal } from './ShortcutsModal';
 import { NotificationBell } from './NotificationBell';
@@ -36,15 +37,20 @@ import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { useWidgetBridge } from '@/lib/widget';
 import { useAutoSync } from '@/lib/integrations';
 import { watchAccounts } from '@/lib/accounts';
-import { AccountSheet, Face } from './AccountSheet';
-import { MessagesSheet, useUnreadCount } from './MessagesSheet';
+import { Face } from './AccountSheet';
+const AccountSheet = dynamic(() => import('./AccountSheet').then((m) => m.AccountSheet), { ssr: false });
+import { useUnreadCount } from './MessagesSheet';
+const MessagesSheet = dynamic(() => import('./MessagesSheet').then((m) => m.MessagesSheet), { ssr: false });
 import { useAlwaysFullscreen } from '@/lib/appUpdate';
 import { useLiveSync } from '@/lib/realtime';
 import { useMyIdentity } from '@/lib/people';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 import { useTabOnboarding } from '@/lib/useTabOnboarding';
-import { SpotlightOverlay } from './SpotlightOverlay';
+/* The tour overlay and its mascot are ~930 lines that only ever render the
+   first time you open a tab. It was in the shell chunk, so every route paid
+   for it on every visit forever after. */
+const SpotlightOverlay = dynamic(() => import('./SpotlightOverlay').then((m) => m.SpotlightOverlay), { ssr: false });
 import { useRanked } from '@/lib/challenges';
 import { BirdMascot } from './BasedlyLogo';
 import { GROUP_HUE, GROUP_ORDER, HAS_SIDEBAR, SECTION_GROUP, type GroupName } from '@/lib/shellLayouts';
@@ -937,7 +943,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
             {layout === 'L4' && <JumpPill onClick={() => setSearch(true)} />}
 
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
               {layout === 'L5' && <JumpPill onClick={() => setSearch(true)} />}
               <OfflinePill />
               <PresenceDock peers={peers} onOpen={() => go('people')} />
@@ -946,18 +952,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
               {!seen.has(getActiveTabKey()) && (
                 <button
                   onClick={() => startTour(getActiveTabKey())}
-                  className="hov k-squish"
+                  className="k-chip"
                   title="Feature Tour & Guide (+15 RP)"
                   aria-label="Feature Tour & Guide"
                   style={{
-                    height: 32,
-                    padding: '0 10px',
-                    borderRadius: 8,
-                    border: '1px solid color-mix(in srgb, var(--pal-amber) 35%, var(--line2))',
-                    background: 'color-mix(in srgb, var(--pal-amber) 10%, var(--card2))',
+                    height: 34,
+                    padding: '0 13px',
+                    borderRadius: 999,
+                    border: '1px solid color-mix(in srgb, var(--pal-amber) 40%, var(--line2))',
+                    background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
+                    boxShadow: 'var(--sh)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 5,
+                    gap: 6,
                     fontSize: 11.5,
                     fontWeight: 700,
                     color: 'var(--pal-amber)',
@@ -969,7 +976,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </button>
               )}
 
-              <NotificationBell />
+              <NotificationBell compact />
 
               {/* Centralized profile & settings entry point on top right */}
               <button
@@ -977,13 +984,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   setSettingsTab('general');
                   setSettings(true);
                 }}
-                className="k-squish"
+                className="k-chip"
                 title="Profile & Settings"
                 aria-label="Profile & Settings"
                 aria-haspopup="dialog"
-                style={{ width: 32, height: 32, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center' }}
+                style={{ width: 34, height: 34, flex: 'none', borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1px solid var(--line2)', background: 'var(--card)', boxShadow: 'var(--sh)' }}
               >
-                <Face name={me.name} photo={me.photo} size={32} />
+                <Face name={me.name} photo={me.photo} size={30} />
               </button>
             </div>
           </div>
@@ -1203,8 +1210,18 @@ function OfflinePill() {
   useEffect(() => onlineManager.subscribe(() => setOnline(onlineManager.isOnline())), []);
   if (online) return null;
   return (
-    <span className="fade" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: PAL.amber }}>
-      Offline — queued
+    <span
+      className="fade k-chip"
+      title="Writes are queued and will sync when the connection returns"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px',
+        borderRadius: 999, border: '1px solid color-mix(in srgb, var(--pal-amber) 40%, var(--line2))',
+        background: 'color-mix(in srgb, var(--pal-amber) 12%, var(--card))',
+        fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+        color: 'var(--pal-amber)', flex: 'none',
+      }}>
+      <span aria-hidden className="k-pulse" style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--pal-amber)' }} />
+      Offline
     </span>
   );
 }

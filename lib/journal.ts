@@ -49,7 +49,7 @@ export function useJournalDates() {
     queryKey: DATES_KEY,
     queryFn: async (): Promise<string[]> => {
       const { data, error } = await supabase.from('bd_journal_entries')
-        .select('entry_date').is('deleted_at', null).order('entry_date');
+        .select('entry_date').is('deleted_at', null).order('entry_date').limit(5000);
       if (error) throw error;
       return (data ?? []).map((r) => r.entry_date as string);
     },

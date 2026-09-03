@@ -116,7 +116,7 @@ export function useBoards() {
     queryKey: BOARDS,
     queryFn: async (): Promise<Board[]> => {
       const { data, error } = await supabase.from('bd_canvases')
-        .select(BOARD_COLS).is('deleted_at', null).order('position').order('created_at');
+        .select(BOARD_COLS).is('deleted_at', null).order('position').order('created_at').limit(500);
       if (error) throw error;
       return (data ?? []).map((b) => ({ ...b, settings: b.settings ?? {} })) as Board[];
     },

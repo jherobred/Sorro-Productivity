@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { Icon, type IconName } from '@/components/Icon';
 import { RowsSkeleton } from '@/components/Skeleton';
 import { SectionLabel, Meter, StatPill, CountUp } from '@/components/Vitals';
@@ -23,10 +24,12 @@ import {
   HABIT_CATEGORIES,
 } from '@/lib/habits';
 import { Buddy } from '@/components/Buddy';
-import { HabitCreatorModal } from '@/components/habits/HabitCreatorModal';
-import { HabitTimerModal } from '@/components/habits/HabitTimerModal';
-import { HabitDetailModal } from '@/components/habits/HabitDetailModal';
-import { HabitsAnalytics } from '@/components/habits/HabitsAnalytics';
+/* Only on screen while you are making or editing a habit. */
+const HabitCreatorModal = dynamic(() => import('@/components/habits/HabitCreatorModal').then((m) => m.HabitCreatorModal), { ssr: false });
+const HabitTimerModal = dynamic(() => import('@/components/habits/HabitTimerModal').then((m) => m.HabitTimerModal), { ssr: false });
+const HabitDetailModal = dynamic(() => import('@/components/habits/HabitDetailModal').then((m) => m.HabitDetailModal), { ssr: false });
+const HabitsAnalytics = dynamic(() => import('@/components/habits/HabitsAnalytics').then((m) => m.HabitsAnalytics), { ssr: false });
+
 import { HabitStats } from '@/components/habits/HabitStats';
 import { HabitMatrix, windowDays, type MatrixSpan } from '@/components/habits/HabitMatrix';
 import { HabitAgenda } from '@/components/habits/HabitAgenda';

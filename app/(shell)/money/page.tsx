@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLayout } from '@/lib/useLayout';
@@ -19,14 +20,15 @@ import {
   Stacks, SpendTrend, MonthHeatmap, ComingUp, toUpcoming, Insight, Empty, colourOf,
 } from '@/components/money/Instruments';
 import { Jar, type JarRow } from '@/components/money/Jars';
-import { JarPage } from '@/components/money/JarPage';
+const JarPage = dynamic(() => import('@/components/money/JarPage').then((m) => m.JarPage), { ssr: false });
 import { MoneyPad } from '@/components/money/MoneyPad';
-import { LogSheet } from '@/components/money/LogSheet';
+const LogSheet = dynamic(() => import('@/components/money/LogSheet').then((m) => m.LogSheet), { ssr: false });
 import { logDay } from '@/lib/logday';
 import {
   balanceOf, burnPerDay, runwayDays, runwayFill, byCategory, monthStart,
   dailySpend, monthSpend, noSpendStreak, weekDelta, localDay, outgo, incoming,
 } from '@/lib/runway';
+
 import { toast } from '@/lib/toast';
 import { AsciiBar } from '@/components/AsciiBar';
 

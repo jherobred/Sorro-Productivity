@@ -1,12 +1,14 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { Page } from '@/components/Page';
 import { Counter } from '@/components/core/Counter';
-import { MovementSheet } from '@/components/gym/MovementSheet';
+const MovementSheet = dynamic(() => import('@/components/gym/MovementSheet').then((m) => m.MovementSheet), { ssr: false });
+
 import { useTraining, TrainingOverlays } from '@/components/body/Gym';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';

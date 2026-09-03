@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Icon, type IconName } from '@/components/Icon';
@@ -7,7 +8,7 @@ import { SectionLabel, Meter, VitalTile, EmptyBlock, CountUp } from '@/component
 import { FuelWaterCard } from '@/components/fuel/WaterFlask';
 import { FoodPhotoCard, DEFAULT_PRESETS, type FoodPreset } from '@/components/fuel/FoodPhotoCard';
 import { MealEditor } from '@/components/fuel/MealEditor';
-import { MealSheet } from '@/components/body/MealSheet';
+const MealSheet = dynamic(() => import('@/components/body/MealSheet').then((m) => m.MealSheet), { ssr: false });
 import { SleepArc } from '@/components/body/Instruments';
 import { ContextMenu, type CtxItem } from '@/components/ContextMenu';
 import { useOverlayBack } from '@/lib/nav';

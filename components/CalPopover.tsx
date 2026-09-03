@@ -43,24 +43,32 @@ export function CalPopover({
     const el = ref.current;
     if (!el) return;
     const M = 10;
-    const isMobile = window.innerWidth <= 640;
-    const w = Math.min(el.offsetWidth || width, window.innerWidth - M * 2);
-    const h = el.offsetHeight || 160;
+    const place = () => {
+      const isMobile = window.innerWidth <= 640;
+      const w = Math.min(el.offsetWidth || width, window.innerWidth - M * 2);
+      const h = el.offsetHeight || 160;
 
-    let left: number;
-    if (isMobile) {
-      left = Math.max(M, (window.innerWidth - w) / 2);
-    } else {
-      left = Math.min(Math.max(M, x + 12), window.innerWidth - w - M);
-      if (left + w > window.innerWidth - M) {
-        left = Math.max(M, x - w - 12);
+      let left: number;
+      if (isMobile) {
+        left = Math.max(M, (window.innerWidth - w) / 2);
+      } else {
+        // Prefer the click's right; flip to its left when the bubble would
+        // leave the viewport.
+        left = x + 12 + w > window.innerWidth - M ? Math.max(M, x - w - 12) : x + 12;
+        left = Math.min(left, window.innerWidth - w - M);
       }
-    }
 
-    const below = y + 8;
-    const wanted = below + h + M > window.innerHeight ? y - h - 8 : below;
-    const top = Math.min(Math.max(M, wanted), Math.max(M, window.innerHeight - h - M));
-    setPos({ left, top });
+      const below = y + 8;
+      const wanted = below + h + M > window.innerHeight ? y - h - 8 : below;
+      const top = Math.min(Math.max(M, wanted), Math.max(M, window.innerHeight - h - M));
+      setPos({ left, top });
+    };
+
+    place();
+    // The bubble is fixed to the viewport, so a window resize would leave it
+    // stranded outside the new bounds — re-clamp whenever the frame changes.
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
   }, [x, y, width]);
 
   return createPortal(

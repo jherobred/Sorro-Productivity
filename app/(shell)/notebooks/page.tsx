@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Icon } from '@/components/Icon';
 import { ShelfSkeleton } from '@/components/Skeleton';
 import { TabRail } from '@/components/TabRail';
@@ -17,12 +18,29 @@ import {
 import { NotebookTable } from '@/components/notes/NotebookTable';
 import { BoardShelf } from '@/components/notes/BoardShelf';
 import { NoteList } from '@/components/notes/NoteList';
-import { NoteEditor } from '@/components/notes/NoteEditor';
-import { GraphView } from '@/components/notes/GraphView';
-import { Canvas } from '@/components/notes/Canvas';
-import { Journal } from '@/components/notes/Journal';
-import { JavaLab } from '@/components/JavaLab';
 import { GlobalShelf } from '@/components/notes/GlobalShelf';
+
+/**
+ * You land on the shelf. The editor, the board, the graph and the Java lab are
+ * all behind a tab or a click, and together they were ~4,900 lines plus KaTeX
+ * sitting in the chunk this route downloads before it can draw that shelf.
+ * Each one now arrives when the thing it draws is actually asked for.
+ * `ssr: false` because none of them render anything at export time anyway —
+ * they all read canvas, window size or a query.
+ */
+const Panel = () => (
+  <div style={{
+    flex: 1, display: 'grid', placeItems: 'center', background: 'var(--card)',
+    borderRadius: 14, boxShadow: 'var(--sh)', fontSize: 12.5, color: 'var(--tx3)',
+  }}>
+    Loading…
+  </div>
+);
+const NoteEditor = dynamic(() => import('@/components/notes/NoteEditor').then((m) => m.NoteEditor), { ssr: false, loading: Panel });
+const GraphView = dynamic(() => import('@/components/notes/GraphView').then((m) => m.GraphView), { ssr: false, loading: Panel });
+const Canvas = dynamic(() => import('@/components/notes/Canvas').then((m) => m.Canvas), { ssr: false, loading: Panel });
+const Journal = dynamic(() => import('@/components/notes/Journal').then((m) => m.Journal), { ssr: false, loading: Panel });
+const JavaLab = dynamic(() => import('@/components/JavaLab').then((m) => m.JavaLab), { ssr: false, loading: Panel });
 import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
 /**

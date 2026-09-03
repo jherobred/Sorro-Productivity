@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { useUserStoryArchive, type StorySlide } from '@/lib/stories';
 import { useOverlayBack } from '@/lib/nav';
 import { ago } from '@/lib/scratch';
-import { StoryViewer } from './StoryViewer';
+/* Replay only opens when an archived story is tapped. */
+const StoryViewer = dynamic(() => import('./StoryViewer').then((m) => m.StoryViewer), { ssr: false });
 import { HighlightEditorModal } from './HighlightEditorModal';
 
 export function StoryArchiveModal({

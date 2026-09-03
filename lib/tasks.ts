@@ -302,7 +302,8 @@ export function useTasks() {
         .from('bd_tasks')
         .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at')
         .is('deleted_at', null)
-        .order('position');
+        .order('position')
+        .limit(500);
       if (error) throw error;
       return (data ?? []).map((t) => {
         const parsed = parseTaskLinks(t.notes);

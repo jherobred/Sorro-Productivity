@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { supabase, currentUserId } from '@/lib/supabase';
 import { toast } from '@/lib/toast';
@@ -18,9 +19,9 @@ import { Icon } from '@/components/Icon';
 import { useRouter } from 'next/navigation';
 import { ProfileTimeline } from '@/components/ProfileTimeline';
 import { HighlightsTray } from '@/components/stories/HighlightsTray';
-import { StoryArchiveModal } from '@/components/stories/StoryArchiveModal';
+const StoryArchiveModal = dynamic(() => import('@/components/stories/StoryArchiveModal').then((m) => m.StoryArchiveModal), { ssr: false });
 import { useFollows } from '@/lib/follows';
-import { FollowListModal } from '@/components/FollowListModal';
+const FollowListModal = dynamic(() => import('@/components/FollowListModal').then((m) => m.FollowListModal), { ssr: false });
 
 /**
  * Ported from Basedly.dc.html markup 663–758. The avatar is drawn as layered

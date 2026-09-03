@@ -41,7 +41,8 @@ export function useScratch() {
         .select('id,text,tag,color,pinned,position,created_at')
         .is('deleted_at', null)
         .order('pinned', { ascending: false })
-        .order('position');
+        .order('position')
+        .limit(500);
       if (error) throw error;
       return (data ?? []).map((d) => {
         // Try parsing JSON payload if photo_url / title was stored inside text

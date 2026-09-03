@@ -87,6 +87,13 @@ const prefixesFor = (table: string): string[] => [
 ];
 
 /**
+ * How long away makes a return worth a full catch-up. Deliberately the global
+ * `staleTime` from lib/offline.ts: below it every query is considered current
+ * anyway, so refetching them all would be buying nothing with a round trip.
+ */
+const CATCHUP_AFTER_MS = 30_000;
+
+/**
  * Changes arrive one row at a time; a fifteen-row insert is fifteen events for
  * one screen. Collect the tables that spoke and refetch each once.
  */
@@ -150,7 +157,14 @@ export function useLiveSync() {
     for (const table of TABLES) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => bump(table));
     }
-    channel.subscribe();
+
+    /**
+     * Whether the socket has been anything other than joined since the last
+     * catch-up. A drop is the only way a change can be missed, so it is also
+     * the only thing that makes a catch-up worth its round trips.
+     */
+    let dropped = false;
+    channel.subscribe((status) => { if (status !== 'SUBSCRIBED') dropped = true; });
 
     /**
      * The backstop. Realtime can drop a socket without either side noticing —
@@ -158,16 +172,31 @@ export function useLiveSync() {
      * one moment a stale screen is guaranteed to be looked at, so refetch what
      * is on it. `visibilitychange` fires where `focus` does not: a phone
      * returning from the background never focuses anything.
+     *
+     * **But not on every switch back.** `invalidateQueries({type:'active'})`
+     * refetches every mounted query *regardless of staleTime* — so glancing at
+     * another app for three seconds cost a whole screen of round trips on
+     * return, which on campus wifi is the "everything has high ping" symptom
+     * itself. That is only ever useful if something was actually missed, and
+     * with the socket up nothing was: Realtime delivered it while we were away.
+     *
+     * So the catch-up runs when the socket dropped, or when we were gone long
+     * enough that it could have died without saying so. Under that, TanStack's
+     * own refetchOnWindowFocus already refetches whatever passed staleTime,
+     * which is the same freshness promise every query has anyway.
      */
     let wakeTimer: ReturnType<typeof setTimeout> | null = null;
+    let hiddenAt = 0;
     const wake = () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== 'visible') { hiddenAt = Date.now(); return; }
+      if (!dropped && Date.now() - hiddenAt < CATCHUP_AFTER_MS) return;
       // Still writing: mirror batcher()'s own retry rather than dropping the
       // catch-up — this is the one moment it exists to cover. A paused
       // mutation (offline, queued) is parked, not executing, so it must not
       // count here or this retries forever while offline.
       const busy = qc.getMutationCache().findAll({ status: 'pending' }).some((m) => !m.state.isPaused);
       if (busy) { wakeTimer = setTimeout(wake, 400); return; }
+      dropped = false;
       void qc.invalidateQueries({ type: 'active' });
     };
     document.addEventListener('visibilitychange', wake);

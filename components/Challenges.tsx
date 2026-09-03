@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { Icon, type IconName } from './Icon';
 import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
@@ -19,7 +20,7 @@ import { Mascot } from './challenges/Mascot';
 import { moodOf, daysSince, streakOf, nudge, type Mood } from '@/lib/mascot';
 import { TrophyRoom, type Won } from './challenges/TrophyRoom';
 import { uploadResult } from './challenges/resultCard';
-import { ChallengeDetailModal } from './challenges/ChallengeDetailModal';
+const ChallengeDetailModal = dynamic(() => import('./challenges/ChallengeDetailModal').then((m) => m.ChallengeDetailModal), { ssr: false });
 import {
   useChallenges, useMembers, useRanked, useStars, useChallengeDays, useChallengeActions,
   phaseOf, daysLeft, payout, scoreOf, normaliseMetric,

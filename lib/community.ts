@@ -121,7 +121,7 @@ export function usePostImages() {
     queryKey: POST_IMAGES,
     queryFn: async (): Promise<{ post_id: string; path: string; position: number }[]> => {
       const { data, error } = await supabase.from('bd_post_images')
-        .select('post_id,path,position').order('position');
+        .select('post_id,path,position').order('position').limit(400);
       if (error) throw error;
       return data ?? [];
     },
