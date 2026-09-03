@@ -135,8 +135,8 @@ export function NoteList({
       </div>
 
       <label style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '0 11px', height: 34,
-        borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card)', flex: 'none',
+        display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36,
+        borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', flex: 'none',
       }}>
         <Icon name="search" size={14} color="var(--tx3)" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find in this notebook"
@@ -153,29 +153,28 @@ export function NoteList({
       {/* Highlighted Create Note Button */}
       <button
         onClick={onNew}
-        className="hov k-squish"
+        className="tap acc k-glass k-squish"
         style={{
           width: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          padding: '11px 14px',
-          borderRadius: 12,
-          background: 'color-mix(in srgb, var(--acc) 16%, var(--card))',
-          border: '1.5px solid var(--acc)',
-          color: 'var(--accTx, var(--tx))',
-          fontSize: 13,
+          padding: '10px 14px',
+          minHeight: 40,
+          borderRadius: 999,
+          background: 'var(--acc)',
+          border: 'none',
+          color: 'var(--accInk)',
+          fontSize: 12.5,
           fontWeight: 800,
           letterSpacing: '-.01em',
           cursor: 'pointer',
-          boxShadow: '0 2px 8px color-mix(in srgb, var(--acc) 18%, transparent)',
           flex: 'none',
-          transition: 'all .16s ease',
         }}
       >
         <Icon name="plus" size={15} color="currentColor" />
-        <span>Create Note</span>
+        <span>Create note</span>
       </button>
 
       {allTags.length > 0 && (
@@ -199,7 +198,7 @@ export function NoteList({
             <button key={n.id} onClick={() => onPick(n.id)}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, label: n.title || 'Untitled', items: noteMenu(n) }); }}
               style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '11px 13px', borderRadius: 12,
+                display: 'block', width: '100%', textAlign: 'left', padding: '11px 13px', borderRadius: 'var(--r-sm)',
                 border: '1px solid transparent',
                 borderLeft: on ? '3px solid var(--acc)' : '3px solid transparent',
                 background: on ? 'color-mix(in srgb, var(--acc) 10%, var(--card2))' : 'var(--card)',

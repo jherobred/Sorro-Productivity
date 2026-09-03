@@ -21,24 +21,24 @@
    nothing below is affected; see the header of gym.css for why. */
 @import './gym.css';
 
-/* ---- Theme tokens (Pure Dark Obsidian & Clean Modern Light) ---------------------------- */
+/* ---- Theme tokens (Sundae: candy-paper light & warm-plum dark, design.md) -------------- */
 :root,
 :root[data-theme='dark'] {
-  --bg: #0B0A13;
-  --panel: #100F1A;
-  --card: #16151F;
-  --card2: #1F1D2A;
-  --line: rgba(170, 166, 210, .14);
-  --line2: rgba(170, 166, 210, .26);
-  --tx: #EFEDF5;
-  --tx2: #A29EBB;
-  --tx3: #78748F;
-  --hov: rgba(170, 166, 210, .075);
-  --sh: 0 6px 22px rgba(0, 0, 0, .46);
-  --shl: 0 18px 48px rgba(0, 0, 0, .6);
-  --ink: #0B0A13;
-  --sk1: rgba(170, 166, 210, .06);
-  --sk2: rgba(170, 166, 210, .13);
+  --bg: #141120;
+  --panel: #191527;
+  --card: #201B31;
+  --card2: #2A2440;
+  --line: rgba(203, 193, 255, .13);
+  --line2: rgba(203, 193, 255, .26);
+  --tx: #F2EFFA;
+  --tx2: #B3ACD4;
+  --tx3: #7E7899;
+  --hov: rgba(203, 193, 255, .08);
+  --sh: 0 10px 30px rgba(0, 0, 0, .42), 0 2px 8px rgba(0, 0, 0, .28);
+  --shl: 0 22px 56px rgba(0, 0, 0, .55);
+  --ink: #141120;
+  --sk1: rgba(203, 193, 255, .06);
+  --sk2: rgba(203, 193, 255, .13);
   
   /* Spot Pastels Dark Variants */
   --pastel-red: rgba(255, 107, 107, .15);
@@ -52,21 +52,21 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #F3F2F7;
-  --panel: #ECEAF2;
-  --card: #FFFFFF;
-  --card2: #F6F5FA;
-  --line: rgba(38, 32, 54, .12);
-  --line2: rgba(38, 32, 54, .22);
-  --tx: #1C1A26;
-  --tx2: #57526E;
-  --tx3: #7C7793;
-  --hov: rgba(38, 32, 54, .05);
-  --sh: 0 3px 12px rgba(40, 34, 60, .13);
-  --shl: 0 14px 38px rgba(40, 34, 60, .2);
-  --ink: #FFFFFF;
-  --sk1: rgba(38, 32, 54, .05);
-  --sk2: rgba(38, 32, 54, .1);
+  --bg: #F3F0EA;
+  --panel: #ECE8E0;
+  --card: #FDFCF9;
+  --card2: #F5F1E9;
+  --line: rgba(64, 52, 100, .10);
+  --line2: rgba(64, 52, 100, .20);
+  --tx: #241F33;
+  --tx2: #5D5875;
+  --tx3: #8B86A3;
+  --hov: rgba(64, 52, 100, .06);
+  --sh: 0 10px 30px rgba(84, 58, 138, .10), 0 2px 8px rgba(84, 58, 138, .07);
+  --shl: 0 22px 56px rgba(84, 58, 138, .16);
+  --ink: #FDFCF9;
+  --sk1: rgba(64, 52, 100, .05);
+  --sk2: rgba(64, 52, 100, .10);
 
   /* Spot Pastels Light Variants */
   --pastel-red: #FDEBEC;
@@ -855,5 +855,62 @@ body {
   margin: 24px 0;
   width: 100%;
 }
+
+/* ---- Sundae system (design.md) ------------------------------------------------------------ */
+
+/* Shape scale. Buttons/pills go full-round; cards take --r-lg; sheets --r-xl. */
+:root {
+  --r-xs: 10px;
+  --r-sm: 14px;
+  --r-md: 18px;
+  --r-lg: 24px;
+  --r-xl: 32px;
+  /* Text colour on accent fills. The grape accent is too light for white text
+     in the light theme, so accent buttons use this instead of --ink. */
+  --accInk: #171326;
+}
+
+/* Clay — the standard raised surface of the rebrand. Hairline edge, clay-soft
+   shadow that deepens on hover. Pair with .k-squish for press feedback. */
+.clay {
+  background: var(--card);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh);
+  transition: box-shadow var(--k-slow) var(--k-expo), transform var(--k-slow) var(--k-spring);
+}
+.clay:hover { box-shadow: var(--shl); transform: translateY(-2px); }
+
+/* Candy tint — a spot-pastel wash for chips, wells and swatch tracks. */
+.candy {
+  background: color-mix(in srgb, var(--c, var(--acc)) 14%, transparent);
+  color: color-mix(in srgb, var(--c, var(--acc)) 72%, var(--tx));
+}
+
+/* .nomo flattens the arrival and pick effects this system adds on top of the
+   original kinetics vocabulary. */
+.nomo .k-stagger > *, .nomo .k-tagin, .nomo .k-bloom, .nomo .k-toast,
+.nomo .k-slidein, .nomo .clay, .nomo .candy {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Progressive blur layers (components/core/ProgBlur.tsx). Each layer carries
+   its blur in --pb and its reveal mask inline; the scrim is the fallback for
+   engines without backdrop-filter. */
+.pb-layer {
+  -webkit-backdrop-filter: blur(var(--pb, 4px));
+  backdrop-filter: blur(var(--pb, 4px));
+}
+.pb-scrim { display: none; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .pb-layer { display: none; }
+  .pb-scrim { display: block; }
+}
+/* The product's reduce-transparency setting flattens the frost to the plain
+   gradient scrim too (lib/prefs.ts `reduceTransparency`). */
+.noglass .pb-layer { display: none; }
+.noglass .pb-scrim { display: block; }
+
 
 

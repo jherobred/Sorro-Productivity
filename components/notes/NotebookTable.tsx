@@ -9,35 +9,28 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
-import { useMyIdentity, type Identity } from '@/lib/people';
-import { Face } from '../AccountSheet';
+import { ProgBlur } from '../core/ProgBlur';
+import { NotebookCover } from './NotebookCover';
 import type { Board } from '@/lib/canvas';
 
 /**
- * The notebook shelf — Evernote's landing screen.
+ * The Notebooks tab — Evernote's landing screen, wearing covers.
  *
- * You do not open Evernote inside a note. You open it on a list of notebooks,
- * with a count and a date against each, and pick one. The old screen skipped
- * that step and dropped you into a three-level tree, which is why finding
- * anything meant expanding two things first.
+ * You do not open Evernote inside a note. You open it on a shelf of notebooks
+ * and pick one. Here every notebook is a cover card: art identifies it, the
+ * name sits on a progressive-blur veil, and the row menu (right-click or the
+ * dots) carries rename, recolour, archive and delete. "Show notes" expands the
+ * card in place, so "which notebook was that in?" is answered without leaving.
  *
- * A row expands in place to show what is inside it, so "which notebook was that
- * in?" is answered without leaving the list.
- *
- * Canvases and graph views sit on the same shelf. They are a kind of notebook —
- * a place your work lives — and hiding them behind a tab meant you had to
- * remember they existed before you could find them.
+ * Canvases and graph views sit on the same shelf as cover tiles — they are a
+ * kind of notebook, and hiding them behind a tab meant you had to remember
+ * they existed before you could find them.
  */
 
 const COLOURS = [
   { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
   { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
 ];
-
-const HEAD: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.02em',
-  textAlign: 'left', padding: '9px 12px', whiteSpace: 'nowrap',
-};
 
 export function NotebookTable({
   notebooks, notes, boards, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
@@ -65,7 +58,6 @@ export function NotebookTable({
 }) {
   const { prefs } = usePrefs();
   const { phone } = useLayout();
-  const me = useMyIdentity();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [desc, setDesc] = useState(false);
@@ -124,6 +116,16 @@ export function NotebookTable({
     ];
   };
 
+  const boardMenu = (b: Board): CtxGroup[] => [
+    { items: [
+      { label: 'Open', icon: b.kind === 'graph' ? 'link' : 'grid', run: () => onOpenBoard(b) },
+      { label: 'Rename', icon: 'edit', run: () => onRenameBoard(b) },
+    ] },
+    { items: [
+      { label: `Delete ${b.kind === 'graph' ? 'graph' : 'canvas'}`, icon: 'trash', danger: true, run: () => onDeleteBoard(b) },
+    ] },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, flex: 1 }}>
       {menu && (
@@ -132,16 +134,16 @@ export function NotebookTable({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={onNew} className="tap acc" style={{
-          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 999,
-          minHeight: 36, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 700,
+        <button onClick={onNew} className="tap acc k-glass" style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 999,
+          minHeight: 38, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
         }}>
-          <Icon name="bookPlus" size={15} color="var(--ink)" />New notebook
+          <Icon name="bookPlus" size={15} color="var(--accInk)" />New notebook
         </button>
 
         <button onClick={() => setDesc((v) => !v)} className="hov tap"
           title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
-          style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
+          style={{ width: 38, height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', display: 'grid', placeItems: 'center' }}>
           <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
 
@@ -153,8 +155,8 @@ export function NotebookTable({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '7px 12px',
-              minHeight: 36,
+              padding: '7px 13px',
+              minHeight: 38,
               borderRadius: 999,
               border: '1px solid var(--line2)',
               background: 'var(--card)',
@@ -171,7 +173,7 @@ export function NotebookTable({
 
         <label style={{
           marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8, flex: phone ? '1 1 100%' : '0 0 240px',
-          padding: '0 12px', height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card)',
+          padding: '0 13px', height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)',
         }}>
           <Icon name="search" size={14} color="var(--tx3)" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find notebooks"
@@ -180,206 +182,219 @@ export function NotebookTable({
         </label>
       </div>
 
-      <div className="navsb" style={{
+      <div className="navsb k-stagger" style={{
         flex: 1, minHeight: 0, overflowY: 'auto',
-        background: 'var(--card)', borderRadius: 14, boxShadow: 'var(--sh)',
+        display: 'grid', alignItems: 'start', alignContent: 'start',
+        gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(225px, 1fr))',
+        gap: 12, paddingRight: 2,
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)' }}>
-              <th style={{ ...HEAD, width: 34 }} aria-label="Expand" />
-              <th style={HEAD}>Title</th>
-              {!phone && <th style={{ ...HEAD, width: 90 }}>Notes</th>}
-              {!phone && <th style={{ ...HEAD, width: 140 }}>Created by</th>}
-              <th style={{ ...HEAD, width: phone ? 74 : 120 }}>Updated</th>
-              <th style={{ ...HEAD, width: 44 }} aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((b) => {
-              const kids = byBook.get(b.id) ?? [];
-              const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
-              const isOpen = !!open[b.id];
-              const isArchived = archivedNbIds?.has(b.id) ?? false;
-              return (
-                <BookRow key={b.id} book={b} kids={kids} last={last} me={me} phone={phone} isOpen={isOpen} isArchived={isArchived}
-                  onToggle={() => setOpen((o) => ({ ...o, [b.id]: !o[b.id] }))}
-                  onOpen={() => onOpen(b.id)}
-                  onOpenNote={(nid) => onOpenNote(b.id, nid)}
-                  onMenu={(x, y) => setMenu({ x, y, label: b.name, items: rowMenu(b) })} />
-              );
-            })}
+        {rows.map((b, i) => (
+          <BookCard key={b.id} book={b} index={i} kids={byBook.get(b.id) ?? []} phone={phone}
+            isOpen={!!open[b.id]} isArchived={archivedNbIds?.has(b.id) ?? false}
+            onToggle={() => setOpen((o) => ({ ...o, [b.id]: !o[b.id] }))}
+            onOpen={() => onOpen(b.id)}
+            onOpenNote={(nid) => onOpenNote(b.id, nid)}
+            onMenu={(x, y) => setMenu({ x, y, label: b.name, items: rowMenu(b) })} />
+        ))}
 
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
-                  {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {rows.length === 0 && (
+          <div style={{
+            gridColumn: '1 / -1', padding: '40px 16px', textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/mascots/otter.svg" alt="" width={64} height={64} style={{ opacity: .9 }} />
+            <div style={{ fontSize: 12.5, color: 'var(--tx3)' }}>
+              {q ? `Nothing called “${q}”.` : 'Nothing here yet. Make a notebook.'}
+            </div>
+          </div>
+        )}
+
+        {/* Canvases and graphs live on the same shelf, as tiles. */}
+        {boardRows.map((b, i) => (
+          <BoardTile key={b.id} board={b} index={rows.length + i}
+            onOpen={() => onOpenBoard(b)}
+            onMenu={(x, y) => setMenu({ x, y, label: b.name, items: boardMenu(b) })} />
+        ))}
+      </div>
+
+      {/* New board doors. The tiles above open what exists; these make more. */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 'none' }}>
+        <button onClick={() => onNewBoard('canvas')} className="hov k-squish" style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', minHeight: 36,
+          borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
+          fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
+        }}>
+          <Icon name="grid" size={13} color="var(--pal-cyan)" />New canvas
+        </button>
+        <button onClick={() => onNewBoard('graph')} className="hov k-squish" style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', minHeight: 36,
+          borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
+          fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
+        }}>
+          <Icon name="link" size={13} color="var(--pal-violet)" />New graph
+        </button>
       </div>
     </div>
   );
 }
 
-/**
- * A canvas or a graph view on the shelf. No expander: what is inside a canvas
- * is a picture, and a list of card titles would not tell you anything a glance
- * at the board would not tell you faster.
- */
-function BoardRow({
-  board: b, me, phone, onOpen, onMenu,
-}: { board: Board; me: Identity; phone: boolean; onOpen: () => void; onMenu: (x: number, y: number) => void }) {
-  const cell: React.CSSProperties = { padding: '10px 12px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
-  const kind = b.kind === 'graph' ? 'Graph' : 'Canvas';
-  const displayName = me.name && me.name.toLowerCase() !== 'gemini'
-    ? me.name
-    : (me.handle && me.handle.toLowerCase() !== 'gemini' ? (me.handle.startsWith('@') ? me.handle : `@${me.handle}`) : 'Owner');
-
+function BoardTile({
+  board: b, index, onOpen, onMenu,
+}: {
+  board: Board; index: number; onOpen: () => void; onMenu: (x: number, y: number) => void;
+}) {
   return (
-    <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
-      onDoubleClick={onOpen}
-      onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}>
-      <td style={{ ...cell, paddingRight: 0 }}>
-        <span style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-          <Icon name={b.kind === 'graph' ? 'link' : 'grid'} size={13} color="var(--tx3)" />
+    <div
+      className="clay k-squish"
+      onClick={onOpen}
+      onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
+      style={{ ['--i' as string]: index, position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%', cursor: 'pointer' }}
+    >
+      <NotebookCover seed={b.id} color={b.color} />
+      <span style={{
+        position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+        display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+        border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+      }}>
+        <Icon name={b.kind === 'graph' ? 'link' : 'grid'} size={12} color="var(--tx2)" />
+      </span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
+        className="hov" aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
+        style={{
+          position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
+          display: 'grid', placeItems: 'center',
+          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+        }}
+      >
+        <Icon name="dots" size={14} color="var(--tx2)" />
+      </button>
+      <ProgBlur edge="bottom" size={52} strength={12} />
+      <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+        <span style={{
+          fontSize: 12.5, fontWeight: 800, color: 'var(--tx)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {b.name}
         </span>
-      </td>
-      <td style={cell}>
-        <button onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 9, textAlign: 'left', width: '100%', minHeight: 30 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 3, background: b.color, flex: 'none' }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {b.name}
-          </span>
-          <span style={{
-            flex: 'none', padding: '2px 7px', borderRadius: 6, fontSize: 9.5, fontWeight: 800,
-            letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', border: '1px solid var(--line2)',
-          }}>
-            {kind}
-          </span>
-        </button>
-      </td>
-      {!phone && <td style={cell}>—</td>}
-      {!phone && (
-        <td style={cell}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: 140 }}>
-            <Face name={displayName} photo={me.photo} size={20} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {displayName}
-            </span>
-          </div>
-        </td>
-      )}
-      <td style={{ ...cell, color: 'var(--tx3)' }}>{b.updated_at ? whenLabel(b.updated_at) : '—'}</td>
-      <td style={{ ...cell, paddingLeft: 0 }}>
-        <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
-          className="hov" aria-label={`Actions for ${b.name}`}
-          style={{ width: 28, height: 28, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-          <Icon name="dots" size={15} color="var(--tx3)" />
-        </button>
-      </td>
-    </tr>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+          {b.kind === 'graph' ? 'Graph' : 'Canvas'}
+        </span>
+      </span>
+    </div>
   );
 }
 
-const NEW_BTN: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 999,
-  minHeight: 36, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
-};
-
-function BookRow({
-  book: b, kids, last, me, phone, isOpen, isArchived, onToggle, onOpen, onOpenNote, onMenu,
+function BookCard({
+  book: b, index, kids, phone, isOpen, isArchived, onToggle, onOpen, onOpenNote, onMenu,
 }: {
-  book: Notebook; kids: Note[]; last: string | null; me: Identity; phone: boolean; isOpen: boolean; isArchived?: boolean;
+  book: Notebook; index: number; kids: Note[]; phone: boolean; isOpen: boolean; isArchived: boolean;
   onToggle: () => void; onOpen: () => void; onOpenNote: (id: string) => void;
   onMenu: (x: number, y: number) => void;
 }) {
-  const cell: React.CSSProperties = { padding: '10px 12px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
-  const displayName = me.name && me.name.toLowerCase() !== 'gemini'
-    ? me.name
-    : (me.handle && me.handle.toLowerCase() !== 'gemini' ? (me.handle.startsWith('@') ? me.handle : `@${me.handle}`) : 'Owner');
-
+  const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
   return (
-    <>
-      <tr className="row" style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer', opacity: isArchived ? 0.75 : 1 }}
-        onDoubleClick={onOpen}
-        onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}>
-        <td style={{ ...cell, paddingRight: 0 }}>
-          <button onClick={onToggle} aria-expanded={isOpen} aria-label={isOpen ? 'Hide notes' : 'Show notes'}
-            className="hov" style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-            <Icon name="chev" size={12} color="var(--tx3)"
-              style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .22s' }} />
-          </button>
-        </td>
-
-        <td style={cell}>
-          <button onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 9, textAlign: 'left', width: '100%', minHeight: 30 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 3, background: b.color, flex: 'none' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {b.name}
-            </span>
-            {isArchived && (
-              <span style={{
-                flex: 'none', padding: '1px 6px', borderRadius: 5, fontSize: 9.5, fontWeight: 800,
-                letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--pal-amber)',
-                background: 'color-mix(in srgb, var(--pal-amber) 16%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--pal-amber) 30%, transparent)',
-              }}>
-                Archived
-              </span>
-            )}
-            {phone && <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{kids.length}</span>}
-          </button>
-        </td>
-
-        {!phone && <td style={cell}>{kids.length}</td>}
-        {!phone && (
-          <td style={cell}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: 140 }}>
-              <Face name={displayName} photo={me.photo} size={20} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {displayName}
-              </span>
-            </div>
-          </td>
+    <div
+      className={isOpen ? 'clay' : 'clay k-squish'}
+      onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
+      style={{
+        ['--i' as string]: index,
+        gridColumn: isOpen && phone ? '1 / -1' : undefined,
+        position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left',
+        display: 'flex', flexDirection: 'column', width: '100%',
+        opacity: isArchived ? 0.78 : 1,
+      }}
+    >
+      {/* The cover opens the notebook. Art first, name on the blur veil, and
+          never a button inside a button — the cover is a click surface, the
+          chevron and dots are separate buttons layered over it. */}
+      <div
+        onClick={isOpen ? undefined : onOpen}
+        role={isOpen ? undefined : 'button'}
+        aria-label={isOpen ? undefined : `Open ${b.name}`}
+        style={{
+          position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+          minHeight: 132, width: '100%', cursor: isOpen ? 'default' : 'pointer', textAlign: 'left', padding: 0,
+        }}
+      >
+        <NotebookCover seed={b.id} color={b.color} />
+        {isArchived && (
+          <span style={{
+            position: 'absolute', top: 8, left: 8, padding: '3px 8px', borderRadius: 999,
+            fontSize: 9, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
+            color: 'var(--pal-amber)', background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--pal-amber) 32%, transparent)',
+          }}>
+            Archived
+          </span>
         )}
-        <td style={{ ...cell, color: 'var(--tx3)' }}>{last ? whenLabel(last) : '—'}</td>
-        <td style={{ ...cell, paddingLeft: 0 }}>
-          <button onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
-            className="hov" aria-label={`Actions for ${b.name}`}
-            style={{ width: 28, height: 28, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-            <Icon name="dots" size={15} color="var(--tx3)" />
-          </button>
-        </td>
-      </tr>
+        <ProgBlur edge="bottom" size={60} strength={12} />
+        <span style={{ position: 'relative', padding: '10px 12px 11px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={{
+            fontSize: 13.5, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--tx)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {b.name}
+          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+            {kids.length} note{kids.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
+          </span>
+        </span>
+      </div>
 
-      {isOpen && kids.map((n) => (
-        <tr key={n.id} className="row" style={{ borderBottom: '1px solid var(--line)' }}>
-          <td />
-          <td colSpan={phone ? 2 : 4} style={{ padding: '8px 12px' }}>
-            <button onClick={() => onOpenNote(n.id)} style={{ display: 'block', width: '100%', textAlign: 'left', minHeight: 30 }}>
-              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{n.title || 'Untitled'}</span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        aria-expanded={isOpen} aria-label={isOpen ? 'Hide notes' : 'Show notes'}
+        className="hov"
+        style={{
+          position: 'absolute', top: 6, right: 40, width: 30, height: 30, borderRadius: 9,
+          display: 'grid', placeItems: 'center',
+          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+        }}
+      >
+        <Icon name="chev" size={13} color="var(--tx2)"
+          style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .22s' }} />
+      </button>
+
+      <button
+        onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
+        className="hov" aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
+        style={{
+          position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
+          display: 'grid', placeItems: 'center',
+          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+        }}
+      >
+        <Icon name="dots" size={14} color="var(--tx2)" />
+      </button>
+
+      {/* Expanded in place: the notes the cover stands for. */}
+      {isOpen && (
+        <div style={{ borderTop: '1px solid var(--line)', background: 'var(--card)', padding: 8, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }} className="navsb">
+          {kids.map((n) => (
+            <button key={n.id} onClick={(e) => { e.stopPropagation(); onOpenNote(n.id); }}
+              className="row" style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 10 }}>
+              <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {n.title || 'Untitled'}
+              </span>
               <span style={{
-                display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 1,
+                display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 1,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {preview(n.body, 90) || 'Empty'}
+                {preview(n.body, 70) || 'Empty'} · {whenLabel(n.updated_at)}
               </span>
             </button>
-          </td>
-          <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--tx3)' }}>{whenLabel(n.updated_at)}</td>
-          <td />
-        </tr>
-      ))}
-
-      {isOpen && kids.length === 0 && (
-        <tr style={{ borderBottom: '1px solid var(--line)' }}>
-          <td />
-          <td colSpan={6} style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--tx3)' }}>Empty notebook.</td>
-        </tr>
+          ))}
+          {kids.length === 0 && (
+            <div style={{ padding: '10px', fontSize: 11, color: 'var(--tx3)', textAlign: 'center' }}>Empty notebook.</div>
+          )}
+        </div>
       )}
-    </>
+    </div>
   );
 }

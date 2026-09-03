@@ -263,10 +263,10 @@ $$
           {canGoBack && (
             <button onClick={stepBack} className="hov k-squish" aria-label="Back"
               style={{
-                flex: 'none', width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center',
-                border: '1px solid var(--line2)', marginRight: 6, background: 'var(--card2)', cursor: 'pointer',
+                flex: 'none', width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center',
+                border: '1px solid var(--line2)', marginRight: 6, background: 'var(--card)', cursor: 'pointer',
               }}>
-              <Icon name="back" size={15} color="var(--tx2)" />
+              <Icon name="back" size={16} color="var(--tx2)" />
             </button>
           )}
 
@@ -303,8 +303,8 @@ $$
             className="hov k-squish"
             aria-label="Back to note list"
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
-              background: 'var(--card2)', border: '1px solid var(--line2)', color: 'var(--tx)',
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', minHeight: 40, borderRadius: 10,
+              background: 'var(--card)', border: '1px solid var(--line2)', color: 'var(--tx)',
               fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
             }}
           >

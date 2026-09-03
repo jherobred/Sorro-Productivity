@@ -809,11 +809,11 @@ function Toolbar({
       aria-label={label}
       disabled={disabled}
       style={{
-        height: 28,
-        minWidth: 28,
-        padding: text ? '0 7px' : '0 5px',
+        height: 32,
+        minWidth: 32,
+        padding: text ? '0 8px' : '0 6px',
         flex: 'none',
-        borderRadius: 7,
+        borderRadius: 9,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -845,15 +845,15 @@ function Toolbar({
           className="hov k-squish"
           aria-label="Back to note list"
           style={{
-            height: 28,
-            padding: '0 8px',
+            height: 36,
+            padding: '0 10px',
             flex: 'none',
-            borderRadius: 7,
+            borderRadius: 10,
             display: 'flex',
             alignItems: 'center',
             gap: 4,
             marginRight: 4,
-            background: 'var(--card2)',
+            background: 'var(--card)',
             border: '1px solid var(--line2)',
             color: 'var(--tx)',
             fontSize: 11.5,

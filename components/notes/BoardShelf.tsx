@@ -6,31 +6,24 @@ import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { whenLabel } from '@/lib/notes';
+import { ProgBlur } from '../core/ProgBlur';
+import { NotebookCover } from './NotebookCover';
 import type { Board, CNode } from '@/lib/canvas';
 
 /**
- * The shelf for canvases and for graphs.
+ * The shelf for canvases and for graphs, in the same cover language as the
+ * notebook shelf.
  *
  * Notebooks land you on a list and you pick one. Canvas and Graph did not —
  * they dropped you straight into whichever board happened to be last, so a
  * second canvas was something you had to already know existed before you could
- * reach it. Same shelf, same table, one kind at a time.
+ * reach it. Same shelf, one kind at a time.
  *
- * The graph shelf carries one row it did not create: the automatic graph of
+ * The graph shelf carries one tile it did not create: the automatic graph of
  * every note and the links between them. That view is not a board and has no
  * row in the table, but it is the thing most people mean by "the graph", so it
- * sits at the top rather than being replaced by the custom ones.
+ * sits at the front rather than being replaced by the custom ones.
  */
-
-const HEAD: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: 'var(--tx3)', letterSpacing: '.02em',
-  textAlign: 'left', padding: '9px 12px', whiteSpace: 'nowrap',
-};
-
-const NEW_BTN: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 7, padding: '8px 13px', borderRadius: 999,
-  minHeight: 36, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
-};
 
 const COLOURS = [
   { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
@@ -77,7 +70,7 @@ export function BoardShelf({
 
   const openMenu = (e: React.MouseEvent, b: Board) => {
     e.stopPropagation();
-    const r = e.currentTarget.getBoundingClientRect();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({
       x: r.left - 150, y: r.bottom + 6, label: b.name,
       items: [
@@ -102,29 +95,32 @@ export function BoardShelf({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={onNew} className="tap acc" style={{
-          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 999,
-          minHeight: 36, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 700,
+        <button onClick={onNew} className="tap acc k-glass" style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 999,
+          minHeight: 38, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
         }}>
-          <Icon name={icon} size={15} color="var(--ink)" />New {noun}
+          <Icon name={icon} size={15} color="var(--accInk)" />New {noun}
         </button>
 
         {kind === 'graph' && onOpenAuto && (
-          <button onClick={onOpenAuto} className="hov tap" style={NEW_BTN}>
-            <Icon name="layers" size={14} color="var(--tx3)" />All notes
+          <button onClick={onOpenAuto} className="hov tap k-squish" style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 999,
+            minHeight: 38, border: '1px solid var(--line2)', background: 'var(--card)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
+          }}>
+            <Icon name="layers" size={14} color="var(--tx2)" />All notes
           </button>
         )}
 
         <button onClick={() => setDesc((v) => !v)} className="hov tap"
           title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
-          style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
+          style={{ width: 38, height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', display: 'grid', placeItems: 'center' }}>
           <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
 
         <label style={{
           marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8,
           flex: phone ? '1 1 100%' : '0 0 260px',
-          padding: '0 12px', height: 36, borderRadius: 10, border: '1px solid var(--line2)', background: 'var(--card)',
+          padding: '0 13px', height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)',
         }}>
           <Icon name="search" size={14} color="var(--tx3)" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Find ${plural}`}
@@ -133,84 +129,96 @@ export function BoardShelf({
         </label>
       </div>
 
-      <div className="navsb" style={{
+      <div className="navsb k-stagger" style={{
         flex: 1, minHeight: 0, overflowY: 'auto',
-        background: 'var(--card)', borderRadius: 14, boxShadow: 'var(--sh)',
+        display: 'grid', alignItems: 'start', alignContent: 'start',
+        gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(225px, 1fr))',
+        gap: 12, paddingRight: 2,
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)' }}>
-              <th style={{ ...HEAD, width: 34 }} aria-label="Colour" />
-              <th style={HEAD}>Title</th>
-              {!phone && <th style={{ ...HEAD, width: 90 }}>Nodes</th>}
-              <th style={{ ...HEAD, width: phone ? 74 : 120 }}>Updated</th>
-              <th style={{ ...HEAD, width: 44 }} aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-            {kind === 'graph' && onOpenAuto && !q.trim() && (
-              <tr onClick={onOpenAuto} className="hov" style={{ cursor: 'pointer', borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '10px 12px' }}>
-                  <span aria-hidden style={{
-                    width: 10, height: 10, borderRadius: 3, display: 'block',
-                    background: 'var(--accTx)',
-                  }} />
-                </td>
-                <td style={{ padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Icon name="layers" size={13} color="var(--tx3)" />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>All notes</span>
-                    <span className="kicker" style={{ letterSpacing: '.1em' }}>Automatic</span>
-                  </div>
-                </td>
-                {!phone && <td style={{ padding: '10px 12px' }} className="metaline num">—</td>}
-                <td style={{ padding: '10px 12px' }} className="metaline">Live</td>
-                <td />
-              </tr>
-            )}
+        {kind === 'graph' && onOpenAuto && !q.trim() && (
+          <button onClick={onOpenAuto} className="clay k-squish" style={{
+            position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%',
+          }}>
+            <NotebookCover seed="basedly-auto-graph" />
+            <span style={{
+              position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+              display: 'grid', placeItems: 'center',
+              background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+              border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            }}>
+              <Icon name="layers" size={12} color="var(--tx2)" />
+            </span>
+            <ProgBlur edge="bottom" size={56} strength={12} />
+            <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)' }}>All notes</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+                Automatic
+              </span>
+            </span>
+          </button>
+        )}
 
-            {rows.map((b) => (
-              <tr key={b.id} onClick={() => onOpen(b)} className="hov"
-                style={{ cursor: 'pointer', borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '10px 12px' }}>
-                  <span aria-hidden style={{
-                    width: 10, height: 10, borderRadius: 3, display: 'block', background: b.color,
-                  }} />
-                </td>
-                <td style={{ padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <Icon name={icon} size={13} color="var(--tx3)" />
-                    <span style={{
-                      fontSize: 13, fontWeight: 600, color: 'var(--tx)', minWidth: 0,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>{b.name || `Untitled ${noun}`}</span>
-                  </div>
-                </td>
-                {!phone && (
-                  <td style={{ padding: '10px 12px' }} className="metaline num">{counts.get(b.id) ?? 0}</td>
-                )}
-                <td style={{ padding: '10px 12px' }} className="metaline">{whenLabel(b.updated_at)}</td>
-                <td style={{ padding: '10px 12px' }}>
-                  <button onClick={(e) => openMenu(e, b)} className="hov"
-                    aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
-                    style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center' }}>
-                    <Icon name="dots" size={14} color="var(--tx3)" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+        {rows.map((b, i) => (
+          <div
+            key={b.id}
+            className="clay k-squish"
+            onClick={() => onOpen(b)}
+            onContextMenu={(e) => { e.preventDefault(); openMenu(e, b); }}
+            style={{
+              ['--i' as string]: i,
+              position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%',
+            }}
+          >
+            <NotebookCover seed={b.id} color={b.color} />
+            <span style={{
+              position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+              display: 'grid', placeItems: 'center',
+              background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+              border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            }}>
+              <Icon name={icon} size={12} color="var(--tx2)" />
+            </span>
+            <button
+              onClick={(e) => openMenu(e, b)} className="hov"
+              aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
+              style={{
+                position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
+                display: 'grid', placeItems: 'center',
+                background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+                border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+              }}
+            >
+              <Icon name="dots" size={14} color="var(--tx2)" />
+            </button>
+            <ProgBlur edge="bottom" size={56} strength={12} />
+            <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{
+                fontSize: 12.5, fontWeight: 800, color: 'var(--tx)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {b.name || `Untitled ${noun}`}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                {kind === 'graph' ? 'Graph' : 'Canvas'} · {counts.get(b.id) ?? 0} · {whenLabel(b.updated_at)}
+              </span>
+            </span>
+          </div>
+        ))}
 
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={phone ? 4 : 5} style={{ padding: '26px 12px', textAlign: 'center' }}>
-                  <div className="metaline">
-                    {q.trim() ? `No ${noun} matches “${q.trim()}”.` : `No ${plural} yet. Make one.`}
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {rows.length === 0 && (
+          <div style={{
+            gridColumn: '1 / -1', padding: '40px 16px', textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/mascots/otter.svg" alt="" width={64} height={64} style={{ opacity: .9 }} />
+            <div className="metaline">
+              {q.trim() ? `No ${noun} matches “${q.trim()}”.` : `No ${plural} yet. Make one.`}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
