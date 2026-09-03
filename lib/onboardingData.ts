@@ -173,7 +173,7 @@ export const TAB_ONBOARDINGS: Record<string, TabOnboardingConfig> = {
     steps: [
       {
         title: 'Flexible Tracking Views',
-        description: 'Switch between weekly streak grids, single-day focus cards, and yearly heatmaps.',
+        description: 'Switch between a week, a rolling 30 days, and the full-year heatmap.',
         targetSelector: '[data-tour="habits-view-modes"]',
         placement: 'bottom',
         icon: 'week',
@@ -183,7 +183,7 @@ export const TAB_ONBOARDINGS: Record<string, TabOnboardingConfig> = {
       },
       {
         title: 'One-Tap Ticking',
-        description: 'Tap today’s square to log progress, earn XP, and preserve your multiplier.',
+        description: 'Tap any square in a habit’s row to tick that day, earn XP, and hold your multiplier.',
         targetSelector: '[data-tour="habits-grid-cells"]',
         placement: 'top',
         icon: 'flame',
