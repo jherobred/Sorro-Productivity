@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Icon } from '../Icon';
 import { playClick, playTick } from '@/lib/audio';
+import { usePrefs } from '@/lib/prefs';
 import type { RunResult, Step } from '@/lib/java';
 
 interface TracePlaybackHUDProps {
@@ -31,8 +32,13 @@ export function TracePlaybackHUD({
   phone = false,
 }: TracePlaybackHUDProps) {
   const [minimized, setMinimized] = useState(false);
+  const { prefs } = usePrefs();
+  // Both hooks run before this early return, so the order stays stable.
   const totalSteps = result.trace.length;
   if (totalSteps <= 1) return null;
+
+  const EASE = 'cubic-bezier(.16, 1, .3, 1)';
+  const tint = (ms: number) => (prefs.motion ? `background ${ms}ms ${EASE}` : 'none');
 
   const activeIndex = currentStepIndex ?? totalSteps - 1;
   const isFinalState = currentStepIndex === null;
@@ -206,7 +212,7 @@ export function TracePlaybackHUD({
               background: isPlaying ? 'var(--pal-mint)' : isFinalState ? 'var(--pal-sky)' : 'var(--pal-amber)',
               boxShadow: isPlaying ? '0 0 8px var(--pal-mint)' : 'none',
               flex: 'none',
-              transition: 'background .2s',
+              transition: tint(200),
             }}
           />
 
@@ -344,21 +350,42 @@ export function TracePlaybackHUD({
         {totalSteps <= 28 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px' }}>
             {Array.from({ length: totalSteps }).map((_, i) => (
-              <span
+              // A button, not a span: these were 4px click targets with no
+              // keyboard path and no role. The dot stays 4px visually while the
+              // button pads out the hit area. 28 dots cannot each reach 44px on
+              // a phone, so the range input above stays the primary control and
+              // these are the coarse secondary one.
+              <button
                 key={i}
+                type="button"
+                aria-label={`Go to step ${i + 1}`}
+                aria-current={i === activeIndex ? 'true' : undefined}
                 onClick={() => {
                   if (isPlaying) onPlayToggle();
                   onStepChange(i);
                 }}
                 style={{
-                  width: 4,
-                  height: 4,
-                  borderRadius: '50%',
-                  background: i === activeIndex ? 'var(--acc)' : i < activeIndex ? 'color-mix(in srgb, var(--acc) 50%, var(--tx3))' : 'var(--line2)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  width: phone ? 14 : 12,
+                  height: phone ? 20 : 14,
+                  padding: 0,
+                  border: 'none',
+                  background: 'none',
                   cursor: 'pointer',
-                  transition: 'background .15s',
+                  flex: 'none',
                 }}
-              />
+              >
+                <span
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    background: i === activeIndex ? 'var(--acc)' : i < activeIndex ? 'color-mix(in srgb, var(--acc) 50%, var(--tx3))' : 'var(--line2)',
+                    transition: tint(150),
+                  }}
+                />
+              </button>
             ))}
           </div>
         )}

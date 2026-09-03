@@ -4,7 +4,9 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Icon } from '../Icon';
 import { playClick } from '@/lib/audio';
 import { PAL } from '@/lib/pal';
-import type { FrameSnap, HeapObj } from '@/lib/java';
+import { usePrefs } from '@/lib/prefs';
+import { sceneFor, type MarkerRole, type Scene, type SceneEdge, type SceneKind } from '@/lib/javaScene';
+import type { FrameSnap, HeapObj, Step } from '@/lib/java';
 
 export interface AISimEntity {
   id: number;
@@ -51,11 +53,18 @@ interface Java3DVisualizerProps {
   stepNote?: string;
   phone?: boolean;
   aiSimulation?: AISimulationData | null;
+  /**
+   * The trace step being displayed. Optional so the call site can be wired
+   * separately; when absent the step is reconstructed from the frames, heap and
+   * line already passed, which carry the same facts.
+   */
+  step?: Step | null;
 }
 
 export type RenderStyle = 'stage2d' | 'orbit3d';
 type ViewAngle = 'isometric' | 'perspective' | 'front' | 'top' | 'side' | 'free';
 export type VisMode = 'auto' | 'arrays' | 'tree' | 'matrix' | 'hanoi' | 'graph' | 'stack' | 'list';
+type ConcreteMode = Exclude<VisMode, 'auto'>;
 
 interface Point3D {
   x: number;
@@ -70,17 +79,204 @@ interface ProjectedPoint {
   scale: number;
 }
 
-interface SimGraphNode {
-  id: number;
-  val: string;
-  x: number;
-  y: number;
-  z: number;
-  vx: number;
-  vy: number;
-  vz: number;
+/* ------------------------------------------------------------------ theme */
+
+/**
+ * Canvas cannot read CSS custom properties, so the theme tokens are resolved
+ * off the root element into plain colour strings and handed to the painter.
+ * They are re-read whenever `prefs.theme` or `prefs.accent` changes, which is
+ * the signal the rest of the app already re-renders on: applyPrefs() writes
+ * `data-theme` and `--acc` onto the root before the prefs store emits, so by
+ * the time this effect runs the new values are on the element.
+ *
+ * Brand hues from lib/pal.ts are identical in both themes and stay literal.
+ */
+const TOKEN_FALLBACK = {
+  bg: '#0B0A13',
+  card: '#16151F',
+  card2: '#1F1D2A',
+  tx: '#EFEDF5',
+  tx2: '#A29EBB',
+  tx3: '#78748F',
+  line2: 'rgba(170, 166, 210, .26)',
+  acc: '#8B7CFF',
+};
+type Tokens = typeof TOKEN_FALLBACK;
+const TOKEN_KEYS = Object.keys(TOKEN_FALLBACK) as (keyof Tokens)[];
+
+function readTokens(): Tokens {
+  if (typeof window === 'undefined') return TOKEN_FALLBACK;
+  const css = getComputedStyle(document.documentElement);
+  const out = { ...TOKEN_FALLBACK };
+  for (const k of TOKEN_KEYS) out[k] = css.getPropertyValue(`--${k}`).trim() || TOKEN_FALLBACK[k];
+  return out;
 }
 
+/* ----------------------------------------------------------------- easing */
+
+const bezAt = (t: number, p1: number, p2: number) => {
+  const u = 1 - t;
+  return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
+};
+
+/**
+ * The house curve, `cubic-bezier(.16, 1, .3, 1)` — the one every transition in
+ * this app runs on (components/AsciiBar.tsx). Solved by bisecting x, which is
+ * exact to ~4e-6 at 18 iterations and needs no dependency.
+ */
+function ease(t: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  let lo = 0;
+  let hi = 1;
+  let u = t;
+  for (let i = 0; i < 18; i++) {
+    u = (lo + hi) / 2;
+    if (bezAt(u, 0.16, 0.3) < t) lo = u;
+    else hi = u;
+  }
+  return bezAt(u, 1, 1);
+}
+
+/** How long one trace step takes to travel to the next. */
+const STEP_MS = 380;
+
+/* ------------------------------------------------------------------ scene */
+
+/**
+ * A slot is where a value sits in its own structure, not on screen: `a` is the
+ * column / depth axis, `b` the position within it. Transitions interpolate
+ * slots rather than pixels, so a swap reads identically at any zoom, camera
+ * angle or canvas size — and the same numbers drive the 2D stage and the 3D
+ * orbit without being computed twice.
+ */
+type Slot = { a: number; b: number };
+
+const lerpSlot = (prev: Slot | undefined, next: Slot, e: number): Slot =>
+  prev ? { a: prev.a + (next.a - prev.a) * e, b: prev.b + (next.b - prev.b) * e } : next;
+
+/** Higher rank wins, so a blanket `sorted` marker never hides the live swap. */
+const ROLE_RANK: Record<MarkerRole, number> = {
+  sorted: 0,
+  visited: 1,
+  active: 2,
+  cursor: 3,
+  pivot: 4,
+  compare: 5,
+  swap: 6,
+  found: 7,
+};
+
+const roleColor = (role: MarkerRole | undefined, T: Tokens): string | null => {
+  switch (role) {
+    case 'cursor':
+      return PAL.sky;
+    case 'compare':
+      return PAL.amber;
+    case 'swap':
+      return PAL.coral;
+    case 'pivot':
+      return PAL.violet;
+    case 'sorted':
+      return PAL.mint;
+    case 'visited':
+      return PAL.indigo;
+    case 'active':
+      return T.acc;
+    case 'found':
+      return PAL.lime;
+    default:
+      return null;
+  }
+};
+
+const KIND_TO_MODE: Record<SceneKind, ConcreteMode> = {
+  array: 'arrays',
+  matrix: 'matrix',
+  tree: 'tree',
+  list: 'list',
+  graph: 'graph',
+  stack: 'stack',
+  hanoi: 'hanoi',
+  frames: 'stack',
+};
+
+type Family = 'row' | 'grid' | 'columns' | 'chain' | 'tree' | 'graph';
+
+const FAMILY: Record<ConcreteMode, Family> = {
+  arrays: 'row',
+  matrix: 'grid',
+  hanoi: 'columns',
+  stack: 'columns',
+  list: 'chain',
+  tree: 'tree',
+  graph: 'graph',
+};
+
+const needsNodes = (f: Family) => f === 'tree' || f === 'graph';
+
+function cellSlots(scene: Scene): Map<string, Slot> {
+  const m = new Map<string, Slot>();
+  scene.columns.forEach((col, ci) => col.cellIds.forEach((id, pi) => m.set(id, { a: ci, b: pi })));
+  for (const c of scene.cells) if (!m.has(c.id)) m.set(c.id, { a: 0, b: c.index });
+  return m;
+}
+
+/** Graph nodes get a ring order; tree nodes get depth plus a tidy leaf slot. */
+function nodeSlots(scene: Scene, radial: boolean): Map<string, Slot> {
+  const m = new Map<string, Slot>();
+  if (radial) {
+    scene.nodes.forEach((n, i) => m.set(n.id, { a: 0, b: i }));
+    return m;
+  }
+
+  const ids = new Set(scene.nodes.map((n) => n.id));
+  const kids = new Map<string, string[]>();
+  const roots: string[] = [];
+  for (const n of scene.nodes) {
+    if (n.parent && n.parent !== n.id && ids.has(n.parent)) {
+      const arr = kids.get(n.parent);
+      if (arr) arr.push(n.id);
+      else kids.set(n.parent, [n.id]);
+    } else {
+      roots.push(n.id);
+    }
+  }
+
+  const depthOf = new Map(scene.nodes.map((n) => [n.id, n.depth]));
+  let leaf = 0;
+  const seen = new Set<string>();
+  // `seen` is the cycle guard: a malformed parent chain must not recurse away.
+  const walk = (id: string): number => {
+    if (seen.has(id)) return m.get(id)?.b ?? 0;
+    seen.add(id);
+    const cs = kids.get(id) ?? [];
+    let x: number;
+    if (!cs.length) {
+      x = leaf++;
+    } else {
+      const xs = cs.map(walk);
+      x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    }
+    m.set(id, { a: depthOf.get(id) ?? 0, b: x });
+    return x;
+  };
+  roots.forEach(walk);
+  for (const n of scene.nodes) if (!m.has(n.id)) m.set(n.id, { a: n.depth, b: leaf++ });
+  return m;
+}
+
+/** One drawable value, independent of the structure it came from. */
+type Vis = {
+  id: string;
+  label: string;
+  sub: string;
+  slot: Slot;
+  prev?: Slot;
+  role?: MarkerRole;
+};
+
+/* Depth reference for the orbit camera. Static: these are a grid, not weather. */
 const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 42 }, (_, i) => {
   const theta = (i * 2.39996) % (Math.PI * 2);
   const phi = ((i * 1.61803) % Math.PI) - Math.PI / 2;
@@ -92,6 +288,8 @@ const STARFIELD_PARTICLES: Point3D[] = Array.from({ length: 42 }, (_, i) => {
   };
 });
 
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
 export function Java3DVisualizer({
   frames,
   heap,
@@ -100,9 +298,11 @@ export function Java3DVisualizer({
   stepNote,
   phone = false,
   aiSimulation,
+  step,
 }: Java3DVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const { prefs } = usePrefs();
 
   const [renderStyle, setRenderStyle] = useState<RenderStyle>('stage2d');
 
@@ -115,21 +315,95 @@ export function Java3DVisualizer({
   const [viewAngle, setViewAngle] = useState<ViewAngle>('isometric');
   const [isPerspective, setIsPerspective] = useState<boolean>(true);
 
-  const animTimeRef = useRef<number>(0);
   const animFrameIdRef = useRef<number | null>(null);
-
-  const graphNodesRef = useRef<SimGraphNode[]>([
-    { id: 0, val: '0', x: 0, y: 70, z: 0, vx: 0, vy: 0, vz: 0 },
-    { id: 1, val: '1', x: -60, y: 35, z: -35, vx: 0, vy: 0, vz: 0 },
-    { id: 2, val: '2', x: 60, y: 35, z: 35, vx: 0, vy: 0, vz: 0 },
-    { id: 3, val: '3', x: -85, y: -5, z: 20, vx: 0, vy: 0, vz: 0 },
-    { id: 4, val: '4', x: 0, y: 5, z: 65, vx: 0, vy: 0, vz: 0 },
-    { id: 5, val: '5', x: 85, y: -5, z: -25, vx: 0, vy: 0, vz: 0 },
-  ]);
+  const lastFrameRef = useRef<number>(0);
 
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchDistanceRef = useRef<number | null>(null);
   const isRightClickPanRef = useRef<boolean>(false);
+
+  const [tokens, setTokens] = useState<Tokens>(TOKEN_FALLBACK);
+  useEffect(() => {
+    setTokens(readTokens());
+  }, [prefs.theme, prefs.accent]);
+
+  /* ------------------------------------------------------------- the data */
+
+  /** Everything drawn comes from here. Nothing is invented downstream. */
+  const scene = useMemo(() => {
+    const s: Step | null =
+      step ??
+      (activeLine === null
+        ? null
+        : { line: activeLine, frames, heap, out: series.length, note: stepNote ?? '' });
+    return sceneFor(s, frames, heap, series);
+  }, [step, activeLine, frames, heap, series, stepNote]);
+
+  const effectiveMode: ConcreteMode = visMode === 'auto' ? KIND_TO_MODE[scene.kind] : visMode;
+  const family = FAMILY[effectiveMode];
+
+  const slots = useMemo(
+    () => (needsNodes(family) ? nodeSlots(scene, family === 'graph') : cellSlots(scene)),
+    [scene, family]
+  );
+
+  const roles = useMemo(() => {
+    const m = new Map<string, MarkerRole>();
+    for (const mk of scene.markers) {
+      for (const id of mk.ids) {
+        const cur = m.get(id);
+        if (!cur || ROLE_RANK[mk.role] > ROLE_RANK[cur]) m.set(id, mk.role);
+      }
+    }
+    return m;
+  }, [scene]);
+
+  /* The transition: where things were, and when the move began. */
+  const prevSlotsRef = useRef<Map<string, Slot>>(new Map());
+  const lastSlotsRef = useRef<Map<string, Slot>>(slots);
+  const tStartRef = useRef<number>(0);
+  useEffect(() => {
+    prevSlotsRef.current = lastSlotsRef.current;
+    lastSlotsRef.current = slots;
+    tStartRef.current = typeof performance !== 'undefined' ? performance.now() : 0;
+  }, [slots]);
+
+  const items = useMemo<Vis[]>(() => {
+    const prev = prevSlotsRef.current;
+    if (needsNodes(family)) {
+      return scene.nodes
+        .filter((n) => slots.has(n.id))
+        .map((n) => ({
+          id: n.id,
+          label: n.value || n.label,
+          sub: n.value && n.label && n.value !== n.label ? n.label : '',
+          slot: slots.get(n.id)!,
+          prev: prev.get(n.id),
+          role: roles.get(n.id),
+        }));
+    }
+    return scene.cells
+      .filter((c) => slots.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        label: c.value,
+        sub: String(c.index),
+        slot: slots.get(c.id)!,
+        prev: prev.get(c.id),
+        role: roles.get(c.id),
+      }));
+  }, [scene, slots, roles, family]);
+
+  /** Trees fall back to the parent links when no explicit edges are given. */
+  const edges = useMemo<SceneEdge[]>(() => {
+    if (!needsNodes(family)) return [];
+    if (scene.edges.length) return scene.edges;
+    return scene.nodes
+      .filter((n) => n.parent && slots.has(n.parent))
+      .map((n) => ({ from: n.parent!, to: n.id, directed: false }));
+  }, [scene, slots, family]);
+
+  /* ------------------------------------------------------------- controls */
 
   const setPresetAngle = useCallback((angle: ViewAngle) => {
     playClick();
@@ -188,44 +462,45 @@ export function Java3DVisualizer({
     }
   }, []);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const pointers = activePointersRef.current;
-    if (!pointers.has(e.pointerId)) return;
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const pointers = activePointersRef.current;
+      if (!pointers.has(e.pointerId)) return;
 
-    const prevPos = pointers.get(e.pointerId)!;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const prevPos = pointers.get(e.pointerId)!;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (pointers.size >= 2) {
-      const pts = Array.from(pointers.values());
-      const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      if (pinchDistanceRef.current !== null && pinchDistanceRef.current > 0) {
-        const deltaDist = currentDist - pinchDistanceRef.current;
-        setZoom((z) => Math.max(0.35, Math.min(3.5, z + deltaDist * 0.005)));
+      if (pointers.size >= 2) {
+        const pts = Array.from(pointers.values());
+        const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pinchDistanceRef.current !== null && pinchDistanceRef.current > 0) {
+          const deltaDist = currentDist - pinchDistanceRef.current;
+          setZoom((z) => clamp(z + deltaDist * 0.005, 0.35, 3.5));
+        }
+        pinchDistanceRef.current = currentDist;
+        return;
       }
-      pinchDistanceRef.current = currentDist;
-      return;
-    }
 
-    if (pointers.size === 1) {
-      const dx = e.clientX - prevPos.x;
-      const dy = e.clientY - prevPos.y;
+      if (pointers.size === 1) {
+        const dx = e.clientX - prevPos.x;
+        const dy = e.clientY - prevPos.y;
 
-      if (isRightClickPanRef.current || e.shiftKey || renderStyle === 'stage2d') {
-        setPanX((px) => px + dx);
-        setPanY((py) => py + dy);
-      } else {
-        setViewAngle('free');
-        setYaw((y) => y + dx * 0.0075);
-        setPitch((p) => Math.max(-0.25, Math.min(1.54, p - dy * 0.0075)));
+        if (isRightClickPanRef.current || e.shiftKey || renderStyle === 'stage2d') {
+          setPanX((px) => px + dx);
+          setPanY((py) => py + dy);
+        } else {
+          setViewAngle('free');
+          setYaw((y) => y + dx * 0.0075);
+          setPitch((p) => clamp(p - dy * 0.0075, -0.25, 1.54));
+        }
       }
-    }
-  }, [renderStyle]);
+    },
+    [renderStyle]
+  );
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size < 2) {
-      pinchDistanceRef.current = null;
-    }
+    if (activePointersRef.current.size < 2) pinchDistanceRef.current = null;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {}
@@ -233,882 +508,680 @@ export function Java3DVisualizer({
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.35, Math.min(3.5, z - e.deltaY * 0.0015)));
+    setZoom((z) => clamp(z - e.deltaY * 0.0015, 0.35, 3.5));
   }, []);
 
-  const detectedMode = useMemo<VisMode>(() => {
-    const isHanoiSignature = frames.some(
-      (f) =>
-        f.sig.toLowerCase().includes('hanoi') ||
-        f.sig.toLowerCase().includes('solve') ||
-        f.locals.some((l) => l.name === 'from' || l.name === 'aux')
-    );
-    if (isHanoiSignature) return 'hanoi';
+  /* ---------------------------------------------------------------- paint */
 
-    const hasGraph =
-      heap.some((h) => h.name.toLowerCase().includes('adj') || h.name.toLowerCase().includes('graph')) ||
-      frames.some((f) => f.sig.toLowerCase().includes('bfs') || f.sig.toLowerCase().includes('dfs'));
-    if (hasGraph) return 'graph';
+  /** Returns true once the current step transition has finished. */
+  const renderScene = useCallback(
+    (nowMs: number): boolean => {
+      const canvas = canvasRef.current;
+      if (!canvas) return true;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return true;
 
-    const hasTreeNodes =
-      heap.some(
-        (h) =>
-          (h.type.toLowerCase().includes('node') && !h.type.toLowerCase().includes('listnode') && !h.name.toLowerCase().includes('head')) ||
-          h.type.toLowerCase().includes('tree') ||
-          h.name.toLowerCase().includes('root') ||
-          h.name.toLowerCase().includes('bst')
-      ) ||
-      frames.some((f) => f.sig.toLowerCase().includes('tree') || f.sig.toLowerCase().includes('inorder'));
-    if (hasTreeNodes) return 'tree';
+      const T = tokens;
+      const parent = canvas.parentElement;
+      const clientW = parent?.clientWidth || 600;
+      const clientH = parent?.clientHeight || 380;
+      const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
 
-    const hasArrays =
-      heap.some((h) => h.type.includes('[]') || (h.cells && h.cells.length > 0)) || series.length > 0;
-    if (hasArrays) return 'arrays';
+      if (canvas.width !== clientW * dpr || canvas.height !== clientH * dpr) {
+        canvas.width = clientW * dpr;
+        canvas.height = clientH * dpr;
+      }
 
-    return 'stack';
-  }, [frames, heap, series]);
+      ctx.save();
+      ctx.scale(dpr, dpr);
 
-  const effectiveMode = visMode === 'auto' ? detectedMode : visMode;
+      const width = clientW;
+      const height = clientH;
+      const isMobile = width < 480;
+      ctx.clearRect(0, 0, width, height);
 
-  const renderScene = useCallback((time: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+      const cx = width / 2 + panX;
+      const cy = height / 2 + panY;
 
-    const parent = canvas.parentElement;
-    const clientW = parent?.clientWidth || 600;
-    const clientH = parent?.clientHeight || 380;
-    const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
+      // Motion is a product setting, not an OS hint (lib/prefs.ts). With it off
+      // the new state is simply the state, drawn at once.
+      const raw = prefs.motion ? (nowMs - tStartRef.current) / STEP_MS : 1;
+      const e = ease(clamp(raw, 0, 1));
+      const settled = raw >= 1;
 
-    if (canvas.width !== clientW * dpr || canvas.height !== clientH * dpr) {
-      canvas.width = clientW * dpr;
-      canvas.height = clientH * dpr;
-    }
+      const project = (x: number, y: number, z: number): ProjectedPoint => {
+        const cosY = Math.cos(yaw);
+        const sinY = Math.sin(yaw);
+        const x1 = x * cosY - z * sinY;
+        const z1 = x * sinY + z * cosY;
 
-    ctx.save();
-    ctx.scale(dpr, dpr);
+        const cosP = Math.cos(pitch);
+        const sinP = Math.sin(pitch);
+        const y2 = y * cosP - z1 * sinP;
+        const z2 = y * sinP + z1 * cosP;
 
-    const width = clientW;
-    const height = clientH;
-
-    ctx.clearRect(0, 0, width, height);
-
-    const cx = width / 2 + panX;
-    const cy = height / 2 + panY;
-
-    const project = (x: number, y: number, z: number): ProjectedPoint => {
-      const cosY = Math.cos(yaw);
-      const sinY = Math.sin(yaw);
-      const x1 = x * cosY - z * sinY;
-      const z1 = x * sinY + z * cosY;
-
-      const cosP = Math.cos(pitch);
-      const sinP = Math.sin(pitch);
-      const y2 = y * cosP - z1 * sinP;
-      const z2 = y * sinP + z1 * cosP;
-
-      if (isPerspective) {
-        const fovDistance = 620;
-        const depth = z2 + fovDistance;
-        const scale = (390 / Math.max(40, depth)) * zoom;
-        return { x: cx + x1 * scale * 1.8, y: cy + 20 - y2 * scale * 1.8, z: z2, scale };
-      } else {
+        if (isPerspective) {
+          const depth = z2 + 620;
+          const scale = (390 / Math.max(40, depth)) * zoom;
+          return { x: cx + x1 * scale * 1.8, y: cy + 20 - y2 * scale * 1.8, z: z2, scale };
+        }
         const scale = 0.65 * zoom;
         return { x: cx + x1 * scale * 1.8, y: cy + 20 - y2 * scale * 1.8, z: z2, scale };
-      }
-    };
-
-    if (renderStyle === 'stage2d') {
-      const isMobile = width < 480;
-
-      const currentLocals = frames[frames.length - 1]?.locals || [];
-      const getLocalNum = (names: string[]) => {
-        const found = currentLocals.find((l) => names.includes(l.name));
-        return found ? Number(found.value?.v ?? found.text) : null;
       };
 
-      const varI = getLocalNum(['i', 'outer', 'index', 'idx']);
-      const varJ = getLocalNum(['j', 'inner']);
-
-      if (effectiveMode === 'hanoi') {
-        const stageY = cy + 40;
-        const pegSpacing = isMobile ? 85 : 120;
-        const pegH = 110;
-        const pegs = [
-          { label: 'A', x: cx - pegSpacing },
-          { label: 'B', x: cx },
-          { label: 'C', x: cx + pegSpacing },
-        ];
-
-        const stageW = pegSpacing * 2 + (isMobile ? 120 : 160);
-        ctx.save();
-        ctx.fillStyle = '#121520';
-        ctx.strokeStyle = '#222838';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(cx - stageW / 2, stageY, stageW, 26, 12);
-        ctx.fill();
-        ctx.stroke();
-
-        pegs.forEach((peg) => {
-          const pegGrad = ctx.createLinearGradient(peg.x - 3, stageY - pegH, peg.x + 3, stageY);
-          pegGrad.addColorStop(0, '#2F3B52');
-          pegGrad.addColorStop(0.5, '#455675');
-          pegGrad.addColorStop(1, '#1A2130');
-          ctx.fillStyle = pegGrad;
-          ctx.beginPath();
-          ctx.roundRect(peg.x - 3.5, stageY - pegH, 7, pegH + 4, 3.5);
-          ctx.fill();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 13px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(peg.label, peg.x, stageY + 18);
-        });
-
-        let movingDisk = 3;
-        let fromPeg = 0;
-        let toPeg = 2;
-        const moveMatch = stepNote?.match(/Move\s+disk\s+(\d+)\s+from\s+([A-C])\s*->\s*([A-C])/i);
-        if (moveMatch) {
-          movingDisk = parseInt(moveMatch[1], 10);
-          fromPeg = moveMatch[2] === 'A' ? 0 : moveMatch[2] === 'B' ? 1 : 2;
-          toPeg = moveMatch[3] === 'A' ? 0 : moveMatch[3] === 'B' ? 1 : 2;
-        }
-
-        const diskColors: Record<number, string> = {
-          1: '#3D4D6B',
-          2: '#2F3C54',
-          3: '#C67A18',
-          4: '#28344B',
-          5: '#222D42',
-        };
-
-        const diskSizes: Record<number, number> = {
-          1: 44,
-          2: 58,
-          3: 72,
-          4: 86,
-          5: 100,
-        };
-
-        const stacks: number[][] = [[5, 4], [2, 1], []];
-        stacks[fromPeg] = stacks[fromPeg].filter((d) => d !== movingDisk);
-
-        stacks.forEach((stack, pIdx) => {
-          let curY = stageY - 14;
-          stack.forEach((dId) => {
-            const dw = diskSizes[dId] || 60;
-            const px = pegs[pIdx].x;
-            ctx.fillStyle = diskColors[dId] || '#2F3C54';
-            ctx.strokeStyle = '#404E6B';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.roundRect(px - dw / 2, curY, dw, 16, 8);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = '#E2E8F0';
-            ctx.font = 'bold 11px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(dId), px, curY + 8);
-            curY -= 18;
-          });
-        });
-
-        if (movingDisk > 0) {
-          const hoverX = pegs[fromPeg].x;
-          const hoverY = stageY - pegH - 12 + Math.sin(time * 3) * 2;
-          const dw = diskSizes[movingDisk] || 72;
-
-          ctx.save();
-          ctx.shadowColor = 'rgba(217, 119, 6, 0.6)';
-          ctx.shadowBlur = 18;
-          ctx.fillStyle = '#C67A18';
-          ctx.strokeStyle = '#F59E0B';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.roundRect(hoverX - dw / 2, hoverY, dw, 17, 8.5);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 12px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(movingDisk), hoverX, hoverY + 8.5);
-          ctx.restore();
-        }
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('MOVES', cx - 24, stageY + 54);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 15px monospace';
-        ctx.fillText('3 / 31', cx + 28, stageY + 54);
-
-        ctx.restore();
-      } else if (effectiveMode === 'stack') {
-        const boxW = isMobile ? 80 : 105;
-        const boxH = 28;
-        const colSpacing = isMobile ? 120 : 160;
-        const stackX = cx - colSpacing / 2;
-        const queueX = cx + colSpacing / 2;
-        const startY = cy - 40;
-
-        ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 18px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('STACK vs QUEUE', cx, cy - 90);
-
-        ctx.font = 'bold 11.5px monospace';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText('STACK ', stackX - 22, startY - 20);
-        ctx.fillStyle = PAL.indigo;
-        ctx.fillText('(LIFO)', stackX + 22, startY - 20);
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText('QUEUE ', queueX - 22, startY - 20);
-        ctx.fillStyle = PAL.sky;
-        ctx.fillText('(FIFO)', queueX + 22, startY - 20);
-
-        const items = [
-          { val: 'D', color: '#E06B88', glow: true },
-          { val: 'C', color: '#B87A28', glow: false },
-          { val: 'B', color: '#2B8265', glow: false },
-          { val: 'A', color: '#3B6FB6', glow: false },
-        ];
-
-        items.forEach((item, idx) => {
-          const iy = startY + idx * (boxH + 3);
-          ctx.save();
-          if (item.glow) {
-            ctx.shadowColor = item.color;
-            ctx.shadowBlur = 14;
-          }
-          ctx.fillStyle = item.color;
-          ctx.strokeStyle = item.glow ? '#FFFFFF' : 'rgba(255,255,255,0.2)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.roundRect(stackX - boxW / 2, iy, boxW, boxH, 8);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 14px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(item.val, stackX, iy + boxH / 2);
-          ctx.restore();
-        });
-
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('Top', stackX + boxW / 2 + 8, startY + 14);
-        ctx.fillText('Bottom', stackX + boxW / 2 + 8, startY + 3 * (boxH + 3) + 14);
-
-        const queueItems = [
-          { val: 'D', color: '#7E4256', glow: false },
-          { val: 'C', color: '#8F6122', glow: false },
-          { val: 'B', color: '#1F5A47', glow: false },
-          { val: 'A', color: '#4B7BFF', glow: true },
-        ];
-
-        queueItems.forEach((item, idx) => {
-          const iy = startY + idx * (boxH + 3);
-          ctx.save();
-          if (item.glow) {
-            ctx.shadowColor = item.color;
-            ctx.shadowBlur = 16;
-          }
-          ctx.fillStyle = item.color;
-          ctx.strokeStyle = item.glow ? '#93C5FD' : 'rgba(255,255,255,0.2)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.roundRect(queueX - boxW / 2, iy, boxW, boxH, 8);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 14px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(item.val, queueX, iy + boxH / 2);
-          ctx.restore();
-        });
-
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText('Rear', queueX - boxW / 2 - 8, startY + 14);
-        ctx.fillText('Front', queueX - boxW / 2 - 8, startY + 3 * (boxH + 3) + 14);
-
-        ctx.fillStyle = '#F59E0B';
-        ctx.font = 'bold 12.5px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Same contents. Different answer.', cx, startY + 4 * (boxH + 3) + 36);
-
-        ctx.restore();
-      } else if (effectiveMode === 'arrays') {
-        const primaryArray = heap.find((h) => h.cells && h.cells.length > 0);
-        const cells =
-          primaryArray?.cells ||
-          (series.length ? series.map(String) : ['4', '8', '3', '2', '6', '1', '9', '7', '10', '5']);
-
-        const count = Math.min(cells.length, isMobile ? 8 : 10);
-        const tileW = isMobile ? 32 : 38;
-        const tileH = isMobile ? 32 : 38;
-        const spacing = tileW + (isMobile ? 6 : 8);
-        const totalW = count * spacing;
-        const startX = cx - totalW / 2 + spacing / 2;
-        const stageY = cy + 10;
-
-        ctx.save();
-
-        const isQuickSort = frames.some((f) => f.sig.toLowerCase().includes('quick'));
-        const isTwoSum = frames.some((f) => f.sig.toLowerCase().includes('twosum') || f.sig.toLowerCase().includes('sum'));
-
-        const titleText = isTwoSum ? 'TWO SUM' : isQuickSort ? 'QUICK SORT' : 'BUBBLE SORT';
-        const subTitleText = isTwoSum
-          ? 'Find two indices whose values add to target'
-          : isQuickSort
-          ? 'LOMUTO PARTITION · LAST ELEMENT AS PIVOT'
-          : 'Compare each neighbour, swap if they are out of order, repeat.';
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 16px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(titleText, cx, cy - 110);
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.fillText(subTitleText, cx, cy - 94);
-
-        const chipY = cy - 78;
-        const drawChip = (label: string, val: string, xPos: number, col: string = PAL.sky) => {
-          ctx.fillStyle = 'rgba(15, 17, 26, 0.9)';
-          ctx.strokeStyle = '#222838';
-          ctx.beginPath();
-          ctx.roundRect(xPos - 38, chipY, 76, 16, 4);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.font = 'bold 7.5px monospace';
-          ctx.textAlign = 'left';
-          ctx.fillText(label, xPos - 34, chipY + 11);
-
-          ctx.fillStyle = col;
-          ctx.font = 'bold 8.5px monospace';
-          ctx.textAlign = 'right';
-          ctx.fillText(val, xPos + 34, chipY + 11);
-        };
-
-        drawChip('TIME', isQuickSort ? 'O(nlogn)' : 'O(n²)', cx - 85, PAL.sky);
-        drawChip('SPACE', 'O(1)', cx, PAL.sky);
-        drawChip('PASS', `${(varI ?? 0) + 1}/5`, cx + 85, PAL.amber);
-
-        const gantryY = cy - 42;
-        ctx.strokeStyle = '#222838';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(startX - 20, gantryY);
-        ctx.lineTo(startX + (count - 1) * spacing + 20, gantryY);
-        ctx.stroke();
-
-        const shelfW = totalW + 30;
-        ctx.fillStyle = '#111420';
-        ctx.strokeStyle = '#1E2433';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(cx - shelfW / 2, stageY + tileH / 2 - 2, shelfW, 14, 7);
-        ctx.fill();
-        ctx.stroke();
-
-        const activeA = varJ !== null && varJ >= 0 && varJ < count ? varJ : 0;
-        const activeB = varJ !== null && varJ + 1 < count ? varJ + 1 : 1;
-        const valA = cells[activeA] || '4';
-        const valB = cells[activeB] || '5';
-
-        const gantryBoxX = (startX + activeA * spacing + startX + activeB * spacing) / 2;
-        ctx.fillStyle = '#171B26';
-        ctx.strokeStyle = '#2F3B52';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.roundRect(gantryBoxX - 35, gantryY - 14, 70, 22, 6);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = PAL.amber;
-        ctx.beginPath();
-        ctx.arc(gantryBoxX - 25, gantryY - 3, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${valA} < ${valB}`, gantryBoxX + 6, gantryY);
-
-        [activeA, activeB].forEach((idx) => {
-          const tx = startX + idx * spacing;
-          ctx.strokeStyle = 'rgba(217, 119, 6, 0.75)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(tx, gantryY + 8);
-          ctx.lineTo(tx, stageY - 22);
-          ctx.stroke();
-        });
-
-        if (isTwoSum || activeB === activeA + 1) {
-          const x1 = startX + activeA * spacing;
-          const x2 = startX + activeB * spacing;
-          ctx.strokeStyle = PAL.amber;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(x1, stageY - tileH / 2 - 4);
-          ctx.quadraticCurveTo((x1 + x2) / 2, stageY - tileH / 2 - 22, x2, stageY - tileH / 2 - 4);
-          ctx.stroke();
-        }
-
-        for (let i = 0; i < count; i++) {
-          const tx = startX + i * spacing;
-          const val = cells[i];
-          const isComparing = i === activeA || i === activeB;
-
-          const elevation = isComparing ? -16 : 0;
-          const ty = stageY + elevation;
-
-          ctx.save();
-          if (isComparing) {
-            ctx.shadowColor = PAL.sky;
-            ctx.shadowBlur = 14;
-            ctx.fillStyle = '#223354';
-            ctx.strokeStyle = PAL.sky;
-          } else {
-            ctx.fillStyle = '#1A1E29';
-            ctx.strokeStyle = '#2B3242';
-          }
-
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.roundRect(tx - tileW / 2, ty - tileH / 2, tileW, tileH, 8);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = isComparing ? '#93C5FD' : '#FFFFFF';
-          ctx.font = '900 13px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(val, tx, ty);
-
-          ctx.fillStyle = isComparing ? PAL.amber : 'rgba(255,255,255,0.4)';
-          ctx.font = 'bold 9px monospace';
-          ctx.fillText(String(i), tx, stageY + tileH / 2 + 18);
-
-          ctx.restore();
-        }
-
-        const eqY = stageY + 54;
-        if (isTwoSum) {
-          ctx.fillStyle = PAL.amber;
-          ctx.font = '900 20px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${valA} + ${valB} = ${Number(valA) + Number(valB)}`, cx, eqY);
-
-          ctx.fillStyle = 'rgba(255,255,255,0.5)';
-          ctx.font = 'bold 9.5px monospace';
-          ctx.fillText('14 COMPARISONS · BRUTE FORCE', cx, eqY + 22);
-
-          ctx.fillStyle = PAL.amber;
-          ctx.font = 'bold 12px system-ui, sans-serif';
-          ctx.fillText('Check every pair.', cx, eqY + 40);
-        } else {
-          ctx.font = '900 18px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = PAL.sky;
-          ctx.fillText(`${valA}`, cx - 22, eqY);
-          ctx.fillStyle = 'rgba(255,255,255,0.6)';
-          ctx.fillText(Number(valA) < Number(valB) ? ' < ' : ' > ', cx, eqY);
-          ctx.fillStyle = PAL.amber;
-          ctx.fillText(`${valB}`, cx + 22, eqY);
-        }
-
-        ctx.restore();
-      } else if (effectiveMode === 'tree') {
-        const treeNodes = [
-          { id: 0, val: '50', x: cx, y: cy - 70, left: 1, right: 2, level: 0 },
-          { id: 1, val: '30', x: cx - 70, y: cy - 10, left: 3, right: 4, level: 1 },
-          { id: 2, val: '70', x: cx + 70, y: cy - 10, left: 5, right: 6, level: 1 },
-          { id: 3, val: '20', x: cx - 105, y: cy + 50, level: 2 },
-          { id: 4, val: '40', x: cx - 35, y: cy + 50, level: 2 },
-          { id: 5, val: '60', x: cx + 35, y: cy + 50, level: 2 },
-          { id: 6, val: '80', x: cx + 105, y: cy + 50, level: 2 },
-        ];
-
-        ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 16px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('BINARY SEARCH TREE', cx, cy - 105);
-
-        treeNodes.forEach((node) => {
-          [node.left, node.right].forEach((childId) => {
-            if (childId === undefined) return;
-            const target = treeNodes[childId];
-            ctx.strokeStyle = 'rgba(124, 108, 255, 0.6)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(node.x, node.y);
-            ctx.lineTo(target.x, target.y);
-            ctx.stroke();
-
-            const pulseT = (time * 1.5 + node.level * 0.3) % 1;
-            const px = (1 - pulseT) * node.x + pulseT * target.x;
-            const py = (1 - pulseT) * node.y + pulseT * target.y;
-            ctx.fillStyle = '#FFFFFF';
-            ctx.shadowColor = PAL.indigo;
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-          });
-        });
-
-        treeNodes.forEach((node) => {
-          const isRoot = node.id === 0;
-          const r = 16;
-          ctx.save();
-          ctx.shadowColor = isRoot ? PAL.amber : PAL.indigo;
-          ctx.shadowBlur = 12;
-          const nodeGrad = ctx.createRadialGradient(node.x - 4, node.y - 4, 2, node.x, node.y, r);
-          nodeGrad.addColorStop(0, '#FFFFFF');
-          nodeGrad.addColorStop(0.3, isRoot ? PAL.amber : '#4B7BFF');
-          nodeGrad.addColorStop(1, isRoot ? '#8F6122' : '#1E2E5A');
-          ctx.fillStyle = nodeGrad;
-          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 11px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(node.val, node.x, node.y);
-          ctx.restore();
-        });
-
-        ctx.restore();
-      } else if (effectiveMode === 'graph') {
-        const gNodes = graphNodesRef.current;
-        const edges = [[0, 1], [0, 2], [1, 3], [1, 4], [2, 4], [2, 5], [3, 5]];
-
-        for (let i = 0; i < gNodes.length; i++) {
-          for (let j = i + 1; j < gNodes.length; j++) {
-            const dx = gNodes[j].x - gNodes[i].x;
-            const dy = gNodes[j].y - gNodes[i].y;
-            const dist = Math.hypot(dx, dy) || 1;
-            if (dist < 180) {
-              const rep = 320 / (dist * dist);
-              gNodes[i].vx -= (dx / dist) * rep;
-              gNodes[i].vy -= (dy / dist) * rep;
-              gNodes[j].vx += (dx / dist) * rep;
-              gNodes[j].vy += (dy / dist) * rep;
-            }
-          }
-        }
-        gNodes.forEach((n) => {
-          n.vx -= n.x * 0.015;
-          n.vy -= n.y * 0.015;
-          n.vx *= 0.90;
-          n.vy *= 0.90;
-          n.x += n.vx;
-          n.y += n.vy;
-        });
-
-        ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 16px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('3D/2.5D NETWORK GRAPH', cx, cy - 105);
-
-        edges.forEach(([u, v]) => {
-          const nU = gNodes[u];
-          const nV = gNodes[v];
-          ctx.strokeStyle = 'rgba(124, 108, 255, 0.55)';
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.moveTo(cx + nU.x, cy + nU.y);
-          ctx.lineTo(cx + nV.x, cy + nV.y);
-          ctx.stroke();
-        });
-
-        gNodes.forEach((node) => {
-          const nx = cx + node.x;
-          const ny = cy + node.y;
-          ctx.save();
-          ctx.shadowColor = PAL.indigo;
-          ctx.shadowBlur = 12;
-          const grad = ctx.createRadialGradient(nx - 3, ny - 3, 2, nx, ny, 15);
-          grad.addColorStop(0, '#FFFFFF');
-          grad.addColorStop(0.3, PAL.indigo);
-          grad.addColorStop(1, '#1A2130');
-          ctx.fillStyle = grad;
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(nx, ny, 15, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 11px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(`N${node.id}`, nx, ny);
-          ctx.restore();
-        });
-        ctx.restore();
-      } else {
-        const listData = heap.find((h) => h.cells && h.cells.length > 0)?.cells || ['10', '25', '48', '64', '82'];
-        const count = Math.min(listData.length, 6);
-        const spacing = 52;
-        const startX = cx - ((count - 1) * spacing) / 2;
-
-        ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 16px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('2.5D DATA STRUCTURE STAGE', cx, cy - 80);
-
-        for (let i = 0; i < count; i++) {
-          const x = startX + i * spacing;
-          const val = listData[i];
-          const isHead = i === 0;
-
-          ctx.fillStyle = isHead ? '#1E3A8A' : '#1A1E29';
-          ctx.strokeStyle = isHead ? PAL.sky : '#2B3242';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.roundRect(x - 20, cy - 16, 40, 32, 8);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 12px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(val, x, cy);
-          if (i < count - 1) {
-            ctx.strokeStyle = PAL.amber;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + 20, cy);
-            ctx.lineTo(x + spacing - 20, cy);
-            ctx.stroke();
-          }
-        }
-        ctx.restore();
+      /* ------------------------------------------------------- header */
+
+      const headerY = 46;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      if (scene.title) {
+        ctx.fillStyle = T.tx;
+        ctx.font = `900 ${isMobile ? 14 : 16}px system-ui, sans-serif`;
+        ctx.fillText(scene.title, width / 2, headerY);
       }
-    } else {
-      STARFIELD_PARTICLES.forEach((p, idx) => {
-        const proj = project(p.x, p.y + Math.sin(time * 0.8 + idx) * 4, p.z);
-        if (proj.scale > 0.1) {
-          const rad = Math.max(0.8, 1.4 * proj.scale);
-          const alpha = Math.min(0.5, Math.max(0.1, 0.28 + 0.18 * Math.sin(idx + time * 1.2)));
-          ctx.fillStyle = idx % 2 === 0 ? `rgba(124, 140, 255, ${alpha})` : `rgba(56, 189, 248, ${alpha})`;
+      if (scene.subtitle) {
+        ctx.fillStyle = T.tx3;
+        ctx.font = `bold ${isMobile ? 8.5 : 9.5}px monospace`;
+        ctx.fillText(scene.subtitle, width / 2, headerY + 15);
+      }
+
+      const stats = scene.stats.slice(0, isMobile ? 2 : 4);
+      if (stats.length) {
+        const chipW = isMobile ? 90 : 98;
+        const gap = 6;
+        const totalW = stats.length * chipW + (stats.length - 1) * gap;
+        const chipY = headerY + 24;
+        stats.forEach((s, i) => {
+          const x = width / 2 - totalW / 2 + i * (chipW + gap);
+          ctx.fillStyle = T.card;
+          ctx.strokeStyle = T.line2;
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(proj.x, proj.y, rad, 0, Math.PI * 2);
+          ctx.roundRect(x, chipY, chipW, 17, 5);
           ctx.fill();
-        }
-      });
+          ctx.stroke();
 
-      [60, 120, 180].forEach((r) => {
-        ctx.strokeStyle = 'rgba(124, 108, 255, 0.08)';
+          ctx.textAlign = 'left';
+          ctx.fillStyle = T.tx3;
+          ctx.font = 'bold 7.5px monospace';
+          ctx.fillText(s.label.toUpperCase(), x + 6, chipY + 11.5);
+
+          ctx.textAlign = 'right';
+          ctx.fillStyle = T.tx;
+          ctx.font = 'bold 8.5px monospace';
+          ctx.fillText(s.value, x + chipW - 6, chipY + 11.5);
+        });
+        ctx.textAlign = 'center';
+      }
+
+      const aiOverride =
+        renderStyle === 'orbit3d' && !!aiSimulation?.entities && aiSimulation.entities.length > 0;
+
+      /* -------------------------------------------------- empty state */
+
+      if (!items.length && !aiOverride) {
+        // A correct blank beats a convincing demo: nothing is drawn that the
+        // trace did not produce.
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = T.tx2;
+        ctx.font = `700 ${isMobile ? 12 : 13}px system-ui, sans-serif`;
+        ctx.fillText('Nothing to show for this step', cx, cy - 8);
+        ctx.fillStyle = T.tx3;
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(
+          needsNodes(family)
+            ? `The trace has no ${family === 'tree' ? 'tree' : 'graph'} nodes here`
+            : 'The trace has no values here',
+          cx,
+          cy + 12
+        );
+        ctx.restore();
+        return true;
+      }
+
+      /* ---------------------------------------------------- geometry */
+
+      let maxA = 0;
+      let maxB = 0;
+      for (const it of items) {
+        if (it.slot.a > maxA) maxA = it.slot.a;
+        if (it.slot.b > maxB) maxB = it.slot.b;
+      }
+      const cols = Math.max(1, Math.round(maxA) + 1);
+      const across = Math.max(1, Math.round(maxB) + 1);
+      const nItems = items.length;
+
+      const stageY = cy + 18;
+      const tile =
+        family === 'row'
+          ? clamp((width - 48) / across - (isMobile ? 5 : 7), 16, isMobile ? 34 : 40)
+          : 34;
+      const rowSp = tile + (isMobile ? 5 : 7);
+      const gridCell = clamp(
+        Math.min((width - 60) / across, (height - 190) / cols),
+        14,
+        isMobile ? 30 : 38
+      );
+      const colSp = clamp((width - 56) / cols, 52, isMobile ? 104 : 148);
+      const colTileW = Math.min(colSp - 16, isMobile ? 84 : 108);
+      const colRowH = 25;
+      const colBaseY = Math.min(cy + 96, height - 44);
+      const chainW = clamp((width - 70) / across - 24, 22, 46);
+      const chainSp = chainW + 28;
+      const treeH = clamp((width - 60) / across, 26, isMobile ? 62 : 88);
+      const treeV = clamp((height - 178) / cols, 30, 60);
+      const treeTop = cy - ((cols - 1) * treeV) / 2 + 12;
+      const ringR = clamp(Math.min(width, height) * 0.3, 60, 190);
+
+      const pos2 = (s: Slot): { x: number; y: number } => {
+        switch (family) {
+          case 'row':
+            return { x: cx + (s.b - (across - 1) / 2) * rowSp, y: stageY };
+          case 'grid':
+            return {
+              x: cx + (s.b - (across - 1) / 2) * gridCell,
+              y: cy + 12 + (s.a - (cols - 1) / 2) * gridCell,
+            };
+          case 'columns':
+            return {
+              x: cx + (s.a - (cols - 1) / 2) * colSp,
+              y: colBaseY - 10 - s.b * (colRowH + 3) - colRowH / 2,
+            };
+          case 'chain':
+            return { x: cx + (s.b - (across - 1) / 2) * chainSp, y: cy + 8 };
+          case 'tree':
+            return { x: cx + (s.b - (across - 1) / 2) * treeH, y: treeTop + s.a * treeV };
+          default: {
+            const ang = (s.b / Math.max(1, nItems)) * Math.PI * 2 - Math.PI / 2;
+            return { x: cx + Math.cos(ang) * ringR, y: cy + 12 + Math.sin(ang) * ringR * 0.66 };
+          }
+        }
+      };
+
+      const pos3 = (s: Slot): Point3D => {
+        switch (family) {
+          case 'row':
+          case 'chain':
+            return { x: (s.b - (across - 1) / 2) * 34, y: 0, z: 0 };
+          case 'grid':
+            return {
+              x: (s.b - (across - 1) / 2) * 30,
+              y: 0,
+              z: (s.a - (cols - 1) / 2) * 30,
+            };
+          case 'columns':
+            return { x: (s.a - (cols - 1) / 2) * 74, y: s.b * 26 - 50, z: 0 };
+          case 'tree':
+            return { x: (s.b - (across - 1) / 2) * 46, y: 74 - s.a * 48, z: 0 };
+          default: {
+            const ang = (s.b / Math.max(1, nItems)) * Math.PI * 2;
+            return { x: Math.cos(ang) * 100, y: 0, z: Math.sin(ang) * 100 };
+          }
+        }
+      };
+
+      const is3d = renderStyle === 'orbit3d';
+      const place = (s: Slot): ProjectedPoint => {
+        if (is3d) {
+          const p = pos3(s);
+          return project(p.x, p.y, p.z);
+        }
+        const p = pos2(s);
+        return { x: p.x, y: p.y, z: 0, scale: 1 };
+      };
+
+      /* ----------------------------------------- one sorted draw list */
+
+      // Every primitive goes through here — background, edges, chrome and
+      // values alike — so a far object can never paint over a near one.
+      type Draw = { z: number; paint: () => void };
+      const draws: Draw[] = [];
+      const push = (z: number, paint: () => void) => draws.push({ z, paint });
+
+      const face = (pts: ProjectedPoint[], fill: string, shade: number) => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        if (shade > 0) {
+          ctx.save();
+          ctx.globalAlpha = shade;
+          // Shadow is dark in both themes; --ink flips, so it cannot be used.
+          ctx.fillStyle = '#000000';
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.strokeStyle = T.line2;
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        const segs = 32;
-        for (let s = 0; s <= segs; s++) {
-          const a = (s / segs) * Math.PI * 2;
-          const pt = project(Math.cos(a) * r, 0, Math.sin(a) * r);
-          if (s === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        }
         ctx.stroke();
-      });
+      };
 
-      const drawVoxel3D = (
-        bx: number,
-        by: number,
-        bz: number,
-        bw: number,
-        bh: number,
-        bd: number,
-        topCol: string,
-        frontCol: string,
-        sideCol: string,
-        label?: string
-      ) => {
-        const p000 = project(bx - bw / 2, by, bz - bd / 2);
-        const p100 = project(bx + bw / 2, by, bz - bd / 2);
-        const p110 = project(bx + bw / 2, by + bh, bz - bd / 2);
-        const p010 = project(bx - bw / 2, by + bh, bz - bd / 2);
+      const voxel = (c: Point3D, w: number, h: number, d: string, base: string, label: string) => {
+        const dep = Number(d);
+        const p000 = project(c.x - w / 2, c.y, c.z - dep / 2);
+        const p100 = project(c.x + w / 2, c.y, c.z - dep / 2);
+        const p110 = project(c.x + w / 2, c.y + h, c.z - dep / 2);
+        const p010 = project(c.x - w / 2, c.y + h, c.z - dep / 2);
+        const p001 = project(c.x - w / 2, c.y, c.z + dep / 2);
+        const p101 = project(c.x + w / 2, c.y, c.z + dep / 2);
+        const p111 = project(c.x + w / 2, c.y + h, c.z + dep / 2);
+        const p011 = project(c.x - w / 2, c.y + h, c.z + dep / 2);
+        void p000;
 
-        const p001 = project(bx - bw / 2, by, bz + bd / 2);
-        const p101 = project(bx + bw / 2, by, bz + bd / 2);
-        const p111 = project(bx + bw / 2, by + bh, bz + bd / 2);
-        const p011 = project(bx - bw / 2, by + bh, bz + bd / 2);
+        face([p001, p101, p111, p011], base, 0.16);
+        face([p101, p100, p110, p111], base, 0.32);
+        face([p011, p111, p110, p010], base, 0);
 
-        ctx.fillStyle = frontCol;
-        ctx.beginPath();
-        ctx.moveTo(p001.x, p001.y);
-        ctx.lineTo(p101.x, p101.y);
-        ctx.lineTo(p111.x, p111.y);
-        ctx.lineTo(p011.x, p011.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.stroke();
-
-        ctx.fillStyle = sideCol;
-        ctx.beginPath();
-        ctx.moveTo(p101.x, p101.y);
-        ctx.lineTo(p100.x, p100.y);
-        ctx.lineTo(p110.x, p110.y);
-        ctx.lineTo(p111.x, p111.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = topCol;
-        ctx.beginPath();
-        ctx.moveTo(p011.x, p011.y);
-        ctx.lineTo(p111.x, p111.y);
-        ctx.lineTo(p110.x, p110.y);
-        ctx.lineTo(p010.x, p010.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.stroke();
-
-        if (label && p011.scale > 0.28) {
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = `bold ${Math.max(9, Math.round(11 * p011.scale))}px monospace`;
+        if (label && p011.scale > 0.22) {
+          ctx.fillStyle = T.tx;
+          ctx.font = `900 ${Math.max(9, Math.round(11 * p011.scale))}px monospace`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(label, (p011.x + p111.x) / 2, (p011.y + p111.y) / 2);
         }
       };
 
-      if (aiSimulation && aiSimulation.entities && aiSimulation.entities.length > 0) {
-        // Draw Links
-        if (aiSimulation.links) {
-          aiSimulation.links.forEach((lk) => {
-            const fromE = aiSimulation.entities?.find((e) => e.id === lk.from);
-            const toE = aiSimulation.entities?.find((e) => e.id === lk.to);
-            if (fromE && toE) {
-              const p1 = project(fromE.x, fromE.y, fromE.z);
-              const p2 = project(toE.x, toE.y, toE.z);
-              ctx.strokeStyle = lk.color || '#89DDFF';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.moveTo(p1.x, p1.y);
-              ctx.lineTo(p2.x, p2.y);
-              ctx.stroke();
+      const orb = (p: ProjectedPoint, r: number, base: string, label: string, sub: string) => {
+        const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.35, r * 0.12, p.x, p.y, r);
+        g.addColorStop(0, base);
+        g.addColorStop(1, T.card);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = base;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
 
-              if (lk.label) {
-                ctx.fillStyle = '#FFFFFF';
-                ctx.font = 'bold 9px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(lk.label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 4);
-              }
+        ctx.fillStyle = T.tx;
+        ctx.font = `900 ${Math.max(9, Math.round(11 * Math.max(0.7, p.scale)))}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, p.x, p.y);
+        if (sub) {
+          ctx.fillStyle = T.tx3;
+          ctx.font = 'bold 8px monospace';
+          ctx.fillText(sub, p.x, p.y + r + 9);
+        }
+      };
+
+      const flatTile = (
+        p: ProjectedPoint,
+        w: number,
+        h: number,
+        base: string | null,
+        label: string,
+        sub: string,
+        subBelow: boolean
+      ) => {
+        ctx.beginPath();
+        ctx.roundRect(p.x - w / 2, p.y - h / 2, w, h, 8);
+        ctx.fillStyle = T.card2;
+        ctx.fill();
+        if (base) {
+          ctx.save();
+          // Tint rather than replace: keeps the value legible in both themes.
+          ctx.globalAlpha = 0.24;
+          ctx.fillStyle = base;
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.strokeStyle = base ?? T.line2;
+        ctx.lineWidth = base ? 2 : 1.2;
+        ctx.stroke();
+
+        ctx.fillStyle = T.tx;
+        ctx.font = `900 ${clamp(Math.round(h * 0.36), 9, 14)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, p.x, p.y);
+
+        if (sub) {
+          ctx.fillStyle = base ?? T.tx3;
+          ctx.font = 'bold 9px monospace';
+          if (subBelow) ctx.fillText(sub, p.x, p.y + h / 2 + 11);
+          else ctx.fillText(sub, p.x + w / 2 + 12, p.y);
+        }
+      };
+
+      /* ------------------------------------------ background in orbit */
+
+      if (is3d) {
+        for (const p of STARFIELD_PARTICLES) {
+          const proj = project(p.x, p.y, p.z);
+          if (proj.scale <= 0.1) continue;
+          push(proj.z, () => {
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = T.tx3;
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, Math.max(0.8, 1.4 * proj.scale), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          });
+        }
+
+        for (const r of [60, 120, 180]) {
+          push(1e5, () => {
+            ctx.strokeStyle = T.line2;
+            ctx.globalAlpha = 0.45;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let s = 0; s <= 32; s++) {
+              const a = (s / 32) * Math.PI * 2;
+              const pt = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+              if (s === 0) ctx.moveTo(pt.x, pt.y);
+              else ctx.lineTo(pt.x, pt.y);
+            }
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          });
+        }
+      }
+
+      /* ------------------------------------------ AI simulation input */
+
+      if (aiOverride && aiSimulation) {
+        const ents = aiSimulation.entities ?? [];
+        const projected = new Map(ents.map((en) => [en.id, project(en.x, en.y, en.z)]));
+
+        for (const lk of aiSimulation.links ?? []) {
+          const p1 = projected.get(lk.from);
+          const p2 = projected.get(lk.to);
+          if (!p1 || !p2) continue;
+          push((p1.z + p2.z) / 2 + 1, () => {
+            ctx.strokeStyle = lk.color || T.line2;
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+            if (lk.label) {
+              ctx.fillStyle = T.tx2;
+              ctx.font = 'bold 9px monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'alphabetic';
+              ctx.fillText(lk.label, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 4);
             }
           });
         }
 
-        // Draw Entities
-        aiSimulation.entities.forEach((ent) => {
-          const p = project(ent.x, ent.y, ent.z);
-          const col = ent.color || '#7C6CFF';
+        for (const en of ents) {
+          const p = projected.get(en.id)!;
           const size = Math.max(16, Math.round(28 * p.scale));
-
-          ctx.save();
-          if (ent.type === 'sphere' || ent.type === 'node') {
-            ctx.fillStyle = col;
-            ctx.shadowColor = col;
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-          } else {
-            drawVoxel3D(ent.x, ent.y, ent.z, size, size, size, col, col, col, String(ent.val));
-          }
-
-          // Label
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = `bold ${Math.max(9, Math.round(10 * p.scale))}px monospace`;
-          ctx.textAlign = 'center';
-          ctx.fillText(ent.label || String(ent.val), p.x, p.y + size / 2 + 12);
-          ctx.restore();
-        });
+          push(p.z, () => {
+            const col = en.color || T.acc;
+            if (en.type === 'sphere' || en.type === 'node') {
+              orb(p, size / 2, col, String(en.val), en.label || '');
+            } else {
+              voxel({ x: en.x, y: en.y, z: en.z }, size, size, String(size), col, String(en.val));
+              ctx.fillStyle = T.tx2;
+              ctx.font = `bold ${Math.max(9, Math.round(10 * p.scale))}px monospace`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'alphabetic';
+              ctx.fillText(en.label || String(en.val), p.x, p.y + size / 2 + 12);
+            }
+          });
+        }
       } else {
-        const count = 8;
-        const spacing = 32;
-        const startX = -((count - 1) * spacing) / 2;
-        for (let i = 0; i < count; i++) {
-          const x = startX + i * spacing;
-          const h = 20 + i * 12;
-          drawVoxel3D(x, 0, 0, 22, h, 22, PAL.indigo, '#5748D6', '#3E32A3', `${h}`);
+        /* ----------------------------------------- the scene's values */
+
+        const placed = items.map((it) => ({
+          it,
+          p: place(lerpSlot(it.prev, it.slot, e)),
+          // A value that did not exist a step ago arrives rather than blinks in.
+          alpha: it.prev ? 1 : e,
+        }));
+        const byId = new Map(placed.map((x) => [x.it.id, x.p]));
+
+        /* column chrome: a base plate and a label per peg / stack / row */
+        if (family === 'columns') {
+          scene.columns.forEach((col, ci) => {
+            const anchor = place({ a: ci, b: 0 });
+            push(is3d ? anchor.z + 2 : 2, () => {
+              const w = is3d ? colTileW * Math.max(0.5, anchor.scale) : colTileW;
+              const baseY = is3d ? anchor.y + 16 : colBaseY;
+              ctx.fillStyle = T.card;
+              ctx.strokeStyle = T.line2;
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.roundRect(anchor.x - w / 2 - 6, baseY, w + 12, 9, 4);
+              ctx.fill();
+              ctx.stroke();
+
+              ctx.fillStyle = T.tx2;
+              ctx.font = 'bold 10px monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'alphabetic';
+              ctx.fillText(col.label, anchor.x, baseY + 22);
+            });
+          });
+        }
+
+        /* matrix chrome: name each row down the left edge */
+        if (family === 'grid' && !is3d) {
+          scene.columns.forEach((col, ci) => {
+            const anchor = pos2({ a: ci, b: 0 });
+            push(2, () => {
+              ctx.fillStyle = T.tx3;
+              ctx.font = 'bold 9px monospace';
+              ctx.textAlign = 'right';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(col.label, anchor.x - gridCell / 2 - 8, anchor.y);
+            });
+          });
+        }
+
+        /* chain chrome: the links between consecutive nodes */
+        if (family === 'chain') {
+          const order = [...placed].sort((x, y) => x.it.slot.b - y.it.slot.b);
+          for (let i = 0; i < order.length - 1; i++) {
+            const a = order[i].p;
+            const b = order[i + 1].p;
+            push(is3d ? (a.z + b.z) / 2 + 1 : 1, () => {
+              ctx.strokeStyle = T.tx3;
+              ctx.lineWidth = 1.6;
+              ctx.beginPath();
+              ctx.moveTo(a.x + chainW / 2, a.y);
+              ctx.lineTo(b.x - chainW / 2, b.y);
+              ctx.stroke();
+              const ang = Math.atan2(b.y - a.y, b.x - a.x);
+              const tipX = b.x - (chainW / 2) * Math.cos(ang);
+              const tipY = b.y - (chainW / 2) * Math.sin(ang);
+              ctx.fillStyle = T.tx3;
+              ctx.beginPath();
+              ctx.moveTo(tipX, tipY);
+              ctx.lineTo(tipX - 6 * Math.cos(ang - 0.4), tipY - 6 * Math.sin(ang - 0.4));
+              ctx.lineTo(tipX - 6 * Math.cos(ang + 0.4), tipY - 6 * Math.sin(ang + 0.4));
+              ctx.closePath();
+              ctx.fill();
+            });
+          }
+        }
+
+        /* tree / graph edges */
+        for (const ed of edges) {
+          const a = byId.get(ed.from);
+          const b = byId.get(ed.to);
+          if (!a || !b) continue;
+          const lit =
+            roles.get(ed.from) && roles.get(ed.to)
+              ? roleColor(roles.get(ed.to), T)
+              : null;
+          push(is3d ? (a.z + b.z) / 2 + 1 : 1, () => {
+            ctx.strokeStyle = lit ?? T.line2;
+            ctx.lineWidth = lit ? 2 : 1.5;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+
+            if (ed.directed) {
+              const ang = Math.atan2(b.y - a.y, b.x - a.x);
+              const r = 16;
+              const tipX = b.x - r * Math.cos(ang);
+              const tipY = b.y - r * Math.sin(ang);
+              ctx.fillStyle = lit ?? T.tx3;
+              ctx.beginPath();
+              ctx.moveTo(tipX, tipY);
+              ctx.lineTo(tipX - 7 * Math.cos(ang - 0.4), tipY - 7 * Math.sin(ang - 0.4));
+              ctx.lineTo(tipX - 7 * Math.cos(ang + 0.4), tipY - 7 * Math.sin(ang + 0.4));
+              ctx.closePath();
+              ctx.fill();
+            }
+
+            if (ed.label) {
+              ctx.fillStyle = T.tx3;
+              ctx.font = 'bold 8.5px monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'alphabetic';
+              ctx.fillText(ed.label, (a.x + b.x) / 2, (a.y + b.y) / 2 - 4);
+            }
+          });
+        }
+
+        /* the values themselves */
+        for (const { it, p, alpha } of placed) {
+          const col = roleColor(it.role, T);
+          push(p.z, () => {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (col) {
+              ctx.shadowColor = col;
+              ctx.shadowBlur = 12;
+            }
+
+            if (needsNodes(family)) {
+              orb(p, is3d ? Math.max(9, 16 * p.scale) : 16, col ?? T.acc, it.label, it.sub);
+            } else if (is3d) {
+              const w3 = pos3(lerpSlot(it.prev, it.slot, e));
+              voxel(w3, 24, 22, '24', col ?? T.card2, it.label);
+            } else if (family === 'columns') {
+              flatTile(p, colTileW, colRowH, col, it.label, '', false);
+            } else if (family === 'grid') {
+              flatTile(p, gridCell - 3, gridCell - 3, col, it.label, '', false);
+            } else if (family === 'chain') {
+              flatTile(p, chainW, chainW * 0.78, col, it.label, '', false);
+            } else {
+              // A marked cell lifts out of the row so the comparison is visible.
+              const lifted: ProjectedPoint = { ...p, y: p.y - (col ? 14 : 0) };
+              flatTile(lifted, tile, tile, col, it.label, it.sub, true);
+            }
+            ctx.restore();
+          });
         }
       }
 
-      const gizmoX = width - 36;
-      const gizmoY = 36;
-      ctx.save();
-      ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
-      ctx.strokeStyle = 'var(--line2)';
-      ctx.beginPath();
-      ctx.arc(gizmoX, gizmoY, 26, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
+      draws.sort((a, b) => b.z - a.z);
+      for (const d of draws) d.paint();
 
-    ctx.restore();
-  }, [renderStyle, yaw, pitch, zoom, panX, panY, isPerspective, effectiveMode, frames, heap, series, stepNote, aiSimulation]);
+      /* gizmo */
+      if (is3d) {
+        ctx.save();
+        ctx.fillStyle = T.card;
+        ctx.strokeStyle = T.line2;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(width - 36, 36, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        const ax = (dx: number, dz: number, col: string, name: string) => {
+          const p = project(dx * 46, 0, dz * 46);
+          const o = project(0, 0, 0);
+          const sx = width - 36 + (p.x - o.x) * 0.34;
+          const sy = 36 + (p.y - o.y) * 0.34;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(width - 36, 36);
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          ctx.fillStyle = col;
+          ctx.font = 'bold 7px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(name, sx, sy);
+        };
+        ax(1, 0, PAL.coral, 'x');
+        ax(0, 1, PAL.sky, 'z');
+        ctx.restore();
+      }
+
+      ctx.restore();
+      return settled;
+    },
+    [
+      tokens,
+      prefs.motion,
+      renderStyle,
+      yaw,
+      pitch,
+      zoom,
+      panX,
+      panY,
+      isPerspective,
+      scene,
+      items,
+      edges,
+      roles,
+      family,
+      aiSimulation,
+    ]
+  );
 
   useEffect(() => {
     let active = true;
-    const animate = (timeMs: number) => {
+    const tick = (nowMs: number) => {
       if (!active) return;
-      animTimeRef.current = timeMs * 0.001;
-      renderScene(animTimeRef.current);
-      animFrameIdRef.current = requestAnimationFrame(animate);
+      lastFrameRef.current = nowMs;
+      // A settled scene is a still picture; redrawing it sixty times a second
+      // costs a phone its battery for nothing. Any camera or scene change
+      // rebuilds renderScene, which restarts the loop.
+      const done = renderScene(nowMs);
+      animFrameIdRef.current = done ? null : requestAnimationFrame(tick);
     };
-
-    animFrameIdRef.current = requestAnimationFrame(animate);
+    animFrameIdRef.current = requestAnimationFrame(tick);
     return () => {
       active = false;
-      if (animFrameIdRef.current !== null) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
+      if (animFrameIdRef.current !== null) cancelAnimationFrame(animFrameIdRef.current);
     };
   }, [renderScene]);
 
   useEffect(() => {
     const parent = containerRef.current;
     if (!parent) return;
-    const ro = new ResizeObserver(() => renderScene(animTimeRef.current));
+    const ro = new ResizeObserver(() => renderScene(lastFrameRef.current));
     ro.observe(parent);
     return () => ro.disconnect();
   }, [renderScene]);
+
+  /* ------------------------------------------------------------------ ui */
+
+  const chrome: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 2,
+    padding: 3,
+    borderRadius: 9,
+    background: 'var(--card)',
+    border: '1px solid var(--line2)',
+    boxShadow: 'var(--sh)',
+    pointerEvents: 'auto',
+  };
+
+  const pill = (on: boolean): React.CSSProperties => ({
+    padding: phone ? '3.5px 7px' : '4px 9px',
+    borderRadius: 6,
+    fontSize: phone ? 9.5 : 10.5,
+    fontWeight: 700,
+    border: 'none',
+    background: on ? 'var(--acc)' : 'transparent',
+    color: on ? 'var(--ink)' : 'var(--tx2)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  });
 
   return (
     <div
@@ -1119,7 +1192,7 @@ export function Java3DVisualizer({
         width: '100%',
         height: '100%',
         minHeight: phone ? 320 : 360,
-        background: 'radial-gradient(circle at 50% 40%, #131726 0%, #080A10 100%)',
+        background: 'radial-gradient(circle at 50% 40%, var(--card) 0%, var(--bg) 100%)',
         borderRadius: 14,
         overflow: 'hidden',
         border: '1px solid var(--line2)',
@@ -1150,44 +1223,23 @@ export function Java3DVisualizer({
           left: 10,
           right: 10,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
           pointerEvents: 'none',
           gap: 6,
           flexWrap: 'wrap',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            padding: 3,
-            borderRadius: 9,
-            background: 'rgba(15, 17, 26, 0.92)',
-            border: '1px solid var(--line2)',
-            backdropFilter: 'blur(10px)',
-            pointerEvents: 'auto',
-          }}
-        >
+        <div style={chrome}>
           <button
             onClick={() => {
               playClick();
               setRenderStyle('stage2d');
             }}
             className="k-squish"
-            style={{
-              padding: phone ? '4px 8px' : '4px 10px',
-              borderRadius: 6,
-              fontSize: phone ? 10 : 11,
-              fontWeight: 800,
-              border: 'none',
-              background: renderStyle === 'stage2d' ? 'var(--acc)' : 'transparent',
-              color: renderStyle === 'stage2d' ? 'var(--ink)' : 'var(--tx2)',
-              cursor: 'pointer',
-            }}
+            style={pill(renderStyle === 'stage2d')}
           >
-            🎨 2.5D Stage
+            2.5D Stage
           </button>
           <button
             onClick={() => {
@@ -1195,90 +1247,43 @@ export function Java3DVisualizer({
               setRenderStyle('orbit3d');
             }}
             className="k-squish"
-            style={{
-              padding: phone ? '4px 8px' : '4px 10px',
-              borderRadius: 6,
-              fontSize: phone ? 10 : 11,
-              fontWeight: 800,
-              border: 'none',
-              background: renderStyle === 'orbit3d' ? 'var(--acc)' : 'transparent',
-              color: renderStyle === 'orbit3d' ? 'var(--ink)' : 'var(--tx2)',
-              cursor: 'pointer',
-            }}
+            style={pill(renderStyle === 'orbit3d')}
           >
-            🌌 3D Orbit
+            3D Orbit
           </button>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            padding: 3,
-            borderRadius: 9,
-            background: 'rgba(15, 17, 26, 0.9)',
-            border: '1px solid var(--line2)',
-            backdropFilter: 'blur(10px)',
-            pointerEvents: 'auto',
-            overflowX: 'auto',
-            maxWidth: '100%',
-          }}
-          className="navsb"
-        >
+        <div style={{ ...chrome, overflowX: 'auto', maxWidth: '100%' }} className="navsb">
           {(
             [
               ['auto', 'Auto'],
-              ['arrays', 'Array/Sort'],
+              ['arrays', 'Array'],
+              ['matrix', 'Matrix'],
+              ['list', 'List'],
               ['hanoi', 'Hanoi'],
-              ['stack', 'Stack/Queue'],
+              ['stack', 'Stack'],
               ['tree', 'Tree'],
               ['graph', 'Graph'],
             ] as [VisMode, string][]
-          ).map(([m, label]) => {
-            const isSel = visMode === m;
-            return (
-              <button
-                key={m}
-                onClick={() => {
-                  playClick();
-                  setVisMode(m);
-                }}
-                className="k-squish"
-                style={{
-                  padding: phone ? '3.5px 7px' : '4px 9px',
-                  borderRadius: 6,
-                  fontSize: phone ? 9.5 : 10.5,
-                  fontWeight: 700,
-                  border: 'none',
-                  background: isSel ? 'var(--acc)' : 'transparent',
-                  color: isSel ? 'var(--ink)' : 'var(--tx2)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => {
+                playClick();
+                setVisMode(m);
+              }}
+              className="k-squish"
+              style={pill(visMode === m)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
-            padding: 3,
-            borderRadius: 9,
-            background: 'rgba(15, 17, 26, 0.9)',
-            border: '1px solid var(--line2)',
-            backdropFilter: 'blur(10px)',
-            pointerEvents: 'auto',
-          }}
-        >
+        <div style={chrome}>
           <button
             onClick={resetCamera}
-            title="Reset View"
+            title="Reset view"
             className="hov k-squish"
             style={{
               width: 22,
@@ -1295,8 +1300,8 @@ export function Java3DVisualizer({
             <Icon name="refresh" size={11} color="var(--tx2)" />
           </button>
           <button
-            onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))}
-            title="Zoom In"
+            onClick={() => setZoom((z) => clamp(z + 0.2, 0.35, 3.5))}
+            title="Zoom in"
             className="hov k-squish"
             style={{
               width: 22,
@@ -1314,6 +1319,29 @@ export function Java3DVisualizer({
           </button>
         </div>
       </div>
+
+      {renderStyle === 'orbit3d' && (
+        <div style={{ position: 'absolute', top: 46, right: 10, ...chrome }}>
+          {(
+            [
+              ['isometric', 'Iso'],
+              ['perspective', 'Persp'],
+              ['front', 'Front'],
+              ['top', 'Top'],
+              ['side', 'Side'],
+            ] as [ViewAngle, string][]
+          ).map(([a, label]) => (
+            <button
+              key={a}
+              onClick={() => setPresetAngle(a)}
+              className="k-squish"
+              style={pill(viewAngle === a)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         style={{
@@ -1339,7 +1367,7 @@ export function Java3DVisualizer({
               gap: 4,
               padding: '2px 6px',
               borderRadius: 4,
-              background: 'rgba(124, 108, 255, 0.15)',
+              background: 'color-mix(in srgb, var(--acc) 16%, transparent)',
               color: 'var(--accTx)',
               fontSize: 9.5,
               fontWeight: 700,
@@ -1354,9 +1382,7 @@ export function Java3DVisualizer({
         </div>
 
         {activeLine && (
-          <span style={{ color: PAL.amber, fontWeight: 700, flexShrink: 0 }}>
-            Line {activeLine}
-          </span>
+          <span style={{ color: PAL.amber, fontWeight: 700, flexShrink: 0 }}>Line {activeLine}</span>
         )}
       </div>
     </div>

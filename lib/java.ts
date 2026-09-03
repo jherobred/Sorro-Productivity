@@ -39,9 +39,16 @@ const OPS = [
   '+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|', '^', '~', '?', ':', ';', ',', '.', '(', ')', '[', ']', '{', '}', '@',
 ];
 
+// Fields are declared and assigned by hand rather than as constructor
+// parameter properties: `npm test` runs these files through Node's strip-only
+// type stripping, which cannot rewrite a parameter property into an assignment.
 export class JavaError extends Error {
-  constructor(message: string, readonly line: number, readonly kind = 'error') {
+  readonly line: number;
+  readonly kind: string;
+  constructor(message: string, line: number, kind = 'error') {
     super(message);
+    this.line = line;
+    this.kind = kind;
   }
 }
 
@@ -745,7 +752,12 @@ function coerce(type: string, x: Val, line: number): Val {
 
 class Frame {
   scopes: Map<string, Val>[] = [new Map()];
-  constructor(readonly sig: string, public thisVal: Val | null = null) {}
+  readonly sig: string;
+  thisVal: Val | null;
+  constructor(sig: string, thisVal: Val | null = null) {
+    this.sig = sig;
+    this.thisVal = thisVal;
+  }
 
   push() { this.scopes.push(new Map()); }
   pop() { this.scopes.pop(); }
