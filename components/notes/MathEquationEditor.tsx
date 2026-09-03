@@ -51,6 +51,9 @@ export function MathEquationEditor({
       const html = katex.renderToString(formula, {
         displayMode: true,
         throwOnError: true,
+        trust: false,
+        maxSize: 20,
+        maxExpand: 1000,
       });
       setRenderedHtml(html);
       setErrorMsg(null);
@@ -59,6 +62,9 @@ export function MathEquationEditor({
         const fallbackHtml = katex.renderToString(formula, {
           displayMode: true,
           throwOnError: false,
+          trust: false,
+          maxSize: 20,
+          maxExpand: 1000,
         });
         setRenderedHtml(fallbackHtml);
         setErrorMsg((err as Error).message);

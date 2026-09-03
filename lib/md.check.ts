@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { parse, spans, wikiTargets, toggleTask, applyKind, wrap, newline, preview, taskCount } from './md.ts';
+import { parse, spans, wikiTargets, toggleTask, applyKind, wrap, newline, preview, taskCount, inlineMarkup } from './md.ts';
 
 /* parse ------------------------------------------------------------------- */
 {
@@ -88,6 +88,36 @@ assert.equal(parse('### deep')[0].text, 'deep');
 
   const e = newline('plain', 5);
   assert.equal(e.body, 'plain\n');
+}
+
+/* inlineMarkup -------------------------------------------------------------
+ * The highlight/color toolbar writes raw `<span>`/`<mark>` HTML into the note
+ * body (NoteEditor's applyTextColor/applyHighlight); the reader renders that
+ * back as real React elements. This is the gate that decides what counts as
+ * "markup" versus plain text carrying literal angle brackets — every payload
+ * that must NOT survive as HTML is asserted here. */
+{
+  const span = inlineMarkup('<span style="color: var(--pal-coral, #FF6B6B)">hello</span>');
+  assert.deepEqual(span, { tag: 'span', color: 'var(--pal-coral, #FF6B6B)', text: 'hello' });
+
+  const mark = inlineMarkup('<mark style="background: rgba(255, 194, 75, 0.28); padding: 1px 4px; border-radius: 4px;">hi</mark>');
+  assert.deepEqual(mark, { tag: 'mark', background: 'rgba(255, 194, 75, 0.28)', text: 'hi' });
+
+  // A substring test used to gate dangerouslySetInnerHTML — any text merely
+  // containing "<span" or "<mark" rendered its ENTIRE contents as raw HTML.
+  // These must all fail to match, so the caller's fallback renders them as
+  // inert text instead.
+  assert.equal(inlineMarkup('<span></span><img src=x onerror="alert(1)">'), null, 'no color attribute: not the toolbar shape');
+  assert.equal(inlineMarkup('<span style="color: red">x</span><img src=x onerror=alert(1)>'), null, 'trailing content after the closing tag');
+  assert.equal(inlineMarkup('plain text mentioning <span> and <mark> in prose'), null, 'unclosed tags in ordinary text');
+  assert.equal(inlineMarkup('<mark style="background: red" onmouseover="alert(1)">x</mark>'), null, 'extra attribute breaks the exact shape');
+
+  // Whatever IS captured must come back as inert data, never re-parsed as HTML:
+  // this confirms an attacker cannot smuggle a second tag through the captured
+  // style value or inner text and have it come back out as markup.
+  const injected = inlineMarkup('<span style="color: red;"><img src=x onerror=alert(1)></span>');
+  assert.equal(injected?.tag, 'span');
+  assert.equal(injected?.text, '<img src=x onerror=alert(1)>', 'captured verbatim as text, not re-parsed as HTML by the caller');
 }
 
 /* preview ----------------------------------------------------------------- */

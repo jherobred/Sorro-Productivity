@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase, currentUserId } from './supabase';
+import { assertSafeFile, safeFileName, IMAGE_EXT } from './uploadGuard';
 
 /**
  * Uploads for feed images and journal photos. README lists these as the
@@ -14,11 +15,15 @@ import { supabase, currentUserId } from './supabase';
 export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files' | 'bd-avatars';
 
 export async function uploadTo(bucket: Bucket, file: File): Promise<string> {
+  const type = assertSafeFile(file);
   const user_id = await currentUserId();
-  const path = `${user_id}/${crypto.randomUUID()}-${file.name}`;
+  const safeName = safeFileName(file.name);
+  const path = `${user_id}/${crypto.randomUUID()}-${safeName}`;
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     cacheControl: '3600',
-    contentType: file.type || undefined,
+    // The verified type, not the raw one — a blank File.type would otherwise be
+    // stored as octet-stream and served back as a download.
+    contentType: type,
   });
   if (error) throw error;
   return path;
@@ -48,12 +53,13 @@ export async function uploadCover(file: File): Promise<string> {
 }
 
 async function uploadProfileImage(file: File, kind: 'avatar' | 'cover'): Promise<string> {
+  const type = assertSafeFile(file, new Set(Object.keys(IMAGE_EXT)));
   const user_id = await currentUserId();
-  const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().slice(0, 5);
+  const ext = IMAGE_EXT[type] ?? 'jpg';
   const path = `${user_id}/${kind}.${ext}`;
   const { error } = await supabase.storage.from('bd-avatars').upload(path, file, {
     cacheControl: '3600',
-    contentType: file.type || undefined,
+    contentType: type,
     upsert: true,
   });
   if (error) throw error;

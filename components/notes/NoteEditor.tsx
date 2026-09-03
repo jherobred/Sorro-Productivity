@@ -12,7 +12,7 @@ import { toast } from '@/lib/toast';
 import { uploadTo } from '@/lib/uploads';
 import { playClick } from '@/lib/audio';
 import {
-  parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount,
+  parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount, inlineMarkup,
   type Line, type LineKind,
 } from '@/lib/md';
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
