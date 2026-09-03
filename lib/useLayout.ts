@@ -51,18 +51,27 @@ let initialized = false;
 const listeners = new Set<() => void>();
 const emit = () => { for (const l of listeners) l(); };
 
+/**
+ * What the server, and the first client render, sees.
+ *
+ * One frozen object rather than a fresh literal per call. `useSyncExternalStore`
+ * compares snapshots by identity, so a new object every time is an unequal
+ * snapshot every time — React logged "The result of getServerSnapshot should be
+ * cached to avoid an infinite loop" on every page that reads the layout, which
+ * is nearly all of them.
+ */
+const SERVER_LAYOUT: Layout = {
+  phone: false,
+  viewMode: 'auto',
+  isPhoneDevice: false,
+  landscape: false,
+  width: 1440,
+  height: 900,
+  setViewMode,
+};
+
 function computeLayout(): Layout {
-  if (typeof window === 'undefined') {
-    return {
-      phone: false,
-      viewMode: 'auto',
-      isPhoneDevice: false,
-      landscape: false,
-      width: 1440,
-      height: 900,
-      setViewMode,
-    };
-  }
+  if (typeof window === 'undefined') return SERVER_LAYOUT;
 
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -124,14 +133,6 @@ export function useLayout(): Layout {
       }
       return cachedLayout;
     },
-    () => ({
-      phone: false,
-      viewMode: 'auto',
-      isPhoneDevice: false,
-      landscape: false,
-      width: 1440,
-      height: 900,
-      setViewMode,
-    })
+    () => SERVER_LAYOUT,
   );
 }

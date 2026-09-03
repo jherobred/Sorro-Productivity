@@ -24,6 +24,10 @@ export function useLongPress() {
 
   const start = useCallback(
     (e: React.PointerEvent, kind: string, id: string, label: string) => {
+      // Primary button only. A right-click already opens the menu through
+      // onContextMenu; letting it also arm the hold timer re-anchored the menu
+      // 420ms later if the button was held still.
+      if (e.button !== 0) return;
       const x0 = e.clientX;
       const y0 = e.clientY;
       let moved = false;
