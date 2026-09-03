@@ -75,9 +75,12 @@ export function useToday(): TodayShape {
     // Budgets are per-category for the month; spend is every outgoing txn in it.
     const monthPrefix = today.slice(0, 7);
     const budgeted = budgets.reduce((n, b) => n + b.amount_centavos, 0);
+    // Positive is money out — see lib/runway.ts. This filtered on `< 0`, which
+    // is what spend looks like in most ledgers but not in this one, so the ring
+    // read near zero all month.
     const spent = txns
-      .filter((t) => !t.deleted_at && t.occurred_at.startsWith(monthPrefix) && t.amount_centavos < 0)
-      .reduce((n, t) => n + Math.abs(t.amount_centavos), 0);
+      .filter((t) => !t.deleted_at && t.occurred_at.startsWith(monthPrefix))
+      .reduce((n, t) => n + Math.max(0, t.amount_centavos), 0);
 
     return {
       events: mine,

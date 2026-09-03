@@ -101,7 +101,9 @@ export function PhoneHome({ name }: { name: string }) {
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
 
   const month = new Date().toISOString().slice(0, 7);
-  const spent = txns.filter((t) => t.occurred_at.startsWith(month)).reduce((s, t) => s + Math.abs(t.amount_centavos), 0);
+  // Positive is money out, negative is money in — see lib/runway.ts. abs() here
+  // counted an allowance as another day of spending.
+  const spent = txns.filter((t) => t.occurred_at.startsWith(month)).reduce((s, t) => s + Math.max(0, t.amount_centavos), 0);
   const budget = budgets.reduce((s, b) => s + b.amount_centavos, 0);
 
   // 15s, not 1s. `next` only has to change when an event ends, and the kicker

@@ -44,6 +44,10 @@ export function useTap<T extends HTMLElement = HTMLButtonElement>(
 
   return useMemo(() => ({
     onPointerDown: (e: React.PointerEvent<T>) => {
+      // Primary button only. A right-click fires pointerdown/pointerup like any
+      // other press, so without this a context menu also triggered whatever the
+      // row's tap does — on Money that armed the jar you were only asking about.
+      if (e.button !== 0) return;
       start.current = { x: e.clientX, y: e.clientY, t: Date.now(), live: true };
       viaPointer.current = true;
     },
@@ -82,6 +86,12 @@ export function useDoubleTap<T extends HTMLElement = HTMLButtonElement>(
   onSingle: () => void,
   onDouble: () => void,
   windowMs = 300,
+  /**
+   * Passed straight to useTap. A row that also answers a hold should set
+   * `limitMs` below the long-press threshold, or one press fires both — the
+   * menu at 420ms and then the tap on release.
+   */
+  opts: { slop?: number; limitMs?: number } = {},
 ) {
   const last = useRef(0);
   const single = useRef(onSingle);
@@ -98,5 +108,5 @@ export function useDoubleTap<T extends HTMLElement = HTMLButtonElement>(
     }
     last.current = now;
     single.current();
-  });
+  }, opts);
 }

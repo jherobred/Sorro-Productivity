@@ -6,23 +6,50 @@
  * `node lib/runway.check.ts` can run it: a runway that is wrong by a factor is
  * worse than no runway, because you would plan around it.
  *
- * A note on signs. Every row in `bd_transactions` is money going out, stored as
- * a positive number; the whole app abs()es it. Nothing here assumes otherwise,
- * and every function takes the absolute value so a stray negative cannot make a
- * week's spending look like income.
+ * **Signs.** A positive `amount_centavos` is money going out, a negative one is
+ * money coming in. That is what the seed data, the to-buy converter and the
+ * metrics query have always written, so it is the convention rather than a
+ * choice made here.
+ *
+ * This file used to `Math.abs()` everything, on the belief that no row could
+ * ever be income. The keypad has an Income button, so rows could — and every
+ * one of them shortened the runway it should have lengthened: ₱5,000 of
+ * allowance came off the balance *and* went on the burn rate. Nothing abs()es
+ * any more. `outgo` takes the positive side, `incoming` the negative one, and
+ * a row can only ever count as one of the two.
  */
 
 export type Spend = { amount_centavos: number; category: string; occurred_at: string };
 
 const DAY = 86_400_000;
 
-export const outgo = (t: { amount_centavos: number }) => Math.abs(t.amount_centavos);
+/** Money out, or zero for a row that was money in. */
+export const outgo = (t: { amount_centavos: number }) => Math.max(0, t.amount_centavos);
 
-/** Everything spent in the window. */
+/** Money in, or zero for a row that was money out. */
+export const incoming = (t: { amount_centavos: number }) => Math.max(0, -t.amount_centavos);
+
+/** What the row does to a balance: spending subtracts, income adds. */
+export const net = (t: { amount_centavos: number }) => -t.amount_centavos;
+
+/** Opening balance plus everything that has happened to it since. */
+export function balanceOf(opening: number, txns: { amount_centavos: number }[]): number {
+  return txns.reduce((sum, t) => sum + net(t), opening);
+}
+
+/** Everything spent in the window. Income in the window is not negative spend. */
 export function spentBetween(txns: Spend[], fromMs: number, toMs: number): number {
   return txns.reduce((sum, t) => {
     const at = new Date(t.occurred_at).getTime();
     return at >= fromMs && at <= toMs ? sum + outgo(t) : sum;
+  }, 0);
+}
+
+/** Everything earned in the window. */
+export function earnedBetween(txns: Spend[], fromMs: number, toMs: number): number {
+  return txns.reduce((sum, t) => {
+    const at = new Date(t.occurred_at).getTime();
+    return at >= fromMs && at <= toMs ? sum + incoming(t) : sum;
   }, 0);
 }
 
@@ -65,8 +92,10 @@ export function byCategory(txns: Spend[], fromMs: number, toMs: number): Categor
   for (const t of txns) {
     const at = new Date(t.occurred_at).getTime();
     if (at < fromMs || at > toMs) continue;
+    const spent = outgo(t);
+    if (spent === 0) continue;
     const key = t.category || 'Other';
-    m.set(key, (m.get(key) ?? 0) + outgo(t));
+    m.set(key, (m.get(key) ?? 0) + spent);
   }
   return [...m.entries()]
     .map(([category, total]) => ({ category, total }))
@@ -80,13 +109,81 @@ export function jarLevel(spent: number, budget: number): { left: number; fill: n
   return { left, fill: Math.max(0, Math.min(1, left / budget)), over: left < 0 };
 }
 
-/** Coins in a stack: one per `per`, capped so a big month is still drawable. */
-export function coinsFor(total: number, per = 50_000, max = 9): number {
-  if (total <= 0) return 0;
-  return Math.max(1, Math.min(max, Math.round(total / per)));
-}
-
 /** The start of the current month, as an instant. */
 export function monthStart(now = new Date()): number {
   return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+}
+
+/* ------------------------------------------------------- the day-by-day set */
+
+export type DaySpend = { day: string; total: number };
+
+/** `YYYY-MM-DD` in local time. `toISOString` would file a 9pm expense tomorrow. */
+export function localDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Spend per calendar day across a run of days, oldest first, days with nothing
+ * spent included as zeroes.
+ *
+ * The zeroes are the point. A sparkline drawn only from the days you bought
+ * something is a lie about the shape of a month, and a streak counter cannot
+ * count what is not in the list.
+ */
+export function dailySpend(txns: Spend[], days = 30, now = new Date()): DaySpend[] {
+  const totals = new Map<string, number>();
+  for (const t of txns) {
+    const spent = outgo(t);
+    if (spent === 0) continue;
+    const key = localDay(new Date(t.occurred_at));
+    totals.set(key, (totals.get(key) ?? 0) + spent);
+  }
+
+  const out: DaySpend[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const day = localDay(d);
+    out.push({ day, total: totals.get(day) ?? 0 });
+  }
+  return out;
+}
+
+/** Every day of `now`'s calendar month, for the heatmap grid. */
+export function monthSpend(txns: Spend[], now = new Date()): DaySpend[] {
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  return dailySpend(txns, end, new Date(first.getFullYear(), first.getMonth(), end));
+}
+
+/**
+ * Consecutive days up to and including today on which nothing was spent.
+ *
+ * Today counts. Ending the streak at yesterday would mean the counter only
+ * moved after midnight, which is the one time nobody is looking at it.
+ */
+export function noSpendStreak(series: DaySpend[]): number {
+  let n = 0;
+  for (let i = series.length - 1; i >= 0; i--) {
+    if (series[i].total > 0) break;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * The last seven days against the seven before them.
+ *
+ * `pct` is null when there is no earlier week to compare against — "up 100%"
+ * from nothing is arithmetic, not information.
+ */
+export function weekDelta(txns: Spend[], now = Date.now()): { current: number; previous: number; pct: number | null } {
+  const current = spentBetween(txns, now - 7 * DAY, now);
+  const previous = spentBetween(txns, now - 14 * DAY, now - 7 * DAY);
+  return {
+    current,
+    previous,
+    pct: previous > 0 ? Math.round(((current - previous) / previous) * 100) : null,
+  };
 }
