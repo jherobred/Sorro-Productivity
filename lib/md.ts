@@ -170,6 +170,33 @@ export function wikiTargets(body: string): string[] {
   return [...new Set([...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim()).filter(Boolean))];
 }
 
+/** What the color/highlight toolbar (applyTextColor/applyHighlight) produces. */
+export type InlineMarkup =
+  | { tag: 'span'; color: string; text: string }
+  | { tag: 'mark'; background: string; text: string };
+
+/**
+ * Recognise ONLY the exact `<span style="color: ...">`/`<mark style="background:
+ * ...">` shapes the highlight toolbar writes into a note body. A `text` span
+ * that merely contains the substring "<span"/"<mark" (typed by hand, or landed
+ * via a plain-text paste) is not markup — callers must treat a `null` result as
+ * plain text.
+ *
+ * The caller MUST render the returned `color`/`background`/`text` fields as a
+ * style object and a text child — never string-concatenate them back into an
+ * HTML string or attribute, and never pass them to `dangerouslySetInnerHTML`.
+ * That discipline, not this regex, is what keeps arbitrary HTML (e.g.
+ * `<span></span><img src=x onerror=...>`, which fails to match and falls
+ * through to plain text) from ever reaching the DOM as markup.
+ */
+export function inlineMarkup(text: string): InlineMarkup | null {
+  const color = text.match(/^<span style="color: ([^"<>]*)">([\s\S]*)<\/span>$/);
+  if (color) return { tag: 'span', color: color[1], text: color[2] };
+  const highlight = text.match(/^<mark style="background: ([^"<>]*); padding: 1px 4px; border-radius: 4px;">([\s\S]*)<\/mark>$/);
+  if (highlight) return { tag: 'mark', background: highlight[1], text: highlight[2] };
+  return null;
+}
+
 /* ------------------------------------------------------------------ editing */
 
 /** Tick or untick the checkbox on one source line, returning the new document. */

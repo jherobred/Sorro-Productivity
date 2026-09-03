@@ -203,5 +203,7 @@ Deno.serve(async (req) => {
   }
   if (!read) return json({ ok: false, message: lastErr?.message ?? 'The model could not read it' }, 502);
 
-  return json({ ok: true, mode, model: used, ...read });
+  // read comes from the model - spread first so ok/mode/model can never be
+  // overwritten by a stray key the model decided to answer with.
+  return json({ ...read, ok: true, mode, model: used });
 });

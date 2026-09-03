@@ -73,6 +73,66 @@ Deno.serve(async (req) => {
   }
 });
 
+/**
+ * Both integrations fetch a URL the user typed into Settings, so the target is
+ * theirs to choose — including, if nothing stops them, the metadata service or
+ * an internal host that would otherwise never see a request from this project.
+ * This blocks the obvious targets by hostname/IP literal.
+ *
+ * ponytail: hostname-only check, not a DNS-rebinding-proof one — a name that
+ * resolves to a public IP now and a private one at fetch time slips through.
+ * Upgrade path: resolve the hostname and check the resulting address instead.
+ */
+function isBlockedHost(urlStr: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(urlStr).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return true;
+  }
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) return true;
+  const v4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const a = Number(v4[1]);
+    const b = Number(v4[2]);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local, incl. the 169.254.169.254 metadata endpoint
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    return false;
+  }
+  if (hostname === '::1' || hostname.startsWith('fe80') || hostname.startsWith('fc') || hostname.startsWith('fd')) return true;
+  return false;
+}
+
+/**
+ * fetch, with every redirect hop checked before it is followed. Checking only
+ * the address the user typed is not enough: the default `redirect: 'follow'`
+ * will happily bounce an allowed public URL onwards to 169.254.169.254, which
+ * is the usual way a host filter gets walked around. Deno returns the real
+ * response for `redirect: 'manual'` rather than the browser's opaque one, so
+ * the Location header is readable here and each hop can be re-checked.
+ *
+ * Authorization is dropped the moment the host changes — otherwise a redirect
+ * to any attacker-controlled host walks off with the user's Canvas token.
+ */
+async function safeFetch(url: string, init: RequestInit, headers: Record<string, string>, hops = 5): Promise<Response> {
+  let target = url;
+  const sent = { ...headers };
+  for (let i = 0; i <= hops; i++) {
+    if (isBlockedHost(target)) throw new Error('That address points at a private host');
+    const res = await fetch(target, { ...init, headers: sent, redirect: 'manual' });
+    if (res.status < 300 || res.status > 399) return res;
+    const loc = res.headers.get('location');
+    if (!loc) return res;
+    const next = new URL(loc, target);
+    if (next.protocol !== 'https:') throw new Error('That address redirected somewhere that is not https');
+    if (next.host !== new URL(target).host) delete sent.Authorization;
+    target = next.toString();
+  }
+  throw new Error('That address redirected too many times');
+}
+
 /* ------------------------------------------------------------------ Canvas */
 
 type Course = { id: number; name: string };
@@ -83,16 +143,16 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
   const base = (config.base_url ?? '').trim().replace(/\/+$/, '');
   const token = (config.token ?? '').trim();
   if (!/^https:\/\//.test(base)) throw new Error('Canvas address must start with https://');
+  if (isBlockedHost(base)) throw new Error('Canvas address must be a public URL');
   if (!token) throw new Error('Missing access token');
 
   const get = async <T>(path: string): Promise<T> => {
-    const res = await fetch(`${base}/api/v1${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await safeFetch(`${base}/api/v1${path}`, {
       // A Canvas that accepts the connection and never answers would otherwise
       // hold this function open until the platform kills it — and the fifty
       // per-course calls below run concurrently, so one slow host stalls them all.
       signal: AbortSignal.timeout(20_000),
-    });
+    }, { Authorization: `Bearer ${token}` });
     if (res.status === 401) throw new Error('Canvas rejected the token — generate a new one');
     if (!res.ok) throw new Error(`Canvas returned ${res.status} for ${path.split('?')[0]}`);
     return res.json() as Promise<T>;
@@ -165,11 +225,11 @@ const stripHtml = (s: string) => (s ?? '').replace(/<[^>]*>/g, ' ').replace(/&nb
 async function syncIcs(db: SupabaseClient, user_id: string, config: Record<string, string>) {
   const url = (config.ics_url ?? '').trim();
   if (!/^https:\/\//.test(url)) throw new Error('The iCal address must start with https://');
+  if (isBlockedHost(url)) throw new Error('The iCal address must be a public URL');
 
-  const res = await fetch(url, {
-    headers: { Accept: 'text/calendar' },
+  const res = await safeFetch(url, {
     signal: AbortSignal.timeout(20_000),
-  });
+  }, { Accept: 'text/calendar' });
   if (!res.ok) throw new Error(`Calendar returned ${res.status} — check the secret address`);
   // The address is whatever the user typed, so the body is an untrusted size.
   // 20MB is a decade of a busy calendar; anything larger is not one.

@@ -44,6 +44,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="dark" suppressHydrationWarning
       className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <head>
+        {/* The same policy vercel.json sends as a header, repeated here because
+            the Android shell never sees that header — Capacitor serves this HTML
+            from https://localhost, not from Vercel's edge, so a meta tag is the
+            only CSP the WebView will ever read. `frame-ancestors` is absent
+            because it is header-only; vercel.json carries it for the website.
+
+            `script-src` has to allow inline: a static export ships Next's
+            hydration payload as ~7 inline <script> blocks whose contents change
+            per page and per build, and with no server there is no request to
+            mint a nonce from. So this does NOT stop script injection. What it
+            does stop is the part that turns an injection into a breach —
+            `connect-src` means injected script cannot post the refresh tokens in
+            localStorage to an attacker's host, and object/base-uri close the
+            usual sidedoors. Tightening script-src needs a post-build step that
+            hashes each page's inline blocks into a per-path header. */}
+        <meta
+          httpEquiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'"
+        />
         {/* Paint the stored theme/accent before first frame so there is no flash.
             The real values are reconciled from bd_profiles.prefs once signed in. */}
         <script

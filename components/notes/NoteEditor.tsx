@@ -10,7 +10,7 @@ import { PAL } from '@/lib/pal';
 import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import {
-  parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount,
+  parse, spans, applyKind, wrap, newline, toggleTask, wordCount, taskCount, inlineMarkup,
   type Line, type LineKind,
 } from '@/lib/md';
 import { markPending, clearPending, whenLabel, type Note } from '@/lib/notes';
@@ -1215,7 +1215,7 @@ function ReadView({
     if (s.s === 'math') {
       if (!katex) return <code key={i} style={{ fontFamily: MONO, color: 'var(--accTx)' }}>${s.text}$</code>;
       try {
-        const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false });
+        const mathHtml = katex.renderToString(s.text, { displayMode: false, throwOnError: false, trust: false, maxSize: 20, maxExpand: 1000 });
         return (
           <span
             key={i}
@@ -1237,7 +1237,17 @@ function ReadView({
       );
     }
     if (s.text.includes('<span') || s.text.includes('<mark')) {
-      return <span key={i} dangerouslySetInnerHTML={{ __html: s.text }} />;
+      // Only the exact shapes applyTextColor/applyHighlight produce render as
+      // markup — as real React elements, never dangerouslySetInnerHTML. Anything
+      // else that merely contains "<span"/"<mark" (typed by hand, or landed via a
+      // plain-text paste) is untrusted text and falls through to plain text below.
+      const markup = inlineMarkup(s.text);
+      if (markup?.tag === 'span') {
+        return <span key={i} style={{ color: markup.color }}>{markup.text}</span>;
+      }
+      if (markup?.tag === 'mark') {
+        return <mark key={i} style={{ background: markup.background, padding: '1px 4px', borderRadius: 4 }}>{markup.text}</mark>;
+      }
     }
     return <span key={i}>{s.text}</span>;
   });
@@ -1252,7 +1262,7 @@ function ReadView({
 ${l.text}
 $$`}</pre>;
           try {
-            const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false });
+            const blockHtml = katex.renderToString(l.text, { displayMode: true, throwOnError: false, trust: false, maxSize: 20, maxExpand: 1000 });
             return (
               <div
                 key={i}
