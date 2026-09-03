@@ -2357,17 +2357,14 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   const dark = prefs.theme === 'dark';
 
   /**
-   * The whole spread, not eight of them.
+   * Categories, not raw swatches.
    *
-   * Google Calendar ships eleven named colours and every calendar app since has
-   * copied the idea, because "the blue one" is how people actually refer to a
-   * block on a grid. The custom well below is the escape hatch for a course
-   * colour that has to match something else.
+   * "The indigo one" is how people refer to a block on a grid, so the picker
+   * offers the nine named categories and stores each one's colour. The custom
+   * well below is the escape hatch for a course colour that has to match
+   * something else; picking it simply falls outside every category.
    */
-  const swatches = [
-    '#FF6B6B', '#FF8A4C', '#FFC24B', '#A3E635', '#34D9A0', '#38D6F2',
-    '#38BDF8', '#7C8CFF', '#B07CFF', '#FF6FA8', '#8A86A6', '#3A3550',
-  ];
+  const selectedCat = resolveCategory(color);
   /** Label colours. `null` is "read it off the background" — see chipInk. */
   const inks: { v: string | null; n: string }[] = [
     { v: null, n: 'Auto' },
@@ -2702,16 +2699,34 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
           )}
         </div>
 
-        <span style={LABEL}>Background</span>
-        <div style={{ display: 'flex', gap: 7, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          {swatches.map((c) => (
-            <button key={c} onClick={() => setColor(c)} aria-label={`Colour ${c}`} aria-pressed={color === c}
-              className={`k-swatch${color === c ? ' on' : ''}`}
-              style={{ width: 26, height: 26, borderRadius: 7, background: c, outline: color === c ? '2px solid var(--tx)' : undefined, outlineOffset: 2 }} />
-          ))}
+        <span style={LABEL}>Category</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 12 }}>
+          {EVENT_CATEGORIES.map((c) => {
+            const on = selectedCat.id === c.id;
+            return (
+              <button key={c.id} onClick={() => setColor(c.color)} aria-pressed={on}
+                className="k-chip"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10,
+                  fontSize: 11.5, fontWeight: 700, minHeight: 34, cursor: 'pointer',
+                  border: `1px solid ${on ? `color-mix(in srgb, ${c.color} 55%, transparent)` : 'var(--line2)'}`,
+                  background: on ? `color-mix(in srgb, ${c.color} 14%, var(--card))` : 'var(--card2)',
+                  color: on ? 'var(--tx)' : 'var(--tx2)',
+                }}>
+                <span aria-hidden style={{
+                  width: 11, height: 11, borderRadius: 4, background: c.color, flex: 'none',
+                  boxShadow: on ? `0 0 0 2px color-mix(in srgb, ${c.color} 30%, transparent)` : undefined,
+                  transition: 'box-shadow var(--k-base) var(--k-spring)',
+                }} />
+                {c.label}
+                {on && <Icon name="check" size={12} color="var(--tx2)" style={{ marginLeft: 'auto' }} />}
+              </button>
+            );
+          })}
           <label title="Any colour" aria-label="Custom background colour"
-            style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', border: '1px dashed var(--line2)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, minHeight: 34, border: `1px dashed ${selectedCat.id === 'custom' ? 'var(--acc)' : 'var(--line2)'}`, background: selectedCat.id === 'custom' ? 'var(--card)' : 'var(--card2)', color: selectedCat.id === 'custom' ? 'var(--tx)' : 'var(--tx2)', cursor: 'pointer', position: 'relative' }}>
             <Icon name="pen" size={12} color="var(--tx3)" />
+            Custom
             <input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#7C8CFF'}
               onChange={(e) => setColor(e.target.value)}
               style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
@@ -2750,9 +2765,9 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
           fontSize: 11, fontWeight: 700,
         }}>
           {title || 'Untitled'}
-          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2 }}>{from}–{to}</span>
-        </div>
-        <div style={{ display: 'none' }}>
+          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2 }}>
+            {selectedCat.id !== 'custom' ? `${selectedCat.label} · ` : ''}{from}–{to}
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: 9 }}>
