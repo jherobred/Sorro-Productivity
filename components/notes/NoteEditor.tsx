@@ -801,9 +801,57 @@ function Toolbar({
   onLink: () => void;
   onDelete: () => void;
 }) {
-  const [colorMenuOpen, setColorMenuOpen] = useState(false);
-  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
-  const [paperMenuOpen, setPaperMenuOpen] = useState(false);
+  const [colorMenuPos, setColorMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [insertMenuPos, setInsertMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [paperMenuPos, setPaperMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!colorMenuPos && !insertMenuPos && !paperMenuPos) return;
+    const closeAll = () => {
+      setColorMenuPos(null);
+      setInsertMenuPos(null);
+      setPaperMenuPos(null);
+    };
+    window.addEventListener('resize', closeAll);
+    window.addEventListener('scroll', closeAll, true);
+    return () => {
+      window.removeEventListener('resize', closeAll);
+      window.removeEventListener('scroll', closeAll, true);
+    };
+  }, [colorMenuPos, insertMenuPos, paperMenuPos]);
+
+  const toggleColorMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (colorMenuPos) {
+      setColorMenuPos(null);
+    } else {
+      const r = e.currentTarget.getBoundingClientRect();
+      setColorMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 190)) });
+      setInsertMenuPos(null);
+      setPaperMenuPos(null);
+    }
+  };
+
+  const toggleInsertMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (insertMenuPos) {
+      setInsertMenuPos(null);
+    } else {
+      const r = e.currentTarget.getBoundingClientRect();
+      setInsertMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 220)) });
+      setColorMenuPos(null);
+      setPaperMenuPos(null);
+    }
+  };
+
+  const togglePaperMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (paperMenuPos) {
+      setPaperMenuPos(null);
+    } else {
+      const r = e.currentTarget.getBoundingClientRect();
+      setPaperMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - 120, window.innerWidth - 130)) });
+      setColorMenuPos(null);
+      setInsertMenuPos(null);
+    }
+  };
 
   const btn = (label: string, icon: IconName, run: () => void, text?: string, active?: boolean, disabled?: boolean) => (
     <button
@@ -885,7 +933,7 @@ function Toolbar({
       {/* Colors & Highlight Menu */}
       <div style={{ position: 'relative' }}>
         <button
-          onClick={() => { setColorMenuOpen(!colorMenuOpen); setInsertMenuOpen(false); }}
+          onClick={toggleColorMenu}
           className="hov k-squish"
           title="Text Colors & Highlight"
           style={{
@@ -897,8 +945,8 @@ function Toolbar({
             gap: 4,
             fontSize: 11,
             fontWeight: 700,
-            background: colorMenuOpen ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
-            border: `1px solid ${colorMenuOpen ? 'var(--acc)' : 'var(--line2)'}`,
+            background: colorMenuPos ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
+            border: `1px solid ${colorMenuPos ? 'var(--acc)' : 'var(--line2)'}`,
             color: 'var(--tx)',
             cursor: 'pointer',
           }}
@@ -907,14 +955,31 @@ function Toolbar({
           <span>Color</span>
         </button>
 
-        {colorMenuOpen && (
+        {colorMenuPos && typeof document !== 'undefined' && createPortal(
           <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setColorMenuOpen(false)} />
-            <div style={{
-              position: 'absolute', top: 34, left: 0, zIndex: 41,
-              background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 12,
-              boxShadow: 'var(--shl)', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 170,
-            }}>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setColorMenuPos(null)}
+              onContextMenu={(e) => { e.preventDefault(); setColorMenuPos(null); }}
+            />
+            <div
+              className="lens"
+              style={{
+                position: 'fixed',
+                top: colorMenuPos.top,
+                left: colorMenuPos.left,
+                zIndex: 9999,
+                background: 'var(--card)',
+                border: '1px solid var(--line2)',
+                borderRadius: 14,
+                boxShadow: 'var(--shl), 0 12px 36px rgba(0,0,0,0.4)',
+                padding: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                minWidth: 175,
+              }}
+            >
               <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Text Color</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
                 {[
@@ -931,7 +996,7 @@ function Toolbar({
                 ].map((c) => (
                   <button
                     key={c.hex}
-                    onClick={() => { onTextColor(c.hex); setColorMenuOpen(false); }}
+                    onClick={() => { onTextColor(c.hex); setColorMenuPos(null); }}
                     title={c.name}
                     style={{
                       width: 24, height: 24, borderRadius: 6, background: c.hex, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer',
@@ -951,7 +1016,7 @@ function Toolbar({
                 ].map((h) => (
                   <button
                     key={h.name}
-                    onClick={() => { onHighlight(h.hex); setColorMenuOpen(false); }}
+                    onClick={() => { onHighlight(h.hex); setColorMenuPos(null); }}
                     title={`${h.name} glow`}
                     style={{
                       flex: 1, height: 22, borderRadius: 5, background: h.hex, border: '1px solid var(--line2)', cursor: 'pointer',
@@ -960,7 +1025,8 @@ function Toolbar({
                 ))}
               </div>
             </div>
-          </>
+          </>,
+          document.body
         )}
       </div>
 
@@ -977,7 +1043,7 @@ function Toolbar({
       {/* Insert Menu (Images, Tables, Columns, Video, Sketch, Math, Divider) */}
       <div style={{ position: 'relative' }}>
         <button
-          onClick={() => { setInsertMenuOpen(!insertMenuOpen); setColorMenuOpen(false); }}
+          onClick={toggleInsertMenu}
           className="hov k-squish"
           title="Insert Media, Tables & Layout"
           style={{
@@ -989,8 +1055,8 @@ function Toolbar({
             gap: 4,
             fontSize: 11,
             fontWeight: 700,
-            background: insertMenuOpen ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
-            border: `1px solid ${insertMenuOpen ? 'var(--acc)' : 'var(--line2)'}`,
+            background: insertMenuPos ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
+            border: `1px solid ${insertMenuPos ? 'var(--acc)' : 'var(--line2)'}`,
             color: 'var(--tx)',
             cursor: 'pointer',
           }}
@@ -999,56 +1065,74 @@ function Toolbar({
           <span>Insert</span>
         </button>
 
-        {insertMenuOpen && (
+        {insertMenuPos && typeof document !== 'undefined' && createPortal(
           <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setInsertMenuOpen(false)} />
-            <div style={{
-              position: 'absolute', top: 34, left: 0, zIndex: 41,
-              background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 12,
-              boxShadow: 'var(--shl)', padding: 6, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 190,
-            }}>
-              <button onClick={() => { onOpenSketch(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setInsertMenuPos(null)}
+              onContextMenu={(e) => { e.preventDefault(); setInsertMenuPos(null); }}
+            />
+            <div
+              className="lens"
+              style={{
+                position: 'fixed',
+                top: insertMenuPos.top,
+                left: insertMenuPos.left,
+                zIndex: 9999,
+                background: 'var(--card)',
+                border: '1px solid var(--line2)',
+                borderRadius: 14,
+                boxShadow: 'var(--shl), 0 12px 36px rgba(0,0,0,0.4)',
+                padding: 6,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 3,
+                minWidth: 195,
+              }}
+            >
+              <button onClick={() => { onOpenSketch(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="pen" size={13} color="var(--accTx, #38BDF8)" />
                 <span>Draw Sketch / Paint</span>
               </button>
-              <button onClick={() => { onInsertImageUpload(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertImageUpload(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="photo" size={13} color="var(--pal-mint, #34D9A0)" />
                 <span>Upload Image File</span>
               </button>
-              <button onClick={() => { onInsertImageUrl(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertImageUrl(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="photo" size={13} color="var(--tx2)" />
                 <span>Insert Image by URL</span>
               </button>
-              <button onClick={() => { onInsertVideo(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertVideo(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="spark" size={13} color="var(--pal-coral, #FF6B6B)" />
                 <span>Embed Video (YouTube / MP4)</span>
               </button>
-              <button onClick={() => { onInsertTable(3, 3); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertTable(3, 3); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="grid" size={13} color="var(--pal-sky, #38BDF8)" />
                 <span>Insert 3x3 Table</span>
               </button>
-              <button onClick={() => { onInsertColumns(2); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertColumns(2); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="grid" size={13} color="var(--tx2)" />
                 <span>2-Column Layout</span>
               </button>
-              <button onClick={() => { onInsertColumns(3); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onInsertColumns(3); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="grid" size={13} color="var(--tx2)" />
                 <span>3-Column Layout</span>
               </button>
-              <button onClick={() => { onOpenMath(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onOpenMath(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="spark" size={13} color="var(--pal-amber, #FFC24B)" />
                 <span>LaTeX Math Formula ($$)</span>
               </button>
-              <button onClick={() => { onDivider(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onDivider(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="minus" size={13} color="var(--tx3)" />
                 <span>Full-Width Divider</span>
               </button>
-              <button onClick={() => { onLink(); setInsertMenuOpen(false); }} className="hov" style={MENU_ITEM}>
+              <button onClick={() => { onLink(); setInsertMenuPos(null); }} className="hov" style={MENU_ITEM}>
                 <Icon name="link" size={13} color="var(--accTx, #7C6CFF)" />
                 <span>Link to Note ([[ ]])</span>
               </button>
             </div>
-          </>
+          </>,
+          document.body
         )}
       </div>
 
@@ -1067,7 +1151,7 @@ function Toolbar({
       {/* Paper Style Selector */}
       <div style={{ position: 'relative' }}>
         <button
-          onClick={() => setPaperMenuOpen(!paperMenuOpen)}
+          onClick={togglePaperMenu}
           className="hov k-squish"
           title="Paper Look"
           style={{
@@ -1079,8 +1163,8 @@ function Toolbar({
             gap: 3,
             fontSize: 10,
             fontWeight: 700,
-            background: 'var(--card2)',
-            border: '1px solid var(--line2)',
+            background: paperMenuPos ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
+            border: `1px solid ${paperMenuPos ? 'var(--acc)' : 'var(--line2)'}`,
             color: 'var(--tx2)',
             cursor: 'pointer',
             textTransform: 'capitalize',
@@ -1090,18 +1174,35 @@ function Toolbar({
           <span>{paperStyle}</span>
         </button>
 
-        {paperMenuOpen && (
+        {paperMenuPos && typeof document !== 'undefined' && createPortal(
           <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setPaperMenuOpen(false)} />
-            <div style={{
-              position: 'absolute', top: 32, right: 0, zIndex: 41,
-              background: 'var(--card)', border: '1px solid var(--line2)', borderRadius: 10,
-              boxShadow: 'var(--shl)', padding: 4, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 110,
-            }}>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setPaperMenuPos(null)}
+              onContextMenu={(e) => { e.preventDefault(); setPaperMenuPos(null); }}
+            />
+            <div
+              className="lens"
+              style={{
+                position: 'fixed',
+                top: paperMenuPos.top,
+                left: paperMenuPos.left,
+                zIndex: 9999,
+                background: 'var(--card)',
+                border: '1px solid var(--line2)',
+                borderRadius: 12,
+                boxShadow: 'var(--shl), 0 12px 36px rgba(0,0,0,0.4)',
+                padding: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                minWidth: 110,
+              }}
+            >
               {(['blank', 'lined', 'grid', 'dotted'] as PaperStyle[]).map((ps) => (
                 <button
                   key={ps}
-                  onClick={() => { onChangePaperStyle(ps); setPaperMenuOpen(false); }}
+                  onClick={() => { onChangePaperStyle(ps); setPaperMenuPos(null); }}
                   className="hov"
                   style={{
                     padding: '5px 8px', borderRadius: 6, border: 'none',
@@ -1114,7 +1215,8 @@ function Toolbar({
                 </button>
               ))}
             </div>
-          </>
+          </>,
+          document.body
         )}
       </div>
 

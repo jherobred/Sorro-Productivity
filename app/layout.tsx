@@ -60,10 +60,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `connect-src` means injected script cannot post the refresh tokens in
             localStorage to an attacker's host, and object/base-uri close the
             usual sidedoors. Tightening script-src needs a post-build step that
-            hashes each page's inline blocks into a per-path header. */}
+            hashes each page's inline blocks into a per-path header.
+
+            Dev needs one extra source: the webpack runtime executes modules
+            through eval, so without `unsafe-eval` in development every page
+            dies on its first module. It is added only when NODE_ENV is
+            development at build time — the shipped export never carries it. */}
         <meta
           httpEquiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com https://lh3.googleusercontent.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'"
+          content={`default-src 'self'; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com https://lh3.googleusercontent.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'`}
         />
 
         {/* Every screen's first job is a Supabase call, and ~65% of that first

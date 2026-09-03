@@ -101,8 +101,8 @@ export function seedDevFixtures() {
     task('t2', LIST.school, 'Email Prof. Santos about regrade', ymdOf(-2), 'med', 2),
     task('t3', LIST.errands, 'Return library books', ymdOf(-1), 'low', 0),
     { ...task('t4', LIST.school, 'Draft thesis outline', ymdOf(0), 'high', 5, 'Three chapters, bullet form.'), due_at: iso(0, 11) },
-    task('t5', LIST.personal, 'Gym — push day', ymdOf(0), 'med', 0),
-    task('t6', LIST.school, 'Read Chapter 7 — algorithms', ymdOf(0), 'low', 1),
+    task('t5', LIST.personal, 'Gym · push day', ymdOf(0), 'med', 0),
+    task('t6', LIST.school, 'Read Chapter 7 · algorithms', ymdOf(0), 'low', 1),
     { ...task('t7', LIST.school, 'Capstone group sync notes', ymdOf(1), 'med', 3), due_at: iso(1, 17, 30) },
     task('t8', LIST.errands, 'Buy notebook + pens', ymdOf(2), 'low', 0),
     task('t9', LIST.personal, 'Call home', ymdOf(3), 'med', 2),
@@ -130,13 +130,13 @@ export function seedDevFixtures() {
     ev('e3', 'Capstone standup', D(2), 7, 30, 8, 30, 'Meet', '#B07CFF'),
     ev('e4', 'Capstone standup', D(3), 7, 30, 8, 30, 'Meet', '#B07CFF'),
     ev('e5', 'Capstone standup', D(4), 7, 30, 8, 30, 'Meet', '#B07CFF'),
-    ev('e6', 'Deep work — thesis outline', D(1), 13, 0, 14, 30, 'Library 3F', '#34D9A0'),
+    ev('e6', 'Deep work · thesis outline', D(1), 13, 0, 14, 30, 'Library 3F', '#34D9A0'),
     ev('e7', 'CS 191 Lecture', D(1), 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
-    ev('e8', 'Group call — capstone', D(1), 19, 30, 20, 30, 'Meet', '#B07CFF'),
+    ev('e8', 'Group call · capstone', D(1), 19, 30, 20, 30, 'Meet', '#B07CFF'),
     ev('e9', 'CS 165 Lab', D(2), 10, 0, 12, 0, 'CS Lab 2', '#7C8CFF'),
     ev('e10', 'STS 1', D(2), 16, 0, 17, 30, 'Palma 105', '#7C8CFF'),
     ev('e11', 'CS 150 Lecture', D(3), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
-    ev('e12', 'Consultation — Prof. Alonzo', D(3), 14, 0, 15, 0, 'Faculty 12', '#FFC24B'),
+    ev('e12', 'Consultation · Prof. Alonzo', D(3), 14, 0, 15, 0, 'Faculty 12', '#FFC24B'),
     ev('e13', 'CS 191 Lecture', D(4), 15, 0, 16, 30, "Eng'g 302", '#7C8CFF'),
     ev('e14', 'CSSS general assembly', D(4), 17, 30, 19, 0, 'AVR', '#B07CFF'),
     ev('e15', 'Gym with Rene', D(5), 8, 0, 9, 30, 'UP Gym', '#FF6B6B', 'gcal_ics'),
@@ -177,7 +177,7 @@ export function seedDevFixtures() {
   ]);
   seed(['transactions'], [
     { id: 'x1', account_id: 'a1', name: 'Jeepney fare', amount_centavos: 2400, category: 'Transport', occurred_at: iso(-1, 8), deleted_at: null },
-    { id: 'x2', account_id: 'a1', name: 'Lunch — canteen', amount_centavos: 9500, category: 'Food', occurred_at: iso(-1, 12), deleted_at: null },
+    { id: 'x2', account_id: 'a1', name: 'Lunch · canteen', amount_centavos: 9500, category: 'Food', occurred_at: iso(-1, 12), deleted_at: null },
     { id: 'x3', account_id: 'a2', name: 'Groceries', amount_centavos: 87500, category: 'Food', occurred_at: iso(-5, 17), deleted_at: null },
   ]);
   seed(['to_buy'], [
@@ -185,20 +185,20 @@ export function seedDevFixtures() {
   ]);
 
   seed(['home_projects'], [
-    { id: 'p1', name: 'Capstone — routing app', progress: 45, color: '#B07CFF' },
+    { id: 'p1', name: 'Capstone · routing app', progress: 45, color: '#B07CFF' },
     { id: 'p2', name: 'Portfolio site', progress: 78, color: '#34D9A0' },
   ]);
   seed(['home_recent_notes'], [
-    { id: 'n1', title: 'Normalisation — 3NF', updated_at: iso(0, 13) },
+    { id: 'n1', title: 'Normalisation · 3NF', updated_at: iso(0, 13) },
     { id: 'n2', title: 'Eigenvectors and diagonalisation', updated_at: iso(-1, 16) },
   ]);
 
   const mins = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
   seed(['notifications'], [
-    { id: 'f1', kind: 'canvas', title: 'CS 191 — Proposal defence moved to Friday', body: 'CS 191 · Bring two printed copies of the revised scope. Slots are first come, first served.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(14) },
+    { id: 'f1', kind: 'canvas', title: 'CS 191 · Proposal defence moved to Friday', body: 'CS 191 · Bring two printed copies of the revised scope. Slots are first come, first served.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(14) },
     { id: 'f2', kind: 'task', title: 'Problem set 4 is overdue', body: 'Was due four days ago. Still sitting in School.', href: '/tasks/', source: 'app', read_at: null, created_at: mins(52) },
     { id: 'f3', kind: 'challenge', title: 'Rain T. passed you in 6 a.m. club', body: 'You are #2 with 12. One more morning takes it back.', href: '/community/', source: 'app', read_at: null, created_at: mins(140) },
-    { id: 'f4', kind: 'canvas', title: 'STS 1 — Reading list for week 12 posted', body: 'STS 1 · Chapters 7 and 8, plus the Ellul excerpt in Files.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(320) },
+    { id: 'f4', kind: 'canvas', title: 'STS 1 · Reading list for week 12 posted', body: 'STS 1 · Chapters 7 and 8, plus the Ellul excerpt in Files.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(320) },
     { id: 'f5', kind: 'event', title: 'Capstone standup in 30 minutes', body: 'Meet · 7:30 AM tomorrow', href: '/calendar/', source: 'app', read_at: mins(400), created_at: mins(420) },
     { id: 'f6', kind: 'social', title: 'Jules replied to your thread', body: '“We scoped to one corridor and wrote the network bit as future work.”', href: '/community/', source: 'app', read_at: mins(600), created_at: mins(610) },
   ]);
@@ -212,7 +212,7 @@ export function seedDevFixtures() {
     deadline: string | null = null, icon = '', cover = '',
   ) => ({ id, name, tag, color, progress, position, deadline, icon, cover, user_id: 'me' });
   seed(['projects'], [
-    proj('p1', 'Capstone — routing app', 'School', '#B07CFF', 45, 0, ymdOf(21), '🚍', 'grad:dusk'),
+    proj('p1', 'Capstone · routing app', 'School', '#B07CFF', 45, 0, ymdOf(21), '🚍', 'grad:dusk'),
     proj('p2', 'CSSS orientation', 'Org', '#38D6F2', 80, 1, null, 'ic:people'),
     proj('p3', 'Jeepney tracker', 'Side', '#34D9A0', 20, 2, null, 'ic:code', 'grad:moss'),
     proj('p4', 'OS machine project', 'School', '#7C8CFF', 60, 3, ymdOf(9), '🖥️'),
@@ -485,7 +485,7 @@ export function seedDevFixtures() {
       'HAVING COUNT(*) > 40;',
       '```',
     ].join('\n'), 1),
-    note('nt2', 'nb1', 'Normalisation — 3NF', [
+    note('nt2', 'nb1', 'Normalisation · 3NF', [
       'Third normal form finally clicked. Every non-key column depends on *the key, the whole key, and nothing but the key*.',
       '',
       '1. Remove repeating groups → 1NF',

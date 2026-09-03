@@ -2048,6 +2048,10 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
           const items = byDay.get(date.toDateString()) ?? [];
           const today = date.toDateString() === new Date().toDateString();
           const inMonth = date.getMonth() === month;
+          // `month` is the month the grid is titled with, so leading and
+          // trailing out-of-month days dim — the standard month-grid read.
+          // (The old bug was different: the title month itself was computed
+          // from the week-start, so in-month rows dimmed by mistake.)
           return (
             <button key={i} onClick={() => onPickDay(date)} className="hov k-squish"
               aria-label={date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
