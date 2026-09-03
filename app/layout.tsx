@@ -63,8 +63,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             hashes each page's inline blocks into a per-path header. */}
         <meta
           httpEquiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'"
+          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com https://lh3.googleusercontent.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'"
         />
+
         {/* Every screen's first job is a Supabase call, and ~65% of that first
             round trip is DNS + TCP + TLS, not the query. Opening the socket
             while the bundle is still parsing takes that off the critical path.
