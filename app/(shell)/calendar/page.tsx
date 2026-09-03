@@ -520,7 +520,7 @@ export default function CalendarPage() {
               // and reading the month off `ws` dimmed the first rows of the
               // real month. ws+6 days always lands inside it.
               month={new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + 6).getMonth()}
-              events={events} tasks={windowTasks} nowMs={nowMs} nextEventId={nextEventId}
+              events={events} tasks={windowTasks} nextEventId={nextEventId}
 
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The

@@ -122,21 +122,6 @@ function subscribe(callback: () => void) {
   };
 }
 
-/**
- * One object, returned every time. React warns "the result of getServerSnapshot
- * should be cached" when this returned a fresh literal per call — the same fix
- * prefs.ts applies, and for the same reason: getSnapshot must be pure, and a
- * new object per call is a new snapshot every render.
- */
-const SERVER_LAYOUT: Layout = {
-  phone: false,
-  viewMode: 'auto',
-  isPhoneDevice: false,
-  landscape: false,
-  width: 1440,
-  height: 900,
-  setViewMode,
-};
 
 export function useLayout(): Layout {
   return useSyncExternalStore(
