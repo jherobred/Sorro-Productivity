@@ -110,15 +110,27 @@ export function useBackGuard() {
       }
     };
 
-    // Mouse button 3 is "back"
-    const onDown = (e: MouseEvent) => {
+    // Mouse button 3 is "back", button 4 is "forward"
+    let lastMouseNav = 0;
+    const onMouseNav = (e: MouseEvent) => {
       if (e.button === 3) {
         e.preventDefault();
+        e.stopPropagation();
+        const now = Date.now();
+        if (now - lastMouseNav < 500) return;
+        lastMouseNav = now;
         if (overlays.length > 0) {
           closeTopOverlay();
         } else {
           window.history.back();
         }
+      } else if (e.button === 4) {
+        e.preventDefault();
+        e.stopPropagation();
+        const now = Date.now();
+        if (now - lastMouseNav < 500) return;
+        lastMouseNav = now;
+        window.history.forward();
       }
     };
 
@@ -132,8 +144,7 @@ export function useBackGuard() {
     };
 
     window.addEventListener('popstate', onPop);
-    window.addEventListener('mousedown', onDown);
-    window.addEventListener('auxclick', onDown);
+    window.addEventListener('auxclick', onMouseNav, { capture: true });
     window.addEventListener('keydown', onKey);
 
     // Android hardware/gesture back, when running inside the Capacitor shell.
@@ -157,8 +168,7 @@ export function useBackGuard() {
 
     return () => {
       window.removeEventListener('popstate', onPop);
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('auxclick', onDown);
+      window.removeEventListener('auxclick', onMouseNav, { capture: true } as EventListenerOptions);
       window.removeEventListener('keydown', onKey);
       dispose?.();
     };

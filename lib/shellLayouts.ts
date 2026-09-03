@@ -8,17 +8,13 @@
 export type ShellLayout = 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
 
 export const SHELL_LAYOUTS: { id: ShellLayout; name: string; blurb: string }[] = [
-  { id: 'L1', name: 'Rail & context', blurb: 'Icon rail, then a column the section fills with its own list.' },
-  { id: 'L2', name: 'Hub & spoke', blurb: 'No sidebar. Home is a board of live cards, and every card is a door.' },
   { id: 'L3', name: 'Grouped & Today', blurb: 'Twelve sections in four groups, and today follows you everywhere.' },
-  { id: 'L4', name: 'Day canvas', blurb: 'The hour grid is always on the left. Sections render beside it.' },
-  { id: 'L5', name: 'One shell', blurb: 'One centred column at every size, with a floating dock.' },
 ];
 
 export const DEFAULT_SHELL: ShellLayout = 'L3';
 
 export function isShellLayout(v: unknown): v is ShellLayout {
-  return typeof v === 'string' && SHELL_LAYOUTS.some((l) => l.id === v);
+  return v === 'L3' || (typeof v === 'string' && SHELL_LAYOUTS.some((l) => l.id === v));
 }
 
 /** Which group each section sits in, and the order the groups are drawn. */

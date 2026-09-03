@@ -169,17 +169,19 @@ export function ContextMenu({
   }
 
   return createPortal(
-    <div ref={ref} className="pop" role="menu" aria-label={label}
+    <div ref={ref} className="pop animate-in fade-in-0 zoom-in-95 duration-100" role="menu" aria-label={label}
       onPointerDown={(e) => e.stopPropagation()}
       style={{
-        ...lg({ tint: accent, strength: 0.95, radius: 15, dark }),
+        ...lg({ tint: accent, strength: 0.95, radius: 16, dark }),
         position: 'fixed',
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
         // Hidden until measured, so it never flashes in the wrong place.
         visibility: pos ? 'visible' : 'hidden',
-        width: 228, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto',
-        zIndex: 60, padding: 5,
+        width: 232, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto',
+        zIndex: 60, padding: 6,
+        boxShadow: 'var(--shl)',
+        border: '1px solid var(--line2)',
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px 8px' }}>
         <span style={{ width: 6, height: 6, borderRadius: 2, flex: 'none', background: KIND_DOT[kind] ?? 'var(--acc)' }} />
@@ -267,10 +269,10 @@ function Row({ it, onClose, accent, dark, phone }: {
           it.run?.();
           onClose();
         }}
-        className={it.disabled ? undefined : 'hov lensrow'}
+        className={it.disabled ? undefined : 'hov lensrow transition-colors rounded-lg'}
         style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: phone ? '14px 12px' : '9px 10px',
-          borderRadius: phone ? 12 : 9, fontSize: phone ? 14 : 12.5, fontWeight: 600, textAlign: 'left', minHeight: phone ? 44 : 36,
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: phone ? '14px 12px' : '7px 9px',
+          borderRadius: phone ? 12 : 8, fontSize: phone ? 14 : 12.5, fontWeight: 600, textAlign: 'left', minHeight: phone ? 44 : 34,
           color: colour, opacity: it.disabled ? 0.45 : 1,
           cursor: it.disabled ? 'default' : 'pointer',
         }}>
@@ -327,7 +329,7 @@ function SubMenu({
   }, [anchor, items.length]);
 
   return createPortal(
-    <div ref={ref} role="menu" aria-label={label} className="pop"
+    <div ref={ref} role="menu" aria-label={label} className="pop animate-in fade-in-0 zoom-in-95 duration-100"
       onPointerEnter={onEnter} onPointerLeave={onLeave}
       // Outside the parent menu's box now, so it needs its own guard: the
       // window pointerdown that closes the menu fires before click, and a
@@ -335,10 +337,12 @@ function SubMenu({
       // choosing one of its rows.
       onPointerDown={(e) => e.stopPropagation()}
       style={{
-        ...lg({ tint: accent, strength: 0.95, radius: 13, dark }),
+        ...lg({ tint: accent, strength: 0.95, radius: 14, dark }),
         position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999,
         visibility: pos ? 'visible' : 'hidden',
-        width: SUB_W, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', padding: 5, zIndex: 61,
+        width: SUB_W, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', padding: 6, zIndex: 61,
+        boxShadow: 'var(--shl)',
+        border: '1px solid var(--line2)',
       }}>
       {items.map((sub) => (
         <Row key={sub.label} it={sub} onClose={onClose} accent={accent} dark={dark} />

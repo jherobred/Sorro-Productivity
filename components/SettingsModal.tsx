@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Icon, type IconName } from './Icon';
 import { SHELL_LAYOUTS } from '@/lib/shellLayouts';
 import { usePrefs, type Prefs } from '@/lib/prefs';
@@ -206,41 +206,12 @@ export function SettingsModal({
 
   // RENDER DESKTOP DIALOG
   const renderDesktop = () => (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 110,
-        background: 'rgba(5, 6, 12, 0.72)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-      }}
+    <DialogContent
+      hideClose
+      className="w-[860px] max-w-[96vw] h-[640px] max-h-[86vh] p-0 overflow-hidden rounded-[20px] border border-[var(--line2)] bg-[var(--card)] text-[var(--tx)] shadow-[0_24px_64px_rgba(0,0,0,0.65)] flex flex-row focus:outline-none gap-0"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Settings"
-        className="k-bloom"
-        style={{
-          width: 860,
-          maxWidth: '96vw',
-          height: 640,
-          maxHeight: '86vh',
-          display: 'flex',
-          background: 'var(--card)',
-          color: 'var(--tx)',
-          border: '1px solid var(--line2)',
-          borderRadius: 20,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.65)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Left Sidebar */}
+      <DialogTitle className="sr-only">Settings</DialogTitle>
+      {/* Left Sidebar */}
         <div
           style={{
             width: 230,
@@ -353,45 +324,17 @@ export function SettingsModal({
             {renderTabContent(tab)}
           </div>
         </div>
-      </div>
-    </div>
+    </DialogContent>
   );
 
   // RENDER PHONE VIEW
   const renderPhone = () => (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 110,
-        background: 'rgba(0,0,0,0.65)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
+    <DialogContent
+      hideClose
+      className="fixed bottom-0 left-0 right-0 top-auto translate-x-0 translate-y-0 w-full h-[92dvh] max-w-none rounded-t-[20px] rounded-b-none border-t border-x-0 border-b-0 border-[var(--line2)] bg-[var(--card)] text-[var(--tx)] p-0 shadow-[var(--shl)] flex flex-col focus:outline-none gap-0"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Settings"
-        className="k-bloom"
-        style={{
-          width: '100%',
-          height: '92dvh',
-          background: 'var(--card)',
-          color: 'var(--tx)',
-          borderTop: '1px solid var(--line2)',
-          borderRadius: '20px 20px 0 0',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: 'var(--shl)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
+      <DialogTitle className="sr-only">Settings</DialogTitle>
+      {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
           {phoneSubPage ? (
             <button
@@ -570,8 +513,7 @@ export function SettingsModal({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </DialogContent>
   );
 
   // SHARED TAB CONTENT PANELS
@@ -1321,9 +1263,11 @@ export function SettingsModal({
     }
   }
 
-  // PORTAL TO BODY
-  if (typeof document === 'undefined') return null;
-  return createPortal(phone ? renderPhone() : renderDesktop(), document.body);
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      {phone ? renderPhone() : renderDesktop()}
+    </Dialog>
+  );
 }
 
 /* ----------------------------------------------------------------- subcomponents */

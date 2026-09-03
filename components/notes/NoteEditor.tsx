@@ -175,6 +175,7 @@ export function NoteEditor({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [mode, setMode] = useState<'write' | 'preview'>('write');
 
   /* --------------------------------------------------------------- saving */
 
@@ -552,6 +553,8 @@ export function NoteEditor({
       {/* Unified Live WYSIWYG Toolbar */}
       <Toolbar
         phone={phone}
+        mode={mode}
+        onToggleMode={setMode}
         dirty={dirty}
         canUndo={canUndo}
         canRedo={canRedo}
@@ -690,20 +693,51 @@ export function NoteEditor({
               </div>
             )}
 
-            {/* Combined Live WYSIWYG Interactive Document */}
-            <div style={{ flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-              <WYSIWYGDocument
-                body={body}
-                lines={lines}
-                onChangeBody={setBodyAndQueue}
-                onLink={(n) => void openLink(n)}
-                known={(n) => !!linkTargets(n)}
-                onEditMath={(formula) => {
-                  setInitialMathFormula(formula);
-                  setMathEditorOpen(true);
-                }}
-                onEditSketch={() => setSketchpadOpen(true)}
-              />
+            {/* Living Document Surface: Write (full editing / backspace support) or Preview (WYSIWYG) */}
+            <div style={{ flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+              {mode === 'write' ? (
+                <textarea
+                  ref={areaRef}
+                  value={body}
+                  onChange={(e) => setBodyAndQueue(e.target.value)}
+                  placeholder="Start writing your note, paste Markdown, or use toolbar commands…"
+                  aria-label="Note body"
+                  className="note-editor-clean-input"
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    flex: 1,
+                    minHeight: phone ? 320 : 420,
+                    resize: 'none',
+                    fontFamily: 'inherit',
+                    fontSize: phone ? 14.5 : 15.5,
+                    lineHeight: 1.76,
+                    color: 'var(--tx)',
+                    border: 'none',
+                    outline: 'none',
+                    boxShadow: 'none',
+                    background: 'transparent',
+                    padding: '4px 0',
+                    margin: 0,
+                    display: 'block',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              ) : (
+                <WYSIWYGDocument
+                  body={body}
+                  lines={lines}
+                  onChangeBody={setBodyAndQueue}
+                  onLink={(n) => void openLink(n)}
+                  known={(n) => !!linkTargets(n)}
+                  onEditMath={(formula) => {
+                    setInitialMathFormula(formula);
+                    setMathEditorOpen(true);
+                  }}
+                  onEditSketch={() => setSketchpadOpen(true)}
+                  onSwitchToWrite={() => setMode('write')}
+                />
+              )}
             </div>
           </div>
 
@@ -752,9 +786,9 @@ export function NoteEditor({
         </div>, document.body
       )}
 
-      {/* Paint & Sketch Studio Modal */}
+      {/* Paint & Sketch Studio Fullscreen */}
       {sketchpadOpen && typeof document !== 'undefined' && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#090A10' }}>
           <NoteSketchpad onInsert={insertSketch} onClose={() => setSketchpadOpen(false)} />
         </div>, document.body
       )}
@@ -765,13 +799,15 @@ export function NoteEditor({
 /* ------------------------------------------------------------------ toolbar */
 
 function Toolbar({
-  phone, dirty, canUndo, canRedo, paperStyle, showLineNumbers,
+  phone, mode, onToggleMode, dirty, canUndo, canRedo, paperStyle, showLineNumbers,
   onBack, onUndo, onRedo, onToggleLineNumbers, onChangePaperStyle,
   onLineFormat, onTextColor, onHighlight, onOpenMath, onOpenSketch,
   onInsertImageUpload, onInsertImageUrl, onInsertVideo, onInsertTable, onInsertColumns,
   onDivider, onLink, onDelete,
 }: {
   phone: boolean;
+  mode: 'write' | 'preview';
+  onToggleMode: (m: 'write' | 'preview') => void;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -838,6 +874,38 @@ function Toolbar({
       display: 'flex', alignItems: 'center', gap: 2, overflowX: 'auto', flex: 'none',
       padding: '0 2px 8px', minHeight: 38, width: '100%', maxWidth: '100%', boxSizing: 'border-box',
     }}>
+      {/* Write / Preview Segmented Switch */}
+      <div style={{
+        display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)',
+        marginRight: 6, flex: 'none',
+      }}>
+        <button
+          onClick={() => onToggleMode('write')}
+          aria-pressed={mode === 'write'}
+          style={{
+            padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 700,
+            background: mode === 'write' ? 'var(--card)' : 'transparent',
+            color: mode === 'write' ? 'var(--tx)' : 'var(--tx3)',
+            boxShadow: mode === 'write' ? 'var(--sh)' : 'none',
+            cursor: 'pointer',
+          }}
+        >
+          Write
+        </button>
+        <button
+          onClick={() => onToggleMode('preview')}
+          aria-pressed={mode === 'preview'}
+          style={{
+            padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 700,
+            background: mode === 'preview' ? 'var(--card)' : 'transparent',
+            color: mode === 'preview' ? 'var(--tx)' : 'var(--tx3)',
+            boxShadow: mode === 'preview' ? 'var(--sh)' : 'none',
+            cursor: 'pointer',
+          }}
+        >
+          Preview
+        </button>
+      </div>
       {/* Modern Back Button for Phone Navigation */}
       {phone && onBack && (
         <button
@@ -1150,7 +1218,7 @@ const MENU_ITEM: React.CSSProperties = {
 /* --------------------------------------------------- living wysiwyg document */
 
 function WYSIWYGDocument({
-  body, lines, onChangeBody, onLink, known, onEditMath, onEditSketch,
+  body, lines, onChangeBody, onLink, known, onEditMath, onEditSketch, onSwitchToWrite,
 }: {
   body: string;
   lines: Line[];
@@ -1159,6 +1227,7 @@ function WYSIWYGDocument({
   known: (name: string) => boolean;
   onEditMath?: (formula: string) => void;
   onEditSketch?: () => void;
+  onSwitchToWrite?: () => void;
 }) {
   const hasMath = useMemo(
     () => lines.some((l) => l.kind === 'math' || l.text.includes('$') || l.text.includes('\\(')),
@@ -1463,28 +1532,23 @@ function WYSIWYGDocument({
         );
       })}
 
-      {/* Direct ContentEditable input zone for seamless continuous writing */}
+      {/* Click-to-edit cue in preview mode */}
       <div
-        contentEditable
-        suppressContentEditableWarning
-        onInput={(e) => {
-          const text = e.currentTarget.innerText;
-          if (text.trim()) {
-            onChangeBody(body ? `${body}\n${text}` : text);
-            e.currentTarget.innerText = '';
-          }
-        }}
-        data-placeholder="Click here to continue writing…"
+        onClick={onSwitchToWrite}
         style={{
-          minHeight: 120,
-          marginTop: 8,
-          outline: 'none',
-          fontSize: 15,
-          lineHeight: 1.76,
-          color: 'var(--tx)',
-          cursor: 'text',
+          marginTop: 16,
+          padding: '12px 14px',
+          borderRadius: 8,
+          border: '1px dashed var(--line2)',
+          color: 'var(--tx3)',
+          fontSize: 12,
+          textAlign: 'center',
+          cursor: 'pointer',
         }}
-      />
+        className="hov"
+      >
+        Click or switch to <strong style={{ color: 'var(--accTx)' }}>Write</strong> mode to edit, backspace, or format text
+      </div>
     </div>
   );
 }

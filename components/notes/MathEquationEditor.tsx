@@ -30,12 +30,23 @@ const SYMBOLS = [
   '\\subset', '\\in', '\\forall', '\\exists', '\\nabla', '\\partial'
 ];
 
+const VISUAL_BUILDERS = [
+  { label: 'a/b Fraction', insert: '\\frac{a}{b}' },
+  { label: 'x² Power', insert: 'x^2' },
+  { label: 'xₙ Subscript', insert: 'x_{i}' },
+  { label: '√x Root', insert: '\\sqrt{x}' },
+  { label: '∫ Integral', insert: '\\int_{a}^{b} f(x) \\, dx' },
+  { label: '∑ Sum', insert: '\\sum_{i=1}^{n}' },
+  { label: 'lim Limit', insert: '\\lim_{x \\to 0}' },
+  { label: 'Matrix', insert: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}' },
+];
+
 export function MathEquationEditor({
   initialFormula = '',
   onInsert,
   onClose,
 }: MathEquationEditorProps) {
-  const [formula, setFormula] = useState(initialFormula || 'f(x) = \\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}');
+  const [formula, setFormula] = useState(initialFormula || '');
   const [renderedHtml, setRenderedHtml] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -152,6 +163,35 @@ export function MathEquationEditor({
           {errorMsg}
         </div>
       )}
+
+      {/* Visual Component Builders */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accTx)' }}>
+          Insert Math Component
+        </div>
+        <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 4 }}>
+          {VISUAL_BUILDERS.map((b) => (
+            <button
+              key={b.label}
+              onClick={() => insertSymbol(b.insert)}
+              className="hov k-squish"
+              style={{
+                padding: '5px 10px',
+                borderRadius: 7,
+                background: 'color-mix(in srgb, var(--acc) 12%, var(--card2))',
+                border: '1px solid color-mix(in srgb, var(--acc) 30%, transparent)',
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: 'var(--tx)',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Templates Row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

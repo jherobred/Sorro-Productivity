@@ -32,8 +32,8 @@ export const SECHUE: Record<string, string> = {
 };
 
 /** Retired in favour of RETIRED_ACCENT's replacement; see prefs.read(). */
-export const RETIRED_ACCENT = '#7C6CFF';
-export const DEFAULT_ACCENT = '#8B7CFF';
+export const RETIRED_ACCENT = '#8B7CFF';
+export const DEFAULT_ACCENT = PAL.pink;
 
 /** Interaction constants — README.md "Interaction constants". These are tuned; reuse them. */
 export const K = {

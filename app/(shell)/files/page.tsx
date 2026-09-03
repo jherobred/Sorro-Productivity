@@ -226,7 +226,7 @@ export default function FilesPage() {
   };
 
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '16px 20px 28px', width: '100%', maxWidth: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 38, height: 38, borderRadius: 11, background: `color-mix(in srgb, ${PAL.indigo} 20%, transparent)`, display: 'grid', placeItems: 'center' }}>

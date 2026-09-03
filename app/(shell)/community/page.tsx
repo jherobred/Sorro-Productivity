@@ -224,9 +224,9 @@ export default function CommunityPage() {
 
   return (
     <div style={{
-      maxWidth: 1280,
-      marginInline: 'auto',
-      padding: phone ? '12px 10px 24px' : '16px 20px 32px',
+      width: '100%',
+      maxWidth: '100%',
+      padding: phone ? '12px 14px 24px' : '16px 20px 28px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <div data-tour="community-nav-tabs">
