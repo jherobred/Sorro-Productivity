@@ -261,7 +261,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '16px 20px 28px', width: '100%', maxWidth: '100%' }}>
+    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <h1 className="sronly">Profile</h1>
         <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Your face across Basedly</div>

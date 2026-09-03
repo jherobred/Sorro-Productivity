@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { PAL } from '@/lib/pal';
 
 interface TaskDatePickerProps {
   initialDate: string | null;
@@ -25,7 +25,9 @@ export function TaskDatePicker({
   initialTime,
   onSave,
   onClose,
+  anchorRect,
 }: TaskDatePickerProps) {
+  // Parse initial date
   const now = new Date();
   const init = initialDate ? new Date(initialDate + 'T00:00:00') : now;
 
@@ -35,6 +37,29 @@ export function TaskDatePicker({
   const [selectedTime, setSelectedTime] = useState<string>(initialTime || '');
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
+
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape or click outside
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    const handleClick = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    const timer = setTimeout(() => {
+      window.addEventListener('pointerdown', handleClick);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('pointerdown', handleClick);
+    };
+  }, [onClose]);
 
   // Calendar math
   const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay(); // 0 = Sun
@@ -97,9 +122,10 @@ export function TaskDatePicker({
     onClose();
   };
 
-  // Build grid days
+  // Build grid days (previous padding, current month, next padding)
   const gridCells: { day: number; current: boolean; ymd: string }[] = [];
 
+  // Prev month padding
   for (let i = firstDayIndex - 1; i >= 0; i--) {
     const day = daysInPrevMonth - i;
     const m = viewMonth === 0 ? 11 : viewMonth - 1;
@@ -107,10 +133,12 @@ export function TaskDatePicker({
     gridCells.push({ day, current: false, ymd: formatYMD(y, m, day) });
   }
 
+  // Current month
   for (let day = 1; day <= daysInMonth; day++) {
     gridCells.push({ day, current: true, ymd: formatYMD(viewYear, viewMonth, day) });
   }
 
+  // Next month padding to fill up to 35 or 42 cells
   const remaining = 35 - gridCells.length >= 0 ? 35 - gridCells.length : 42 - gridCells.length;
   for (let day = 1; day <= remaining; day++) {
     const m = viewMonth === 11 ? 0 : viewMonth + 1;
@@ -118,106 +146,145 @@ export function TaskDatePicker({
     gridCells.push({ day, current: false, ymd: formatYMD(y, m, day) });
   }
 
-  // Quick preset dates
-  const setQuickDate = (offsetDays: number) => {
-    const target = new Date();
-    target.setDate(target.getDate() + offsetDays);
-    setSelectedDate(formatYMD(target.getFullYear(), target.getMonth(), target.getDate()));
-    setViewYear(target.getFullYear());
-    setViewMonth(target.getMonth());
-  };
+  // Position calculation (centered or anchored)
+  let topStyle: number | string = '50%';
+  let leftStyle: number | string = '50%';
+  let transformStyle = 'translate(-50%, -50%)';
 
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent
-        hideClose
-        className="w-[340px] max-w-[94vw] p-5 rounded-[22px] border-[var(--line2)] bg-[var(--card)] text-[var(--tx)] shadow-[var(--shl)] focus:outline-none"
+  if (anchorRect && typeof window !== 'undefined') {
+    const popWidth = 320;
+    const popHeight = 440;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = anchorRect.left;
+    if (left + popWidth > vw - 16) {
+      left = Math.max(16, vw - popWidth - 16);
+    }
+
+    let top = anchorRect.bottom + 8;
+    if (top + popHeight > vh - 16) {
+      top = Math.max(16, anchorRect.top - popHeight - 8);
+    }
+
+    topStyle = top;
+    leftStyle = left;
+    transformStyle = 'none';
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(3px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        ref={cardRef}
+        className="k-bloom"
+        style={{
+          position: 'absolute',
+          top: topStyle,
+          left: leftStyle,
+          transform: transformStyle,
+          width: 320,
+          background: 'var(--card, #1E1F22)',
+          borderRadius: 24,
+          padding: '20px 20px 16px',
+          boxShadow: '0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line2, rgba(255,255,255,0.12))',
+          border: '1px solid var(--line2, rgba(255,255,255,0.12))',
+          color: 'var(--tx, #E3E3E3)',
+          userSelect: 'none',
+        }}
       >
-        <DialogTitle className="sr-only">Select Due Date and Time</DialogTitle>
-
-        {/* Quick presets */}
-        <div className="flex items-center gap-1.5 pb-2 border-b border-[var(--line)]">
-          <button
-            type="button"
-            onClick={() => setQuickDate(0)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--card2)] hover:bg-[var(--hov)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors border border-[var(--line)]"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickDate(1)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--card2)] hover:bg-[var(--hov)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors border border-[var(--line)]"
-          >
-            Tomorrow
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickDate(7)}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--card2)] hover:bg-[var(--hov)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors border border-[var(--line)]"
-          >
-            +1 Week
-          </button>
-        </div>
-
-        {/* Month Navigation Header */}
-        <div className="flex items-center justify-between pt-1">
-          <div className="text-[14.5px] font-bold tracking-tight text-[var(--tx)]">
+        {/* Header: Month Year + Arrows */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--tx)' }}>
             {MONTH_NAMES[viewMonth]} {viewYear}
           </div>
-          <div className="flex items-center gap-1">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <button
-              type="button"
               onClick={prevMonth}
-              className="w-7 h-7 rounded-full grid place-items-center text-[var(--tx2)] hover:text-[var(--tx)] hover:bg-[var(--hov)] transition-colors"
+              className="hov k-squish"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
               title="Previous month"
             >
-              <Icon name="chev" size={13} color="currentColor" style={{ transform: 'rotate(90deg)' }} />
+              <Icon name="chev" size={14} color="var(--tx2)" style={{ transform: 'rotate(90deg)' }} />
             </button>
             <button
-              type="button"
               onClick={nextMonth}
-              className="w-7 h-7 rounded-full grid place-items-center text-[var(--tx2)] hover:text-[var(--tx)] hover:bg-[var(--hov)] transition-colors"
+              className="hov k-squish"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
               title="Next month"
             >
-              <Icon name="chev" size={13} color="currentColor" style={{ transform: 'rotate(-90deg)' }} />
+              <Icon name="chev" size={14} color="var(--tx2)" style={{ transform: 'rotate(-90deg)' }} />
             </button>
           </div>
         </div>
 
         {/* Days of Week Header */}
-        <div className="grid grid-cols-7 text-center">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', marginBottom: 6 }}>
           {DAYS_HEADER.map((d, i) => (
-            <div key={i} className="text-[10.5px] font-bold text-[var(--tx3)] py-1">
+            <div key={i} style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3, #8E918F)', padding: '4px 0' }}>
               {d}
             </div>
           ))}
         </div>
 
         {/* Calendar Day Grid */}
-        <div className="grid grid-cols-7 gap-1">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: 14 }}>
           {gridCells.map((cell, idx) => {
             const isSelected = selectedDate === cell.ymd;
-            const today = isToday(
-              viewYear,
-              cell.current ? viewMonth : (cell.day > 15 ? viewMonth - 1 : viewMonth + 1),
-              cell.day
-            );
+            const today = isToday(viewYear, cell.current ? viewMonth : (cell.day > 15 ? viewMonth - 1 : viewMonth + 1), cell.day);
 
             return (
               <button
                 key={idx}
-                type="button"
                 onClick={() => setSelectedDate(cell.ymd)}
-                className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs transition-all ${
-                  isSelected
-                    ? 'bg-[var(--acc)] text-[var(--ink)] font-extrabold shadow-sm scale-105'
-                    : today
-                    ? 'border border-[var(--acc)] text-[var(--tx)] font-bold'
-                    : cell.current
-                    ? 'text-[var(--tx)] font-medium hover:bg-[var(--hov)]'
-                    : 'text-[var(--tx3)] opacity-40 hover:opacity-80'
-                }`}
+                style={{
+                  width: 36,
+                  height: 36,
+                  margin: '0 auto',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12.5,
+                  fontWeight: isSelected ? 800 : (today ? 700 : 500),
+                  border: today && !isSelected ? '1px solid var(--acc, #A8C7FA)' : 'none',
+                  background: isSelected
+                    ? 'var(--acc, #A8C7FA)'
+                    : 'transparent',
+                  color: isSelected
+                    ? '#040C1A'
+                    : (cell.current ? 'var(--tx, #E3E3E3)' : 'var(--tx3, #5E6268)'),
+                  cursor: 'pointer',
+                  transition: 'background .15s, color .15s',
+                }}
               >
                 {cell.day}
               </button>
@@ -225,45 +292,58 @@ export function TaskDatePicker({
           })}
         </div>
 
-        {/* Time Selector */}
-        <div className="pt-2 border-t border-[var(--line)]">
+        {/* Set Time Row */}
+        <div style={{ marginBottom: 10 }}>
           <div
             onClick={() => setTimePickerOpen((v) => !v)}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[var(--card2)] border border-[var(--line)] cursor-pointer hover:bg-[var(--hov)] transition-colors"
+            className="hov"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 12px',
+              borderRadius: 10,
+              background: 'var(--card2, #282A2C)',
+              cursor: 'pointer',
+            }}
           >
-            <Icon name="clock" size={14} color="var(--tx2)" />
-            <span className="text-xs font-medium text-[var(--tx)] flex-1">
-              {selectedTime ? `Time: ${selectedTime}` : 'Add time (optional)'}
+            <Icon name="clock" size={16} color="var(--tx2)" />
+            <span style={{ fontSize: 13, fontWeight: 500, color: selectedTime ? 'var(--tx)' : 'var(--tx3)', flex: 1 }}>
+              {selectedTime ? `Time: ${selectedTime}` : 'Set time'}
             </span>
             {selectedTime && (
               <button
-                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedTime('');
                 }}
-                className="text-[var(--tx3)] hover:text-[var(--tx)] p-0.5"
+                style={{ background: 'none', border: 'none', color: 'var(--tx3)', cursor: 'pointer', padding: 2 }}
               >
-                <Icon name="close" size={12} color="currentColor" />
+                <Icon name="close" size={12} color="var(--tx3)" />
               </button>
             )}
           </div>
 
           {timePickerOpen && (
-            <div className="flex gap-1.5 mt-2 flex-wrap items-center">
-              {['09:00', '12:00', '15:00', '18:00', '21:00'].map((tm) => (
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, padding: '0 4px', flexWrap: 'wrap' }}>
+              {['09:00', '12:00', '15:00', '18:00', '20:00'].map((tm) => (
                 <button
                   key={tm}
-                  type="button"
                   onClick={() => {
                     setSelectedTime(tm);
                     setTimePickerOpen(false);
                   }}
-                  className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                    selectedTime === tm
-                      ? 'bg-[var(--acc)] text-[var(--ink)] border-[var(--acc)]'
-                      : 'bg-[var(--card2)] text-[var(--tx2)] border-[var(--line)] hover:bg-[var(--hov)]'
-                  }`}
+                  className="k-squish"
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: selectedTime === tm ? 'var(--acc)' : 'var(--card2)',
+                    color: selectedTime === tm ? '#040C1A' : 'var(--tx2)',
+                    border: '1px solid var(--line2)',
+                    cursor: 'pointer',
+                  }}
                 >
                   {tm}
                 </button>
@@ -272,57 +352,105 @@ export function TaskDatePicker({
                 type="time"
                 value={selectedTime}
                 onChange={(e) => setSelectedTime(e.target.value)}
-                className="px-2 py-0.5 rounded-md text-xs bg-[var(--card2)] text-[var(--tx)] border border-[var(--line)] outline-none"
+                style={{
+                  padding: '3px 6px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  background: 'var(--card2)',
+                  color: 'var(--tx)',
+                  border: '1px solid var(--line2)',
+                  outline: 'none',
+                }}
               />
             </div>
           )}
         </div>
 
-        {/* Repeat Selector */}
-        <div
-          onClick={() => {
-            const modes: ('none' | 'daily' | 'weekly' | 'monthly')[] = ['none', 'daily', 'weekly', 'monthly'];
-            const idx = modes.indexOf(repeatMode);
-            setRepeatMode(modes[(idx + 1) % modes.length]);
-          }}
-          className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-[var(--hov)] transition-colors text-xs text-[var(--tx3)] hover:text-[var(--tx)]"
-        >
-          <Icon name="spark" size={14} color="var(--tx2)" />
-          <span>{repeatMode === 'none' ? 'Does not repeat' : `Repeats ${repeatMode}`}</span>
-        </div>
-
-        {/* Action Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-[var(--line)]">
-          <button
-            type="button"
-            onClick={handleClear}
-            className="w-8 h-8 rounded-lg grid place-items-center text-[var(--tx3)] hover:text-red-400 hover:bg-[var(--hov)] transition-colors"
-            title="Clear date and time"
+        {/* Repeat Row */}
+        <div style={{ marginBottom: 18 }}>
+          <div
+            onClick={() => {
+              const modes: ('none' | 'daily' | 'weekly' | 'monthly')[] = ['none', 'daily', 'weekly', 'monthly'];
+              const idx = modes.indexOf(repeatMode);
+              setRepeatMode(modes[(idx + 1) % modes.length]);
+            }}
+            className="hov"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 12px',
+              borderRadius: 10,
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
           >
-            <Icon name="trash" size={15} color="currentColor" />
-          </button>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-xs font-semibold text-[var(--tx2)]"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              className="text-xs font-bold bg-[var(--acc)] text-[var(--ink)] hover:bg-[var(--acc)]/90 shadow-sm"
-            >
-              Done
-            </Button>
+            <Icon name="spark" size={16} color="var(--tx2)" />
+            <span style={{ fontSize: 13, fontWeight: 500, color: repeatMode !== 'none' ? 'var(--tx)' : 'var(--tx3)' }}>
+              {repeatMode === 'none' ? 'Repeat' : `Repeats: ${repeatMode}`}
+            </span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Action Footer: Trash on left, Cancel & Done on right */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line2)' }}>
+          <button
+            onClick={handleClear}
+            className="hov k-squish"
+            title="Clear date and time"
+            aria-label="Clear date and time"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              display: 'grid',
+              placeItems: 'center',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="trash" size={16} color="var(--tx2)" />
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={onClose}
+              className="hov k-squish"
+              style={{
+                padding: '8px 14px',
+                borderRadius: 18,
+                background: 'transparent',
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--tx2)',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="k-squish"
+              style={{
+                padding: '8px 20px',
+                borderRadius: 20,
+                background: 'var(--acc, #A8C7FA)',
+                color: '#040C1A',
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

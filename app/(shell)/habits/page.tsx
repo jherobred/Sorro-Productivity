@@ -88,9 +88,7 @@ export default function HabitsPage() {
 
   return (
     <div style={{
-      padding: phone ? '12px 14px 28px' : '16px 20px 36px',
-      width: '100%',
-      maxWidth: '100%',
+      padding: phone ? '14px 14px 28px' : '20px 24px 36px', maxWidth: 1480, marginInline: 'auto',
       display: 'flex', flexDirection: phone ? 'column' : 'row', gap: phone ? 16 : 20,
       alignItems: 'flex-start',
     }}>

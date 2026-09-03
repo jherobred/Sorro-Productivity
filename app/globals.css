@@ -21,35 +21,6 @@
    nothing below is affected; see the header of gym.css for why. */
 @import './gym.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --background: var(--bg);
-    --foreground: var(--tx);
-    --card-bg: var(--card);
-    --card-foreground: var(--tx);
-    --popover: var(--card);
-    --popover-foreground: var(--tx);
-    --primary: var(--acc);
-    --primary-foreground: var(--ink);
-    --secondary: var(--card2);
-    --secondary-foreground: var(--tx);
-    --muted: var(--panel);
-    --muted-foreground: var(--tx3);
-    --accent: var(--hov);
-    --accent-foreground: var(--tx);
-    --destructive: var(--pastel-red-tx);
-    --destructive-foreground: #FFFFFF;
-    --border: var(--line);
-    --input: var(--line);
-    --ring: var(--acc);
-    --radius: 12px;
-  }
-}
-
 /* ---- Theme tokens (Pure Dark Obsidian & Clean Modern Light) ---------------------------- */
 :root,
 :root[data-theme='dark'] {
@@ -110,10 +81,10 @@
 
 /* Accent is user-settable; --accTx is the accent tuned for text on panels. */
 :root {
-  --acc: #FF6FA8;
+  --acc: #8B7CFF;
   --acc2: #38D6F2;
-  --accTx: color-mix(in srgb, #FF6FA8 82%, #FFFFFF);
-  --gl2: color-mix(in srgb, #FF6FA8 35%, transparent);
+  --accTx: color-mix(in srgb, #8B7CFF 82%, #FFFFFF);
+  --gl2: color-mix(in srgb, #8B7CFF 35%, transparent);
   --anim: running;
   --cols: repeat(3, 1fr);
 }

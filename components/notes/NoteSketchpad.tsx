@@ -64,8 +64,6 @@ export function NoteSketchpad({ initialImage, onInsert, onClose }: NoteSketchpad
   const [bgStyle, setBgStyle] = useState<BgStyle>('dark_grid');
   const [opacity, setOpacity] = useState(1);
   const [textInput, setTextInput] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [stylusOnly, setStylusOnly] = useState(false);
-  const penDetected = useRef(false);
 
   const historyRef = useRef<ImageData[]>([]);
   const historyIdxRef = useRef<number>(-1);
@@ -600,51 +598,12 @@ export function NoteSketchpad({ initialImage, onInsert, onClose }: NoteSketchpad
     pushHistory();
   };
 
-  
   const handleSaveAndInsert = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dataUrl = canvas.toDataURL('image/png', 0.95);
     onInsert(dataUrl);
   };
-
-  // Power User Keyboard Shortcuts
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        handleRedo();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        handleSaveAndInsert();
-      } else if (e.key.toLowerCase() === 'p') {
-        setTool('pen');
-      } else if (e.key.toLowerCase() === 'e') {
-        setTool('eraser');
-      } else if (e.key.toLowerCase() === 'h') {
-        setTool('highlighter');
-      } else if (e.key.toLowerCase() === 'b') {
-        setTool('brush');
-      } else if (e.key.toLowerCase() === 'r') {
-        setTool('rect');
-      } else if (e.key.toLowerCase() === 'c') {
-        setTool('circle');
-      } else if (e.key === '[') {
-        setSize((s) => Math.max(1, s - 1));
-      } else if (e.key === ']') {
-        setSize((s) => Math.min(40, s + 1));
-      } else if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo, handleRedo, handleSaveAndInsert, onClose]);
 
   const toolBtn = (t: Tool, icon: IconName, label: string) => {
     const active = tool === t;
@@ -682,21 +641,19 @@ export function NoteSketchpad({ initialImage, onInsert, onClose }: NoteSketchpad
       onClick={(e) => e.stopPropagation()}
       className="k-bloom"
       style={{
-        width: '100vw',
-        height: '100vh',
-        maxWidth: '100vw',
-        maxHeight: '100vh',
-        overflow: 'hidden',
+        width: '100%',
+        maxWidth: 780,
+        maxHeight: '94dvh',
+        overflowY: 'auto',
         background: 'var(--panel, #12111A)',
-        border: 'none',
-        borderRadius: 0,
-        boxShadow: 'none',
+        border: '1px solid var(--line2)',
+        borderRadius: 18,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
-        padding: '12px 18px',
+        gap: 12,
+        padding: '16px 18px',
         color: 'var(--tx)',
-        boxSizing: 'border-box',
       }}
     >
       {/* Header */}
@@ -916,8 +873,7 @@ export function NoteSketchpad({ initialImage, onInsert, onClose }: NoteSketchpad
         style={{
           position: 'relative',
           width: '100%',
-          flex: 1,
-          minHeight: 0,
+          minHeight: 380,
           borderRadius: 14,
           overflow: 'hidden',
           border: '1px solid var(--line2)',

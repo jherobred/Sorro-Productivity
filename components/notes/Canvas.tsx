@@ -379,51 +379,6 @@ function Board({
   const insertBoard = (wx: number, wy: number, b: Board) =>
     addCard(wx, wy, 'canvas', { ref_canvas: b.id, text: b.name, color: b.color });
 
-  const addGroup = (wx: number, wy: number) => {
-    const selectedNodes = nodes.filter((n) => sel.nodes.includes(n.id) && n.kind !== 'group');
-    if (selectedNodes.length > 0) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const n of selectedNodes) {
-        minX = Math.min(minX, n.x);
-        minY = Math.min(minY, n.y);
-        maxX = Math.max(maxX, n.x + n.w);
-        maxY = Math.max(maxY, n.y + n.h);
-      }
-      return addCard(minX - 24, minY - 48, 'group', {
-        w: (maxX - minX) + 48,
-        h: (maxY - minY) + 72,
-        text: 'Group Bundle',
-        color: accent,
-      });
-    }
-    return addCard(wx, wy, 'group', { w: 420, h: 320, text: 'Group Bundle', color: accent });
-  };
-
-  const autoArrangeGroup = (g: CNode) => {
-    const children = nodes.filter((c) => {
-      if (c.id === g.id || c.kind === 'group') return false;
-      const cx = c.x + c.w / 2;
-      const cy = c.y + c.h / 2;
-      return cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
-    });
-    if (children.length === 0) return;
-    const padding = 16;
-    const headerH = 44;
-    const cols = Math.max(1, Math.min(3, Math.floor((g.w - padding * 2) / 220)));
-    const cardW = Math.floor((g.w - padding * (cols + 1)) / cols);
-    const cardH = 130;
-
-    for (let idx = 0; idx < children.length; idx++) {
-      const c = children[idx];
-      const col = idx % cols;
-      const row = Math.floor(idx / cols);
-      const newX = g.x + padding + col * (cardW + padding);
-      const newY = g.y + headerH + row * (cardH + padding);
-      A.saveNode.mutate({ id: c.id, patch: { x: newX, y: newY, w: cardW, h: cardH } });
-    }
-    toast('Auto-arranged bundled cards in group');
-  };
-
   /* ------------------------------------------------------------ gestures */
 
   const nodeAt = (wx: number, wy: number): CNode | null => {
@@ -457,20 +412,7 @@ function Board({
     setSel(next);
 
     const start: Record<string, Draft> = {};
-    const idsToMove = new Set(next.nodes.length ? next.nodes : [n.id]);
-    if (n.kind === 'group') {
-      const gv = view(n);
-      for (const card of nodes) {
-        if (card.id === n.id || card.kind === 'group') continue;
-        const cv = view(card);
-        const cx = cv.x + cv.w / 2;
-        const cy = cv.y + cv.h / 2;
-        if (cx >= gv.x && cx <= gv.x + gv.w && cy >= gv.y && cy <= gv.y + gv.h) {
-          idsToMove.add(card.id);
-        }
-      }
-    }
-    for (const id of idsToMove) {
+    for (const id of next.nodes.length ? next.nodes : [n.id]) {
       const at = byId.get(id);
       if (at) start[id] = { x: view(at).x, y: view(at).y };
     }
@@ -828,7 +770,6 @@ function Board({
               return (
                 <Card
                   key={n.id} node={n} selected={selSet.has(n.id)} editing={editing === n.id}
-                  allNodes={nodes}
                   note={n.note_id ? noteById.get(n.note_id) ?? null : null}
                   target={n.ref_canvas ? boardById.get(n.ref_canvas) ?? null : null}
                   linking={gesture?.g === 'link' && gesture.over === n.id}
@@ -837,8 +778,6 @@ function Board({
                   onActivate={() => activate(n)}
                   onEdited={(text) => A.saveNode.mutate({ id: n.id, patch: { text } })}
                   onDoneEditing={() => setEditing(null)}
-                  onAutoArrange={() => autoArrangeGroup(n)}
-                  onUngroup={() => A.delNodes.mutate({ ids: [n.id] })}
                   onLink={(side, e) => {
                     const w = toWorld(e.clientX, e.clientY);
                     setGesture({ g: 'link', from: n.id, side, x: w.x, y: w.y, over: null });
@@ -857,10 +796,6 @@ function Board({
           <button onClick={() => { const c = centreOfView(); addCard(c.x, c.y); }} className="k-squish"
             style={{ ...BTN, background: 'var(--acc)', color: 'var(--ink)', border: 0 }}>
             <Icon name="plus" size={13} color="var(--ink)" />Card
-          </button>
-          <button onClick={() => { const c = centreOfView(); addGroup(c.x, c.y); }} className="hov k-squish"
-            style={{ ...BTN, background: 'var(--card2)', color: 'var(--tx)' }}>
-            <Icon name="grid" size={13} color="var(--accTx)" />Group
           </button>
           <button onClick={(e) => { const c = centreOfView(); setMenu({ x: e.clientX, y: e.clientY, label: 'Insert', items: insertItems(c.x, c.y) }); }}
             className="hov k-squish" style={BTN}>
@@ -941,19 +876,16 @@ function Board({
 /* ------------------------------------------------------------------- card */
 
 function Card({
-  node: n, selected, editing, note, target, linking, handle, edge, allNodes = [],
-  onDown, onActivate, onEdited, onDoneEditing, onLink, onResize, onAutoArrange, onUngroup,
+  node: n, selected, editing, note, target, linking, handle, edge,
+  onDown, onActivate, onEdited, onDoneEditing, onLink, onResize,
 }: {
   node: CNode; selected: boolean; editing: boolean;
-  allNodes?: CNode[];
   note: Note | null; target: Board | null; linking: boolean;
   handle: number; edge: number;
   onDown: (e: React.PointerEvent) => void;
   onActivate: () => void;
   onEdited: (text: string) => void;
   onDoneEditing: () => void;
-  onAutoArrange?: () => void;
-  onUngroup?: () => void;
   onLink: (side: Side, e: React.PointerEvent) => void;
   onResize: (h: Handle, e: React.PointerEvent) => void;
 }) {
@@ -962,16 +894,6 @@ function Card({
   // Obsidian shows a card's connection dots on hover, not only once it is
   // selected — reaching for one should not cost a click first.
   const showDots = (selected || hover) && !isGroup;
-
-  const bundledCount = useMemo(() => {
-    if (!isGroup) return 0;
-    return allNodes.filter((c) => {
-      if (c.id === n.id || c.kind === 'group') return false;
-      const cx = c.x + c.w / 2;
-      const cy = c.y + c.h / 2;
-      return cx >= n.x && cx <= n.x + n.w && cy >= n.y && cy <= n.y + n.h;
-    }).length;
-  }, [isGroup, allNodes, n]);
 
   return (
     <div
@@ -989,44 +911,8 @@ function Card({
       }}>
 
       {isGroup ? (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 12px', borderBottom: `1px dashed color-mix(in srgb, ${n.color} 40%, transparent)`,
-          background: `color-mix(in srgb, ${n.color} 10%, transparent)`,
-          borderRadius: '13px 13px 0 0',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: n.color, flex: 'none' }} />
-            <span style={{ fontSize: 11.5, fontWeight: 800, color: n.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {n.text || 'Group Bundle'}
-            </span>
-            {bundledCount > 0 && (
-              <span style={{
-                padding: '1px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--tx) 10%, transparent)',
-                fontSize: 9.5, fontWeight: 700, color: 'var(--tx3)', flex: 'none',
-              }}>
-                {bundledCount} bundled
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 'none' }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onAutoArrange?.(); }}
-              title="Auto-arrange bundled cards"
-              className="hov tap"
-              style={{ padding: '2px 7px', borderRadius: 5, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 10, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer' }}
-            >
-              Align
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onUngroup?.(); }}
-              title="Ungroup container"
-              className="hov tap"
-              style={{ padding: '2px 7px', borderRadius: 5, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 10, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer' }}
-            >
-              Ungroup
-            </button>
-          </div>
+        <div style={{ padding: '7px 11px', fontSize: 11, fontWeight: 800, letterSpacing: '.02em', color: n.color }}>
+          {n.text || 'Group'}
         </div>
       ) : editing ? (
         <CardEditor text={n.text} onChange={onEdited} onDone={onDoneEditing} />

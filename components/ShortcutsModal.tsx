@@ -2,13 +2,6 @@
 
 import { useOverlayBack } from '@/lib/nav';
 import { Icon } from './Icon';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
 
 export type ShortcutItem = {
   keys: string[];
@@ -46,49 +39,133 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const categories = ['General', 'Quick Actions', 'Calendar & Tasks', 'Navigation'] as const;
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-[580px] max-h-[85dvh] overflow-y-auto rounded-[22px] border-[var(--line2)] bg-[var(--card)] p-6 shadow-[var(--shl)] focus:outline-none">
-        <DialogHeader className="flex flex-row items-center gap-3 space-y-0 pb-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--acc)_18%,transparent)]">
-            <Icon name="spark" size={16} color="var(--accTx)" />
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 999,
+        background: 'rgba(0,0,0,.6)',
+        backdropFilter: 'blur(8px)',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        className="k-bloom navsb"
+        style={{
+          width: 580,
+          maxWidth: '100%',
+          maxHeight: '85dvh',
+          overflowY: 'auto',
+          background: 'var(--card)',
+          border: '1px solid var(--line2)',
+          borderRadius: 22,
+          padding: '22px 24px',
+          boxShadow: 'var(--shl)',
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: 'color-mix(in srgb, var(--acc) 18%, transparent)',
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              <Icon name="spark" size={16} color="var(--accTx)" />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                Keyboard Shortcuts
+              </h2>
+              <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                Speed up your flow across Basedly
+              </div>
+            </div>
           </div>
-          <div>
-            <DialogTitle className="text-base font-extrabold tracking-[-0.02em] text-[var(--tx)]">
-              Keyboard Shortcuts
-            </DialogTitle>
-            <DialogDescription className="text-[11px] text-[var(--tx3)]">
-              Speed up your flow across Basedly
-            </DialogDescription>
-          </div>
-        </DialogHeader>
+
+          <button
+            onClick={onClose}
+            className="hov k-squish"
+            aria-label="Close"
+            style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center' }}
+          >
+            <Icon name="close" size={14} color="var(--tx2)" />
+          </button>
+        </div>
 
         {/* Categories */}
-        <div className="flex flex-col gap-[18px]">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {categories.map((cat) => {
             const items = KEYBOARD_SHORTCUTS.filter((s) => s.category === cat);
             if (!items.length) return null;
 
             return (
               <div key={cat}>
-                <div className="mb-2 text-[10px] font-extrabold tracking-[.12em] uppercase text-[var(--tx3)]">
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: '.12em',
+                    textTransform: 'uppercase',
+                    color: 'var(--tx3)',
+                    marginBottom: 8,
+                  }}
+                >
                   {cat}
                 </div>
 
-                <div className="flex flex-col gap-1.5 rounded-[14px] border border-[var(--line2)] bg-[var(--card2)] p-2">
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    background: 'var(--card2)',
+                    borderRadius: 14,
+                    padding: 8,
+                    border: '1px solid var(--line2)',
+                  }}
+                >
                   {items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-[var(--hov)] transition-colors"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 8px',
+                        borderRadius: 8,
+                      }}
                     >
-                      <span className="text-[12.5px] font-semibold text-[var(--tx)]">
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>
                         {item.description}
                       </span>
 
-                      <div className="flex items-center gap-1">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         {item.keys.map((k, ki) => (
                           <kbd
                             key={ki}
-                            className="rounded-md border border-[var(--line2)] bg-[var(--card)] px-1.5 py-0.5 text-[11px] font-extrabold text-[var(--accTx)] shadow-sm font-mono"
+                            style={{
+                              padding: '3px 7px',
+                              borderRadius: 6,
+                              background: 'var(--card)',
+                              border: '1px solid var(--line2)',
+                              fontSize: 11,
+                              fontWeight: 800,
+                              color: 'var(--accTx)',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                              fontFamily: 'inherit',
+                            }}
                           >
                             {k}
                           </kbd>
@@ -101,7 +178,7 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

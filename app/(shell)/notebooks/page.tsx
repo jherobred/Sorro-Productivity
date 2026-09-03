@@ -21,7 +21,7 @@ import { NoteEditor } from '@/components/notes/NoteEditor';
 import { GraphView } from '@/components/notes/GraphView';
 import { Canvas } from '@/components/notes/Canvas';
 import { Journal } from '@/components/notes/Journal';
-import { CodeVisualizer } from '@/components/code/CodeVisualizer';
+import { JavaLab } from '@/components/JavaLab';
 import { GlobalShelf } from '@/components/notes/GlobalShelf';
 import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
@@ -34,7 +34,7 @@ import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH,
  * settled on because it puts the writing surface where the eye already is.
  *
  * The other tabs are Obsidian's: Graph draws the `[[links]]` between notes,
- * Canvas is the infinite board. Journal and Code Visualizer are unchanged.
+ * Canvas is the infinite board. Journal and Java are unchanged.
  */
 
 const TABS = [
@@ -43,7 +43,7 @@ const TABS = [
   { id: 'canvas', label: 'Canvas', icon: 'grid' },
   { id: 'graph', label: 'Graph', icon: 'link' },
   { id: 'journal', label: 'Journal', icon: 'pen' },
-  { id: 'code', label: 'Visualizer', icon: 'spark' },
+  { id: 'code', label: 'Java', icon: 'code' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -72,7 +72,6 @@ export default function NotebooksPage() {
   const [graphId, setGraphId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [inTrash, setInTrash] = useState(false);
-  const [pagesMinimized, setPagesMinimized] = useState(false);
   const [archivedNbIds, setArchivedNbIds] = useState<Set<string>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -396,59 +395,25 @@ $$
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14, width: '100%', maxWidth: '100%' }}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14 }}>
               {(!phone || !note) && (
-                pagesMinimized && note && !phone ? (
-                  <button
-                    onClick={() => setPagesMinimized(false)}
-                    title="Expand note pages sidebar"
-                    className="hov tap"
-                    style={{
-                      flex: 'none', width: 28, height: '100%', borderRadius: 10,
-                      background: 'var(--card)', border: '1px solid var(--line2)',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      gap: 8, cursor: 'pointer', color: 'var(--tx3)',
-                    }}
-                  >
-                    <Icon name="chevron" size={13} color="var(--tx2)" />
-                    <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-                      Pages
-                    </span>
-                  </button>
-                ) : (
-                  <div data-tour="notebooks-sidebar" style={{ height: '100%', display: 'flex', position: 'relative' }}>
-                    <NoteList
-                      notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
-                      selected={noteId} phone={phone}
-                      trashCount={trash.filter((n) => n.notebook_id === nbId).length || trash.length}
-                      onOpenTrash={() => { setInTrash(true); setNbId(null); }}
-                      onPick={setNoteId}
-                      onNew={() => newNote()}
-                      onNewMathNote={newMathNote}
-                      onDelete={removeNote}
-                      onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
-                      onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />
-                    {note && !phone && (
-                      <button
-                        onClick={() => setPagesMinimized(true)}
-                        title="Minimize sidebar to maximize writing space"
-                        className="hov tap"
-                        style={{
-                          position: 'absolute', top: 12, right: 12, zIndex: 10,
-                          width: 24, height: 24, borderRadius: 6,
-                          background: 'var(--card2)', border: '1px solid var(--line2)',
-                          display: 'grid', placeItems: 'center', color: 'var(--tx3)', cursor: 'pointer',
-                        }}
-                      >
-                        <Icon name="back" size={12} color="var(--tx2)" />
-                      </button>
-                    )}
-                  </div>
-                )
+                <div data-tour="notebooks-sidebar" style={{ height: '100%', display: 'flex' }}>
+                  <NoteList
+                    notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
+                    selected={noteId} phone={phone}
+                    trashCount={trash.filter((n) => n.notebook_id === nbId).length || trash.length}
+                    onOpenTrash={() => { setInTrash(true); setNbId(null); }}
+                    onPick={setNoteId}
+                    onNew={() => newNote()}
+                    onNewMathNote={newMathNote}
+                    onDelete={removeNote}
+                    onMove={(n, id) => { A.moveNote.mutate({ id: n.id, notebook_id: id }); toast('Moved'); }}
+                    onRename={(n, title) => A.saveNote.mutate({ id: n.id, notebook_id: n.notebook_id, title, body: n.body })} />
+                </div>
               )}
 
               {note ? (
-                <div data-tour="notebooks-editor" style={{ flex: 1, minHeight: 0, display: 'flex', width: '100%', maxWidth: '100%' }}>
+                <div data-tour="notebooks-editor" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                   <NoteEditor
                     key={note.id}
                     note={note} notes={notes} tags={tags[note.id] ?? []} phone={phone}
@@ -516,7 +481,7 @@ $$
             onOpenNote={(id) => { setTab('notebooks'); goToNote(id); }} />
         )}
         {tab === 'journal' && <Journal />}
-        {tab === 'code' && <CodeVisualizer />}
+        {tab === 'code' && <JavaLab />}
       </div>
     </div>
   );

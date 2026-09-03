@@ -177,10 +177,11 @@ export default function FuelPage() {
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: '100%',
+        padding: phone ? '14px 14px 32px' : 'clamp(20px, 2.5vw, 36px) clamp(24px, 3.5vw, 56px) 56px',
+        maxWidth: 1400,
         marginInline: 'auto',
-        padding: phone ? '12px 14px 24px' : '16px 20px 28px',
+        color: 'var(--tx)',
+        width: '100%',
         boxSizing: 'border-box',
       }}
     >
