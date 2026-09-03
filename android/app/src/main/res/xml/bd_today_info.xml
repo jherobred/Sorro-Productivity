@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/bd_widget_today"
+    android:previewLayout="@layout/bd_widget_today"
+    android:minWidth="250dp"
+    android:minHeight="150dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="150dp"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/bd_today_desc"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0" />

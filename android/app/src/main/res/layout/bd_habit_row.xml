@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One habit. Dot, name, streak.
+
+  The dot carries the habit's own colour when it is ticked and is a hollow ring
+  when it is not, which is the same read as the ring on Home: filled means done.
+  It is tinted per row at bind time rather than by a drawable per colour, since
+  a habit's colour is whatever the user picked.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bd_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:baselineAligned="false"
+    android:gravity="center_vertical"
+    android:background="@drawable/bd_row"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <ImageView
+        android:id="@+id/bd_row_dot"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginEnd="9dp"
+        android:src="@drawable/bd_dot_off"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/bd_row_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/bd_tx2"
+        android:textSize="12.5sp"
+        android:textStyle="bold"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/bd_row_streak"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:textColor="@color/bd_tx3"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:text="" />
+</LinearLayout>

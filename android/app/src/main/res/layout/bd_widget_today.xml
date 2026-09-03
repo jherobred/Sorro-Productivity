@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Today, at arm's length.
+
+  Four bands, in the order the eye wants them: what day it is and how the day is
+  going, the bar for that, the three numbers worth a glance, then the row that
+  is the whole point - four buttons that log without reading anything first.
+
+  Eight targets, and every one of them is a whole block rather than a glyph: the
+  header opens Home, each of the three numbers opens the section it came from,
+  and the four buttons log. Nothing here needs aiming at, which is the only way
+  a widget beats opening the app.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bd_card"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/bd_open_home"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/bd_date"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textColor="@color/bd_tx"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:text="TODAY" />
+
+            <TextView
+                android:id="@+id/bd_done"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:textColor="@color/bd_tx3"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:text="" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/bd_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="14dp"
+            android:layout_marginTop="9dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/bd_bar" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <LinearLayout
+                android:id="@+id/bd_go_tasks"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/bd_tasks_n"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/bd_tasks"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:text="0" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/bd_tx3"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:text="OPEN" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/bd_go_water"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/bd_water_n"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/bd_water"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:text="0" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/bd_tx3"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:text="CUPS" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/bd_go_spent"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/bd_spent_n"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="@color/bd_money"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:text="0" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/bd_tx3"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:text="SPENT" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!--
+      Fixed, and unweighted, on purpose. Launchers hand a widget whatever a cell
+      happens to be on that grid, and it can be less than the content wants. The
+      slack - and the squeeze - both belong to the block above: a clipped number
+      is a number you can still open the section to read, but a clipped 44dp
+      button is the widget failing at the one thing it is for.
+    -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <LinearLayout
+            android:id="@+id/bd_act_water"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/bd_btn"
+            android:contentDescription="Log a cup of water">
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:src="@drawable/bd_ic_drop"
+                android:tint="@color/bd_water"
+                android:contentDescription="@null" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/bd_act_task"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/bd_btn"
+            android:contentDescription="New task">
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:src="@drawable/bd_ic_task"
+                android:tint="@color/bd_tasks"
+                android:contentDescription="@null" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/bd_act_money"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/bd_btn"
+            android:contentDescription="Log an expense">
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:src="@drawable/bd_ic_money"
+                android:tint="@color/bd_money"
+                android:contentDescription="@null" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/bd_act_note"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/bd_btn"
+            android:contentDescription="New note">
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:src="@drawable/bd_ic_note"
+                android:tint="@color/bd_notes"
+                android:contentDescription="@null" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

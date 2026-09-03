@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Today's habits, tickable where they are.
+
+  The one screen in the app that is opened purely to press things, so it is the
+  one that most deserves not to be opened at all. A row here does the same thing
+  the ring on Home does: toggles today's tick. The list is a RemoteViews
+  collection, which is the only way to get a variable number of rows into a
+  widget - see HabitsWidget.java for the adapter it is fed by.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bd_card"
+    android:padding="13dp">
+
+    <LinearLayout
+        android:id="@+id/bd_open_habits"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/bd_ic_bolt"
+            android:tint="@color/bd_habits"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/bd_tx"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="HABITS" />
+
+        <TextView
+            android:id="@+id/bd_habits_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="@color/bd_tx3"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:text="" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/bd_habit_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:scrollbars="none" />
+
+    <TextView
+        android:id="@+id/bd_habits_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:textColor="@color/bd_tx3"
+        android:textSize="11sp"
+        android:visibility="gone"
+        android:text="Open Basedly to sync" />
+</LinearLayout>

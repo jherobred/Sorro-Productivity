@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- components/Icon.tsx ICONS.bookPlus — same 24x24 path, same 2px round cap. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="@color/bd_tx">
+    <path
+        android:pathData="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2zM12 9v6M9 12h6"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

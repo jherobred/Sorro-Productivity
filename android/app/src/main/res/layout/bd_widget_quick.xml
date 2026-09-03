@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The action row on its own, one cell tall.
+
+  Icon only. At 4x1 a label under a glyph is six pixels of type nobody reads,
+  and the hue already says which one this is - the same hue the section uses
+  everywhere else in the app. The label lives in contentDescription, where
+  TalkBack can reach it and the layout does not have to pay for it.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:baselineAligned="false"
+    android:background="@drawable/bd_card"
+    android:padding="7dp">
+
+    <LinearLayout
+        android:id="@+id/bd_act_water"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginEnd="5dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/bd_btn"
+        android:contentDescription="Log a cup of water">
+        <ImageView
+            android:layout_width="21dp"
+            android:layout_height="21dp"
+            android:src="@drawable/bd_ic_drop"
+            android:tint="@color/bd_water"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/bd_act_task"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginEnd="5dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/bd_btn"
+        android:contentDescription="New task">
+        <ImageView
+            android:layout_width="21dp"
+            android:layout_height="21dp"
+            android:src="@drawable/bd_ic_task"
+            android:tint="@color/bd_tasks"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/bd_act_money"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginEnd="5dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/bd_btn"
+        android:contentDescription="Log an expense">
+        <ImageView
+            android:layout_width="21dp"
+            android:layout_height="21dp"
+            android:src="@drawable/bd_ic_money"
+            android:tint="@color/bd_money"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/bd_act_note"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/bd_btn"
+        android:contentDescription="New note">
+        <ImageView
+            android:layout_width="21dp"
+            android:layout_height="21dp"
+            android:src="@drawable/bd_ic_note"
+            android:tint="@color/bd_notes"
+            android:contentDescription="@null" />
+    </LinearLayout>
+</LinearLayout>
