@@ -9,6 +9,7 @@ import { defineMutation } from '@/lib/offline';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
+import { usePrefs } from '@/lib/prefs';
 import { useOverlayBack } from '@/lib/nav';
 import { playClick, playTick, playCelebration } from '@/lib/audio';
 import { run, highlight, type RunResult, type Step, type FrameSnap, type HeapObj, type Local } from '@/lib/java';
@@ -145,7 +146,11 @@ export function JavaLab() {
       toast(`Line ${r.error.line}: ${r.error.message}`);
     } else {
       playCelebration();
-      toast(`Compiled & Executed in ${r.ms}ms (${r.trace.length} trace steps)`);
+      toast(
+        r.truncated
+          ? `Ran in ${r.ms}ms — trace capped at ${r.trace.length} steps, replay stops early`
+          : `Compiled & Executed in ${r.ms}ms (${r.trace.length} trace steps)`
+      );
       if (phone && mobileTab === 'code') {
         // Auto-switch to 3D World on phone so user immediately sees visual results
         setMobileTab('3d');
@@ -196,26 +201,48 @@ export function JavaLab() {
     return () => window.removeEventListener('keydown', onKey);
   }, [doRun]);
 
-  // Variable speed execution playback loop
+  /**
+   * Playback clock.
+   *
+   * The clock is the ONLY writer of `at` while `playing` is true — scrubbing
+   * pauses first (see onStepChange), which tears this effect down. So the
+   * interval can keep its own cursor `i` instead of reading `at` back through a
+   * state updater, which is what the previous version did: it called
+   * setPlaying(false) from inside a setAt updater, a side effect during the
+   * render phase that React double-invokes in StrictMode.
+   *
+   * `at` is deliberately not a dependency. It is only read to seed the cursor
+   * when the effect (re)starts, which happens on play and on a speed change —
+   * at both of those moments `at` is already committed, so re-seeding neither
+   * repeats nor skips a step. A speed change re-times the *next* step and
+   * clears the pending timer, so nothing double-fires.
+   */
   useEffect(() => {
-    if (!playing || !result?.trace.length) return;
-    const delay = Math.max(50, Math.round(280 / speed));
+    const total = result?.trace.length ?? 0;
+    if (!playing || total < 2) return;
+    let i = at ?? 0;
     const t = setInterval(() => {
-      setAt((cur) => {
-        const next = (cur ?? -1) + 1;
-        if (next >= result.trace.length) {
-          setPlaying(false);
-          return null;
-        }
-        return next;
-      });
-    }, delay);
+      i += 1;
+      if (i >= total) {
+        // Ran off the end. `null` is the post-run final state, which is a real
+        // snapshot java.ts computes after the last traced statement — not the
+        // last step replayed again.
+        clearInterval(t);
+        setPlaying(false);
+        setAt(null);
+        return;
+      }
+      setAt(i);
+    }, Math.max(50, Math.round(280 / speed)));
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, result, speed]);
 
   const step: Step | null = result && at !== null ? result.trace[at] ?? null : null;
   const frames: FrameSnap[] = step ? step.frames : result?.frames ?? [];
   const heap: HeapObj[] = step ? step.heap : result?.heap ?? [];
+  // Scrubbing rewinds the console too: step.out is how many lines had been
+  // printed by that statement, so anything past it has not happened yet.
   const consoleOutput: string[] = result ? (step ? result.out.slice(0, step.out) : result.out) : [];
   const activeLine = step?.line ?? null;
 
@@ -833,6 +860,7 @@ export function JavaLab() {
                   heap={heap}
                   series={result?.series || []}
                   activeLine={activeLine}
+                  step={step}
                   stepNote={step?.note}
                   phone={true}
                   aiSimulation={aiSimulation}
@@ -846,6 +874,7 @@ export function JavaLab() {
                   file={file}
                   result={result}
                   consoleOutput={consoleOutput}
+                  stepIndex={at}
                   onRun={doRun}
                 />
               </div>
@@ -927,8 +956,18 @@ export function JavaLab() {
                   </div>
 
                   {result && (
-                    <span style={{ fontSize: 10.5, color: result.error ? PAL.coral : PAL.mint, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                      {result.error ? 'Error' : `${result.ms}ms · ${result.trace.length} steps`}
+                    <span
+                      title={result.truncated ? `Trace recording capped at ${result.trace.length} steps — the program ran past this point.` : undefined}
+                      style={{
+                        fontSize: 10.5,
+                        color: result.error ? PAL.coral : result.truncated ? PAL.amber : PAL.mint,
+                        fontVariantNumeric: 'tabular-nums',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {result.error
+                        ? 'Error'
+                        : `${result.ms}ms · ${result.trace.length}${result.truncated ? '+' : ''} trace steps`}
                     </span>
                   )}
                 </div>
@@ -941,6 +980,7 @@ export function JavaLab() {
                       heap={heap}
                       series={result?.series || []}
                       activeLine={activeLine}
+                      step={step}
                       stepNote={step?.note}
                       phone={phone}
                       aiSimulation={aiSimulation}
@@ -955,6 +995,7 @@ export function JavaLab() {
                       file={file}
                       result={result}
                       consoleOutput={consoleOutput}
+                      stepIndex={at}
                       onRun={doRun}
                     />
                   </div>
@@ -1026,11 +1067,14 @@ function TerminalConsole({
   file,
   result,
   consoleOutput,
+  stepIndex,
   onRun,
 }: {
   file: JFile | null;
   result: RunResult | null;
   consoleOutput: string[];
+  /** Scrubber position. null means the run's final state. */
+  stepIndex: number | null;
   onRun: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -1183,20 +1227,43 @@ function TerminalConsole({
               </div>
             )}
 
-            {/* Process finish banner */}
+            {/* Trace was cut short by the recorder's cap: the console above is
+                complete, but the replay stops before the program did. */}
+            {result.truncated && (
+              <div
+                style={{
+                  padding: '7px 10px',
+                  borderRadius: 8,
+                  background: 'color-mix(in srgb, var(--pal-amber) 14%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--pal-amber) 45%, transparent)',
+                  color: PAL.amber,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.5,
+                }}
+              >
+                Trace recording stopped at {result.trace.length} steps. The program ran to the end and
+                this output is complete, but the step replay covers only the first {result.trace.length} statements.
+              </div>
+            )}
+
+            {/* Process status banner. While scrubbed this must not claim the
+                process finished — at step N it has not. */}
             <div
               style={{
                 marginTop: 6,
                 paddingTop: 8,
                 borderTop: '1px solid rgba(255,255,255,0.06)',
-                color: result.error ? PAL.coral : PAL.mint,
+                color: stepIndex !== null ? PAL.amber : result.error ? PAL.coral : PAL.mint,
                 fontSize: 11,
                 fontWeight: 800,
               }}
             >
-              {result.error
+              {stepIndex !== null
+                ? `⏸ Replaying step ${stepIndex + 1} of ${result.trace.length} — ${consoleOutput.length} of ${result.out.length} output line${result.out.length === 1 ? '' : 's'} printed so far`
+                : result.error
                 ? '✗ Process exited with code 1 (Execution Failed)'
-                : `✓ Process finished with exit code 0 (${result.ms}ms · ${result.trace.length} steps)`}
+                : `✓ Process finished with exit code 0 (${result.ms}ms · ${result.trace.length} trace steps)`}
             </div>
           </div>
         )}
@@ -1381,10 +1448,12 @@ function LiveCodeEditor({
   activeLine: number | null;
   errorLine: number | null;
 }) {
+  const { prefs } = usePrefs();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const syntaxRef = useRef<HTMLDivElement | null>(null);
   const lineNumbersRef = useRef<HTMLDivElement | null>(null);
   const [cursorLine, setCursorLine] = useState<number>(1);
+  const EASE = prefs.motion ? 'background .18s cubic-bezier(.16, 1, .3, 1), color .18s cubic-bezier(.16, 1, .3, 1)' : 'none';
 
   // Synchronize scroll between textarea, syntax highlight backdrop, and line numbers
   const handleScroll = () => {
@@ -1519,12 +1588,13 @@ function LiveCodeEditor({
 
   const lineCount = Math.max(src.split('\n').length, 1);
 
-  // Auto-scroll to active execution line during trace scrubbing
+  // Auto-scroll to active execution line during trace scrubbing. Smooth is an
+  // animation like any other, so it is gated on the motion preference.
   useEffect(() => {
     if (activeLine === null || !textareaRef.current) return;
     const lineTop = (activeLine - 1) * 21;
-    textareaRef.current.scrollTo({ top: Math.max(0, lineTop - 80), behavior: 'smooth' });
-  }, [activeLine]);
+    textareaRef.current.scrollTo({ top: Math.max(0, lineTop - 80), behavior: prefs.motion ? 'smooth' : 'auto' });
+  }, [activeLine, prefs.motion]);
 
   return (
     <div
@@ -1589,7 +1659,7 @@ function LiveCodeEditor({
                   : isExec
                   ? 'color-mix(in srgb, var(--acc) 25%, transparent)'
                   : undefined,
-                transition: 'background .15s, color .15s',
+                transition: EASE,
               }}
             >
               {lineNum}
@@ -1645,6 +1715,7 @@ function LiveCodeEditor({
                     ? 'color-mix(in srgb, var(--acc) 18%, transparent)'
                     : undefined,
                   borderRadius: 4,
+                  transition: EASE,
                 }}
               >
                 {row.length === 0 ? (
@@ -1722,8 +1793,10 @@ function Series({ values }: { values: number[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={KICKER}>Numerical Output Graph</span>
+        {/* The trace carries no per-step series count, so this is always the
+            whole run — say so rather than let it read as the scrubbed step. */}
         <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-          {values.length} numbers
+          {values.length > 120 ? `first 120 of ${values.length}` : `${values.length} numbers`} · whole run
         </span>
       </div>
 
