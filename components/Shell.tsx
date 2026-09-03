@@ -30,7 +30,7 @@ import type { SettingsTab } from './SettingsModal';
  * static type import - types erase, so it pulls nothing.
  */
 const SettingsModal = dynamic(() => import('./SettingsModal').then((m) => m.SettingsModal), { ssr: false });
-import { ContextMenu, type CtxItem } from './ContextMenu';
+import { ContextMenu, type CtxContent, type CtxGroup, type CtxItem } from './ContextMenu';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { useAutoSync } from '@/lib/integrations';
@@ -151,7 +151,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [sideMore, setSideMore] = useState(false);
   const [settings, setSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
-  const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxItem[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; kind: string; label: string; items: CtxContent } | null>(null);
   const { data: tasks = [] } = useTasks();
   const { data: ranked } = useRanked();
   const unread = useUnreadCount();
@@ -432,6 +432,68 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const activeSection = SECTIONS.find((x) => x.id === section);
 
+  /**
+   * Right-click (or long-press) on a tab: actions for that section first, then
+   * create and view verbs that work from anywhere. The state, the render and
+   * the import all survived the quick-actions button that used to feed them,
+   * so for a while the app carried a context menu nothing could open — wiring
+   * the tabs to it is the fix, not new machinery.
+   */
+  const openSectionMenu = (sec: Section, x: number, y: number) => {
+    const groups: CtxGroup[] = [];
+
+    if (sec.kids?.length) {
+      groups.push({
+        label: sec.name,
+        items: sec.kids.map((k): CtxItem => ({
+          label: k.n, icon: 'chev', run: () => goFiltered(sec.id, k.n),
+        })),
+      });
+    }
+
+    groups.push({
+      label: 'Create',
+      items: [
+        { label: 'New task', icon: 'taskPlus', run: () => setSheet('task') },
+        { label: 'New note', icon: 'bookPlus', run: () => setSheet('note') },
+        { label: 'New expense', icon: 'money', run: () => setSheet('money') },
+      ],
+    });
+
+    groups.push({
+      label: 'View',
+      items: [
+        { label: 'Search everything', icon: 'search', shortcut: '⌘K', run: () => setSearch(true) },
+        {
+          label: viewMode === 'phone' ? 'Switch to web view' : 'Dedicated phone view',
+          icon: viewMode === 'phone' ? 'monitor' : 'phone',
+          run: () => setViewMode(viewMode === 'phone' ? 'web' : 'phone'),
+        },
+        {
+          label: dark ? 'Light mode' : 'Dark mode', icon: 'moon',
+          run: () => void update({ theme: dark ? 'light' : 'dark' }),
+        },
+        {
+          label: prefs.motion ? 'Reduce motion' : 'Enable motion', icon: 'spark',
+          run: () => void update({ motion: !prefs.motion }),
+        },
+        {
+          label: 'All settings', icon: 'cog',
+          run: () => { setSettingsTab('general'); setSettings(true); },
+        },
+      ],
+    });
+
+    setMenu({ x, y, kind: 'nav', label: sec.name, items: groups });
+  };
+
+  /** preventDefault so the browser's own menu never double-opens over ours. */
+  const tabContextMenu = (sec: Section) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    openSectionMenu(sec, e.clientX, e.clientY);
+  };
+
+
   const hueTx = (hue: string) =>
     dark ? `color-mix(in srgb, ${hue} 84%, #FFFFFF)` : `color-mix(in srgb, ${hue} 62%, #1C1A26)`;
 
@@ -552,6 +614,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     <button
                       onClick={() => go(sec.id)}
                       onPointerDown={() => prefetchSection(sec.id)}
+                      onContextMenu={tabContextMenu(sec)}
                       aria-label={sec.name}
                       className={on ? 'k-squish' : 'hov k-squish'}
                       style={{
@@ -579,11 +642,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               return (
                 <div key={sec.id}>
-                  <div className="hov" style={{
-                    display: 'flex', alignItems: 'center', borderRadius: 10, position: 'relative',
-                    background: on ? `color-mix(in srgb, ${hue} 16%, transparent)` : 'transparent',
-                    boxShadow: on ? `inset 0 0 0 1px color-mix(in srgb, ${hue} 30%, transparent)` : 'none',
-                  }}>
+                  <div
+                    className="hov"
+                    onContextMenu={tabContextMenu(sec)}
+                    style={{
+                      display: 'flex', alignItems: 'center', borderRadius: 10, position: 'relative',
+                      background: on ? `color-mix(in srgb, ${hue} 16%, transparent)` : 'transparent',
+                      boxShadow: on ? `inset 0 0 0 1px color-mix(in srgb, ${hue} 30%, transparent)` : 'none',
+                    }}>
                     <span style={{
                       position: 'absolute', left: -9, top: 7, bottom: 7, width: 3, borderRadius: 2,
                       background: hue, opacity: on ? 1 : 0, transform: on ? 'scaleY(1)' : 'scaleY(.3)',

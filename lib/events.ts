@@ -108,6 +108,20 @@ export function getWeekNumber(d: Date): number {
   return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
 }
 
+/**
+ * ISO week number of the week being displayed, for the header badge.
+ *
+ * ISO weeks are defined by the Thursday they contain, so reading the badge off
+ * the week's *start* lies to Sunday-start users: their week begins inside the
+ * previous ISO week and the badge counted that one instead. Anchoring on the
+ * displayed week's Thursday is correct for either week start.
+ */
+export function displayedWeekNumber(ws: Date, startsOn: 'mon' | 'sun' = readWeekStart()): number {
+  const anchor = new Date(ws);
+  anchor.setDate(anchor.getDate() + (startsOn === 'sun' ? 4 : 3));
+  return getWeekNumber(anchor);
+}
+
 export function formatRecurrenceLabel(rule: RecurrenceRule | null | undefined, startDate?: Date): string {
   if (!rule || !rule.freq) return 'Does not repeat';
   const interval = rule.interval ?? 1;
@@ -380,15 +394,36 @@ export function at(ws: Date, day: number, hour: number): string {
  * rules"), but the time-format setting wins when the user has chosen 24-hour.
  */
 export function hhmm(hour: number, force24?: boolean): string {
+  // Round the whole time in minutes once, not the hour and minutes
+  // separately: rounding a 0.999 hour gave ":60" and rolled 24:00 into a
+  // non-existent minute of the same day.
+  const totalMin = Math.max(0, Math.round(hour * 60));
   // Hour 24 is the end of the grid — the next midnight, not noon. Without the
   // wrap, 24 % 12 === 0 gave 12 and 24 >= 12 gave PM, so the last rule on the
   // day grid was labelled "12:00 PM".
-  const h24 = Math.floor(hour) % 24;
-  const m = Math.round((hour % 1) * 60);
+  const h24 = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
   if (force24 ?? read24h()) return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   const ampm = h24 >= 12 ? 'PM' : 'AM';
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Grid hours for an event, safe to subtract.
+ *
+ * `hoursOf` reads local wall-clock hours, so an event that crosses midnight
+ * (23:00–01:00) comes back with its end before its start; laid out raw, that
+ * is a negative-height chip and a drag length that escapes the 24-hour grid.
+ * Crossing midnight is drawn as a chip that runs to the end of the day it
+ * starts on.
+ */
+export function gridRange(startsAt: string, endsAt: string): { start: number; end: number } {
+  const a = hoursOf(startsAt);
+  const b = hoursOf(endsAt);
+  const start = Math.min(a, b);
+  const end = Math.max(a, b);
+  return { start, end: end > start ? end : Math.min(24, start + 1) };
 }
 
 /**

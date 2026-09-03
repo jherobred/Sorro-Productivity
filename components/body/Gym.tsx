@@ -102,7 +102,13 @@ export function useTraining({
 
   /* --------------------------------------------------------------- verbs */
 
-  const start = (routine: Routine | null) => {
+  /**
+   * Start (or resume) today's session. `focus` opens the fullscreen guided
+   * session; without it the workout is created and running state stays put, so
+   * the dashboard remains the logging surface — the overlay is a choice now,
+   * not a hijack. TrainCard, which has no dashboard of its own, passes true.
+   */
+  const start = (routine: Routine | null, focus = false) => {
     if (!session) {
       addWorkout({
         id: crypto.randomUUID(), on_date: today,
@@ -110,7 +116,7 @@ export function useTraining({
       });
     }
     if (routine) setPending(routine.exercises);
-    setRunning(true);
+    if (focus) setRunning(true);
   };
 
   const restamp = (after: WorkoutSet[]) => {
@@ -132,7 +138,6 @@ export function useTraining({
         id: workoutId, on_date: today,
         name: todayRoutine?.name ?? 'Workout', groups: [], minutes: 0,
       });
-      setRunning(true);
     }
     const inSession = [...mine].reverse().find((s) => s.exercise === exercise);
     const v = seed ?? nextSet(inSession ?? previously[exercise], kindOf(exercise));
@@ -180,7 +185,6 @@ export function useTraining({
   const addExercise = (name: string) => {
     if (!session) start(null);
     setPending((p) => (p.includes(name) ? p : [...p, name]));
-    setRunning(true);
   };
 
   const setPlanDay = (i: number, id: string) => {
@@ -269,7 +273,7 @@ export function TrainCard({ T }: { T: Training }) {
           })}
         </div>
 
-        <button className="og-today-row" onClick={() => T.start(session ? null : todayRoutine)}>
+        <button className="og-today-row" onClick={() => T.start(session ? null : todayRoutine, true)}>
           <div className="og-row" style={{ gap: 9, minWidth: 0 }}>
             <span className="og-lrow-i" style={{
               background: session ? 'var(--og-orange)' : todayRoutine ? 'var(--og-acc)' : 'var(--og-surface-3)',

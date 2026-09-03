@@ -26,6 +26,11 @@ export type Prefs = {
   /** Seven slots, Monday first: which split each weekday carries, or ''. */
   gymPlan: string[];
   /**
+   * ISO timestamp the open gym session started tracking from, so the stopwatch
+   * survives a reload instead of guessing. Cleared when the session ends.
+   */
+  gymStartAt?: string;
+  /**
    * Go fullscreen on the first tap, every launch. Web only — the APK is already
    * edge to edge and has no browser chrome to hide. See useAlwaysFullscreen.
    */

@@ -152,6 +152,15 @@
 }
 @keyframes kpulse { from { transform: scale(1); opacity: .55; } to { transform: scale(2.4); opacity: 0; } }
 
+/* Breathe — the live marker on the calendar's now-line. A slow swell that says
+   "this is happening" without ever demanding attention; the one loop allowed
+   on an informational surface, because the line is the information. */
+.k-breathe { animation: kbreathe 2.6s ease-in-out infinite; animation-play-state: var(--anim, running); }
+@keyframes kbreathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--pal-coral, #FF6B6B) 45%, transparent); }
+  50%      { transform: scale(1.35); box-shadow: 0 0 0 5px transparent; }
+}
+
 /* Skeleton shimmer, for anything still loading. */
 .k-skeleton {
   background: linear-gradient(90deg, var(--card2) 25%, var(--hov) 50%, var(--card2) 75%) 0 0 / 300% 100%;
@@ -244,7 +253,7 @@
   transform: none;
   clip-path: none;
 }
-.nomo :is(.k-pulse::after, .k-skeleton, .k-orbit) { animation: none; }
+.nomo :is(.k-pulse::after, .k-skeleton, .k-orbit, .k-breathe) { animation: none; }
 .nomo :is(.k-squish, .k-push, .k-glass, .k-chip, .k-swatch, .k-star, .k-progress, .k-ring,
           .k-morph, .k-check, .k-drag.settle, .k-reorder, .k-swipe, .k-snap, .k-accordion,
           .k-chevron, .k-bento, .k-dock, .k-search, .k-fan > *, .k-relay, .k-picker, .k-zoom,

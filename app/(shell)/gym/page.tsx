@@ -1,30 +1,36 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
+import { Page } from '@/components/Page';
+import { Counter } from '@/components/core/Counter';
 import { MovementSheet } from '@/components/gym/MovementSheet';
 import { useTraining, TrainingOverlays } from '@/components/body/Gym';
 import { useLayout } from '@/lib/useLayout';
+import { usePrefs } from '@/lib/prefs';
 import { ymd } from '@/lib/series';
 import { useTap } from '@/hooks/useTap';
 import { PAL } from '@/lib/pal';
 import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import {
-  routineOf, slotFor, shotOf, lbs, volumeOf, ROUTINES, workedOf, gearOf,
+  routineOf, slotFor, shotOf, volumeOf, workedOf, gearOf,
   type Routine, type WorkoutSet,
 } from '@/lib/lift';
 import { useWorkouts, useBodyActions } from '@/lib/body';
 
 const HUE = PAL.pink;
-const LIME = PAL.lime;
 const MINT = PAL.mint;
+const AMBER = PAL.amber;
 const REST_S = 90;
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const WEEK_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function GymPage() {
   const { phone } = useLayout();
+  const { prefs, update } = usePrefs();
   const today = ymd(new Date());
   const [open, setOpen] = useState<{ exercise: string; sub: string } | null>(null);
   const [editingExercise, setEditingExercise] = useState<string | null>(null);
@@ -39,7 +45,7 @@ export default function GymPage() {
     delWorkout: (id) => A.delWorkout.mutate({ id }),
   });
 
-  const { session, blocks, plan, todayRoutine, mine, previously, sets, running } = T;
+  const { session, blocks, plan, todayRoutine, mine, previously, sets, bests } = T;
   const currentDaySlot = slotFor(new Date().getDay());
 
   // Active viewed routine based on selected slot in the week strip
@@ -57,15 +63,16 @@ export default function GymPage() {
     return activeRoutine?.exercises ?? ['Bench press', 'Incline press', 'Overhead press', 'Cable pushdown'];
   }, [activeRoutine]);
 
-  // Combined reactive list of exercises for today
+  // Combined reactive list of exercises for the viewed day
   const displayExercises = useMemo(() => {
-    const fromMine = mine.map((s) => s.exercise);
-    const fromBlocks = blocks.map((b) => b.exercise);
+    const viewingToday = selectedSlot === currentDaySlot;
+    const fromMine = viewingToday ? mine.map((s) => s.exercise) : [];
+    const fromBlocks = viewingToday ? blocks.map((b) => b.exercise) : [];
     const combined = [...new Set([...fromMine, ...fromBlocks, ...addedExercises, ...baseExercises])];
     return combined.filter((ex) => !removedExercises.includes(ex));
-  }, [mine, blocks, addedExercises, baseExercises, removedExercises]);
+  }, [mine, blocks, addedExercises, baseExercises, removedExercises, selectedSlot, currentDaySlot]);
 
-  /** Consecutive days trained */
+  /** Consecutive days trained. Zero is a fine answer. */
   const streak = useMemo(() => {
     const done = new Set(workouts.map((w) => w.on_date));
     let n = 0;
@@ -77,7 +84,7 @@ export default function GymPage() {
     return n;
   }, [workouts]);
 
-  /** Which week of the plan this is */
+  /** Which week of the plan this is. */
   const week = useMemo(() => {
     if (!workouts.length) return 1;
     const first = [...workouts].sort((a, b) => a.on_date.localeCompare(b.on_date))[0];
@@ -90,14 +97,14 @@ export default function GymPage() {
     return workouts.filter((w) => w.on_date.startsWith(today.slice(0, 7))).length;
   }, [workouts, today]);
 
-  /** Week volume compared against last week */
+  /** Week volume compared against last week. No baseline, no percentage. */
   const weekVol = useMemo(() => {
     const from = ymd(new Date(Date.now() - 7 * 864e5));
     const ids = new Set(workouts.filter((w) => w.on_date >= from).map((w) => w.id));
     const prevIds = new Set(workouts.filter((w) => w.on_date < from).map((w) => w.id));
     const now = volumeOf(sets.filter((s) => ids.has(s.workout_id)));
     const before = volumeOf(sets.filter((s) => prevIds.has(s.workout_id)));
-    const pct = before > 0 ? Math.round(Math.min(100, (now / before) * 100)) : 62;
+    const pct = before > 0 ? Math.round(Math.min(100, (now / before) * 100)) : 0;
     return { now, target: before, comparable: before > 0, pct };
   }, [workouts, sets]);
 
@@ -115,51 +122,82 @@ export default function GymPage() {
   const totalSets = blocks.reduce((n, b) => (removedExercises.includes(b.exercise) ? n : n + b.sets.length), 0);
   const doneSets = mine.filter((s) => s.done && !removedExercises.includes(s.exercise)).length;
 
-  const exerciseCount = displayExercises.length || activeRoutine?.exercises.length || 6;
+  const exerciseCount = displayExercises.length || activeRoutine?.exercises.length || 0;
   const plannedSets = totalSets || exerciseCount * 4;
   const estMinutes = Math.max(1, Math.round(plannedSets * 2.2));
+  const viewingToday = selectedSlot === currentDaySlot;
 
-  /** Rest clock */
+  /** Rest clock. Ticking is an interval started once the timer turns on. */
   const [rest, setRest] = useState(0);
   const lastDone = useRef(doneSets);
   useEffect(() => {
     if (doneSets > lastDone.current) setRest(REST_S);
     lastDone.current = doneSets;
   }, [doneSets]);
+  const restOn = rest > 0;
   useEffect(() => {
-    if (rest <= 0) return;
+    if (!restOn) return;
     const t = setInterval(() => setRest((r) => Math.max(0, r - 1)), 1000);
     return () => clearInterval(t);
-  }, [rest > 0]);
+  }, [restOn]);
 
-  /** Live Stopwatch Timer */
-  const [elapsed, setElapsed] = useState(1112);
+  /**
+   * Session stopwatch, anchored to a stored start time so a reload does not
+   * invent a number. A session from before this existed (or from another day,
+   * after a crashed tab) re-anchors to now: honest is better than grand.
+   */
+  const startAt = prefs.gymStartAt;
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    if (!session && !running) return;
-    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, [session, running]);
+    if (!session) return;
+    if (!startAt || !startAt.startsWith(today)) {
+      void update({ gymStartAt: new Date().toISOString() });
+      return;
+    }
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - new Date(startAt).getTime()) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [session?.id, startAt, today, update]);
 
   const formatClock = (sec: number) => {
-    const hrs = Math.floor(sec / 3600);
-    const mins = Math.floor((sec % 3600) / 60);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
-    if (hrs > 0) {
-      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    }
-    return `00:${String(mins).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
   };
 
   /** Current Movement being performed / demonstrated */
   const currentMovement = next?.exercise ?? displayExercises[0] ?? 'Bench press';
   const heroShot = shotOf(currentMovement) ?? 'bench';
 
-  /** Animated Movement Demo Loop (GIF demonstration of the current movement) */
+  /** Animated Movement Demo Loop (two frames crossfaded on a slow beat) */
   const [heroFrame, setHeroFrame] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setHeroFrame((f) => (f === 0 ? 1 : 0)), 1400);
+    if (!prefs.motion) return;
+    const timer = setInterval(() => setHeroFrame((f) => (f === 0 ? 1 : 0)), 1600);
     return () => clearInterval(timer);
-  }, [heroShot]);
+  }, [heroShot, prefs.motion]);
+
+  /** Top PRs, strongest first */
+  const prs = useMemo(
+    () => Object.entries(bests).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 4),
+    [bests],
+  );
+
+  /** Start or resume the session; the stopwatch anchor is set here. */
+  const handleStart = () => {
+    T.start(session ? null : activeRoutine);
+    if (!session) void update({ gymStartAt: new Date().toISOString() });
+  };
+
+  /** End and save */
+  const handleEnd = async () => {
+    await T.finish();
+    void update({ gymStartAt: undefined });
+  };
 
   /** Rename Workout Handler */
   const handleRenameWorkout = async () => {
@@ -183,481 +221,549 @@ export default function GymPage() {
     if (session) {
       await T.deleteSession();
     } else {
-      T.setRunning(false);
-      toast('Workout cleared');
+      toast('Nothing to delete yet');
+      return;
     }
     setRemovedExercises([]);
     setAddedExercises([]);
-    setElapsed(0);
+    void update({ gymStartAt: undefined });
   };
 
-  // Left Column Content (Command Center)
-  const LeftColumn = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(10px, 1.6vw, 16px)' }}>
-      {/* Top Badges & Date */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <PillBadge>{streak > 0 ? `${streak} DAY STREAK` : '4 DAY STREAK'}</PillBadge>
-          <PillBadge>WEEK {week || 6}</PillBadge>
-        </div>
-        {!phone && (
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-            {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-          </div>
-        )}
-      </div>
+  const card: React.CSSProperties = {
+    background: 'var(--card)', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-lg, 24)', boxShadow: 'var(--sh)',
+  };
 
-      {/* Active Workout Timer HUD */}
-      <div style={{
-        borderRadius: 16, background: 'var(--card)', border: '1px solid var(--line)',
-        padding: 'clamp(12px, 1.8vw, 18px)', display: 'flex', flexDirection: 'column', gap: 12,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+  return (
+    <Page
+      name="Gym"
+      width="full"
+      meta={
+        <span>
+          Week {week} · {streak > 0 ? `${streak} day streak` : 'no streak yet'} ·{' '}
+          {activeRoutine?.name ?? 'Rest day'}
+        </span>
+      }
+      actions={
+        <>
+          <button
+            onClick={T.logWeight}
+            className="hov k-squish"
+            style={{
+              minHeight: 36, padding: '0 14px', borderRadius: 999, cursor: 'pointer',
+              border: '1px solid var(--line2)', background: 'var(--card)',
+              display: 'flex', alignItems: 'center', gap: 7,
+              fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
+            }}
+          >
+            <Icon name="scale" size={14} color="var(--tx3)" /> Log weight
+          </button>
+          <button
+            onClick={() => T.setSheet('plan')}
+            className="hov k-squish"
+            style={{
+              minHeight: 36, padding: '0 14px', borderRadius: 999, cursor: 'pointer',
+              border: '1px solid var(--line2)', background: 'var(--card)',
+              display: 'flex', alignItems: 'center', gap: 7,
+              fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
+            }}
+          >
+            <Icon name="cal" size={14} color="var(--tx3)" /> Weekly plan
+          </button>
+        </>
+      }
+    >
+      <div
+        className="k-stagger"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: phone ? '1fr' : 'repeat(12, 1fr)',
+          gap: phone ? 10 : 12,
+          alignItems: 'start',
+        }}
+      >
+        {/* ------------------------------------------------ stat strip, full width */}
+        <div style={{ gridColumn: phone ? undefined : 'span 12', '--i': 0 } as React.CSSProperties}>
+          <div style={{ display: 'grid', gridTemplateColumns: phone ? '1fr 1fr' : 'repeat(4, 1fr)', gap: phone ? 10 : 12 }}>
+            <StatTile icon="flame" hue={AMBER} kicker="Day streak" value={streak} suffix={streak === 1 ? 'day' : 'days'} />
+            <StatTile icon="cal" hue={PAL.sky} kicker="This month" value={thisMonthCount} suffix={thisMonthCount === 1 ? 'session' : 'sessions'} />
+            <StatTile icon="check" hue={MINT} kicker="Sets done" value={doneSets} sub={plannedSets > 0 ? `of ${plannedSets} planned` : 'log a set to begin'} />
+            <StatTile icon="target" hue={HUE} kicker="Volume this week" value={weekVol.now} format={(v) => `${Math.round(v).toLocaleString()} kg`} />
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ hero movement, span 5 */}
+        <div
+          onClick={() => setOpen({ exercise: currentMovement, sub: 'Movement demonstration and form coaching' })}
+          style={{
+            ...(phone ? {} : { gridColumn: 'span 5' }),
+            position: 'relative', borderRadius: 'var(--r-lg, 24)', overflow: 'hidden',
+            background: 'var(--panel)', padding: 'clamp(16px, 2vw, 22px) clamp(14px, 1.8vw, 20px)',
+            minHeight: phone ? 220 : 'clamp(280px, 24vw, 330px)',
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            border: '1px solid var(--line2)', cursor: 'pointer', boxShadow: 'var(--sh)',
+          }}
+        >
+          {/* Animated 2-Frame Crossfade Movement Loop */}
+          {[0, 1].map((n) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={n}
+              src={`/ex/${heroShot}-${n}.jpg`}
+              alt=""
+              aria-hidden
+              style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                opacity: heroFrame === n ? 1 : 0,
+                transition: 'opacity 0.7s ease-in-out',
+              }}
+              onError={(e) => {
+                if (n === 1) (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ))}
+
+          {/* Ambient gradient scrim so white text survives any photo */}
+          <span aria-hidden style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(20,17,32,0.42) 0%, rgba(20,17,32,0.18) 42%, rgba(20,17,32,0.92) 88%)',
+          }} />
+
+          {/* Top strip: demo tag and cues affordance */}
+          <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(20,17,32,0.72)', backdropFilter: 'blur(6px)',
+              padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)',
+            }}>
+              {session && <span className="k-pulse" style={{
+                width: 7, height: 7, borderRadius: '50%', background: HUE,
+                display: 'inline-block',
+              }} />}
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800,
-                letterSpacing: '.13em', textTransform: 'uppercase', color: HUE,
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800,
+                letterSpacing: '.1em', textTransform: 'uppercase', color: '#FFFFFF',
               }}>
-                {session || running ? `${session?.name ?? activeRoutine?.name ?? 'Workout'} · Running` : `${activeRoutine?.name?.toUpperCase() ?? 'PUSH DAY'} · RUNNING`}
+                {session ? 'Live session' : 'Movement demo'}
               </span>
+            </div>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
+              background: 'rgba(20,17,32,0.72)', color: 'rgba(255,255,255,0.85)',
+              padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(6px)',
+            }}>
+              Cues and steps
+            </span>
+          </div>
+
+          {/* Bottom details */}
+          <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, letterSpacing: '.13em',
+              textTransform: 'uppercase', color: HUE,
+            }}>
+              {viewingToday ? 'Next up' : `Preview · ${WEEK_FULL[selectedSlot]}`}
+            </div>
+            <div style={{
+              fontSize: 'clamp(21px, 2.2vw, 28px)', fontWeight: 800, letterSpacing: '-.025em',
+              lineHeight: 1.15, color: '#FFFFFF',
+            }}>
+              {currentMovement}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 2 }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
+                color: '#FFFFFF', background: 'color-mix(in srgb, ' + HUE + ' 72%, rgba(0,0,0,0.4))',
+                padding: '3px 9px', borderRadius: 999,
+              }}>
+                {workedOf(currentMovement)}
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
+                color: 'rgba(255,255,255,0.88)', background: 'rgba(255,255,255,0.14)',
+                padding: '3px 9px', borderRadius: 999,
+              }}>
+                {gearOf(currentMovement)}
+              </span>
+              {exerciseCount > 0 && (
+                <span className="num" style={{ fontSize: 'clamp(10.5px, 1vw, 12px)', color: 'rgba(255,255,255,0.78)' }}>
+                  {exerciseCount} exercises · ~{estMinutes} min
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ session HUD, span 4 */}
+        <div style={{
+          ...(phone ? {} : { gridColumn: 'span 4' }),
+          ...card,
+          padding: 'clamp(14px, 1.8vw, 20px)', display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                {session && <span className="k-pulse" style={{
+                  width: 7, height: 7, borderRadius: '50%', background: HUE, flex: 'none',
+                  display: 'inline-block',
+                }} />}
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800,
+                  letterSpacing: '.12em', textTransform: 'uppercase', color: session ? HUE : 'var(--tx3)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {session
+                    ? `${session.name} · in progress`
+                    : `${activeRoutine?.name ?? 'Workout'} · ready`}
+                </span>
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 'clamp(30px, 3vw, 40px)', fontWeight: 900,
+                letterSpacing: '-.03em', lineHeight: 1.1, marginTop: 4, color: session ? 'var(--tx)' : 'var(--tx2)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {formatClock(elapsed)}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 'none' }}>
               <button
                 onClick={handleRenameWorkout}
                 title="Rename workout"
                 className="hov k-squish"
                 style={{
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                  display: 'inline-flex', alignItems: 'center', color: 'var(--tx3)',
+                  width: 30, height: 30, borderRadius: 999, border: '1px solid var(--line2)',
+                  background: 'var(--card2)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                  color: 'var(--tx3)',
                 }}
               >
-                <Icon name="edit" size={11} color="currentColor" />
+                <Icon name="edit" size={12} color="currentColor" />
               </button>
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 'clamp(30px, 3.4vw, 42px)', fontWeight: 900,
-              letterSpacing: '-.03em', lineHeight: 1.1, marginTop: 3, color: 'var(--tx)',
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-              {formatClock(elapsed)}
+              {session && (
+                <button
+                  onClick={handleDeleteWorkout}
+                  title="Delete workout"
+                  className="hov k-squish"
+                  style={{
+                    width: 30, height: 30, borderRadius: 999, border: '1px solid var(--line2)',
+                    background: 'var(--card2)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                    color: PAL.coral,
+                  }}
+                >
+                  <Icon name="trash" size={12} color="currentColor" />
+                </button>
+              )}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {session && (
-              <button
-                onClick={handleDeleteWorkout}
-                title="Delete workout"
-                className="k-squish"
-                style={{
-                  padding: '8px 12px', borderRadius: 10, border: '1px solid var(--line2)',
-                  background: 'var(--card2)', color: 'var(--pal-orange, #FF5555)', fontSize: 12.5, fontWeight: 700,
-                  cursor: 'pointer', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                <Icon name="trash" size={13} color="currentColor" />
-              </button>
-            )}
-            <button
-              onClick={() => {
-                if (session) void T.finish();
-                else T.setRunning(false);
-              }}
-              className="k-squish"
-              style={{
-                padding: '8px 18px', borderRadius: 10, border: '1px solid var(--line2)',
-                background: 'var(--card2)', color: 'var(--tx)', fontSize: 13, fontWeight: 700,
-                cursor: 'pointer', transition: 'all 0.15s ease',
-              }}
-            >
-              End
-            </button>
-          </div>
-        </div>
 
-        {/* Sets Progress Bar */}
-        <div style={{ width: '100%' }}>
+          {/* Sets progress, real numbers only */}
           <AsciiBar
-            value={plannedSets > 0 ? (Math.max(doneSets, 11) / Math.max(plannedSets, 24)) * 100 : 46}
+            value={plannedSets > 0 ? (doneSets / plannedSets) * 100 : 0}
             hue={HUE}
-            text={`${doneSets || 11} of ${plannedSets || 24} sets`}
+            text={plannedSets > 0 ? `${doneSets} of ${plannedSets} sets` : 'No sets logged yet'}
             label="Workout sets completed"
           />
-        </div>
-      </div>
 
-      {/* 7-Day Split Selector Strip */}
-      <div data-tour="gym-week" style={{
-        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6,
-        background: 'var(--card)', padding: 'clamp(6px, 1vw, 10px)', borderRadius: 14, border: '1px solid var(--line)',
-      }}>
-        {DAYS.map((d, i) => {
-          const r = routineOf(plan[i]);
-          const isToday = i === currentDaySlot;
-          const isSelected = i === selectedSlot;
-          return (
-            <button
-              key={i}
-              onClick={() => setSelectedSlot(i)}
-              style={{
-                borderRadius: 10, padding: 'clamp(7px, 1.2vw, 12px) 2px', textAlign: 'center', cursor: 'pointer',
-                border: `1.5px solid ${isSelected ? HUE : isToday ? 'color-mix(in srgb, var(--tx) 38%, transparent)' : 'transparent'}`,
-                background: isSelected
-                  ? `color-mix(in srgb, ${HUE} 22%, var(--card2))`
-                  : 'var(--card2)',
-                opacity: r ? 1 : 0.45,
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <b style={{
-                display: 'block', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800,
-                color: isSelected ? HUE : 'var(--tx)', lineHeight: 1.1,
-              }}>{d}</b>
-              <span style={{
-                display: 'block', fontSize: 8, fontWeight: 700,
-                color: isSelected ? HUE : 'var(--tx3)', textTransform: 'uppercase', marginTop: 3,
-              }}>
-                {r ? r.id.toUpperCase() : 'REST'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Hero Workout Card with Animated Movement Demonstration Loop */}
-      <div
-        onClick={() => setOpen({ exercise: currentMovement, sub: 'Movement demonstration & form coaching' })}
-        style={{
-          position: 'relative', borderRadius: 18, overflow: 'hidden',
-          background: '#0B0A13', padding: 'clamp(16px, 2.2vw, 24px) clamp(14px, 2vw, 20px)',
-          minHeight: 'clamp(190px, 23vw, 260px)',
-          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-          border: '1px solid var(--line2)', cursor: 'pointer',
-        }}
-      >
-        {/* Animated 2-Frame Crossfade Movement Loop */}
-        {[0, 1].map((n) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={n}
-            src={`/ex/${heroShot}-${n}.jpg`}
-            alt={`${currentMovement} demonstration`}
-            aria-hidden
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-              opacity: heroFrame === n ? 1 : 0,
-              transition: 'opacity 0.6s ease-in-out',
-            }}
-            onError={(e) => {
-              if (n === 1) (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-        ))}
-
-        {/* Ambient Dark Gradient Protection */}
-        <span aria-hidden style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(8,7,14,0.45) 0%, rgba(8,7,14,0.2) 40%, rgba(8,7,14,0.92) 88%)',
-        }} />
-
-        {/* Top Tag Strip: Live Movement Indicator & Cues Button */}
-        <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(11, 10, 19, 0.78)', backdropFilter: 'blur(6px)',
-            padding: '4px 9px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)',
-          }}>
-            <span style={{
-              width: 7, height: 7, borderRadius: '50%', background: HUE,
-              boxShadow: `0 0 8px ${HUE}`, display: 'inline-block',
-            }} />
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800,
-              letterSpacing: '.09em', textTransform: 'uppercase', color: '#FFFFFF',
-            }}>
-              LIVE DEMO · {heroFrame === 0 ? 'START' : 'FINISH'}
-            </span>
-          </div>
-
-          <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
-            background: 'rgba(11, 10, 19, 0.78)', color: 'var(--tx2)',
-            padding: '4px 8px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(6px)',
-          }}>
-            Cues & Steps ↗
-          </span>
-        </div>
-
-        {/* Bottom Details */}
-        <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, letterSpacing: '.13em',
-            textTransform: 'uppercase', color: HUE,
-          }}>
-            {selectedSlot === currentDaySlot ? 'TODAY' : DAYS[selectedSlot]} · {currentMovement.toUpperCase()}
-          </div>
-          <div style={{
-            fontSize: 'clamp(20px, 2.3vw, 27px)', fontWeight: 800, letterSpacing: '-.025em',
-            lineHeight: 1.15, color: '#FFFFFF',
-          }}>
-            {currentMovement}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
-              color: 'var(--accTx)', background: 'color-mix(in srgb, var(--accTx) 20%, rgba(0,0,0,0.6))',
-              padding: '2px 7px', borderRadius: 5,
-            }}>
-              {workedOf(currentMovement)}
-            </span>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
-              color: 'rgba(240, 240, 250, 0.85)', background: 'rgba(255,255,255,0.12)',
-              padding: '2px 7px', borderRadius: 5,
-            }}>
-              {gearOf(currentMovement)}
-            </span>
-            <span className="num" style={{ fontSize: 'clamp(10.5px, 1.1vw, 12px)', color: 'rgba(240, 240, 250, 0.78)' }}>
-              {exerciseCount} exercises · {plannedSets} sets · ~{estMinutes} min
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Start / Resume CTA Button */}
-      <button
-        data-tour="gym-start"
-        onClick={() => T.start(session ? null : activeRoutine)}
-        className="k-squish"
-        style={{
-          width: '100%', minHeight: 'clamp(48px, 5.5vw, 54px)', borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: HUE, color: '#0B0A13', fontSize: 'clamp(14.5px, 1.3vw, 16px)', fontWeight: 800, letterSpacing: '-.01em',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          boxShadow: `0 6px 24px color-mix(in srgb, ${HUE} 38%, transparent)`,
-        }}
-      >
-        <Icon name="play" size={17} color="#0B0A13" />
-        {session ? 'Resume today’s routine' : 'Start today’s routine'}
-      </button>
-
-      {/* Week Volume Progress Bar */}
-      <div style={{
-        background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 'clamp(10px, 1.4vw, 14px)',
-      }}>
-        <AsciiBar
-          value={weekVol.pct || 62}
-          hue={HUE}
-          text={`Week volume ${weekVol.pct || 62}% · ${lbs(weekVol.now || 8420).toLocaleString()} lbs`}
-          label="Volume this week against last"
-        />
-      </div>
-
-      {/* Rest Timer & Up Next HUD (Desktop & Mobile) */}
-      <div style={{
-        background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 16,
-        padding: 'clamp(10px, 1.5vw, 15px) clamp(12px, 1.8vw, 18px)', display: 'flex', gap: 14, alignItems: 'center',
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={KICKER}>Rest</span>
-            <span className="num" style={{ fontSize: 11.5, fontWeight: 700, color: rest > 0 ? PAL.amber : 'var(--tx3)' }}>
-              {rest > 0 ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}` : '90s'}
-            </span>
-          </div>
-          <AsciiBar shape="slim" value={rest > 0 ? (rest / REST_S) * 100 : 0} hue={PAL.amber} showValue={false} label="Rest remaining" />
-        </div>
-        <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />
-        <div style={{ flex: 1.2, minWidth: 0 }}>
-          <div style={{ ...KICKER, marginBottom: 2 }}>Up next</div>
-          <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {next?.exercise ?? activeRoutine?.exercises[0] ?? 'Bench press'}
-          </div>
-          <div className="num" style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
-            {next?.set
-              ? `Set ${next.index} of ${next.of} · ${lbs(next.set.weight_kg)} lbs × ${next.set.reps}`
-              : 'Working weight · 4 sets'}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Right Column Content (Done So Far Lift Stack & Library Buttons)
-  const RightColumn = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(10px, 1.6vw, 16px)' }}>
-      {/* DONE SO FAR Container Card */}
-      <div style={{
-        borderRadius: 18, background: 'var(--card)', border: '1px solid var(--line)',
-        padding: 'clamp(14px, 2vw, 20px)', display: 'flex', flexDirection: 'column', gap: 12,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ ...KICKER, color: 'var(--tx2)' }}>DONE SO FAR</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Add Exercise Quick Button */}
-            <button
-              onClick={() => T.setSheet('exercises')}
-              className="k-squish"
-              style={{
-                padding: '4px 10px', borderRadius: 7, border: '1px solid var(--line2)',
-                background: 'var(--card2)', color: HUE, fontSize: 11, fontWeight: 800,
-                display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
-              }}
-            >
-              <Icon name="plus" size={11} color={HUE} /> Add Exercise
-            </button>
-            <span className="num" style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, color: MINT,
-              background: `color-mix(in srgb, ${MINT} 16%, transparent)`, padding: '3px 8px', borderRadius: 6,
-            }}>
-              {doneSets} / {totalSets || 4} SETS
-            </span>
-          </div>
-        </div>
-
-        {/* Exercises List Stack / Bento Grid on Large Screens */}
-        <div
-          data-tour="gym-lifts"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: 10,
-          }}
-        >
-          {displayExercises.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '32px 14px', color: 'var(--tx3)', fontSize: 12.5,
-              background: 'var(--card2)', borderRadius: 12, border: '1px dashed var(--line2)',
-            }}>
-              No exercises left in this workout. Click &ldquo;+ Add Exercise&rdquo; to add one.
+          {/* Actions */}
+          {session ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button
+                onClick={() => T.setRunning(true)}
+                className="hov k-squish"
+                style={{
+                  minHeight: 42, borderRadius: 999, cursor: 'pointer',
+                  border: '1px solid var(--line2)', background: 'var(--card2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  fontSize: 13, fontWeight: 700, color: 'var(--tx2)',
+                }}
+              >
+                <Icon name="focus" size={14} color="currentColor" /> Focus mode
+              </button>
+              <button
+                onClick={() => void handleEnd()}
+                className="k-glass k-squish"
+                style={{
+                  minHeight: 42, borderRadius: 999, border: 'none', cursor: 'pointer',
+                  background: MINT, color: '#141120',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  fontSize: 13, fontWeight: 800,
+                  boxShadow: `0 6px 20px color-mix(in srgb, ${MINT} 30%, transparent)`,
+                }}
+              >
+                <Icon name="check" size={14} color="#141120" /> End and save
+              </button>
             </div>
           ) : (
-            displayExercises.map((exName, idx) => {
-              const b = blocks.find((x) => x.exercise === exName);
-              const exSets = b?.sets ?? mine.filter((s) => s.exercise === exName);
-              const doneCount = exSets.filter((s) => s.done).length;
-              const setsCount = exSets.length || 4;
-              const isLive = (next?.exercise === exName && !!session) || (idx === 0 && !next && !session);
-              const shorthand = exSets.length > 0
-                ? exSets.filter((s) => s.done).map((s) => `${s.weight_kg}×${s.reps}`).join('  ') || `${exSets[0]?.weight_kg ?? 60}×${exSets[0]?.reps ?? 8}`
-                : previously[exName]
-                  ? `${previously[exName].weight_kg}×${previously[exName].reps}`
-                  : '4 sets planned';
-
-              return (
-                <CanvaLiftCard
-                  key={exName}
-                  exercise={exName}
-                  setsCount={setsCount}
-                  doneCount={doneCount}
-                  weightShorthand={shorthand}
-                  isLive={isLive}
-                  onOpen={() => setOpen({ exercise: exName, sub: `${doneCount} of ${setsCount} sets done` })}
-                  onQuickLog={() => T.logSet(exName)}
-                  onEdit={() => setEditingExercise(exName)}
-                  onRemove={() => {
-                    setRemovedExercises((r) => [...r, exName]);
-                    setAddedExercises((a) => a.filter((x) => x !== exName));
-                    T.removeExercise(exName);
-                  }}
-                />
-              );
-            })
+            <button
+              data-tour="gym-start"
+              onClick={handleStart}
+              className="k-glass k-squish"
+              style={{
+                minHeight: 46, borderRadius: 999, border: 'none', cursor: 'pointer',
+                background: HUE, color: '#141120',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                fontSize: 14.5, fontWeight: 800, letterSpacing: '-.01em',
+                boxShadow: `0 8px 26px color-mix(in srgb, ${HUE} 38%, transparent)`,
+              }}
+            >
+              <Icon name="play" size={16} color="#141120" />
+              Start today&apos;s routine
+            </button>
           )}
         </div>
-      </div>
 
-      {/* Bottom Action Button: List of Workouts / Exercise Catalog */}
-      <button
-        onClick={() => T.setSheet('exercises')}
-        className="k-squish"
-        style={{
-          width: '100%', minHeight: 'clamp(48px, 5.5vw, 54px)', borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: LIME, color: '#0B0A13', fontSize: 'clamp(14.5px, 1.3vw, 16px)', fontWeight: 900, letterSpacing: '-.015em',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          boxShadow: `0 6px 20px color-mix(in srgb, ${LIME} 28%, transparent)`,
-        }}
-      >
-        <Icon name="gym" size={18} color="#0B0A13" />
-        List of Workouts & Exercises
-      </button>
-
-      {/* Secondary Controls: Weekly Plan & Body Weight */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <button
-          onClick={() => T.setSheet('plan')}
-          className="k-squish"
+        {/* ------------------------------------------------ week split, span 3 */}
+        <div
+          data-tour="gym-week"
           style={{
-            minHeight: 42, borderRadius: 12, border: '1px solid var(--line2)',
-            background: 'var(--card)', color: 'var(--tx)', fontSize: 13, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: 'pointer',
+            ...(phone ? {} : { gridColumn: 'span 3' }),
+            ...card,
+            padding: 'clamp(12px, 1.5vw, 16px)', display: 'flex', flexDirection: 'column', gap: 4,
           }}
         >
-          <Icon name="cal" size={14} color="var(--tx2)" /> Weekly Plan
-        </button>
-        <button
-          onClick={T.logWeight}
-          className="k-squish"
-          style={{
-            minHeight: 42, borderRadius: 12, border: '1px solid var(--line2)',
-            background: 'var(--card)', color: 'var(--tx)', fontSize: 13, fontWeight: 700,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, cursor: 'pointer',
-          }}
-        >
-          <Icon name="scale" size={14} color="var(--tx2)" /> Body Weight
-        </button>
+          <div style={{ ...KICKER, padding: '2px 4px 8px' }}>The week</div>
+          {DAYS.map((d, i) => {
+            const r = routineOf(plan[i]);
+            const isToday = i === currentDaySlot;
+            const isSelected = i === selectedSlot;
+            return (
+              <button
+                key={i}
+                onClick={() => setSelectedSlot(i)}
+                className="k-chip hov"
+                aria-pressed={isSelected}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+                  padding: phone ? '9px 10px' : '7px 10px', borderRadius: 14, cursor: 'pointer',
+                  textAlign: 'left',
+                  border: `1.5px solid ${isSelected ? `color-mix(in srgb, ${HUE} 55%, transparent)` : isToday ? 'color-mix(in srgb, var(--tx) 22%, transparent)' : 'transparent'}`,
+                  background: isSelected
+                    ? `color-mix(in srgb, ${HUE} 14%, var(--card2))`
+                    : 'transparent',
+                  opacity: r ? 1 : 0.55,
+                }}
+              >
+                <b style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 800,
+                  width: 16, flex: 'none',
+                  color: isSelected ? HUE : isToday ? 'var(--tx)' : 'var(--tx3)',
+                }}>{d}</b>
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700,
+                  color: isSelected ? 'var(--tx)' : 'var(--tx2)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {r ? r.name : 'Rest day'}
+                </span>
+                {isToday && (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 8.5, fontWeight: 800, letterSpacing: '.08em',
+                    color: HUE, flex: 'none',
+                  }}>TODAY</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ------------------------------------------------ lift cards, span 8 */}
+        <div style={{
+          ...(phone ? {} : { gridColumn: 'span 8' }),
+          ...card,
+          padding: 'clamp(14px, 1.8vw, 20px)', display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <div style={KICKER}>{viewingToday ? 'Today’s session' : 'Routine preview'}</div>
+              {viewingToday && mine.length > 0 && (
+                <div className="num" style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 3 }}>
+                  {doneSets} of {totalSets} sets done
+                </div>
+              )}
+            </div>
+            <button
+              data-tour="gym-lifts"
+              onClick={() => T.setSheet('exercises')}
+              className="hov k-squish"
+              style={{
+                minHeight: 36, padding: '0 14px', borderRadius: 999, cursor: 'pointer',
+                border: `1px solid color-mix(in srgb, ${HUE} 40%, transparent)`,
+                background: `color-mix(in srgb, ${HUE} 12%, transparent)`, color: HUE,
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800,
+              }}
+            >
+              <Icon name="plus" size={12} color={HUE} /> Add exercise
+            </button>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: 10,
+          }}>
+            {displayExercises.length === 0 ? (
+              <MascotEmpty
+                title="Nothing planned for this day yet"
+                body="Add a movement and it will show up here, ready to log sets against."
+              >
+                <button
+                  onClick={() => T.setSheet('exercises')}
+                  className="k-glass k-squish"
+                  style={{
+                    minHeight: 38, padding: '0 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: HUE, color: '#141120', fontSize: 12.5, fontWeight: 800,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <Icon name="plus" size={13} color="#141120" /> Add an exercise
+                </button>
+              </MascotEmpty>
+            ) : (
+              displayExercises.map((exName, idx) => {
+                const b = blocks.find((x) => x.exercise === exName);
+                const exSets = viewingToday
+                  ? (b?.sets ?? mine.filter((s) => s.exercise === exName))
+                  : [];
+                const doneCount = exSets.filter((s) => s.done).length;
+                const setsCount = exSets.length || 4;
+                const isLive = viewingToday && ((next?.exercise === exName && !!session) || (idx === 0 && !next && !!session));
+                const shorthand = exSets.length > 0
+                  ? exSets.map((s) => `${s.weight_kg}×${s.reps}`).join(' · ')
+                  : previously[exName]
+                    ? `Last: ${previously[exName].weight_kg}×${previously[exName].reps}`
+                    : '4 sets planned';
+
+                return (
+                  <LiftCard
+                    key={exName}
+                    exercise={exName}
+                    setsCount={setsCount}
+                    doneCount={doneCount}
+                    weightShorthand={shorthand}
+                    pr={bests[exName] ?? 0}
+                    isLive={isLive}
+                    onOpen={() => setOpen({ exercise: exName, sub: `${doneCount} of ${setsCount} sets done` })}
+                    onQuickLog={() => {
+                      if (!viewingToday) setSelectedSlot(currentDaySlot);
+                      T.logSet(exName);
+                    }}
+                    onEdit={() => setEditingExercise(exName)}
+                    onRemove={async () => {
+                      const yes = await confirmAsk(`Remove ${exName}?`, {
+                        message: 'This removes the exercise and its logged sets from today’s workout.',
+                        confirmLabel: 'Remove', danger: true,
+                      });
+                      if (!yes) return;
+                      setRemovedExercises((r) => [...r, exName]);
+                      setAddedExercises((a) => a.filter((x) => x !== exName));
+                      T.removeExercise(exName);
+                    }}
+                  />
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ------------------------------------------------ right rail, span 4 */}
+        <div style={{
+          ...(phone ? {} : { gridColumn: 'span 4' }),
+          display: 'flex', flexDirection: 'column', gap: phone ? 10 : 12,
+        }}>
+          {/* Rest clock with ring, controls, and up next */}
+          <div style={{
+            ...card,
+            padding: 'clamp(14px, 1.6vw, 18px)', display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <RestRing value={restOn ? (rest / REST_S) * 100 : 0} hue={restOn ? AMBER : 'var(--line2)'} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={KICKER}>Rest clock</div>
+                <div className="num" style={{
+                  fontSize: 24, fontWeight: 800, letterSpacing: '-.02em', marginTop: 2,
+                  color: restOn ? AMBER : 'var(--tx3)', fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {restOn ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}` : `${REST_S}s`}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
+                  {restOn ? 'Breathe. Next set soon.' : 'Starts when you finish a set'}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+              <button onClick={() => setRest((r) => Math.max(0, r - 15))} className="hov k-squish" style={REST_BTN}>−15s</button>
+              <button onClick={() => setRest((r) => r + 15)} className="hov k-squish" style={REST_BTN}>+15s</button>
+              <button onClick={() => setRest(0)} className="hov k-squish" style={REST_BTN}>Skip</button>
+              <button onClick={() => setRest(REST_S)} className="hov k-squish" style={{ ...REST_BTN, color: AMBER, borderColor: `color-mix(in srgb, ${AMBER} 40%, transparent)` }}>Start</button>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--line)' }} />
+
+            <div>
+              <div style={{ ...KICKER, marginBottom: 4 }}>Up next</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {next?.exercise ?? activeRoutine?.exercises[0] ?? 'Nothing queued'}
+              </div>
+              <div className="num" style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>
+                {next?.set
+                  ? `Set ${next.index} of ${next.of} · ${next.set.weight_kg} kg × ${next.set.reps}`
+                  : next
+                    ? 'First set · working weight'
+                    : 'Log a set to see what is next'}
+              </div>
+            </div>
+          </div>
+
+          {/* Personal bests */}
+          <div style={{ ...card, padding: 'clamp(14px, 1.6vw, 18px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={KICKER}>Personal bests</div>
+              <Icon name="trophy" size={14} color={AMBER} />
+            </div>
+            {prs.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/mascots/otter.svg" alt="" width={40} height={40} style={{ opacity: 0.9, flex: 'none' }} />
+                <span style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.45 }}>
+                  No bests yet. Log a few sets and your strongest effort per movement lands here.
+                </span>
+              </div>
+            ) : (
+              prs.map(([name, kg]) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: 2, background: AMBER, flex: 'none',
+                  }} />
+                  <span style={{
+                    flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{name}</span>
+                  <span className="num" style={{ fontSize: 12.5, fontWeight: 800, color: AMBER, flex: 'none' }}>
+                    {Math.round(kg)} kg
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Week volume against last week */}
+          <div style={{ ...card, padding: 'clamp(14px, 1.6vw, 18px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={KICKER}>Volume this week</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 900, letterSpacing: '-.02em', color: 'var(--tx)' }}>
+                <Counter to={weekVol.now} format={(v) => Math.round(v).toLocaleString()} />
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)' }}>kg moved</span>
+            </div>
+            <AsciiBar
+              value={weekVol.comparable ? weekVol.pct : 0}
+              hue={HUE}
+              text={weekVol.comparable ? `${weekVol.pct}% of last week` : 'First full week sets the bar'}
+              label="Week volume against last week"
+            />
+          </div>
+        </div>
       </div>
-
-      {/* Desktop Dashboard Metrics Bento (Fills White Space Purposefully) */}
-      {!phone && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
-          background: 'var(--card)', borderRadius: 16, padding: '12px 14px', border: '1px solid var(--line)',
-        }}>
-          <div style={{ textAlign: 'center', padding: '6px 4px' }}>
-            <div style={KICKER}>MONTH WORKOUTS</div>
-            <div className="num" style={{ fontSize: 20, fontWeight: 800, color: 'var(--tx)', marginTop: 4 }}>
-              {thisMonthCount}
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '6px 4px', borderLeft: '1px solid var(--line)', borderRight: '1px solid var(--line)' }}>
-            <div style={KICKER}>STREAK</div>
-            <div className="num" style={{ fontSize: 20, fontWeight: 800, color: PAL.amber, marginTop: 4 }}>
-              {streak} Days
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '6px 4px' }}>
-            <div style={KICKER}>EST. TIME</div>
-            <div className="num" style={{ fontSize: 20, fontWeight: 800, color: HUE, marginTop: 4 }}>
-              ~{estMinutes}m
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div style={{
-      padding: phone ? '12px 12px 28px' : 'clamp(16px, 2.5vw, 32px) clamp(16px, 3vw, 42px) 48px',
-      maxWidth: phone ? 480 : 'min(1440px, 100%)',
-      marginInline: 'auto',
-    }}>
-      {phone ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {LeftColumn}
-          {RightColumn}
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(380px, 1fr) minmax(420px, 1.35fr)',
-          gap: 'clamp(16px, 2.2vw, 28px)',
-          alignItems: 'start',
-        }}>
-          {LeftColumn}
-          {RightColumn}
-        </div>
-      )}
 
       <TrainingOverlays T={T} />
 
@@ -673,59 +779,169 @@ export default function GymPage() {
           onAddSet={() => T.logSet(editingExercise)}
           onChangeSet={(set, patch) => T.change(set, patch)}
           onDropSet={(set) => T.drop(set)}
-          onRemoveExercise={() => {
+          onRemoveExercise={async () => {
+            const yes = await confirmAsk(`Remove ${editingExercise}?`, {
+              message: 'This removes the exercise and all its logged sets from today’s workout.',
+              confirmLabel: 'Remove', danger: true,
+            });
+            if (!yes) return;
+            setRemovedExercises((r) => [...r, editingExercise]);
+            setAddedExercises((a) => a.filter((x) => x !== editingExercise));
             T.removeExercise(editingExercise);
             setEditingExercise(null);
           }}
         />
       )}
+    </Page>
+  );
+}
+
+/* ------------------------------------------------------------------ pieces */
+
+const KICKER: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.12em',
+  textTransform: 'uppercase', color: 'var(--tx3)',
+};
+
+const REST_BTN: React.CSSProperties = {
+  minHeight: 30, borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
+  color: 'var(--tx2)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+};
+
+/** One stat in the top strip. The number counts; the label does not move. */
+function StatTile({
+  icon, hue, kicker, value, format, suffix, sub,
+}: {
+  icon: Parameters<typeof Icon>[0]['name'];
+  hue: string;
+  kicker: string;
+  value: number;
+  format?: (v: number) => string;
+  suffix?: string;
+  sub?: string;
+}) {
+  return (
+    <div
+      style={{
+        ...cardBase,
+        padding: 'clamp(12px, 1.4vw, 16px)', display: 'flex', flexDirection: 'column', gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{
+          width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center',
+          background: `color-mix(in srgb, ${hue} 15%, transparent)`, flex: 'none',
+        }}>
+          <Icon name={icon} size={13} color={hue} />
+        </span>
+        <span style={KICKER}>{kicker}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 'clamp(20px, 1.8vw, 26px)', fontWeight: 900,
+          letterSpacing: '-.02em', color: 'var(--tx)',
+        }}>
+          <Counter to={value} format={format} />
+        </span>
+        {suffix && (
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)' }}>{suffix}</span>
+        )}
+      </div>
+      {sub && (
+        <div className="num" style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4 }}>{sub}</div>
+      )}
+    </div>
+  );
+}
+
+const cardBase: React.CSSProperties = {
+  background: 'var(--card)', border: '1px solid var(--line)',
+  borderRadius: 'var(--r-lg, 24)', boxShadow: 'var(--sh)',
+};
+
+/** The rest countdown ring. The `.k-ring.linear` transition matches the 1s tick. */
+function RestRing({ value, hue }: { value: number; hue: string }) {
+  const R = 26;
+  const C = 2 * Math.PI * R;
+  const off = C * (1 - Math.min(100, Math.max(0, value)) / 100);
+  return (
+    <svg width={64} height={64} viewBox="0 0 64 64" role="img" aria-label="Rest remaining" style={{ flex: 'none' }}>
+      <circle cx={32} cy={32} r={R} fill="none" stroke="var(--line)" strokeWidth={5} />
+      <circle
+        className="k-ring linear"
+        cx={32} cy={32} r={R} fill="none" stroke={hue} strokeWidth={5}
+        strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off}
+        transform="rotate(-90 32 32)"
+      />
+    </svg>
+  );
+}
+
+/** design.md empty state: mascot, one sentence, one action. */
+function MascotEmpty({ title, body, children }: {
+  title: string; body: string; children?: React.ReactNode;
+}) {
+  return (
+    <div style={{
+      gridColumn: '1 / -1', textAlign: 'center',
+      padding: '26px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      background: 'var(--card2)', borderRadius: 'var(--r-md, 18)', border: '1px dashed var(--line2)',
+    }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/mascots/otter.svg" alt="" width={56} height={56} style={{ opacity: 0.92 }} />
+      <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--tx)', marginTop: 4 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--tx3)', maxWidth: 340, lineHeight: 1.5 }}>{body}</div>
+      {children && <div style={{ marginTop: 8 }}>{children}</div>}
     </div>
   );
 }
 
 /**
- * Canva Styled Lift Card with Photo, Name, Shorthand, "now" badge, green 2/4 fraction, and pink progress bar
+ * One lift. Photo, name, what the sets look like, a PR chip when there is one,
+ * the mint fraction, and the pink progress line. Hovers with a spring lift.
  */
-function CanvaLiftCard({
-  exercise,
-  setsCount,
-  doneCount,
-  weightShorthand,
-  isLive,
-  onOpen,
-  onQuickLog,
-  onEdit,
-  onRemove,
+function LiftCard({
+  exercise, setsCount, doneCount, weightShorthand, pr, isLive,
+  onOpen, onQuickLog, onEdit, onRemove,
 }: {
   exercise: string;
   setsCount: number;
   doneCount: number;
   weightShorthand: string;
+  pr: number;
   isLive: boolean;
   onOpen: () => void;
   onQuickLog: () => void;
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const { prefs } = usePrefs();
+  const { phone } = useLayout();
   const shot = shotOf(exercise) ?? 'bench';
   const tap = useTap(onOpen);
   const fraction = `${doneCount}/${setsCount}`;
-  const pct = setsCount > 0 ? (doneCount / setsCount) * 100 : 50;
+  const pct = setsCount > 0 ? (doneCount / setsCount) * 100 : 0;
+  const lift = prefs.motion === false ? undefined : {
+    whileHover: { y: -3 },
+    whileTap: { scale: 0.985 },
+    transition: { type: 'spring' as const, stiffness: 420, damping: 26 },
+  };
 
   return (
-    <div
+    <motion.div
+      {...lift}
       style={{
-        borderRadius: 14,
+        borderRadius: 'var(--r-md, 18)',
         background: isLive
           ? `color-mix(in srgb, ${HUE} 8%, var(--card2))`
           : 'var(--card2)',
         border: `1.2px solid ${isLive ? `color-mix(in srgb, ${HUE} 50%, var(--line2))` : 'var(--line2)'}`,
         overflow: 'hidden',
-        boxShadow: isLive ? `0 0 16px color-mix(in srgb, ${HUE} 16%, transparent)` : 'none',
+        boxShadow: isLive ? `0 0 18px color-mix(in srgb, ${HUE} 18%, transparent)` : 'none',
         display: 'flex', flexDirection: 'column',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '9px 10px 7px', gap: 4 }}>
         <button
           {...tap}
           style={{
@@ -734,13 +950,13 @@ function CanvaLiftCard({
             font: 'inherit', color: 'inherit', padding: 0,
           }}
         >
-          {/* Exercise Thumbnail */}
+          {/* Exercise thumbnail */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/ex/${shot}-0.jpg`}
             alt=""
             style={{
-              width: 44, height: 44, borderRadius: 8, objectFit: 'cover',
+              width: 44, height: 44, borderRadius: 10, objectFit: 'cover',
               flex: 'none', border: '1px solid var(--line2)',
             }}
             onError={(e) => {
@@ -748,46 +964,58 @@ function CanvaLiftCard({
             }}
           />
 
-          {/* Title & Set Details */}
+          {/* Title and set line */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, color: 'var(--tx)' }}>
-              {exercise}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {exercise}
+              </span>
+              {isLive && (
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800,
+                  color: HUE, textTransform: 'uppercase', letterSpacing: '.08em', flex: 'none',
+                }}>
+                  now
+                </span>
+              )}
             </div>
             <div className="num" style={{
-              fontSize: 10, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center',
+              fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6,
+              alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden',
             }}>
-              <span>{weightShorthand}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{weightShorthand}</span>
             </div>
           </div>
 
-          {/* Status Tag "now" */}
-          {isLive && (
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800,
-              color: '#FF5C98', textTransform: 'lowercase', letterSpacing: '.04em',
-              marginRight: 4,
+          {/* PR chip */}
+          {pr > 0 && (
+            <span title={`Best estimated one-rep max: ${Math.round(pr)} kg`} style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800, flex: 'none',
+              color: AMBER, background: `color-mix(in srgb, ${AMBER} 14%, transparent)`,
+              padding: '3px 7px', borderRadius: 999, marginRight: 2,
             }}>
-              now
+              {Math.round(pr)} kg
             </span>
           )}
 
-          {/* Completion Fraction: e.g. 2/4 in Mint Green */}
+          {/* Completion fraction */}
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800,
-            color: MINT, letterSpacing: '-.02em', flex: 'none', marginRight: 6,
+            color: doneCount >= setsCount && setsCount > 0 ? MINT : 'var(--tx3)',
+            letterSpacing: '-.02em', flex: 'none', marginRight: 4,
           }}>
             {fraction}
           </div>
         </button>
 
-        {/* Quick Action Controls on the Card */}
+        {/* Quick actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 'none' }}>
           <button
             onClick={onQuickLog}
-            title="Log set"
-            className="k-squish"
+            title="Log a set"
+            className="hov k-squish"
             style={{
-              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
+              width: 28, height: 28, borderRadius: 999, border: '1px solid var(--line2)',
               background: 'var(--card)', color: HUE, display: 'grid', placeItems: 'center',
               cursor: 'pointer',
             }}
@@ -799,53 +1027,43 @@ function CanvaLiftCard({
             title="Edit sets and reps"
             className="hov k-squish"
             style={{
-              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
+              width: 28, height: 28, borderRadius: 999, border: '1px solid var(--line2)',
               background: 'var(--card)', color: 'var(--tx2)', display: 'grid', placeItems: 'center',
               cursor: 'pointer',
             }}
           >
             <Icon name="edit" size={11} color="currentColor" />
           </button>
-          <button
-            onClick={async () => {
-              const yes = await confirmAsk(`Remove ${exercise}?`, {
-                message: 'This will remove the exercise and its sets from this workout.',
-                confirmLabel: 'Remove', danger: true,
-              });
-              if (yes) onRemove();
-            }}
-            title="Remove exercise"
-            className="hov k-squish"
-            style={{
-              width: 26, height: 26, borderRadius: 6, border: '1px solid var(--line2)',
-              background: 'var(--card)', color: 'var(--tx3)', display: 'grid', placeItems: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <Icon name="trash" size={11} color="currentColor" />
-          </button>
+          {!phone && (
+            <button
+              onClick={onRemove}
+              title="Remove exercise"
+              className="hov k-squish"
+              style={{
+                width: 28, height: 28, borderRadius: 999, border: '1px solid var(--line2)',
+                background: 'var(--card)', color: 'var(--tx3)', display: 'grid', placeItems: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="trash" size={11} color="currentColor" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Pink Filled Progress Bar */}
-      <div style={{ padding: '0 10px 8px' }}>
+      {/* Progress line */}
+      <div style={{ padding: '0 10px 9px' }}>
         <AsciiBar shape="slim" value={pct} hue={HUE} showValue={false} label={`${exercise} progress`} />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 /**
- * Exercise Edit Modal: Allows adjusting weights, reps, marking complete, or adding/deleting sets
+ * Edit modal for one exercise's sets: weights, reps, done ticks, add and drop.
  */
 function ExerciseEditModal({
-  exercise,
-  sets,
-  onClose,
-  onAddSet,
-  onChangeSet,
-  onDropSet,
-  onRemoveExercise,
+  exercise, sets, onClose, onAddSet, onChangeSet, onDropSet, onRemoveExercise,
 }: {
   exercise: string;
   sets: WorkoutSet[];
@@ -861,7 +1079,7 @@ function ExerciseEditModal({
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(6,5,11,.76)',
+        position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(20,17,32,.7)',
         backdropFilter: 'blur(4px)', display: 'flex',
         alignItems: phone ? 'flex-end' : 'center',
         justifyContent: 'center',
@@ -876,15 +1094,15 @@ function ExerciseEditModal({
         style={{
           width: 480, maxWidth: '100%', maxHeight: phone ? '88dvh' : '82dvh', overflowY: 'auto',
           background: 'var(--panel)', border: '1px solid var(--line2)',
-          borderRadius: phone ? '18px 18px 0 0' : 20, padding: 18,
-          boxShadow: phone ? 'none' : '0 24px 64px rgba(0,0,0,0.75)',
+          borderRadius: phone ? '18px 18px 0 0' : 'var(--r-xl, 32)', padding: 18,
+          boxShadow: phone ? 'none' : 'var(--shl, 0 24px 64px rgba(0,0,0,0.5))',
           display: 'flex', flexDirection: 'column', gap: 14,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
-              Edit Sets · {exercise}
+              Edit sets · {exercise}
             </h3>
             <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
               {sets.length} {sets.length === 1 ? 'set' : 'sets'} logged
@@ -895,19 +1113,20 @@ function ExerciseEditModal({
             className="hov k-squish"
             aria-label="Close"
             style={{
-              width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center',
+              width: 30, height: 30, borderRadius: 999, display: 'grid', placeItems: 'center',
               background: 'var(--card2)', border: '1px solid var(--line2)', cursor: 'pointer',
+              color: 'var(--tx2)', flex: 'none',
             }}
           >
-            <Icon name="close" size={13} color="var(--tx2)" />
+            <Icon name="close" size={13} color="currentColor" />
           </button>
         </div>
 
-        {/* Sets Rows */}
+        {/* Set rows */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {sets.length === 0 && (
             <div style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--tx3)', fontSize: 12 }}>
-              No sets recorded yet. Click below to add your first set.
+              No sets recorded yet. Add your first one below.
             </div>
           )}
 
@@ -916,64 +1135,61 @@ function ExerciseEditModal({
               key={s.id}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                background: 'var(--card2)', borderRadius: 10, border: '1px solid var(--line)',
+                background: 'var(--card2)', borderRadius: 14, border: '1px solid var(--line)',
               }}
             >
               <button
                 onClick={() => onChangeSet(s, { done: !s.done })}
                 className="k-squish"
+                aria-pressed={s.done}
+                aria-label={`Set ${idx + 1} done`}
                 style={{
-                  width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${s.done ? MINT : 'var(--line2)'}`,
+                  width: 26, height: 26, borderRadius: 999, border: `1.5px solid ${s.done ? MINT : 'var(--line2)'}`,
                   background: s.done ? `color-mix(in srgb, ${MINT} 20%, transparent)` : 'transparent',
                   color: s.done ? MINT : 'var(--tx3)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                  flex: 'none',
                 }}
               >
                 {s.done ? <Icon name="check" size={13} color={MINT} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{idx + 1}</span>}
               </button>
 
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Weight Input */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number"
-                    value={s.weight_kg || ''}
-                    onChange={(e) => onChangeSet(s, { weight_kg: Number(e.target.value) || 0 })}
-                    style={{
-                      width: 54, padding: '4px 6px', borderRadius: 6, background: 'var(--card)',
-                      border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
-                      fontSize: 12, fontWeight: 700, textAlign: 'center',
-                    }}
-                  />
-                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>kg</span>
-                </div>
-
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <input
+                  type="number"
+                  value={s.weight_kg || ''}
+                  onChange={(e) => onChangeSet(s, { weight_kg: Number(e.target.value) || 0 })}
+                  aria-label={`Weight for set ${idx + 1}, kilograms`}
+                  style={{
+                    width: 58, padding: '5px 6px', borderRadius: 8, background: 'var(--card)',
+                    border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
+                    fontSize: 12, fontWeight: 700, textAlign: 'center',
+                  }}
+                />
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>kg</span>
                 <span style={{ color: 'var(--line2)' }}>×</span>
-
-                {/* Reps Input */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number"
-                    value={s.reps || ''}
-                    onChange={(e) => onChangeSet(s, { reps: Number(e.target.value) || 0 })}
-                    style={{
-                      width: 46, padding: '4px 6px', borderRadius: 6, background: 'var(--card)',
-                      border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
-                      fontSize: 12, fontWeight: 700, textAlign: 'center',
-                    }}
-                  />
-                  <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>reps</span>
-                </div>
+                <input
+                  type="number"
+                  value={s.reps || ''}
+                  onChange={(e) => onChangeSet(s, { reps: Number(e.target.value) || 0 })}
+                  aria-label={`Reps for set ${idx + 1}`}
+                  style={{
+                    width: 48, padding: '5px 6px', borderRadius: 8, background: 'var(--card)',
+                    border: '1px solid var(--line2)', color: 'var(--tx)', fontFamily: 'var(--font-mono)',
+                    fontSize: 12, fontWeight: 700, textAlign: 'center',
+                  }}
+                />
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>reps</span>
               </div>
 
-              {/* Delete Set */}
               <button
                 onClick={() => onDropSet(s)}
                 className="hov k-squish"
                 title="Delete set"
+                aria-label={`Delete set ${idx + 1}`}
                 style={{
-                  width: 24, height: 24, borderRadius: 6, border: 'none',
+                  width: 26, height: 26, borderRadius: 999, border: 'none',
                   background: 'transparent', color: 'var(--tx3)', display: 'grid', placeItems: 'center',
-                  cursor: 'pointer',
+                  cursor: 'pointer', flex: 'none',
                 }}
               >
                 <Icon name="close" size={12} color="currentColor" />
@@ -982,59 +1198,34 @@ function ExerciseEditModal({
           ))}
         </div>
 
-        {/* Modal Bottom Verbs */}
+        {/* Modal actions */}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
             onClick={onAddSet}
-            className="k-squish"
+            className="k-glass k-squish"
             style={{
-              flex: 1, minHeight: 38, borderRadius: 10, border: `1px solid color-mix(in srgb, ${HUE} 40%, transparent)`,
-              background: `color-mix(in srgb, ${HUE} 15%, transparent)`, color: HUE,
+              flex: 1, minHeight: 38, borderRadius: 999, border: 'none',
+              background: HUE, color: '#141120',
               fontSize: 12.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
               gap: 6, cursor: 'pointer',
             }}
           >
-            <Icon name="plus" size={13} color={HUE} /> Add Set
+            <Icon name="plus" size={13} color="#141120" /> Add set
           </button>
           <button
-            onClick={async () => {
-              const yes = await confirmAsk(`Remove ${exercise}?`, {
-                message: 'This will remove the exercise and all its sets from this workout.',
-                confirmLabel: 'Remove', danger: true,
-              });
-              if (yes) onRemoveExercise();
-            }}
-            className="k-squish"
+            onClick={onRemoveExercise}
+            className="hov k-squish"
             style={{
-              minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)',
-              background: 'var(--card)', color: 'var(--pal-orange, #FF5555)',
+              minHeight: 38, padding: '0 14px', borderRadius: 999, border: '1px solid var(--line2)',
+              background: 'var(--card)', color: PAL.coral,
               fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
               gap: 6, cursor: 'pointer',
             }}
           >
-            <Icon name="trash" size={13} color="currentColor" /> Remove Exercise
+            <Icon name="trash" size={13} color="currentColor" /> Remove exercise
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-function PillBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{
-      fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em',
-      textTransform: 'uppercase', padding: '4px 8px', borderRadius: 6,
-      background: `color-mix(in srgb, ${HUE} 18%, transparent)`, color: HUE,
-      border: `1px solid color-mix(in srgb, ${HUE} 35%, transparent)`,
-    }}>
-      {children}
-    </span>
-  );
-}
-
-const KICKER: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.12em',
-  textTransform: 'uppercase', color: 'var(--tx3)',
-};
-
