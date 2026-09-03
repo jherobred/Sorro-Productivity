@@ -416,6 +416,42 @@ export function Shell({ children }: { children: React.ReactNode }) {
     }
   };
   /**
+   * The nav row's own menu.
+   *
+   * `menu` state and the <ContextMenu> at the bottom of this file have both
+   * been here all along with nothing between them — no caller ever set the
+   * state, so right-clicking a tab did the browser's default and every row in
+   * the sidebar was click-only. This is the missing half.
+   */
+  const openNavMenu = (sec: Section, x: number, y: number) => {
+    const newKind: Record<string, CaptureKind> = {
+      tasks: 'task', notebooks: 'note', money: 'money',
+    };
+    const kind = newKind[sec.id];
+
+    setMenu({
+      x, y, kind: 'nav', label: sec.name,
+      items: [
+        {
+          label: `Open ${sec.name}`,
+          icon: sec.ic,
+          run: () => go(sec.id),
+          disabled: !BUILT.has(sec.id),
+          hint: 'Not built yet',
+        },
+        ...(kind
+          ? [{ label: `New ${kind === 'money' ? 'expense' : kind}`, icon: 'plus' as IconName, run: () => setSheet(kind) }]
+          : []),
+        ...(sec.kids ?? []).map((k) => ({
+          label: k.n,
+          icon: 'chev' as IconName,
+          run: () => goFiltered(sec.id, k.n),
+        })),
+      ],
+    });
+  };
+
+  /**
    * SECTIONS interleaved with the four group headers, in GROUP_ORDER. Anything
    * an edit to SECTIONS adds without a group falls to the end under "More",
    * rather than silently disappearing from the sidebar.
@@ -659,7 +695,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       background: hue, opacity: on ? 1 : 0, transform: on ? 'scaleY(1)' : 'scaleY(.3)',
                       transition: 'opacity .3s cubic-bezier(.22,1,.36,1), transform .3s cubic-bezier(.22,1,.36,1)',
                     }} />
-                    <button onClick={() => go(sec.id)} onPointerDown={() => prefetchSection(sec.id)} style={{
+                    <button onClick={() => go(sec.id)} onPointerDown={() => prefetchSection(sec.id)}
+                      onContextMenu={(e) => { e.preventDefault(); openNavMenu(sec, e.clientX, e.clientY); }}
+                      style={{
                       display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
                       padding: hasKids ? '7px 4px 7px 8px' : '7px 8px 7px 8px', borderRadius: 8, fontSize: 12.5, fontWeight: on ? 700 : 500,
                       background: 'transparent', color: on ? hueTx(hue) : 'var(--tx2)',
@@ -1109,7 +1147,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             id: x.id, name: x.name, ic: x.ic, hue: SECHUE[x.id] || acc,
           }))} active={section} go={go} onMore={() => go('more')} />
         ) : phone && (
-          <BottomNav section={section} go={go} accent={acc} dark={dark} labels={prefs.alwaysShowLabels}
+          <BottomNav section={section} go={go} accent={acc} dark={dark} labels={prefs.alwaysShowLabels} onMenu={openNavMenu}
             items={navFor(prefs.navPicks)} />
         )}
       </div>
@@ -1172,10 +1210,11 @@ function OfflinePill() {
 }
 
 function BottomNav({
-  section, go, accent, dark, labels, items,
+  section, go, accent, dark, labels, items, onMenu,
 }: {
   section: string; go: (id: string) => void; accent: string; dark: boolean; labels: boolean;
   items: Section[];
+  onMenu: (sec: Section, x: number, y: number) => void;
 }) {
   /* Seven icons have to fit a 360px phone. The slot compresses with the count
      but the *button* never goes under 44px tall and stays a full share of the
@@ -1189,6 +1228,7 @@ function BottomNav({
     const on = s.id === section;
     return (
       <button key={s.id} onClick={() => go(s.id)} onPointerDown={() => prefetchSection(s.id)}
+        onContextMenu={(e) => { e.preventDefault(); onMenu(s, e.clientX, e.clientY); }}
         title={s.name} aria-label={s.name} aria-current={on ? 'page' : undefined}
         className="k-squish"
         style={{

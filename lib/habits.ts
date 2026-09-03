@@ -146,25 +146,65 @@ export function removeHabitEntryLog(habitId: string, onDate: string) {
 
 /* ----------------------------------------------------------------- Streak Freezes */
 
-export function getAvailableFreezes(): number {
-  if (typeof window === 'undefined') return 2;
+const FREEZE_START = 2;
+
+/**
+ * Same external-store shape the logs above use. Reading localStorage straight
+ * out of the hook meant spending a freeze changed the number on disk and left
+ * every badge on screen showing the old one until an unrelated re-render.
+ */
+let freezeCache = FREEZE_START;
+const freezeListeners = new Set<() => void>();
+
+function readFreezes(): number {
+  if (typeof window === 'undefined') return FREEZE_START;
   try {
     const raw = localStorage.getItem(HABIT_FREEZES_KEY);
-    return raw !== null ? Number(raw) : 2;
+    return raw !== null ? Number(raw) : FREEZE_START;
   } catch {
-    return 2;
+    return FREEZE_START;
   }
 }
 
+if (typeof window !== 'undefined') freezeCache = readFreezes();
+
+export function getAvailableFreezes(): number {
+  return freezeCache;
+}
+
 export function setAvailableFreezes(n: number) {
-  if (typeof window === 'undefined') return;
+  freezeCache = Math.max(0, n);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(HABIT_FREEZES_KEY, String(freezeCache));
+    } catch {}
+  }
+  freezeListeners.forEach((l) => l());
+}
+
+const subscribeFreezes = (onStoreChange: () => void) => {
+  freezeListeners.add(onStoreChange);
+  return () => { freezeListeners.delete(onStoreChange); };
+};
+const freezeSnapshot = () => freezeCache;
+const freezeServerSnapshot = () => FREEZE_START;
+
+/** Dates a freeze has been spent on, so a gap can be forgiven deliberately. */
+const FROZEN_DAYS_KEY = 'basedly-habit-frozen-days-v1';
+
+function readFrozenDays(): string[] {
+  if (typeof window === 'undefined') return [];
   try {
-    localStorage.setItem(HABIT_FREEZES_KEY, String(Math.max(0, n)));
-  } catch {}
+    const raw = localStorage.getItem(FROZEN_DAYS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function useStreakFreezes() {
-  const count = getAvailableFreezes();
+  const count = useSyncExternalStore(subscribeFreezes, freezeSnapshot, freezeServerSnapshot);
+
   return {
     freezes: count,
     useFreeze: (dateStr: string) => {
@@ -173,6 +213,14 @@ export function useStreakFreezes() {
         return false;
       }
       setAvailableFreezes(count - 1);
+      if (typeof window !== 'undefined') {
+        try {
+          const days = readFrozenDays();
+          if (!days.includes(dateStr)) {
+            localStorage.setItem(FROZEN_DAYS_KEY, JSON.stringify([...days, dateStr]));
+          }
+        } catch {}
+      }
       toast(`Used Streak Freeze for ${dateStr} 🛡️`);
       return true;
     },
@@ -376,8 +424,52 @@ export function calculateHabitGamification(habits: Habit[], ticks: Tick[]) {
 
 /* ----------------------------------------------------------------- Mutations */
 
-const TICK = defineMutation('habit.tick', async (v: { habitId: string; date: string; value?: number; note?: string; mood?: HabitLog['mood'] }) => {
+/**
+ * `toggle` flips the day on or off. `set` writes an exact value and only
+ * removes the row when that value drops to zero.
+ *
+ * Without the split, every caller that meant "record 3 reps" or "log 42
+ * minutes" hit the toggling RPC and deleted the entry it was trying to
+ * update, so a count habit could never pass 1 and finishing a timer on an
+ * already-ticked habit un-ticked it.
+ */
+export type TickMode = 'toggle' | 'set';
+
+export type TickVars = {
+  habitId: string;
+  date: string;
+  value?: number;
+  note?: string;
+  mood?: HabitLog['mood'];
+  mode?: TickMode;
+};
+
+const TICK = defineMutation('habit.tick', async (v: TickVars) => {
   const user_id = await currentUserId();
+
+  if (v.mode === 'set') {
+    const next = v.value ?? 1;
+    const { data: row } = await supabase
+      .from('bd_habit_ticks')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('habit_id', v.habitId)
+      .eq('on_date', v.date)
+      .maybeSingle();
+
+    const { error } = next <= 0
+      ? (row?.id
+        ? await supabase.from('bd_habit_ticks').delete().eq('id', row.id)
+        : { error: null })
+      : (row?.id
+        ? await supabase.from('bd_habit_ticks').update({ value: next }).eq('id', row.id)
+        : await supabase.from('bd_habit_ticks').insert({
+          user_id, habit_id: v.habitId, on_date: v.date, value: next,
+        }));
+    if (error) throw error;
+    return;
+  }
+
   const { error: rpcErr } = await supabase.rpc('bd_habit_tick', {
     p_habit: v.habitId,
     p_date: v.date,
@@ -532,17 +624,22 @@ export function useHabitActions(days = 30) {
 
   const tick = useMutation({
     mutationKey: TICK,
-    onMutate: (v: { habitId: string; date: string; value?: number; note?: string; mood?: HabitLog['mood'] }) => {
+    onMutate: (v: TickVars) => {
       const prev = queryClient.getQueryData<Tick[]>(tKey) ?? [];
       const on = prev.some((t) => t.habit_id === v.habitId && t.on_date === v.date);
 
-      if (!on) {
-        playTick();
+      // `set` writes the value it was given. Only `toggle` may clear the day,
+      // which is what a square in the grid and the Mark Done button mean.
+      const next = v.value ?? 1;
+      const clearing = v.mode === 'set' ? next <= 0 : on;
+
+      if (!clearing) {
+        if (!on) playTick();
         if (v.note || v.mood) {
           logHabitEntry({
             habit_id: v.habitId,
             on_date: v.date,
-            value: v.value ?? 1,
+            value: next,
             note: v.note,
             mood: v.mood,
             completed_at: new Date().toISOString(),
@@ -554,9 +651,12 @@ export function useHabitActions(days = 30) {
 
       queryClient.setQueryData<Tick[]>(
         tKey,
-        on
+        clearing
           ? prev.filter((t) => !(t.habit_id === v.habitId && t.on_date === v.date))
-          : [...prev, { habit_id: v.habitId, on_date: v.date, value: v.value ?? 1 }]
+          : on
+            ? prev.map((t) => (t.habit_id === v.habitId && t.on_date === v.date
+              ? { ...t, value: next } : t))
+            : [...prev, { habit_id: v.habitId, on_date: v.date, value: next }]
       );
       return prev;
     },
