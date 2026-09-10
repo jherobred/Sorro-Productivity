@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { Icon } from '../Icon';
 import { ProgBlur } from '../core/ProgBlur';
 import { useLayout } from '@/lib/useLayout';
+import { useOverlayBack } from '@/lib/nav';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
 import { coverArt, NotebookCover } from './NotebookCover';
 import type { Board } from '@/lib/canvas';
@@ -40,6 +42,8 @@ export function GlobalShelf({
   onNewNotebook,
 }: GlobalShelfProps) {
   const { phone } = useLayout();
+  /** Which notebook is peeked, and where its card sat when it was clicked. */
+  const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const canvases = boards.filter((b) => b.kind !== 'graph');
   const graphs = boards.filter((b) => b.kind === 'graph');
@@ -63,8 +67,10 @@ export function GlobalShelf({
         onNew={onNewNotebook}
       />
 
-      {/* Notebooks — cover cards. The art identifies the notebook faster than
-          a fourth line of metadata would. */}
+      {/* Notebooks — the notebook's own first notes, read off the card. Cover
+          art said which notebook this was; the titles say what is in it, which
+          is the question you actually arrive with. Clicking peeks rather than
+          navigating: only Open notebook leaves the shelf. */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <SectionHead title="Notebooks" count={notebooks.length} />
         {notebooks.length === 0 ? (
@@ -77,27 +83,53 @@ export function GlobalShelf({
             alignItems: 'start',
           }}>
             {notebooks.map((b, i) => {
-              const list = notes.filter((n) => n.notebook_id === b.id);
+              const list = [...notes.filter((n) => n.notebook_id === b.id)]
+                .sort((x, y) => y.updated_at.localeCompare(x.updated_at));
               const last = lastTouched(list);
               return (
                 <button
                   key={b.id}
-                  onClick={() => onOpenNotebook(b.id)}
+                  aria-label={`Peek inside ${b.name}`}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setPeek({ id: b.id, x: r.left, y: r.top });
+                  }}
                   className="clay k-squish"
-                  style={{ ['--i' as string]: i, position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: phone ? 132 : 150, width: '100%' }}
+                  style={{
+                    ['--i' as string]: i, position: 'relative', overflow: 'hidden',
+                    padding: '11px 13px 12px', textAlign: 'left',
+                    display: 'flex', flexDirection: 'column', gap: 3,
+                    minHeight: phone ? 132 : 150, width: '100%',
+                  }}
                 >
-                  <NotebookCover seed={b.id} color={b.color} />
-                  <ProgBlur edge="bottom" size={phone ? 58 : 66} strength={13} />
-                  <span style={{ position: 'relative', padding: '10px 12px 11px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                    <span style={{
-                      fontSize: 13.5, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--tx)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {b.name}
-                    </span>
-                    <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
-                      {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
-                    </span>
+                  <span aria-hidden style={{
+                    position: 'absolute', top: 10, bottom: 10, left: 0, width: 3, borderRadius: '0 3px 3px 0',
+                    background: b.color,
+                  }} />
+                  <span style={{
+                    fontSize: 13.5, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--tx)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {b.name}
+                  </span>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+                    {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
+                  </span>
+                  <span style={{
+                    marginTop: 5, paddingTop: 7, borderTop: '1px solid var(--line)',
+                    display: 'flex', flexDirection: 'column', minWidth: 0,
+                  }}>
+                    {list.slice(0, 3).map((n) => (
+                      <span key={n.id} style={{
+                        fontSize: 11.5, lineHeight: 1.78, color: 'var(--tx2)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {n.title || 'Untitled'}
+                      </span>
+                    ))}
+                    {list.length === 0 && (
+                      <span style={{ fontSize: 11.5, lineHeight: 1.78, color: 'var(--tx3)' }}>Nothing written yet.</span>
+                    )}
                   </span>
                 </button>
               );
@@ -192,11 +224,184 @@ export function GlobalShelf({
           </div>
         </section>
       )}
+
+      {peek && (() => {
+        const b = notebooks.find((x) => x.id === peek.id);
+        if (!b) return null;
+        const list = [...notes.filter((n) => n.notebook_id === b.id)]
+          .sort((x, y) => y.updated_at.localeCompare(x.updated_at));
+        return (
+          <NotebookPeek
+            notebook={b}
+            notes={list}
+            at={peek}
+            phone={phone}
+            onClose={() => setPeek(null)}
+            onOpenNote={(id) => { setPeek(null); onOpenNote(b.id, id); }}
+            onOpen={() => { setPeek(null); onOpenNotebook(b.id); }}
+          />
+        );
+      })()}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ pieces */
+
+/** Panel size, used to keep the peek on screen beside the card that opened it. */
+const PEEK_W = 460;
+const PEEK_H = 430;
+
+/**
+ * The peek — a notebook opened over the shelf instead of instead of it.
+ *
+ * Most trips into a notebook are a look, not a session: which notes are in
+ * here, is the one I want still near the top. That does not need a page.
+ */
+function NotebookPeek({
+  notebook, notes, at, phone, onClose, onOpenNote, onOpen,
+}: {
+  notebook: Notebook;
+  notes: Note[];
+  at: { x: number; y: number };
+  phone: boolean;
+  onClose: () => void;
+  onOpenNote: (id: string) => void;
+  onOpen: () => void;
+}) {
+  const [q, setQ] = useState('');
+  useOverlayBack(true, onClose);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [onClose]);
+
+  if (typeof document === 'undefined') return null;
+
+  const term = q.trim().toLowerCase();
+  const shown = notes.filter((n) => !term || `${n.title} ${n.body}`.toLowerCase().includes(term));
+  const listed = shown.slice(0, 7);
+
+  // Grow out of the card, but never off the edge of the window.
+  const pos: React.CSSProperties = phone
+    ? { left: 12, right: 12, bottom: 12 }
+    : {
+      left: Math.max(12, Math.min(at.x, window.innerWidth - PEEK_W - 16)),
+      top: Math.max(12, Math.min(at.y, window.innerHeight - PEEK_H - 16)),
+      width: PEEK_W,
+    };
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10, 8, 20, .45)' }}
+    >
+      <div
+        role="dialog" aria-modal="true" aria-label={notebook.name}
+        onClick={(e) => e.stopPropagation()}
+        className="k-bloom"
+        style={{
+          position: 'fixed', ...pos, maxWidth: 'calc(100vw - 24px)',
+          background: 'var(--card)', border: '1px solid var(--line2)',
+          borderRadius: 'var(--r-lg)', boxShadow: 'var(--shl)', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        <div style={{
+          position: 'relative', padding: '14px 16px 13px', display: 'flex', alignItems: 'flex-start', gap: 12,
+          background: `color-mix(in srgb, ${notebook.color} 16%, var(--card))`,
+          borderBottom: '1px solid var(--line)',
+        }}>
+          <span aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, background: notebook.color }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {notebook.name}
+            </div>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginTop: 2 }}>
+              {notes.length} note{notes.length === 1 ? '' : 's'}
+              {notes[0] ? ` · edited ${whenLabel(notes[0].updated_at)}` : ''}
+            </div>
+          </div>
+          <button onClick={onClose} className="hov" aria-label="Close"
+            style={{
+              flex: 'none', width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center',
+              border: '1px solid var(--line2)', background: 'var(--card)', cursor: 'pointer',
+            }}>
+            <Icon name="close" size={12} color="var(--tx2)" />
+          </button>
+        </div>
+
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 8, margin: '12px 16px 0', flex: 'none',
+          height: 34, padding: '0 12px', borderRadius: 'var(--r-sm)',
+          border: '1px solid var(--line2)', background: 'var(--panel)',
+        }}>
+          <Icon name="search" size={13} color="var(--tx3)" />
+          <input
+            autoFocus={!phone}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label={`Find in ${notebook.name}`}
+            placeholder="Find in this notebook"
+            style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--tx)', fontFamily: 'inherit' }}
+          />
+        </label>
+
+        <div className="navsb" style={{
+          margin: '8px 8px 0 8px', padding: '0 8px', maxHeight: 232, overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', gap: 1,
+        }}>
+          {listed.map((n) => (
+            <button key={n.id} onClick={() => onOpenNote(n.id)} className="row"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                padding: '8px 9px', borderRadius: 'var(--r-xs)', cursor: 'pointer',
+              }}>
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--tx)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {n.title || 'Untitled'}
+              </span>
+              <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+                {whenLabel(n.updated_at)}
+              </span>
+            </button>
+          ))}
+          {listed.length === 0 && (
+            <div style={{ padding: '18px 9px', fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center' }}>
+              {term ? 'Nothing matches.' : 'This notebook is empty.'}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 16px',
+          borderTop: '1px solid var(--line)', background: 'var(--panel)', flex: 'none',
+        }}>
+          {shown.length > listed.length && (
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+              {shown.length - listed.length} more
+            </span>
+          )}
+          <button onClick={onOpen} className="tap acc k-glass"
+            style={{
+              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
+              padding: '8px 15px', minHeight: 36, borderRadius: 999,
+              background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
+            }}>
+            Open notebook<Icon name="chev" size={13} color="var(--accInk)" />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 function SectionHead({ title, count }: { title: string; count: number | undefined }) {
   return (
