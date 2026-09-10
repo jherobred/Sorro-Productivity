@@ -110,16 +110,32 @@ export function useBackGuard() {
       }
     };
 
-    // Mouse button 3 is "back"
+    /**
+     * Mouse button 3 is "back".
+     *
+     * One press raises BOTH mousedown and auxclick, and this handler was bound
+     * to each of them — so a single click ran it twice and the app went back
+     * two steps. Decide on mousedown; auxclick only mops up the default.
+     *
+     * With no overlay open there is nothing to intercept: let the browser do
+     * its own back rather than calling history.back() on top of it, which was
+     * the other half of the double. popstate below picks it up either way.
+     */
+    let suppressAux = false;
+
     const onDown = (e: MouseEvent) => {
-      if (e.button === 3) {
+      if (e.button !== 3) return;
+      suppressAux = overlays.length > 0;
+      if (suppressAux) {
         e.preventDefault();
-        if (overlays.length > 0) {
-          closeTopOverlay();
-        } else {
-          window.history.back();
-        }
+        closeTopOverlay();
       }
+    };
+
+    const onAux = (e: MouseEvent) => {
+      if (e.button !== 3 || !suppressAux) return;
+      suppressAux = false;
+      e.preventDefault();
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -133,7 +149,7 @@ export function useBackGuard() {
 
     window.addEventListener('popstate', onPop);
     window.addEventListener('mousedown', onDown);
-    window.addEventListener('auxclick', onDown);
+    window.addEventListener('auxclick', onAux);
     window.addEventListener('keydown', onKey);
 
     // Android hardware/gesture back, when running inside the Capacitor shell.
@@ -158,7 +174,7 @@ export function useBackGuard() {
     return () => {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('auxclick', onDown);
+      window.removeEventListener('auxclick', onAux);
       window.removeEventListener('keydown', onKey);
       dispose?.();
     };
