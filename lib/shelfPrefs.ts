@@ -21,8 +21,19 @@ import { toast } from './toast';
 
 const KEY = 'bd_shelf_prefs';
 
-/** How a picture sits in the frame it fills. x/y are background-position %. */
-export type Framing = { fit?: 'cover' | 'contain'; x?: number; y?: number };
+/** How a picture sits in the frame it fills, and how it is veiled. */
+export type Framing = {
+  fit?: 'cover' | 'contain';
+  /** Focal point, as object-position percentages. */
+  x?: number;
+  y?: number;
+  /** Quarter turns, in degrees. */
+  rot?: number;
+  /** Blur radius in px at the strongest point. */
+  blur?: number;
+  /** Where the blur is heaviest, or the whole picture, or nothing. */
+  blurEdge?: 'none' | 'full' | 'top' | 'bottom' | 'left' | 'right';
+};
 
 /** The old three-way anchor, as the percentage that replaced it. */
 const POS_Y: Record<string, number> = { top: 0, center: 50, bottom: 100 };
@@ -155,12 +166,6 @@ export function useShelfPrefs(): ShelfPrefs {
     load,
     () => EMPTY,
   );
-}
-
-/** `background` shorthand for a framed picture, or undefined when there is none. */
-export function framed(image: string | undefined, frame: Framing | undefined): string | undefined {
-  if (!image) return undefined;
-  return `${frame?.x ?? 50}% ${frame?.y ?? 50}%/${frame?.fit ?? 'cover'} no-repeat url("${image}")`;
 }
 
 /**

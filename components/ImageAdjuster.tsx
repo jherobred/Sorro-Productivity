@@ -39,6 +39,8 @@ export function ImageAdjuster({
   const x = value.x ?? 50;
   const y = value.y ?? 50;
   const fit = value.fit ?? 'cover';
+  const blur = value.blur ?? 0;
+  const edge = value.blurEdge ?? 'none';
 
   const label: React.CSSProperties = {
     fontSize: 10, fontWeight: 800, letterSpacing: '.08em',
@@ -56,7 +58,7 @@ export function ImageAdjuster({
       <div
         style={{
           position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)',
-          width: 380, maxWidth: 'calc(100vw - 24px)', padding: 14,
+          width: 400, maxWidth: 'calc(100vw - 24px)', padding: 14,
           display: 'flex', gap: 14, alignItems: 'stretch',
           background: 'var(--card)', border: '1px solid var(--line2)', boxShadow: 'var(--shl)',
         }}
@@ -97,12 +99,47 @@ export function ImageAdjuster({
             <button onClick={() => onChange({ fit: 'cover' })} style={seg(fit === 'cover')}>Fill</button>
             <button onClick={() => onChange({ fit: 'contain' })} style={seg(fit === 'contain')}>Fit</button>
             <button
-              onClick={() => onChange({ x: 50, y: 50 })}
-              title="Centre the picture" aria-label="Centre the picture"
+              onClick={() => onChange({ rot: (((value.rot ?? 0) + 90) % 360) })}
+              title="Rotate a quarter turn" aria-label="Rotate a quarter turn"
+              style={{ ...seg(false), flex: 'none', width: 34, display: 'grid', placeItems: 'center', padding: 0 }}
+            >
+              <Icon name="redo" size={14} color="var(--tx2)" />
+            </button>
+            <button
+              onClick={() => onChange({ x: 50, y: 50, rot: 0 })}
+              title="Centre and unrotate" aria-label="Centre and unrotate"
               style={{ ...seg(false), flex: 'none', width: 34, display: 'grid', placeItems: 'center', padding: 0 }}
             >
               <Icon name="focus" size={14} color="var(--tx2)" />
             </button>
+          </div>
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={label}>Blur {blur}px</span>
+            <input
+              type="range" min={0} max={40} value={blur} aria-label="Blur amount"
+              onChange={(e) => {
+                const v = +e.target.value;
+                // Turning blur up from nothing needs somewhere to put it.
+                onChange(edge === 'none' && v > 0 ? { blur: v, blurEdge: 'bottom' } : { blur: v });
+              }}
+              style={{ width: '100%', accentColor: 'var(--acc)', cursor: 'pointer' }}
+            />
+          </label>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={label}>Blur sits</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['none', 'full', 'top', 'bottom', 'left', 'right'] as const).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => onChange(e !== 'none' && !blur ? { blurEdge: e, blur: 16 } : { blurEdge: e })}
+                  style={{ ...seg(edge === e), minHeight: 26, padding: '0 4px', fontSize: 10.5, textTransform: 'capitalize' }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
           </div>
 
           <button onClick={onClose} className="tap acc k-glass" style={{

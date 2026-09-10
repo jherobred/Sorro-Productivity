@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { Icon, type IconName } from '../Icon';
-import { ProgBlur } from '../core/ProgBlur';
 import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { ask } from '@/lib/ask';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { ColorPicker } from '../ColorPicker';
 import { ImageAdjuster } from '../ImageAdjuster';
+import { ImageVeil } from '../ImageVeil';
 import {
-  addWallpaper, currentWallpaper, cycleWallpaper, framed, pickImage,
+  addWallpaper, currentWallpaper, cycleWallpaper, pickImage,
   removeCurrentWallpaper, setBookPrefs, setHideRecent, setWallpaperFrame, useShelfPrefs,
 } from '@/lib/shelfPrefs';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
@@ -76,6 +76,8 @@ export function GlobalShelf({
   const pointer = useRef({ x: 0, y: 0 });
   /** Which picture the adjust panel is moving, if it is open. */
   const [adjusting, setAdjusting] = useState<string | null>(null);
+  /** The card whose caption is showing — hovered, or first-tapped on a phone. */
+  const [revealed, setRevealed] = useState<string | null>(null);
 
   /** Insert / adjust / remove, shared by notebook bands and board faces. */
   const imageGroup = (id: string, noun: string): CtxGroup => {
@@ -187,7 +189,15 @@ export function GlobalShelf({
                   key={b.id}
                   role="button" tabIndex={0}
                   aria-label={`Open ${b.name}`}
-                  onClick={() => onOpenNotebook(b.id)}
+                  onClick={() => {
+                    // On a phone there is no hover, so the first tap does what
+                    // hovering does and the second one opens the notebook.
+                    if (phone && revealed !== b.id) { setRevealed(b.id); return; }
+                    onOpenNotebook(b.id);
+                  }}
+                  onMouseEnter={() => { if (!phone) setRevealed(b.id); }}
+                  onMouseLeave={() => { if (!phone) setRevealed((r) => (r === b.id ? null : r)); }}
+                  onFocus={() => setRevealed(b.id)}
                   onKeyDown={(e) => {
                     if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                       e.preventDefault(); onOpenNotebook(b.id);
@@ -241,7 +251,14 @@ export function GlobalShelf({
                     }}>
                       {b.name}
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                    <span style={{
+                      display: 'flex', alignItems: 'center', gap: 7, minWidth: 0,
+                      // The caption is the card's second thought — out of the
+                      // way until the card is the one being looked at.
+                      opacity: revealed === b.id ? 1 : 0,
+                      transform: revealed === b.id ? 'none' : 'translateY(-3px)',
+                      transition: 'opacity .2s ease, transform .2s cubic-bezier(.2,.8,.2,1)',
+                    }}>
                       <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
                         {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
                       </span>
@@ -267,10 +284,11 @@ export function GlobalShelf({
                   <span style={{
                     position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden',
                     borderTop: '1px solid var(--line)',
-                    background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
-                      ?? `linear-gradient(120deg, color-mix(in srgb, ${b.color} 20%, var(--card)), color-mix(in srgb, ${b.color} 6%, var(--card)))`,
+                    background: `linear-gradient(120deg, color-mix(in srgb, ${b.color} 20%, var(--card)), color-mix(in srgb, ${b.color} 6%, var(--card)))`,
                   }}>
-                    <ProgBlur edge="top" size={phone ? 92 : 118} strength={14} />
+                    {pic(shelf.books[b.id]?.image) && (
+                      <ImageVeil url={pic(shelf.books[b.id]?.image)!} frame={shelf.books[b.id]} />
+                    )}
                     <span style={{
                       position: 'relative', display: 'flex', flexDirection: 'column', minWidth: 0,
                       padding: phone ? '8px 14px 12px' : '10px 18px 14px',
@@ -322,9 +340,11 @@ export function GlobalShelf({
               >
                 <span aria-hidden style={{
                   position: 'absolute', inset: 0,
-                  background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
-                    ?? `linear-gradient(140deg, color-mix(in srgb, ${b.color} 46%, var(--card2)), color-mix(in srgb, ${b.color} 14%, var(--card2)))`,
+                  background: `linear-gradient(140deg, color-mix(in srgb, ${b.color} 46%, var(--card2)), color-mix(in srgb, ${b.color} 14%, var(--card2)))`,
                 }} />
+                {pic(shelf.books[b.id]?.image) && (
+                  <ImageVeil url={pic(shelf.books[b.id]?.image)!} frame={shelf.books[b.id]} />
+                )}
                 <span style={{
                   position: 'absolute', top: 8, left: 8, width: 26, height: 26,
                   display: 'grid', placeItems: 'center',
@@ -333,7 +353,6 @@ export function GlobalShelf({
                 }}>
                   <Icon name={b.kind === 'graph' ? 'link' : 'grid'} size={12} color="var(--tx2)" />
                 </span>
-                <ProgBlur edge="bottom" size={44} strength={11} />
                 <span style={{
                   position: 'relative', padding: '10px 13px 11px', fontSize: 12.5, fontWeight: 800,
                   color: (shelf.books[b.id]?.image && readableOnLuminance(shelf.books[b.id]?.imageLum)) || 'var(--tx)',
@@ -356,8 +375,10 @@ export function GlobalShelf({
             collapsed={!!shelf.hideRecent}
             onToggle={() => setHideRecent(!shelf.hideRecent)}
           />
-          <div hidden={shelf.hideRecent} style={{
-            display: 'grid', gap: 12, alignItems: 'start',
+          <div style={{
+            // [hidden] sets display:none in the UA sheet, which an inline
+            // display:grid outranks — so the chevron did nothing. Drive it here.
+            display: shelf.hideRecent ? 'none' : 'grid', gap: 12, alignItems: 'start',
             gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
           }}>
             {recentNotes.map((n) => {
@@ -543,11 +564,8 @@ function ShelfHero({
       position: 'relative', overflow: 'hidden', minHeight: phone ? 210 : 268,
       display: 'flex', alignItems: 'flex-end', padding: phone ? 16 : 22, borderRadius: 0,
     }}>
-      <div aria-hidden style={{
-        position: 'absolute', inset: 0,
-        background: framed(wallpaper, frame) ?? coverArt('basedly-shelf-hero'),
-      }} />
-      <ProgBlur edge="bottom" size={phone ? 110 : 140} strength={16} />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: coverArt('basedly-shelf-hero') }} />
+      {wallpaper && <ImageVeil url={wallpaper} frame={frame} />}
 
       {/* Remove sits on the wallpaper it removes, so cycling to a picture you
           are done with puts its own delete under your cursor. */}
