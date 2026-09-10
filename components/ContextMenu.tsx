@@ -26,6 +26,8 @@ export type CtxItem = {
   hint?: string;
   /** A tick on the left, for rows that report a current setting. */
   checked?: boolean;
+  /** A CSS colour shown in place of the icon, for rows that pick a colour. */
+  swatch?: string;
 };
 
 /** A labelled run of rows. The label is optional; the rule above it is not. */
@@ -274,7 +276,16 @@ function Row({ it, onClose, accent, dark, phone }: {
           color: colour, opacity: it.disabled ? 0.45 : 1,
           cursor: it.disabled ? 'default' : 'pointer',
         }}>
-        <Icon name={it.icon} size={phone ? 18 : 14} color={it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx3)'} />
+        {it.swatch
+          ? (
+            /* A colour row says which colour with the colour itself; the name
+               alone makes you guess what this file calls "Indigo". */
+            <span aria-hidden style={{
+              flex: 'none', width: phone ? 18 : 14, height: phone ? 18 : 14,
+              background: it.swatch, border: '1px solid var(--line2)',
+            }} />
+          )
+          : <Icon name={it.icon} size={phone ? 18 : 14} color={it.disabled ? 'var(--tx3)' : it.danger ? PAL.coral : 'var(--tx3)'} />}
         <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {it.label}
         </span>

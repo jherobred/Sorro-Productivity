@@ -98,7 +98,7 @@ export function NotebookTable({
           run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
             .then((n) => { if (n && n !== b.name) onRename(b, n); }) },
         { label: 'Colour', icon: 'palette', items: COLOURS.map((c) => ({
-          label: c.n, icon: 'palette' as IconName, checked: b.color === c.v, run: () => onRecolour(b, c.v),
+          label: c.n, icon: 'palette' as IconName, swatch: c.v, checked: b.color === c.v, run: () => onRecolour(b, c.v),
         })) },
         { label: isArchived ? 'Unarchive notebook' : 'Archive notebook', icon: 'clock', run: () => onToggleArchive?.(b.id) },
         { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },

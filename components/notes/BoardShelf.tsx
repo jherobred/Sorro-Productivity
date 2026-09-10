@@ -79,7 +79,7 @@ export function BoardShelf({
         {
           label: 'Colour',
           items: COLOURS.map((c) => ({
-            label: c.n, icon: 'palette' as IconName, run: () => onRecolour(b, c.v),
+            label: c.n, icon: 'palette' as IconName, swatch: c.v, checked: b.color === c.v, run: () => onRecolour(b, c.v),
           })),
         },
         { items: [{ label: `Delete ${noun}`, icon: 'trash', danger: true, run: () => onDelete(b) }] },
