@@ -25,10 +25,10 @@ interface GlobalShelfProps {
 /**
  * The shelf — the landing screen of Notebooks.
  *
- * Image-led, not word-led. A hero band opens the tab, every notebook wears
- * generated cover art with its name on a progressive-blur veil, and canvases
- * and graphs sit in a snap-scrolling strip under it. Counts live on the hero
- * as tappable stat chips; there is no filter row and no search field here —
+ * A hero band opens the tab, then three four-up grids of square cards:
+ * notebooks reading their own note titles, the canvases and graphs wearing
+ * cover art, and the notes you touched last. Counts live on the hero as
+ * tappable stat chips; there is no filter row and no search field here —
  * the global search palette owns search, and each inner tab owns its tools.
  */
 export function GlobalShelf({
@@ -78,7 +78,7 @@ export function GlobalShelf({
         ) : (
           <div className="k-stagger" style={{
             display: 'grid',
-            gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(215px, 1fr))',
+            gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
             gap: 12,
             alignItems: 'start',
           }}>
@@ -96,39 +96,39 @@ export function GlobalShelf({
                   }}
                   className="clay k-squish"
                   style={{
-                    ['--i' as string]: i, position: 'relative', overflow: 'hidden',
-                    padding: '11px 13px 12px', textAlign: 'left',
-                    display: 'flex', flexDirection: 'column', gap: 3,
-                    minHeight: phone ? 132 : 150, width: '100%',
+                    ['--i' as string]: i, position: 'relative', overflow: 'hidden', borderRadius: 0,
+                    padding: phone ? '13px 14px 14px' : '16px 18px 17px', textAlign: 'left',
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                    minHeight: phone ? 152 : 210, width: '100%',
                   }}
                 >
                   <span aria-hidden style={{
-                    position: 'absolute', top: 10, bottom: 10, left: 0, width: 3, borderRadius: '0 3px 3px 0',
+                    position: 'absolute', top: 0, bottom: 0, left: 0, width: 4,
                     background: b.color,
                   }} />
                   <span style={{
-                    fontSize: 13.5, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--tx)',
+                    fontSize: phone ? 14 : 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {b.name}
                   </span>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
                     {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
                   </span>
                   <span style={{
                     marginTop: 5, paddingTop: 7, borderTop: '1px solid var(--line)',
                     display: 'flex', flexDirection: 'column', minWidth: 0,
                   }}>
-                    {list.slice(0, 3).map((n) => (
+                    {list.slice(0, phone ? 3 : 4).map((n) => (
                       <span key={n.id} style={{
-                        fontSize: 11.5, lineHeight: 1.78, color: 'var(--tx2)',
+                        fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx2)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {n.title || 'Untitled'}
                       </span>
                     ))}
                     {list.length === 0 && (
-                      <span style={{ fontSize: 11.5, lineHeight: 1.78, color: 'var(--tx3)' }}>Nothing written yet.</span>
+                      <span style={{ fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx3)' }}>Nothing written yet.</span>
                     )}
                   </span>
                 </button>
@@ -138,13 +138,13 @@ export function GlobalShelf({
         )}
       </section>
 
-      {/* Canvases & graphs — a snap strip of the same cover language, smaller. */}
+      {/* Canvases & graphs — the cover language, on the same four-up grid. */}
       {boards.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <SectionHead title="Canvas & graphs" count={boards.length} />
           <div style={{
-            display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4,
-            scrollSnapType: 'x proximity', margin: '0 -2px', padding: '0 2px 4px',
+            display: 'grid', gap: 12, alignItems: 'start',
+            gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
           }}>
             {[...canvases, ...graphs].map((b) => (
               <button
@@ -152,14 +152,14 @@ export function GlobalShelf({
                 onClick={() => onOpenBoard(b)}
                 className="clay k-squish"
                 style={{
-                  position: 'relative', overflow: 'hidden', flex: '0 0 auto', width: phone ? 138 : 156, height: 92,
-                  scrollSnapAlign: 'start', textAlign: 'left', padding: 0,
+                  position: 'relative', overflow: 'hidden', borderRadius: 0, width: '100%', height: phone ? 124 : 158,
+                  textAlign: 'left', padding: 0,
                   display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
                 }}
               >
                 <NotebookCover seed={b.id} color={b.color} />
                 <span style={{
-                  position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+                  position: 'absolute', top: 8, left: 8, width: 26, height: 26,
                   display: 'grid', placeItems: 'center',
                   background: 'color-mix(in srgb, var(--card) 62%, transparent)',
                   border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
@@ -168,7 +168,7 @@ export function GlobalShelf({
                 </span>
                 <ProgBlur edge="bottom" size={44} strength={11} />
                 <span style={{
-                  position: 'relative', padding: '8px 10px 9px', fontSize: 11.5, fontWeight: 800,
+                  position: 'relative', padding: '10px 13px 11px', fontSize: 12.5, fontWeight: 800,
                   color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
                 }}>
                   {b.name}
@@ -179,13 +179,13 @@ export function GlobalShelf({
         </section>
       )}
 
-      {/* Recently touched notes — the "carry on where I left" row. */}
+      {/* Recently touched notes — the "carry on where I left" grid. */}
       {recentNotes.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <SectionHead title="Picked up lately" count={undefined} />
           <div style={{
-            display: 'flex', gap: 10, overflowX: 'auto',
-            scrollSnapType: 'x proximity', padding: '0 2px 4px',
+            display: 'grid', gap: 12, alignItems: 'start',
+            gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
           }}>
             {recentNotes.map((n) => {
               const book = notebooks.find((b) => b.id === n.notebook_id);
@@ -195,27 +195,27 @@ export function GlobalShelf({
                   onClick={() => onOpenNote(n.notebook_id, n.id)}
                   className="clay k-squish"
                   style={{
-                    position: 'relative', flex: '0 0 auto', width: phone ? 190 : 224, scrollSnapAlign: 'start',
-                    textAlign: 'left', padding: '11px 13px 10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 3,
+                    position: 'relative', width: '100%', borderRadius: 0, minHeight: phone ? 116 : 138,
+                    textAlign: 'left', padding: phone ? '13px 14px 12px' : '15px 17px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 4,
                   }}
                 >
                   <span aria-hidden style={{
-                    position: 'absolute', top: 10, bottom: 10, left: 0, width: 3, borderRadius: '0 3px 3px 0',
+                    position: 'absolute', top: 0, bottom: 0, left: 0, width: 4,
                     background: book?.color ?? 'var(--acc)',
                   }} />
                   <span style={{
-                    fontSize: 12.5, fontWeight: 800, color: 'var(--tx)',
+                    fontSize: 13.5, fontWeight: 800, color: 'var(--tx)',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {n.title || 'Untitled'}
                   </span>
                   <span style={{
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    fontSize: 11, lineHeight: 1.45, color: 'var(--tx3)', minHeight: 31,
+                    fontSize: 12, lineHeight: 1.5, color: 'var(--tx3)', minHeight: 36,
                   }}>
                     {n.body ? n.body.replace(/[#*`>\[\]]/g, '').slice(0, 110) : 'Empty note'}
                   </span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
                     {book?.name ?? 'Notebook'} · {whenLabel(n.updated_at)}
                   </span>
                 </button>
@@ -304,7 +304,7 @@ function NotebookPeek({
         style={{
           position: 'fixed', ...pos, maxWidth: 'calc(100vw - 24px)',
           background: 'var(--card)', border: '1px solid var(--line2)',
-          borderRadius: 'var(--r-lg)', boxShadow: 'var(--shl)', overflow: 'hidden',
+          borderRadius: 0, boxShadow: 'var(--shl)', overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
         }}
       >
@@ -328,7 +328,7 @@ function NotebookPeek({
           </div>
           <button onClick={onClose} className="hov" aria-label="Close"
             style={{
-              flex: 'none', width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center',
+              flex: 'none', width: 30, height: 30, display: 'grid', placeItems: 'center',
               border: '1px solid var(--line2)', background: 'var(--card)', cursor: 'pointer',
             }}>
             <Icon name="close" size={12} color="var(--tx2)" />
@@ -337,7 +337,7 @@ function NotebookPeek({
 
         <label style={{
           display: 'flex', alignItems: 'center', gap: 8, margin: '12px 16px 0', flex: 'none',
-          height: 34, padding: '0 12px', borderRadius: 'var(--r-sm)',
+          height: 34, padding: '0 12px',
           border: '1px solid var(--line2)', background: 'var(--panel)',
         }}>
           <Icon name="search" size={13} color="var(--tx3)" />
@@ -359,7 +359,7 @@ function NotebookPeek({
             <button key={n.id} onClick={() => onOpenNote(n.id)} className="row"
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                padding: '8px 9px', borderRadius: 'var(--r-xs)', cursor: 'pointer',
+                padding: '8px 9px', cursor: 'pointer',
               }}>
               <span style={{
                 flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--tx)',
@@ -391,7 +391,7 @@ function NotebookPeek({
           <button onClick={onOpen} className="tap acc k-glass"
             style={{
               marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
-              padding: '8px 15px', minHeight: 36, borderRadius: 999,
+              padding: '8px 15px', minHeight: 36, borderRadius: 0,
               background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
             }}>
             Open notebook<Icon name="chev" size={13} color="var(--accInk)" />
@@ -448,7 +448,7 @@ function ShelfHero({
       onClick={() => onJump(jump === 'graph' ? 'graph' : jump)}
       className="k-chip"
       style={{
-        display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 999,
+        display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: 0,
         background: 'color-mix(in srgb, var(--card) 55%, transparent)',
         border: '1px solid var(--line2)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
       }}
@@ -462,7 +462,7 @@ function ShelfHero({
   return (
     <div className="clay" style={{
       position: 'relative', overflow: 'hidden', minHeight: phone ? 128 : 152,
-      display: 'flex', alignItems: 'flex-end', padding: phone ? 14 : 18, borderRadius: 'var(--r-xl)',
+      display: 'flex', alignItems: 'flex-end', padding: phone ? 16 : 22, borderRadius: 0,
     }}>
       <div aria-hidden style={{ position: 'absolute', inset: 0, background: coverArt('basedly-shelf-hero') }} />
       <ProgBlur edge="bottom" size={phone ? 76 : 92} strength={16} />
@@ -487,7 +487,7 @@ function ShelfHero({
           {chip('Graphs', graphs, 'link', 'graph')}
           <button onClick={onNew} className="tap acc k-glass" style={{
             display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', minHeight: 38,
-            borderRadius: 999, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
+            borderRadius: 0, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
           }}>
             <Icon name="bookPlus" size={15} color="var(--accInk)" />New notebook
           </button>
@@ -500,7 +500,7 @@ function ShelfHero({
 function EmptyShelf({ onNew }: { onNew: () => void }) {
   return (
     <div className="clay" style={{
-      padding: '34px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center',
+      padding: '34px 20px', borderRadius: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center',
     }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/mascots/otter.svg" alt="" width={72} height={72} style={{ opacity: .92 }} />
@@ -510,7 +510,7 @@ function EmptyShelf({ onNew }: { onNew: () => void }) {
       </div>
       <button onClick={onNew} className="tap acc k-glass" style={{
         display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', minHeight: 38,
-        borderRadius: 999, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
+        borderRadius: 0, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
       }}>
         <Icon name="bookPlus" size={15} color="var(--accInk)" />New notebook
       </button>
