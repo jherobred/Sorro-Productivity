@@ -595,7 +595,7 @@ export function NoteEditor({
           maxWidth: '100%',
           overflowY: 'auto',
           overflowX: 'hidden',
-          borderRadius: phone ? 0 : 16,
+          borderRadius: phone ? 0 : 4,
           border: phone ? 'none' : '1px solid var(--line2)',
           boxShadow: phone ? 'none' : 'var(--sh)',
           padding: phone ? '12px 14px 60px' : '24px 28px 64px',

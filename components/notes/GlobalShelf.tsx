@@ -1,15 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { Icon } from '../Icon';
+import { Icon, type IconName } from '../Icon';
 import { ProgBlur } from '../core/ProgBlur';
 import { useLayout } from '@/lib/useLayout';
-import { useOverlayBack } from '@/lib/nav';
+import { usePrefs } from '@/lib/prefs';
+import { ask } from '@/lib/ask';
+import { ContextMenu, type CtxGroup } from '../ContextMenu';
+import { pickImage, setBookPrefs, setHideRecent, setWallpaper, useShelfPrefs } from '@/lib/shelfPrefs';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
 import { coverArt, NotebookCover } from './NotebookCover';
 import type { Board } from '@/lib/canvas';
+
+/** Recolour options, matching the notebook menus elsewhere in Notes. */
+const COLOURS = [
+  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
+  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
+];
 
 interface GlobalShelfProps {
   notebooks: Notebook[];
@@ -20,10 +28,14 @@ interface GlobalShelfProps {
   onOpenBoard: (board: Board) => void;
   onJumpTab: (tab: 'notebooks' | 'canvas' | 'graph' | 'journal' | 'code') => void;
   onNewNotebook: () => void;
+  onRenameNotebook?: (b: Notebook, name: string) => void;
+  onRecolourNotebook?: (b: Notebook, color: string) => void;
+  onRenameBoard?: (b: Board) => void;
+  onRecolourBoard?: (b: Board, color: string) => void;
 }
 
 /**
- * The shelf — the landing screen of Notebooks.
+ * The library — the landing screen of Notebooks.
  *
  * A hero band opens the tab, then three four-up grids of square cards:
  * notebooks reading their own note titles, the canvases and graphs wearing
@@ -40,10 +52,73 @@ export function GlobalShelf({
   onOpenBoard,
   onJumpTab,
   onNewNotebook,
+  onRenameNotebook,
+  onRecolourNotebook,
+  onRenameBoard,
+  onRecolourBoard,
 }: GlobalShelfProps) {
   const { phone } = useLayout();
-  /** Which notebook is peeked, and where its card sat when it was clicked. */
-  const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
+  const { prefs } = usePrefs();
+  const shelf = useShelfPrefs();
+  const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxGroup[] } | null>(null);
+
+  /** Everything a notebook card can be customised with, in one menu. */
+  const bookMenu = (b: Notebook): CtxGroup[] => [
+    { items: [{ label: 'Open notebook', icon: 'book', run: () => onOpenNotebook(b.id) }] },
+    {
+      label: 'Notebook',
+      items: [
+        ...(onRenameNotebook ? [{
+          label: 'Rename', icon: 'edit' as const, shortcut: 'F2',
+          run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
+            .then((n) => { if (n && n !== b.name) onRenameNotebook(b, n); }),
+        }] : []),
+        ...(onRecolourNotebook ? [{
+          label: 'Colour', icon: 'palette' as const,
+          items: COLOURS.map((c) => ({
+            label: c.n, icon: 'palette' as const, checked: b.color === c.v,
+            run: () => onRecolourNotebook(b, c.v),
+          })),
+        }] : []),
+        {
+          label: shelf.books[b.id]?.tag ? 'Edit tag' : 'Add tag', icon: 'tag',
+          run: () => void ask('Tag this notebook', {
+            initial: shelf.books[b.id]?.tag ?? '', placeholder: 'e.g. school, work',
+          }).then((t) => setBookPrefs(b.id, { tag: t?.trim().slice(0, 24) || undefined })),
+        },
+      ],
+    },
+    {
+      label: 'Header image',
+      items: [
+        {
+          label: shelf.books[b.id]?.image ? 'Replace image' : 'Add image', icon: 'photo',
+          run: () => void pickImage('band').then((d) => { if (d) setBookPrefs(b.id, { image: d }); }),
+        },
+        ...(shelf.books[b.id]?.image ? [{
+          label: 'Remove image', icon: 'trash' as const, danger: true,
+          run: () => setBookPrefs(b.id, { image: undefined }),
+        }] : []),
+      ],
+    },
+  ];
+
+  const boardMenu = (b: Board): CtxGroup[] => [
+    { items: [{ label: 'Open', icon: (b.kind === 'graph' ? 'link' : 'grid') as IconName, run: () => onOpenBoard(b) }] },
+    {
+      label: b.kind === 'graph' ? 'Graph' : 'Canvas',
+      items: [
+        ...(onRenameBoard ? [{ label: 'Rename', icon: 'edit' as const, run: () => onRenameBoard(b) }] : []),
+        ...(onRecolourBoard ? [{
+          label: 'Colour', icon: 'palette' as const,
+          items: COLOURS.map((c) => ({
+            label: c.n, icon: 'palette' as const, checked: b.color === c.v,
+            run: () => onRecolourBoard(b, c.v),
+          })),
+        }] : []),
+      ],
+    },
+  ].filter((g) => g.items.length > 0);
 
   const canvases = boards.filter((b) => b.kind !== 'graph');
   const graphs = boards.filter((b) => b.kind === 'graph');
@@ -63,6 +138,7 @@ export function GlobalShelf({
         canvases={canvases.length}
         graphs={graphs.length}
         phone={phone}
+        wallpaper={shelf.wallpaper}
         onJump={onJumpTab}
         onNew={onNewNotebook}
       />
@@ -87,51 +163,107 @@ export function GlobalShelf({
                 .sort((x, y) => y.updated_at.localeCompare(x.updated_at));
               const last = lastTouched(list);
               return (
-                <button
+                <div
                   key={b.id}
-                  aria-label={`Peek inside ${b.name}`}
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setPeek({ id: b.id, x: r.left, y: r.top });
+                  role="button" tabIndex={0}
+                  aria-label={`Open ${b.name}`}
+                  onClick={() => onOpenNotebook(b.id)}
+                  onKeyDown={(e) => {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault(); onOpenNotebook(b.id);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: bookMenu(b) });
                   }}
                   className="clay k-squish"
                   style={{
                     ['--i' as string]: i, position: 'relative', overflow: 'hidden', borderRadius: 0,
-                    padding: phone ? '13px 14px 14px' : '16px 18px 17px', textAlign: 'left',
-                    display: 'flex', flexDirection: 'column', gap: 4,
-                    minHeight: phone ? 152 : 210, width: '100%',
+                    textAlign: 'left', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column',
+                    minHeight: phone ? 172 : 238, width: '100%',
                   }}
                 >
+                  {/* The header band — an eighth of the card, and the only
+                      place a picture belongs on it. The blur under the image
+                      hands off to the card surface instead of stopping at a
+                      hard line. */}
                   <span aria-hidden style={{
-                    position: 'absolute', top: 0, bottom: 0, left: 0, width: 4,
+                    position: 'relative', flex: 'none', height: phone ? 22 : 30, overflow: 'hidden',
+                    background: shelf.books[b.id]?.image
+                      ? `center/cover url("${shelf.books[b.id]!.image}")`
+                      : `linear-gradient(120deg, color-mix(in srgb, ${b.color} 42%, var(--card2)), color-mix(in srgb, ${b.color} 12%, var(--card2)))`,
+                  }}>
+                    <ProgBlur edge="bottom" size={phone ? 14 : 18} strength={10} />
+                  </span>
+
+                  <span aria-hidden style={{
+                    position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, zIndex: 1,
                     background: b.color,
                   }} />
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: bookMenu(b) });
+                    }}
+                    className="hov" aria-label={`Customise ${b.name}`} aria-haspopup="menu"
+                    style={{
+                      position: 'absolute', top: 7, left: 11, zIndex: 2, width: 26, height: 26,
+                      display: 'grid', placeItems: 'center', cursor: 'pointer',
+                      background: 'color-mix(in srgb, var(--card) 68%, transparent)',
+                      border: '1px solid var(--line2)',
+                      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+                    }}
+                  >
+                    <Icon name="dots" size={14} color="var(--tx2)" />
+                  </button>
+
                   <span style={{
-                    fontSize: phone ? 14 : 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4,
+                    padding: phone ? '11px 14px 14px' : '13px 18px 17px',
                   }}>
-                    {b.name}
-                  </span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
-                    {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
-                  </span>
-                  <span style={{
-                    marginTop: 5, paddingTop: 7, borderTop: '1px solid var(--line)',
-                    display: 'flex', flexDirection: 'column', minWidth: 0,
-                  }}>
-                    {list.slice(0, phone ? 3 : 4).map((n) => (
-                      <span key={n.id} style={{
-                        fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx2)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {n.title || 'Untitled'}
+                    <span style={{
+                      fontSize: phone ? 14 : 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {b.name}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)' }}>
+                        {list.length} note{list.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
                       </span>
-                    ))}
-                    {list.length === 0 && (
-                      <span style={{ fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx3)' }}>Nothing written yet.</span>
-                    )}
+                      {shelf.books[b.id]?.tag && (
+                        <span style={{
+                          flex: 'none', padding: '2px 7px', fontSize: 10.5, fontWeight: 800,
+                          letterSpacing: '.02em', maxWidth: 110,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          color: b.color, background: `color-mix(in srgb, ${b.color} 16%, transparent)`,
+                          border: `1px solid color-mix(in srgb, ${b.color} 38%, transparent)`,
+                        }}>
+                          {shelf.books[b.id]!.tag}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{
+                      marginTop: 5, paddingTop: 7, borderTop: '1px solid var(--line)',
+                      display: 'flex', flexDirection: 'column', minWidth: 0,
+                    }}>
+                      {list.slice(0, phone ? 3 : 4).map((n) => (
+                        <span key={n.id} style={{
+                          fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx2)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {n.title || 'Untitled'}
+                        </span>
+                      ))}
+                      {list.length === 0 && (
+                        <span style={{ fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx3)' }}>Nothing written yet.</span>
+                      )}
+                    </span>
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -150,6 +282,10 @@ export function GlobalShelf({
               <button
                 key={b.id}
                 onClick={() => onOpenBoard(b)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: boardMenu(b) });
+                }}
                 className="clay k-squish"
                 style={{
                   position: 'relative', overflow: 'hidden', borderRadius: 0, width: '100%', height: phone ? 124 : 158,
@@ -182,8 +318,15 @@ export function GlobalShelf({
       {/* Recently touched notes — the "carry on where I left" grid. */}
       {recentNotes.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <SectionHead title="Picked up lately" count={undefined} />
-          <div style={{
+          <SectionHead
+            title="Picked up lately"
+            count={undefined}
+            action={{
+              label: shelf.hideRecent ? `Show ${recentNotes.length}` : 'Hide',
+              onClick: () => setHideRecent(!shelf.hideRecent),
+            }}
+          />
+          <div hidden={shelf.hideRecent} style={{
             display: 'grid', gap: 12, alignItems: 'start',
             gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
           }}>
@@ -225,190 +368,39 @@ export function GlobalShelf({
         </section>
       )}
 
-      {peek && (() => {
-        const b = notebooks.find((x) => x.id === peek.id);
-        if (!b) return null;
-        const list = [...notes.filter((n) => n.notebook_id === b.id)]
-          .sort((x, y) => y.updated_at.localeCompare(x.updated_at));
-        return (
-          <NotebookPeek
-            notebook={b}
-            notes={list}
-            at={peek}
-            phone={phone}
-            onClose={() => setPeek(null)}
-            onOpenNote={(id) => { setPeek(null); onOpenNote(b.id, id); }}
-            onOpen={() => { setPeek(null); onOpenNotebook(b.id); }}
-          />
-        );
-      })()}
+      {menu && (
+        <ContextMenu
+          x={menu.x} y={menu.y} kind="project" label={menu.label} items={menu.items}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
+        />
+      )}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ pieces */
 
-/** Panel size, used to keep the peek on screen beside the card that opened it. */
-const PEEK_W = 460;
-const PEEK_H = 430;
-
-/**
- * The peek — a notebook opened over the shelf instead of instead of it.
- *
- * Most trips into a notebook are a look, not a session: which notes are in
- * here, is the one I want still near the top. That does not need a page.
- */
-function NotebookPeek({
-  notebook, notes, at, phone, onClose, onOpenNote, onOpen,
+function SectionHead({
+  title, count, action,
 }: {
-  notebook: Notebook;
-  notes: Note[];
-  at: { x: number; y: number };
-  phone: boolean;
-  onClose: () => void;
-  onOpenNote: (id: string) => void;
-  onOpen: () => void;
+  title: string;
+  count: number | undefined;
+  action?: { label: string; onClick: () => void };
 }) {
-  const [q, setQ] = useState('');
-  useOverlayBack(true, onClose);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onClose]);
-
-  if (typeof document === 'undefined') return null;
-
-  const term = q.trim().toLowerCase();
-  const shown = notes.filter((n) => !term || `${n.title} ${n.body}`.toLowerCase().includes(term));
-  const listed = shown.slice(0, 7);
-
-  // Grow out of the card, but never off the edge of the window.
-  const pos: React.CSSProperties = phone
-    ? { left: 12, right: 12, bottom: 12 }
-    : {
-      left: Math.max(12, Math.min(at.x, window.innerWidth - PEEK_W - 16)),
-      top: Math.max(12, Math.min(at.y, window.innerHeight - PEEK_H - 16)),
-      width: PEEK_W,
-    };
-
-  return createPortal(
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(10, 8, 20, .45)' }}
-    >
-      <div
-        role="dialog" aria-modal="true" aria-label={notebook.name}
-        onClick={(e) => e.stopPropagation()}
-        className="k-bloom"
-        style={{
-          position: 'fixed', ...pos, maxWidth: 'calc(100vw - 24px)',
-          background: 'var(--card)', border: '1px solid var(--line2)',
-          borderRadius: 0, boxShadow: 'var(--shl)', overflow: 'hidden',
-          display: 'flex', flexDirection: 'column',
-        }}
-      >
-        <div style={{
-          position: 'relative', padding: '14px 16px 13px', display: 'flex', alignItems: 'flex-start', gap: 12,
-          background: `color-mix(in srgb, ${notebook.color} 16%, var(--card))`,
-          borderBottom: '1px solid var(--line)',
-        }}>
-          <span aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, background: notebook.color }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {notebook.name}
-            </div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginTop: 2 }}>
-              {notes.length} note{notes.length === 1 ? '' : 's'}
-              {notes[0] ? ` · edited ${whenLabel(notes[0].updated_at)}` : ''}
-            </div>
-          </div>
-          <button onClick={onClose} className="hov" aria-label="Close"
-            style={{
-              flex: 'none', width: 30, height: 30, display: 'grid', placeItems: 'center',
-              border: '1px solid var(--line2)', background: 'var(--card)', cursor: 'pointer',
-            }}>
-            <Icon name="close" size={12} color="var(--tx2)" />
-          </button>
-        </div>
-
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: 8, margin: '12px 16px 0', flex: 'none',
-          height: 34, padding: '0 12px',
-          border: '1px solid var(--line2)', background: 'var(--panel)',
-        }}>
-          <Icon name="search" size={13} color="var(--tx3)" />
-          <input
-            autoFocus={!phone}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label={`Find in ${notebook.name}`}
-            placeholder="Find in this notebook"
-            style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--tx)', fontFamily: 'inherit' }}
-          />
-        </label>
-
-        <div className="navsb" style={{
-          margin: '8px 8px 0 8px', padding: '0 8px', maxHeight: 232, overflowY: 'auto',
-          display: 'flex', flexDirection: 'column', gap: 1,
-        }}>
-          {listed.map((n) => (
-            <button key={n.id} onClick={() => onOpenNote(n.id)} className="row"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                padding: '8px 9px', cursor: 'pointer',
-              }}>
-              <span style={{
-                flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--tx)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {n.title || 'Untitled'}
-              </span>
-              <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
-                {whenLabel(n.updated_at)}
-              </span>
-            </button>
-          ))}
-          {listed.length === 0 && (
-            <div style={{ padding: '18px 9px', fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center' }}>
-              {term ? 'Nothing matches.' : 'This notebook is empty.'}
-            </div>
-          )}
-        </div>
-
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 16px',
-          borderTop: '1px solid var(--line)', background: 'var(--panel)', flex: 'none',
-        }}>
-          {shown.length > listed.length && (
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
-              {shown.length - listed.length} more
-            </span>
-          )}
-          <button onClick={onOpen} className="tap acc k-glass"
-            style={{
-              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
-              padding: '8px 15px', minHeight: 36, borderRadius: 0,
-              background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
-            }}>
-            Open notebook<Icon name="chev" size={13} color="var(--accInk)" />
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function SectionHead({ title, count }: { title: string; count: number | undefined }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
       <h2 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)' }}>{title}</h2>
       {count !== undefined && (
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+      )}
+      {action && (
+        <button onClick={action.onClick} className="hov" style={{
+          marginLeft: 'auto', padding: '4px 10px', minHeight: 28, cursor: 'pointer',
+          border: '1px solid var(--line2)', background: 'var(--card)',
+          fontSize: 11, fontWeight: 700, color: 'var(--tx2)',
+        }}>
+          {action.label}
+        </button>
       )}
     </div>
   );
@@ -428,9 +420,11 @@ function Stat({ to }: { to: number }) {
 }
 
 function ShelfHero({
-  notebooks, notes, canvases, graphs, phone, onJump, onNew,
+  notebooks, notes, canvases, graphs, phone, wallpaper, onJump, onNew,
 }: {
   notebooks: number; notes: number; canvases: number; graphs: number; phone: boolean;
+  /** A picture the reader chose, standing in for the generated gradient. */
+  wallpaper: string | undefined;
   onJump: GlobalShelfProps['onJumpTab'];
   onNew: () => void;
 }) {
@@ -464,8 +458,42 @@ function ShelfHero({
       position: 'relative', overflow: 'hidden', minHeight: phone ? 128 : 152,
       display: 'flex', alignItems: 'flex-end', padding: phone ? 16 : 22, borderRadius: 0,
     }}>
-      <div aria-hidden style={{ position: 'absolute', inset: 0, background: coverArt('basedly-shelf-hero') }} />
+      <div aria-hidden style={{
+        position: 'absolute', inset: 0,
+        background: wallpaper ? `center/cover url("${wallpaper}")` : coverArt('basedly-shelf-hero'),
+      }} />
       <ProgBlur edge="bottom" size={phone ? 76 : 92} strength={16} />
+
+      {/* Wallpaper controls sit on the band they change. */}
+      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 2 }}>
+        <button
+          onClick={() => void pickImage('wide').then((d) => { if (d) setWallpaper(d); })}
+          className="hov" title={wallpaper ? 'Change wallpaper' : 'Add a wallpaper'}
+          aria-label={wallpaper ? 'Change wallpaper' : 'Add a wallpaper'}
+          style={{
+            display: 'grid', placeItems: 'center', width: 30, height: 30, cursor: 'pointer',
+            background: 'color-mix(in srgb, var(--card) 68%, transparent)',
+            border: '1px solid var(--line2)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          }}
+        >
+          <Icon name="photo" size={14} color="var(--tx2)" />
+        </button>
+        {wallpaper && (
+          <button
+            onClick={() => setWallpaper(undefined)}
+            className="hov" title="Remove wallpaper" aria-label="Remove wallpaper"
+            style={{
+              display: 'grid', placeItems: 'center', width: 30, height: 30, cursor: 'pointer',
+              background: 'color-mix(in srgb, var(--card) 68%, transparent)',
+              border: '1px solid var(--line2)',
+              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            }}
+          >
+            <Icon name="close" size={13} color="var(--tx2)" />
+          </button>
+        )}
+      </div>
 
       <div style={{
         position: 'relative', width: '100%', display: 'flex', alignItems: 'flex-end',
@@ -475,7 +503,7 @@ function ShelfHero({
           <h1 style={{
             fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)',
           }}>
-            Your shelf
+            Your library
           </h1>
           <span className="metaline" style={{ fontWeight: 600, color: 'var(--tx2)' }}>{today || '\u00A0'}</span>
         </div>
@@ -505,7 +533,7 @@ function EmptyShelf({ onNew }: { onNew: () => void }) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/mascots/otter.svg" alt="" width={72} height={72} style={{ opacity: .92 }} />
       <div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)' }}>Your shelf is waiting</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)' }}>Your library is waiting</div>
         <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3 }}>Make your first notebook and it moves in.</div>
       </div>
       <button onClick={onNew} className="tap acc k-glass" style={{

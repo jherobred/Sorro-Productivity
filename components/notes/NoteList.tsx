@@ -23,7 +23,6 @@ const SORT_LABEL: Record<Sort, string> = { updated: 'Date updated', created: 'Da
 
 export function NoteList({
   notebook, notes, tags, selected, phone, onPick, onNew, onNewMathNote, onDelete, onMove, onRename, notebooks,
-  trashCount, onOpenTrash,
 }: {
   notebook: Notebook;
   notes: Note[];
@@ -37,8 +36,6 @@ export function NoteList({
   onMove: (n: Note, notebookId: string) => void;
   onRename: (n: Note, title: string) => void;
   notebooks: Notebook[];
-  trashCount?: number;
-  onOpenTrash?: () => void;
 }) {
   const { prefs } = usePrefs();
   const [q, setQ] = useState('');
@@ -129,14 +126,14 @@ export function NoteList({
         <span style={{ marginLeft: 'auto' }} />
         <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY, label: 'Sort', items: sortMenu() })}
           className="hov tap" title="Sort" aria-label="Sort notes"
-          style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center' }}>
+          style={{ width: 32, height: 32, borderRadius: 4, display: 'grid', placeItems: 'center' }}>
           <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
       </div>
 
       <label style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36,
-        borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', flex: 'none',
+        borderRadius: 4, border: '1px solid var(--line2)', background: 'var(--card)', flex: 'none',
       }}>
         <Icon name="search" size={14} color="var(--tx3)" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find in this notebook"
@@ -144,7 +141,7 @@ export function NoteList({
           style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--tx)', fontFamily: 'inherit' }} />
         {q && (
           <button onClick={() => setQ('')} aria-label="Clear search" className="hov"
-            style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center' }}>
+            style={{ width: 20, height: 20, borderRadius: 4, display: 'grid', placeItems: 'center' }}>
             <Icon name="close" size={11} color="var(--tx3)" />
           </button>
         )}
@@ -162,7 +159,7 @@ export function NoteList({
           gap: 8,
           padding: '10px 14px',
           minHeight: 40,
-          borderRadius: 999,
+          borderRadius: 4,
           background: 'var(--acc)',
           border: 'none',
           color: 'var(--accInk)',
@@ -181,7 +178,7 @@ export function NoteList({
         <div className="hbar" style={{ display: 'flex', gap: 5, overflowX: 'auto', flex: 'none', paddingBottom: 2 }}>
           {allTags.map((t) => (
             <button key={t} onClick={() => setTag(tag === t ? null : t)} className="k-chip" style={{
-              flex: 'none', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+              flex: 'none', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 700,
               border: `1px solid ${tag === t ? 'var(--acc)' : 'var(--line2)'}`,
               background: tag === t ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
               color: tag === t ? 'var(--accTx)' : 'var(--tx3)',
@@ -198,7 +195,7 @@ export function NoteList({
             <button key={n.id} onClick={() => onPick(n.id)}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, label: n.title || 'Untitled', items: noteMenu(n) }); }}
               style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '11px 13px', borderRadius: 'var(--r-sm)',
+                display: 'block', width: '100%', textAlign: 'left', padding: '11px 13px', borderRadius: 4,
                 border: '1px solid transparent',
                 borderLeft: on ? '3px solid var(--acc)' : '3px solid transparent',
                 background: on ? 'color-mix(in srgb, var(--acc) 10%, var(--card2))' : 'var(--card)',
@@ -239,24 +236,6 @@ export function NoteList({
         )}
       </div>
 
-      {/* Bottom Left Trash / Archive Button for notes in this notebook */}
-      {onOpenTrash && (
-        <div style={{ marginTop: 'auto', paddingTop: 6, borderTop: '1px solid var(--line2)', flex: 'none' }}>
-          <button
-            onClick={onOpenTrash}
-            className="hov k-squish"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 10,
-              border: '1px solid var(--line2)', background: 'var(--card2)',
-              fontSize: 12, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', width: '100%',
-              justifyContent: 'flex-start',
-            }}
-          >
-            <Icon name="trash" size={13} color="var(--pal-coral, var(--tx3))" />
-            <span>Bin {typeof trashCount === 'number' && trashCount > 0 ? `(${trashCount})` : ''}</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }

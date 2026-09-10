@@ -56,7 +56,7 @@ import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH,
  */
 
 const TABS = [
-  { id: 'shelf', label: 'Shelf', icon: 'layers' },
+  { id: 'shelf', label: 'Library', icon: 'layers' },
   { id: 'notebooks', label: 'Notebooks', icon: 'book' },
   { id: 'canvas', label: 'Canvas', icon: 'grid' },
   { id: 'graph', label: 'Graph', icon: 'link' },
@@ -195,6 +195,9 @@ export default function NotebooksPage() {
 
   // What "back" means on this screen, in the order things were opened.
   const canGoBack = inTrash || !!nbId || !!(phone && noteId);
+  /** A notebook is open: the library, canvas, graph, journal and Java doors
+      all step aside so the screen is just this notebook. */
+  const insideNotebook = tab === 'notebooks' && !!nbId;
   const stepBack = () => {
     if (inTrash) { setInTrash(false); return; }
     if (noteId && phone) { setNoteId(null); return; }
@@ -279,16 +282,22 @@ $$
           display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
         }}>
           {canGoBack && (
-            <button onClick={stepBack} className="hov k-squish" aria-label="Back"
+            <button onClick={stepBack} className="hov k-squish"
+              aria-label={insideNotebook ? 'Back to library' : 'Back'}
               style={{
-                flex: 'none', width: 40, height: 40, borderRadius: 12, display: 'grid', placeItems: 'center',
-                border: '1px solid var(--line2)', marginRight: 6, background: 'var(--card)', cursor: 'pointer',
+                flex: 'none', height: 44, minWidth: 44, padding: insideNotebook ? '0 15px 0 12px' : 0,
+                borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                border: '1px solid var(--line2)', marginRight: 10, background: 'var(--card)', cursor: 'pointer',
+                fontSize: 13, fontWeight: 700, color: 'var(--tx)',
               }}>
-              <Icon name="back" size={16} color="var(--tx2)" />
+              <Icon name="back" size={19} color="var(--tx2)" />
+              {insideNotebook && <span>Library</span>}
             </button>
           )}
 
-          <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
+          {!insideNotebook && (
+            <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
+          )}
 
           {!phone && tab === 'notebooks' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>
@@ -301,7 +310,7 @@ $$
                 aria-pressed={inTrash} title="Trash & Archive"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
-                  borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
+                  borderRadius: 4, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
                   fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
                 }}>
                 <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
@@ -353,6 +362,11 @@ $$
             }}
             onJumpTab={(t) => setTab(t)}
             onNewNotebook={() => { setTab('notebooks'); newNotebook(); }}
+            onRenameNotebook={(b, name) => { A.editNotebook.mutate({ id: b.id, patch: { name } }); toast('Renamed'); }}
+            onRecolourNotebook={(b, color) => A.editNotebook.mutate({ id: b.id, patch: { color } })}
+            onRenameBoard={(b) => void ask(`Rename ${b.kind === 'graph' ? 'graph' : 'canvas'}`, { initial: b.name, placeholder: 'Name' })
+              .then((n) => { if (n) B.saveBoard.mutate({ id: b.id, patch: { name: n } }); })}
+            onRecolourBoard={(b, color) => B.saveBoard.mutate({ id: b.id, patch: { color } })}
           />
         )}
 
@@ -419,8 +433,6 @@ $$
                   <NoteList
                     notebook={notebook} notes={mine} tags={tags} notebooks={notebooks}
                     selected={noteId} phone={phone}
-                    trashCount={trash.filter((n) => n.notebook_id === nbId).length || trash.length}
-                    onOpenTrash={() => { setInTrash(true); setNbId(null); }}
                     onPick={setNoteId}
                     onNew={() => newNote()}
                     onNewMathNote={newMathNote}
