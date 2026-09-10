@@ -21,12 +21,22 @@ import { toast } from './toast';
 
 const KEY = 'bd_shelf_prefs';
 
-/** How a picture sits in the frame it fills. */
-export type Framing = { fit?: 'cover' | 'contain'; pos?: 'top' | 'center' | 'bottom' };
+/** How a picture sits in the frame it fills. x/y are background-position %. */
+export type Framing = { fit?: 'cover' | 'contain'; x?: number; y?: number };
+
+/** The old three-way anchor, as the percentage that replaced it. */
+const POS_Y: Record<string, number> = { top: 0, center: 50, bottom: 100 };
+function migrate(f: (Framing & { pos?: string }) | undefined): Framing {
+  if (!f) return {};
+  const { pos, ...rest } = f;
+  return pos && rest.y === undefined ? { ...rest, y: POS_Y[pos] ?? 50 } : rest;
+}
 
 export type BookPrefs = Framing & {
   /** imageStore id for the card header band, or a board tile's whole face. */
   image?: string;
+  /** How bright that picture is, measured once, so text over it can contrast. */
+  imageLum?: number;
   /** One short label shown beside the note count. */
   tag?: string;
 };
@@ -38,12 +48,14 @@ export type ShelfPrefs = {
   wallpaperAt: number;
   /** Framing for the hero. */
   wallpaperFrame: Framing;
+  /** Brightness per wallpaper id, for the greeting drawn over it. */
+  wallpaperLum: Record<string, number>;
   books: Record<string, BookPrefs>;
   /** Whether the "Picked up lately" grid is collapsed. */
   hideRecent?: boolean;
 };
 
-const EMPTY: ShelfPrefs = { wallpapers: [], wallpaperAt: 0, wallpaperFrame: {}, books: {} };
+const EMPTY: ShelfPrefs = { wallpapers: [], wallpaperAt: 0, wallpaperFrame: {}, wallpaperLum: {}, books: {} };
 
 let cache: ShelfPrefs | null = null;
 const listeners = new Set<() => void>();
@@ -59,8 +71,11 @@ function load(): ShelfPrefs {
     cache = {
       wallpapers,
       wallpaperAt: Math.min(parsed.wallpaperAt ?? 0, Math.max(0, wallpapers.length - 1)),
-      wallpaperFrame: parsed.wallpaperFrame ?? {},
-      books: parsed.books ?? {},
+      wallpaperFrame: migrate(parsed.wallpaperFrame),
+      wallpaperLum: parsed.wallpaperLum ?? {},
+      books: Object.fromEntries(
+        Object.entries(parsed.books ?? {}).map(([k, v]) => [k, { ...v, ...migrate(v) }]),
+      ),
       hideRecent: parsed.hideRecent,
     };
   } catch {
@@ -86,10 +101,13 @@ export function currentWallpaper(p: ShelfPrefs): string | undefined {
   return p.wallpapers[p.wallpaperAt];
 }
 
-export function addWallpaper(id: string) {
+export function addWallpaper(id: string, lum: number) {
   const p = load();
   const wallpapers = [...p.wallpapers, id];
-  commit({ ...p, wallpapers, wallpaperAt: wallpapers.length - 1 });
+  commit({
+    ...p, wallpapers, wallpaperAt: wallpapers.length - 1,
+    wallpaperLum: { ...p.wallpaperLum, [id]: lum },
+  });
 }
 
 /** Drop the one on screen and land on its neighbour. */
@@ -142,7 +160,7 @@ export function useShelfPrefs(): ShelfPrefs {
 /** `background` shorthand for a framed picture, or undefined when there is none. */
 export function framed(image: string | undefined, frame: Framing | undefined): string | undefined {
   if (!image) return undefined;
-  return `${frame?.pos ?? 'center'}/${frame?.fit ?? 'cover'} no-repeat url("${image}")`;
+  return `${frame?.x ?? 50}% ${frame?.y ?? 50}%/${frame?.fit ?? 'cover'} no-repeat url("${image}")`;
 }
 
 /**
@@ -153,7 +171,7 @@ export function framed(image: string | undefined, frame: Framing | undefined): s
  * retina one, and it is the same picture behind both. imageStore only
  * re-encodes when a file is genuinely enormous.
  */
-export function pickImage(): Promise<string | null> {
+export function pickImage(): Promise<{ id: string; lum: number } | null> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') return resolve(null);
     const input = document.createElement('input');

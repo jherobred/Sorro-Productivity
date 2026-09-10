@@ -9,6 +9,7 @@ import { usePrefs } from '@/lib/prefs';
 import { ask } from '@/lib/ask';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { ColorPicker } from '../ColorPicker';
+import { ImageAdjuster } from '../ImageAdjuster';
 import {
   addWallpaper, currentWallpaper, cycleWallpaper, framed, pickImage,
   removeCurrentWallpaper, setBookPrefs, setHideRecent, setWallpaperFrame, useShelfPrefs,
@@ -16,6 +17,7 @@ import {
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
 import { coverArt } from './NotebookCover';
 import { useImageUrls } from '@/lib/imageStore';
+import { inkFor, readableOnLuminance } from '@/lib/contrast';
 import type { Framing } from '@/lib/shelfPrefs';
 import type { Board } from '@/lib/canvas';
 
@@ -72,6 +74,8 @@ export function GlobalShelf({
   const [picker, setPicker] = useState<{ x: number; y: number; value: string; apply: (c: string) => void } | null>(null);
   /** Where the menu was opened, so the wheel lands there and not at 0,0. */
   const pointer = useRef({ x: 0, y: 0 });
+  /** Which picture the adjust panel is moving, if it is open. */
+  const [adjusting, setAdjusting] = useState<string | null>(null);
 
   /** Insert / adjust / remove, shared by notebook bands and board faces. */
   const imageGroup = (id: string, noun: string): CtxGroup => {
@@ -81,19 +85,10 @@ export function GlobalShelf({
       items: [
         {
           label: cur?.image ? 'Replace image' : 'Insert an image', icon: 'photo',
-          run: () => void pickImage().then((d) => { if (d) setBookPrefs(id, { image: d }); }),
+          run: () => void pickImage().then((d) => { if (d) setBookPrefs(id, { image: d.id, imageLum: d.lum }); }),
         },
         ...(cur?.image ? [
-          {
-            label: 'Adjust the image', icon: 'focus' as const,
-            items: [
-              { label: 'Fill the frame', icon: 'expand' as const, checked: (cur.fit ?? 'cover') === 'cover', run: () => setBookPrefs(id, { fit: 'cover' }) },
-              { label: 'Fit the whole picture', icon: 'collapse' as const, checked: cur.fit === 'contain', run: () => setBookPrefs(id, { fit: 'contain' }) },
-              { label: 'Anchor top', icon: 'sort' as const, checked: cur.pos === 'top', run: () => setBookPrefs(id, { pos: 'top' }) },
-              { label: 'Anchor middle', icon: 'sort' as const, checked: (cur.pos ?? 'center') === 'center', run: () => setBookPrefs(id, { pos: 'center' }) },
-              { label: 'Anchor bottom', icon: 'sort' as const, checked: cur.pos === 'bottom', run: () => setBookPrefs(id, { pos: 'bottom' }) },
-            ],
-          },
+          { label: 'Adjust the image', icon: 'focus' as const, run: () => setAdjusting(id) },
           { label: 'Remove image', icon: 'trash' as const, danger: true, run: () => setBookPrefs(id, { image: undefined }) },
         ] : []),
       ],
@@ -163,6 +158,7 @@ export function GlobalShelf({
         frame={shelf.wallpaperFrame}
         count={shelf.wallpapers.length}
         at={shelf.wallpaperAt}
+        ink={readableOnLuminance(shelf.wallpaperLum[currentWallpaper(shelf) ?? ''])}
         onJump={onJumpTab}
         onNew={onNewNotebook}
       />
@@ -210,18 +206,6 @@ export function GlobalShelf({
                     minHeight: phone ? 212 : 292, width: '100%',
                   }}
                 >
-                  {/* The header band — an eighth of the card, and the only
-                      place a picture belongs on it. The blur under the image
-                      hands off to the card surface instead of stopping at a
-                      hard line. */}
-                  <span aria-hidden style={{
-                    position: 'relative', flex: 'none', height: phone ? 62 : 84, overflow: 'hidden',
-                    background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
-                      ?? `linear-gradient(120deg, color-mix(in srgb, ${b.color} 42%, var(--card2)), color-mix(in srgb, ${b.color} 12%, var(--card2)))`,
-                  }}>
-                    <ProgBlur edge="bottom" size={phone ? 30 : 40} strength={14} />
-                  </span>
-
                   <span aria-hidden style={{
                     position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, zIndex: 1,
                     background: b.color,
@@ -235,7 +219,7 @@ export function GlobalShelf({
                     }}
                     className="hov" aria-label={`Customise ${b.name}`} aria-haspopup="menu"
                     style={{
-                      position: 'absolute', top: 7, left: 11, zIndex: 2, width: 26, height: 26,
+                      position: 'absolute', top: 10, right: 10, zIndex: 2, width: 26, height: 26,
                       display: 'grid', placeItems: 'center', cursor: 'pointer',
                       background: 'color-mix(in srgb, var(--card) 68%, transparent)',
                       border: '1px solid var(--line2)',
@@ -245,12 +229,14 @@ export function GlobalShelf({
                     <Icon name="dots" size={14} color="var(--tx2)" />
                   </button>
 
+                  {/* Title and count sit on the card itself, where they were. */}
                   <span style={{
-                    flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4,
-                    padding: phone ? '11px 14px 14px' : '13px 18px 17px',
+                    flex: 'none', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4,
+                    padding: phone ? '11px 14px 10px' : '13px 18px 12px',
                   }}>
                     <span style={{
                       fontSize: phone ? 14 : 15.5, fontWeight: 800, letterSpacing: '-.015em', color: 'var(--tx)',
+                      paddingRight: 28,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {b.name}
@@ -264,20 +250,35 @@ export function GlobalShelf({
                           flex: 'none', padding: '2px 7px', fontSize: 10.5, fontWeight: 800,
                           letterSpacing: '.02em', maxWidth: 110,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          color: b.color, background: `color-mix(in srgb, ${b.color} 16%, transparent)`,
+                          color: inkFor(b.color, prefs.theme === 'dark'),
+                          background: `color-mix(in srgb, ${b.color} 16%, transparent)`,
                           border: `1px solid color-mix(in srgb, ${b.color} 38%, transparent)`,
                         }}>
                           {shelf.books[b.id]!.tag}
                         </span>
                       )}
                     </span>
+                  </span>
+
+                  {/* The picture starts at the rule under the title and takes
+                      the rest of the card. The notes read over it, on a frost
+                      that is strongest where they are and clears toward the
+                      bottom so the picture is still a picture. */}
+                  <span style={{
+                    position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden',
+                    borderTop: '1px solid var(--line)',
+                    background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
+                      ?? `linear-gradient(120deg, color-mix(in srgb, ${b.color} 20%, var(--card)), color-mix(in srgb, ${b.color} 6%, var(--card)))`,
+                  }}>
+                    <ProgBlur edge="top" size={phone ? 92 : 118} strength={14} />
                     <span style={{
-                      marginTop: 5, paddingTop: 7, borderTop: '1px solid var(--line)',
-                      display: 'flex', flexDirection: 'column', minWidth: 0,
+                      position: 'relative', display: 'flex', flexDirection: 'column', minWidth: 0,
+                      padding: phone ? '8px 14px 12px' : '10px 18px 14px',
                     }}>
                       {list.slice(0, phone ? 3 : 4).map((n) => (
                         <span key={n.id} style={{
-                          fontSize: 12.5, lineHeight: 1.85, color: 'var(--tx2)',
+                          fontSize: 12.5, lineHeight: 1.85,
+                          color: (shelf.books[b.id]?.image && readableOnLuminance(shelf.books[b.id]?.imageLum)) || 'var(--tx2)',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
                           {n.title || 'Untitled'}
@@ -335,7 +336,8 @@ export function GlobalShelf({
                 <ProgBlur edge="bottom" size={44} strength={11} />
                 <span style={{
                   position: 'relative', padding: '10px 13px 11px', fontSize: 12.5, fontWeight: 800,
-                  color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+                  color: (shelf.books[b.id]?.image && readableOnLuminance(shelf.books[b.id]?.imageLum)) || 'var(--tx)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
                 }}>
                   {b.name}
                 </span>
@@ -402,6 +404,14 @@ export function GlobalShelf({
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
         />
       )}
+      {adjusting && (
+        <ImageAdjuster
+          title="Adjust the image"
+          value={shelf.books[adjusting] ?? {}}
+          onChange={(patch) => setBookPrefs(adjusting, patch)}
+          onClose={() => setAdjusting(null)}
+        />
+      )}
       {picker && (
         <ColorPicker
           x={picker.x} y={picker.y} value={picker.value}
@@ -465,7 +475,7 @@ function Stat({ to }: { to: number }) {
 }
 
 function ShelfHero({
-  notebooks, notes, canvases, graphs, phone, wallpaper, frame, count, at, onJump, onNew,
+  notebooks, notes, canvases, graphs, phone, wallpaper, frame, count, at, ink, onJump, onNew,
 }: {
   notebooks: number; notes: number; canvases: number; graphs: number; phone: boolean;
   /** The wallpaper on screen, standing in for the generated gradient. */
@@ -474,33 +484,27 @@ function ShelfHero({
   /** How many wallpapers are loaded, and which one this is. */
   count: number;
   at: number;
+  /** Ink the greeting needs against this wallpaper, if there is one. */
+  ink: string | undefined;
   onJump: GlobalShelfProps['onJumpTab'];
   onNew: () => void;
 }) {
   const [today, setToday] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [adjust, setAdjust] = useState(false);
   const { prefs } = usePrefs();
 
   const wallMenu: CtxGroup[] = [
     {
       items: [{
         label: 'Insert a wallpaper', icon: 'photo',
-        run: () => void pickImage().then((d) => { if (d) addWallpaper(d); }),
+        run: () => void pickImage().then((d) => { if (d) addWallpaper(d.id, d.lum); }),
       }],
     },
     ...(wallpaper ? [{
       label: 'Wallpaper',
       items: [
-        {
-          label: 'Adjust the wallpaper', icon: 'focus' as const,
-          items: [
-            { label: 'Fill the frame', icon: 'expand' as const, checked: (frame.fit ?? 'cover') === 'cover', run: () => setWallpaperFrame({ fit: 'cover' }) },
-            { label: 'Fit the whole picture', icon: 'collapse' as const, checked: frame.fit === 'contain', run: () => setWallpaperFrame({ fit: 'contain' }) },
-            { label: 'Anchor top', icon: 'sort' as const, checked: frame.pos === 'top', run: () => setWallpaperFrame({ pos: 'top' }) },
-            { label: 'Anchor middle', icon: 'sort' as const, checked: (frame.pos ?? 'center') === 'center', run: () => setWallpaperFrame({ pos: 'center' }) },
-            { label: 'Anchor bottom', icon: 'sort' as const, checked: frame.pos === 'bottom', run: () => setWallpaperFrame({ pos: 'bottom' }) },
-          ],
-        },
+        { label: 'Adjust the wallpaper', icon: 'focus' as const, run: () => setAdjust(true) },
         {
           label: count > 1 ? `Next of ${count} wallpapers` : 'Cycle wallpapers', icon: 'redo' as const,
           disabled: count < 2,
@@ -547,7 +551,7 @@ function ShelfHero({
 
       {/* Remove sits on the wallpaper it removes, so cycling to a picture you
           are done with puts its own delete under your cursor. */}
-      {wallpaper && (
+      {wallpaper && !adjust && (
         <button
           onClick={removeCurrentWallpaper}
           className="hov" title="Remove this wallpaper" aria-label="Remove this wallpaper"
@@ -563,7 +567,7 @@ function ShelfHero({
         </button>
       )}
 
-      <button
+      {!adjust && <button
         onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}
         className="hov" title="Wallpaper options" aria-label="Wallpaper options" aria-haspopup="menu"
         style={{
@@ -575,7 +579,7 @@ function ShelfHero({
         }}
       >
         <Icon name="dots" size={15} color="var(--tx2)" style={{ transform: 'rotate(90deg)' }} />
-      </button>
+      </button>}
 
       {count > 1 && (
         <span aria-hidden style={{
@@ -598,6 +602,14 @@ function ShelfHero({
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
         />
       )}
+      {adjust && (
+        <ImageAdjuster
+          title="Adjust the wallpaper"
+          value={frame}
+          onChange={setWallpaperFrame}
+          onClose={() => setAdjust(false)}
+        />
+      )}
 
       <div style={{
         position: 'relative', width: '100%', display: 'flex', alignItems: 'flex-end',
@@ -605,11 +617,12 @@ function ShelfHero({
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           <h1 style={{
-            fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.02em', color: 'var(--tx)',
+            fontSize: phone ? 22 : 27, fontWeight: 800, letterSpacing: '-.02em',
+            color: ink ?? 'var(--tx)',
           }}>
             Your library
           </h1>
-          <span className="metaline" style={{ fontWeight: 600, color: 'var(--tx2)' }}>{today || '\u00A0'}</span>
+          <span className="metaline" style={{ fontWeight: 600, color: ink ?? 'var(--tx2)', opacity: ink ? 0.85 : 1 }}>{today || '\u00A0'}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

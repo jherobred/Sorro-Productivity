@@ -47,12 +47,38 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
 export const getImage = (id: string) => tx<Blob | undefined>('readonly', (s) => s.get(id));
 export const deleteImage = (id: string) => tx('readwrite', (s) => s.delete(id)).then(() => undefined);
 
-/** Store a picked file and hand back the id to keep in shelf prefs. */
-export async function storeImage(file: File): Promise<string> {
+/**
+ * Store a picked file and hand back its id and how bright it is.
+ *
+ * The luminance is measured once, here, because text has to be drawn over
+ * this picture on every render and sampling a photograph per paint is not
+ * something to do in a grid of cards.
+ */
+export async function storeImage(file: File): Promise<{ id: string; lum: number }> {
   const id = `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const blob = file.size <= AS_IS_LIMIT ? file : await downscale(file);
+  const lum = await measure(blob).catch(() => 0.5);
   await tx('readwrite', (s) => s.put(blob, id));
-  return id;
+  return { id, lum };
+}
+
+/** Average sRGB relative luminance, off a 24px thumbnail of the picture. */
+async function measure(blob: Blob): Promise<number> {
+  const bitmap = await createImageBitmap(blob);
+  const cv = document.createElement('canvas');
+  cv.width = 24;
+  cv.height = 24;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  if (!ctx) { bitmap.close(); return 0.5; }
+  ctx.drawImage(bitmap, 0, 0, 24, 24);
+  bitmap.close();
+  const { data } = ctx.getImageData(0, 0, 24, 24);
+  const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    sum += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+  }
+  return sum / (data.length / 4);
 }
 
 /** Only for files too big to keep whole. 3200px wide at 0.95 is still sharp. */
