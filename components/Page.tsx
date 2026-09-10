@@ -1,8 +1,98 @@
 'use client';
+
 import { useLayout } from '@/lib/useLayout';
+import { usePrefs } from '@/lib/prefs';
+
+/**
+ * The shell every section sits in.
+ *
+ * Two problems it exists to fix.
+ *
+ * **The repeated title.** Every page opened with its own name in 24px bold —
+ * directly under a sidebar item saying the same word, or on a phone, directly
+ * under a top bar saying the same word. The navigation already tells you where
+ * you are; saying it twice spends the most valuable line on the screen
+ * agreeing with itself. The name stays for screen readers, where there is no
+ * "already visible", and the visible line carries what is actually true right
+ * now — how many are open, what month you are in, what this costs.
+ *
+ * **The stretched row.** Content ran the full width of the window. On a wide
+ * monitor a task called "Call home" became a checkbox, three words, and seven
+ * hundred pixels of nothing before the buttons on the far right. Lists get a
+ * reading measure; grids and boards, which genuinely use the room, get more.
+ */
+
 export type PageWidth = 'list' | 'wide' | 'full';
-const MAX: Record<PageWidth, number | undefined> = { list:900, wide:1240, full:undefined };
-export function Page({name,meta,actions,width='wide',children,fill=false}:{name:string;meta?:React.ReactNode;actions?:React.ReactNode;width?:PageWidth;fill?:boolean;children:React.ReactNode}) {
+
+const MAX: Record<PageWidth, number | undefined> = {
+  /** Rows and forms. Past roughly this, the eye loses the line. */
+  list: 820,
+  /** Card grids and dashboards, which fill the space with content. */
+  wide: 1240,
+  /** Boards and canvases that want every pixel. */
+  full: undefined,
+};
+
+export function Page({
+  name, meta, actions, width = 'wide', children, fill = false,
+}: {
+  /** The section's name. Announced, not drawn — the chrome already draws it. */
+  name: string;
+  /** The line worth reading: a count, a range, a total. */
+  meta?: React.ReactNode;
+  /** Controls that belong to the whole page, right-aligned. */
+  actions?: React.ReactNode;
+  width?: PageWidth;
+  /** True when the page manages its own scrolling and should fill the height. */
+  fill?: boolean;
+  children: React.ReactNode;
+}) {
   const { phone } = useLayout();
-  return <div className="studio-page" style={fill?{height:'100%',display:'flex',flexDirection:'column',minHeight:0}:undefined}><div className="studio-page-inner" style={{maxWidth:MAX[width],...(fill?{flex:1,minHeight:0,display:'flex',flexDirection:'column'}:null)}}><header className="studio-page-header"><div><h1 className="studio-page-title">{name}</h1>{meta&&<div className="studio-page-meta">{meta}</div>}</div>{actions&&<div className="studio-page-actions" style={phone?{maxWidth:'100%'}:undefined}>{actions}</div>}</header>{children}</div></div>;
+  const { prefs } = usePrefs();
+
+  /**
+   * L5's claim is one column at every size, so a page that asked for the wide
+   * grid measure gets the reading measure instead. `full` is left alone: a
+   * board or a canvas at 820px is not a narrower version of itself, it is a
+   * broken one.
+   */
+  const effective: PageWidth = prefs.shellLayout === 'L5' && width === 'wide' ? 'list' : width;
+  const max = MAX[effective];
+
+  return (
+    <div style={{
+      padding: phone ? '14px 14px 24px' : '20px 24px 28px',
+      ...(fill ? { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } : null),
+    }}>
+      <div style={{
+        maxWidth: max, marginInline: max ? 'auto' : undefined, width: '100%',
+        ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : null),
+      }}>
+        <h1 className="sronly">{name}</h1>
+
+        {(meta || actions) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            marginBottom: phone ? 12 : 16, minHeight: 34, flex: 'none',
+          }}>
+            {meta && (
+              <div style={{
+                fontSize: phone ? 13 : 14, fontWeight: 700, letterSpacing: '-.01em',
+                color: 'var(--tx2)', minWidth: 0,
+              }}>
+                {meta}
+              </div>
+            )}
+            {actions && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {actions}
+              </div>
+            )}
+          </div>
+        )}
+
+        {children}
+      </div>
+    </div>
+  );
 }

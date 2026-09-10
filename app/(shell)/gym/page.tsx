@@ -343,14 +343,14 @@ export default function GymPage() {
                 display: 'inline-block',
               }} />}
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800,
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800,
                 letterSpacing: '.1em', textTransform: 'uppercase', color: '#FFFFFF',
               }}>
                 {session ? 'Live session' : 'Movement demo'}
               </span>
             </div>
             <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
               background: 'rgba(20,17,32,0.72)', color: 'rgba(255,255,255,0.85)',
               padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)',
               backdropFilter: 'blur(6px)',
@@ -362,7 +362,7 @@ export default function GymPage() {
           {/* Bottom details */}
           <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 5 }}>
             <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, letterSpacing: '.13em',
+              fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, letterSpacing: '.13em',
               textTransform: 'uppercase', color: HUE,
             }}>
               {viewingToday ? 'Next up' : `Preview · ${WEEK_FULL[selectedSlot]}`}
@@ -375,14 +375,14 @@ export default function GymPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 2 }}>
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
                 color: '#FFFFFF', background: 'color-mix(in srgb, ' + HUE + ' 72%, rgba(0,0,0,0.4))',
                 padding: '3px 9px', borderRadius: 999,
               }}>
                 {workedOf(currentMovement)}
               </span>
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700,
                 color: 'rgba(255,255,255,0.88)', background: 'rgba(255,255,255,0.14)',
                 padding: '3px 9px', borderRadius: 999,
               }}>
@@ -411,7 +411,7 @@ export default function GymPage() {
                   display: 'inline-block',
                 }} />}
                 <span style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800,
+                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800,
                   letterSpacing: '.12em', textTransform: 'uppercase', color: session ? HUE : 'var(--tx3)',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
@@ -546,7 +546,7 @@ export default function GymPage() {
                 }}
               >
                 <b style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800,
+                  fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 800,
                   width: 16, flex: 'none',
                   color: isSelected ? HUE : isToday ? 'var(--tx)' : 'var(--tx3)',
                 }}>{d}</b>
@@ -559,7 +559,7 @@ export default function GymPage() {
                 </span>
                 {isToday && (
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, letterSpacing: '.08em',
+                    fontFamily: 'var(--font-mono)', fontSize: 8.5, fontWeight: 800, letterSpacing: '.08em',
                     color: HUE, flex: 'none',
                   }}>TODAY</span>
                 )}
@@ -578,7 +578,7 @@ export default function GymPage() {
             <div>
               <div style={KICKER}>{viewingToday ? 'Today’s session' : 'Routine preview'}</div>
               {viewingToday && mine.length > 0 && (
-                <div className="num" style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3 }}>
+                <div className="num" style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 3 }}>
                   {doneSets} of {totalSets} sets done
                 </div>
               )}
@@ -687,7 +687,7 @@ export default function GymPage() {
                 }}>
                   {restOn ? `${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, '0')}` : `${REST_S}s`}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
                   {restOn ? 'Breathe. Next set soon.' : 'Starts when you finish a set'}
                 </div>
               </div>
@@ -706,7 +706,7 @@ export default function GymPage() {
               <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {next?.exercise ?? activeRoutine?.exercises[0] ?? 'Nothing queued'}
               </div>
-              <div className="num" style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3 }}>
+              <div className="num" style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>
                 {next?.set
                   ? `Set ${next.index} of ${next.of} · ${next.set.weight_kg} kg × ${next.set.reps}`
                   : next
@@ -726,7 +726,7 @@ export default function GymPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/mascots/otter.svg" alt="" width={40} height={40} style={{ opacity: 0.9, flex: 'none' }} />
-                <span style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.45 }}>
+                <span style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.45 }}>
                   No bests yet. Log a few sets and your strongest effort per movement lands here.
                 </span>
               </div>
@@ -801,13 +801,13 @@ export default function GymPage() {
 /* ------------------------------------------------------------------ pieces */
 
 const KICKER: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, letterSpacing: '.12em',
+  fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 800, letterSpacing: '.12em',
   textTransform: 'uppercase', color: 'var(--tx3)',
 };
 
 const REST_BTN: React.CSSProperties = {
   minHeight: 30, borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
-  color: 'var(--tx2)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  color: 'var(--tx2)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
 };
 
 /** One stat in the top strip. The number counts; the label does not move. */
@@ -846,11 +846,11 @@ function StatTile({
           <Counter to={value} format={format} />
         </span>
         {suffix && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)' }}>{suffix}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)' }}>{suffix}</span>
         )}
       </div>
       {sub && (
-        <div className="num" style={{ fontSize: 12, color: 'var(--tx3)', marginTop: -4 }}>{sub}</div>
+        <div className="num" style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4 }}>{sub}</div>
       )}
     </div>
   );
@@ -974,7 +974,7 @@ function LiftCard({
               </span>
               {isLive && (
                 <span style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800,
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800,
                   color: HUE, textTransform: 'uppercase', letterSpacing: '.08em', flex: 'none',
                 }}>
                   now
@@ -982,7 +982,7 @@ function LiftCard({
               )}
             </div>
             <div className="num" style={{
-              fontSize: 12, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6,
+              fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, display: 'flex', gap: 6,
               alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden',
             }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{weightShorthand}</span>
@@ -992,7 +992,7 @@ function LiftCard({
           {/* PR chip */}
           {pr > 0 && (
             <span title={`Best estimated one-rep max: ${Math.round(pr)} kg`} style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, flex: 'none',
+              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800, flex: 'none',
               color: AMBER, background: `color-mix(in srgb, ${AMBER} 14%, transparent)`,
               padding: '3px 7px', borderRadius: 999, marginRight: 2,
             }}>
@@ -1106,7 +1106,7 @@ function ExerciseEditModal({
             <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, letterSpacing: '-.02em', color: 'var(--tx)' }}>
               Edit sets · {exercise}
             </h3>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
               {sets.length} {sets.length === 1 ? 'set' : 'sets'} logged
             </div>
           </div>
@@ -1152,7 +1152,7 @@ function ExerciseEditModal({
                   flex: 'none',
                 }}
               >
-                {s.done ? <Icon name="check" size={13} color={MINT} /> : <span style={{ fontSize: 12, fontWeight: 700 }}>{idx + 1}</span>}
+                {s.done ? <Icon name="check" size={13} color={MINT} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{idx + 1}</span>}
               </button>
 
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1167,7 +1167,7 @@ function ExerciseEditModal({
                     fontSize: 12, fontWeight: 700, textAlign: 'center',
                   }}
                 />
-                <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>kg</span>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>kg</span>
                 <span style={{ color: 'var(--line2)' }}>×</span>
                 <input
                   type="number"
@@ -1180,7 +1180,7 @@ function ExerciseEditModal({
                     fontSize: 12, fontWeight: 700, textAlign: 'center',
                   }}
                 />
-                <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>reps</span>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>reps</span>
               </div>
 
               <button

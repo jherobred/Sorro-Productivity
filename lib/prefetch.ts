@@ -35,59 +35,53 @@ const WARM: Record<string, Warm> = {
   tasks: {
     key: ['tasks'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_tasks')
+      const { data } = await supabase.from('bd_tasks')
         .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at')
         .is('deleted_at', null).order('position').limit(500);
-      if(error) throw error;
       return data ?? [];
     },
   },
   habits: {
     key: ['habits'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_habits')
+      const { data } = await supabase.from('bd_habits')
         .select('id,name,color,kind,target,position,archived_at,challenge_id')
         .is('archived_at', null).order('position');
-      if(error) throw error;
       return data ?? [];
     },
   },
   projects: {
     key: ['projects'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_projects')
+      const { data } = await supabase.from('bd_projects')
         .select('id,name,tag,color,progress,deadline,position,icon,cover,user_id')
         .is('deleted_at', null).order('position');
-      if(error) throw error;
       return data ?? [];
     },
   },
   files: {
     key: ['files'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_files')
+      const { data } = await supabase.from('bd_files')
         .select('id,name,kind,size_bytes,storage_path,folder_id,starred,created_at')
         .is('deleted_at', null).order('created_at', { ascending: false }).limit(500);
-      if(error) throw error;
       return data ?? [];
     },
   },
   community: {
     key: ['posts'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_posts')
+      const { data } = await supabase.from('bd_posts')
         .select('id,author_id,title,caption,tag,image_path,created_at')
         .is('deleted_at', null).order('created_at', { ascending: false }).limit(40);
-      if(error) throw error;
       return data ?? [];
     },
   },
   notebooks: {
     key: ['notebooks'],
     run: async () => {
-      const { data, error } = await supabase.from('bd_notebooks')
-        .select('id,name,color,position,created_at').order('position').order('created_at');
-      if(error) throw error;
+      const { data } = await supabase.from('bd_notebooks')
+        .select('id,name,color,position').order('position');
       return data ?? [];
     },
   },

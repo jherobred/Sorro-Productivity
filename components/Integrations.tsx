@@ -1,6 +1,5 @@
 'use client';
 
-import { validateIntegration } from '@/lib/integrationValidation';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon, type IconName } from './Icon';
@@ -36,7 +35,7 @@ const SPECS: Spec[] = [
       { key: 'base_url', label: 'Canvas address', placeholder: 'https://canvas.yourschool.edu' },
       { key: 'token', label: 'Access token', placeholder: 'Paste your token', secret: true, hint: 'Canvas → Account → Settings → New Access Token.' },
     ],
-    help: 'Stored in your private account settings. The sync runs on the server. Keep this token private and revoke it in Canvas whenever you disconnect.',
+    help: 'The token is stored against your account only — row-level security means no other user, and no browser, can read it. Sync runs on the server.',
   },
   {
     kind: 'gcal_ics',
@@ -52,14 +51,10 @@ const SPECS: Spec[] = [
 ];
 
 export function Integrations() {
-  const { data: rows = [], isPending, isError, refetch } = useIntegrations();
+  const { data: rows = [] } = useIntegrations();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {isPending && <p role="status">Loading your connections…</p>}
-      {isError && <p role="alert">Could not load connections. <button onClick={()=>void refetch()}>Try again</button></p>}
-      <p style={{fontSize:14,lineHeight:1.65,color:'var(--tx2)'}}>Bring your schedule and assignments into Basedly. Each connection tells you what it imports and when it last worked.</p>
       {SPECS.map((s) => <Card key={s.kind} spec={s} row={rows.find((r) => r.kind === s.kind)} />)}
-      <div className="studio-connection-info"><strong>Gmail sharing</strong><p>Use Gmail in the note or community Share menu to prepare an email. You review and send it in Gmail. Inbox access and automatic email sync are not connected.</p><a className="studio-text-button" href="https://mail.google.com/mail/" target="_blank" rel="noopener noreferrer">Open Gmail</a></div>
     </div>
   );
 }
@@ -71,7 +66,6 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>(() => ({ ...(row?.config ?? {}) }));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
 
   const complete = spec.fields.every((f) => (draft[f.key] ?? '').trim());
 
@@ -84,18 +78,12 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
    * request for the data.
    */
   const save = () => {
-    if(A.save.isPending || busy) return;
-    const config = Object.fromEntries(Object.entries(draft).map(([k,v])=>[k,v.trim()]));
-    const invalid = validateIntegration(spec.kind, config);
-    if(invalid) {setError(invalid);return;}
-    setError('');
     A.save.mutate(
-      { kind: spec.kind, config, enabled: true },
+      { kind: spec.kind, config: draft, enabled: true },
       {
-        onError: (e) => setError(e.message || 'Could not save. Check your connection and try again.'),
         onSuccess: async () => {
           setOpen(false);
-          toast(`${spec.name} saved. Checking the connection…`);
+          toast(`${spec.name} connected — syncing…`);
           await sync();
         },
       },
@@ -103,11 +91,9 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
   };
 
   const sync = async () => {
-    if(busy)return;
     setBusy(true);
     const r = await runSync(spec.kind);
     setBusy(false);
-    setError(r.ok ? '' : r.message);
     toast(r.ok ? `${spec.name}: ${r.message}` : `${spec.name} — ${r.message}`);
     // A sync writes tasks, events and notifications, so refresh all three.
     for (const k of ['tasks', 'events', 'notifications', 'integrations']) {
@@ -126,17 +112,17 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 800 }}>{spec.name}</span>
             <span style={{
-              padding: '2px 7px', borderRadius: 6, fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
+              padding: '2px 7px', borderRadius: 6, fontSize: 9.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
               background: connected ? 'color-mix(in srgb, var(--pal-mint) 20%, transparent)' : 'var(--hov)',
               color: connected ? 'var(--pal-mint)' : 'var(--tx3)',
             }}>
-              {connected ? row?.last_error ? 'Needs attention' : row?.last_sync_at ? 'Connected' : 'Not verified' : 'Not set up'}
+              {connected ? 'Connected' : 'Not set up'}
             </span>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.55, marginTop: 4 }}>{spec.blurb}</p>
+          <p style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55, marginTop: 4 }}>{spec.blurb}</p>
 
           {connected && (
-            <p style={{ fontSize: 12, color: row?.last_error ? 'var(--pal-coral)' : 'var(--tx3)', marginTop: 5 }}>
+            <p style={{ fontSize: 10.5, color: row?.last_error ? 'var(--pal-coral)' : 'var(--tx3)', marginTop: 5 }}>
               {row?.last_error
                 ? `Last sync failed — ${row.last_error}`
                 : row?.last_sync_at ? `Synced ${ago(row.last_sync_at)}` : 'Never synced'}
@@ -167,7 +153,6 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
         )}
       </div>
 
-      {error && <p role="alert" style={{padding:'0 16px 14px',color:'var(--tx)',fontSize:13,lineHeight:1.6}}>{error}</p>}
       {open && (
         <div className="k-bloom" style={{ padding: '12px 14px 14px', borderTop: '1px solid var(--line)', background: 'var(--card)' }}>
           {spec.fields.map((f) => (
@@ -182,19 +167,19 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
                 spellCheck={false}
                 style={{
                   width: '100%', minHeight: 42, padding: '10px 12px', borderRadius: 10,
-                  border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 14,
+                  border: '1px solid var(--line2)', background: 'var(--card2)', fontSize: 12.5,
                 }} />
-              {f.hint && <span style={{ display: 'block', fontSize: 12, color: 'var(--tx3)', marginTop: 4 }}>{f.hint}</span>}
+              {f.hint && <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 4 }}>{f.hint}</span>}
             </label>
           ))}
 
-          <p style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.6, margin: '2px 0 12px' }}>{spec.help}</p>
+          <p style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1.6, margin: '2px 0 12px' }}>{spec.help}</p>
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setOpen(false)} className="hov k-squish" style={{ ...BTN, flex: 1, justifyContent: 'center' }}>Cancel</button>
-            <button onClick={save} disabled={!complete || busy || A.save.isPending} className="k-squish"
+            <button onClick={save} disabled={!complete} className="k-squish"
               style={{ ...BTN, flex: 1, justifyContent: 'center', background: 'var(--acc)', color: 'var(--ink)', border: 0, opacity: complete ? 1 : 0.45 }}>
-              {A.save.isPending || busy ? 'Connecting…' : 'Save & test connection'}
+              Save
             </button>
           </div>
         </div>
@@ -205,5 +190,5 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
 
 const BTN: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 7, padding: '8px 13px', borderRadius: 10,
-  border: '1px solid var(--line2)', fontSize: 13, fontWeight: 700, color: 'var(--tx2)', minHeight: 38,
+  border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 38,
 };

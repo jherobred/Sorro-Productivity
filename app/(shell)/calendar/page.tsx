@@ -39,7 +39,7 @@ import {
  * of the band, so the geometry survives any container width.
  */
 const SPAN = GRID_END - GRID_START;   // 24 intervals, 25 labels
-const GUTTER = 68;
+const GUTTER = 52;
 const HOUR_H = 48;
 const GRID_H = HOUR_H * SPAN;
 /** Where the day is first parked — early enough to see a 7 a.m. class. */
@@ -129,7 +129,7 @@ export default function CalendarPage() {
     return weekStart(first, prefs.weekStart);
   }, [view, ws, prefs.weekStart]);
 
-  const { data: events = [], isPending, isError: eventsError, refetch: retryEvents } = useEvents(windowStart, windowDays);
+  const { data: events = [], isPending } = useEvents(windowStart, windowDays);
   const { data: tasks = [] } = useTasks();
   const A = useEventActions(ws);
   const TA = useTaskActions();
@@ -398,11 +398,11 @@ export default function CalendarPage() {
     }
   };
 
-  const showHeading = true;
+  const showHeading = !phone || view === 'month' || view === 'agenda';
   const showPager = !phone || view !== 'day';
 
   return (
-    <div className="studio-calendar" style={{
+    <div style={{
       padding: phone ? '6px 12px 12px' : '18px 22px 20px',
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
@@ -430,7 +430,7 @@ export default function CalendarPage() {
                 <button
                   onClick={goToday}
                   className="hov k-squish"
-                  style={{ height: 28, padding: '0 11px', borderRadius: 999, fontSize: 12, fontWeight: 700, color: 'var(--tx)', background: 'var(--card2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  style={{ height: 28, padding: '0 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', background: 'var(--card2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 >
                   Today
                 </button>
@@ -450,7 +450,7 @@ export default function CalendarPage() {
               <div
                 className="num k-stagger"
                 title={`Week ${displayedWeekNumber(ws, prefs.weekStart)} of ${ws.getFullYear()}`}
-                style={{ ['--i' as string]: 2, height: 34, padding: '0 12px', borderRadius: 999, display: 'flex', alignItems: 'center', border: '1px solid color-mix(in srgb, var(--pal-sky) 32%, var(--line))', background: 'color-mix(in srgb, var(--pal-sky) 8%, var(--card))', color: 'var(--pal-sky)', fontSize: 12, fontWeight: 800, userSelect: 'none', whiteSpace: 'nowrap' } as React.CSSProperties}
+                style={{ ['--i' as string]: 2, height: 34, padding: '0 12px', borderRadius: 999, display: 'flex', alignItems: 'center', border: '1px solid color-mix(in srgb, var(--pal-sky) 32%, var(--line))', background: 'color-mix(in srgb, var(--pal-sky) 8%, var(--card))', color: 'var(--pal-sky)', fontSize: 11, fontWeight: 800, userSelect: 'none', whiteSpace: 'nowrap' } as React.CSSProperties}
               >
                 W{displayedWeekNumber(ws, prefs.weekStart)}
               </div>
@@ -497,10 +497,9 @@ export default function CalendarPage() {
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {/* The chrome above is not data-dependent and paints immediately;
               only the grid waits, so only the grid is outlined. */}
-          {eventsError && <div className="studio-load-error" role="alert">Calendar could not load. <button className="studio-text-button" onClick={() => void retryEvents()}>Try again</button></div>}
           {isPending && (
             <div style={{ padding: phone ? '0 14px 14px' : '0 22px 16px' }}>
-              <CalendarSkeleton view={view} days={view === 'day' ? 1 : 7} />
+              <CalendarSkeleton days={view === 'day' ? 1 : 7} />
             </div>
           )}
           {!isPending && view === 'week' && (
@@ -762,7 +761,7 @@ function ToolButton({ icon, label, active, hue, danger, title, onClick, classNam
     <button onClick={onClick} title={title} aria-label={title} aria-pressed={on}
       className={`${className ?? ''} k-chip`} style={{ ...style, ...(styleIndex !== undefined ? { ['--i' as string]: styleIndex } : {}) } as React.CSSProperties}>
       <Icon name={icon} size={15} color={on ? HUE : danger ? 'var(--pal-coral)' : 'var(--tx3)'} />
-      {label && <span style={{ fontSize: 12, fontWeight: 700, color: on ? HUE : 'var(--tx2)' }}>{label}</span>}
+      {label && <span style={{ fontSize: 11.5, fontWeight: 700, color: on ? HUE : 'var(--tx2)' }}>{label}</span>}
     </button>
   );
 }
@@ -781,7 +780,7 @@ function ViewSwitcher({ view, onChange, phone }: { view: View; onChange: (v: Vie
         return (
           <button key={v} onClick={() => onChange(v)} className="k-chip" aria-pressed={on}
             aria-label={VIEW_LABEL[v]} title={VIEW_LABEL[v]}
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: phone ? 32 : undefined, height: 28, padding: phone ? 0 : '0 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: on ? 'var(--ink)' : 'var(--tx3)' }}>
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: phone ? 32 : undefined, height: 28, padding: phone ? 0 : '0 11px', borderRadius: 999, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: on ? 'var(--ink)' : 'var(--tx3)' }}>
             {on && (
               <motion.span layoutId="cal-view-pill"
                 transition={{ type: 'spring', stiffness: 560, damping: 42 }}
@@ -1229,7 +1228,7 @@ function Grid({
             d.setDate(d.getDate() + idx);
             const today = d.toDateString() === new Date().toDateString();
             return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: today ? SECHUE.calendar : 'var(--tx3)' }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: today ? SECHUE.calendar : 'var(--tx3)' }}>
                 {DAYS_SHORT[idx]} <span style={{ opacity: .7 }}>{d.getDate()}</span>
               </div>
             );
@@ -1240,7 +1239,7 @@ function Grid({
         <div style={{ display: 'flex', borderBottom: '2px solid var(--line2)', minHeight: 34 }}>
           <div aria-hidden style={{
             position: 'absolute', left: 0, width: GUTTER, marginTop: 4,
-            fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+            fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
             color: 'var(--tx3)', textAlign: 'right', paddingRight: 8, pointerEvents: 'none',
           }}>
             All-day
@@ -1261,7 +1260,7 @@ function Grid({
                   <div key={e.id} onPointerDown={(p) => press(p, e, 'move')}
                     onContextMenu={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
                     style={{
-                      fontSize: 12, fontWeight: 700, padding: '2px 6px', borderRadius: 6, marginBottom: 2, cursor: 'grab',
+                      fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, marginBottom: 2, cursor: 'grab',
                       background: `color-mix(in srgb, ${e.color} 26%, var(--card))`, color: 'var(--tx)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>{chipLabel(e)}</div>
@@ -1273,7 +1272,7 @@ function Grid({
 
                 <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task')} className="hov"
                   title="Add a task or all-day item" aria-label="Add a task or all-day item"
-                  style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 12, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
                 </button>
               </div>
@@ -1294,7 +1293,7 @@ function Grid({
             <div key={h} style={{
               position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`,
               transform: first ? 'none' : last ? 'translateY(-100%)' : 'translateY(-50%)',
-              fontSize: 12, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+              fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             }}>
               {hhmm(h)}
             </div>
@@ -1342,10 +1341,10 @@ function Grid({
                         overflow: 'hidden',
                       }}
                     >
-                      <span style={{ fontSize: 12, fontWeight: 700, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         (No title)
                       </span>
-                      <span style={{ fontSize: 12, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ fontSize: 9.5, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
                         {hhmm(s)} – {hhmm(e)}
                       </span>
                     </div>
@@ -1516,7 +1515,7 @@ function Grid({
                     position: 'absolute', left: 3, right: 3, top: `${pct(taskDrag.hour)}%`, height: `${(1.5 / SPAN) * 100}%`,
                     borderRadius: 8, border: '2px dashed var(--acc)',
                     background: 'color-mix(in srgb, var(--acc) 14%, transparent)',
-                    display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accTx)',
+                    display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, color: 'var(--accTx)',
                   }}>
                     {hhmm(taskDrag.hour)}
                   </div>
@@ -1623,7 +1622,7 @@ function EventChip({
           display: 'flex',
           alignItems: 'center',
           gap: 4,
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 800,
           lineHeight: 1.25,
           overflow: 'hidden',
@@ -1634,7 +1633,7 @@ function EventChip({
         </span>
         <span style={{
           display: 'block',
-          fontSize: 12,
+          fontSize: 9.5,
           opacity: 0.72,
           marginTop: 1,
           fontWeight: 500,
@@ -1648,7 +1647,7 @@ function EventChip({
       {tall && !cd && (
         <span style={{
           marginTop: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
-          fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase',
+          fontSize: 8.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase',
           padding: '1.5px 7px', borderRadius: 999,
           background: `color-mix(in srgb, ${ev.color} 34%, var(--card))`,
           color: ink, whiteSpace: 'nowrap',
@@ -1802,7 +1801,7 @@ function VacantCountdown({ targetStartsAt }: { targetStartsAt: string }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 3,
-        fontSize: 12,
+        fontSize: 9.5,
         fontWeight: 800,
         color: 'var(--tx2)',
         fontVariantNumeric: 'tabular-nums',
@@ -1861,20 +1860,20 @@ function SpanChip({ span: s, days, offset, dark, nowMs = Date.now(), onPointerDo
         flexDirection: 'column',
         justifyContent: 'space-between',
       }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, lineHeight: 1.25 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {chipLabel(s.ev)}
         {!lifted && (
           <span style={{
             marginLeft: 'auto', flex: 'none', padding: '1px 7px', borderRadius: 999,
             background: `color-mix(in srgb, ${s.ev.color} 42%, var(--card))`,
-            fontSize: 12, fontWeight: 800,
+            fontSize: 9, fontWeight: 800,
           }}>
             {s.days} days
           </span>
         )}
       </span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 2 }}>
-        <span style={{ fontSize: 12, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 9.5, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
           {hhmm(start)}–{hhmm(end)} · {s.ev.location}
         </span>
         {cd && cd.status !== 'past' && <CdBadge cd={cd} subtle />}
@@ -1902,7 +1901,7 @@ function TaskChip({ task, onPointerDown, style, compact }: {
         ...style,
       }}>
       {alert ? (
-        <span className="task-alarm-emoji" style={{ fontSize: 12, flex: 'none', lineHeight: 1 }}>{alert.emoji}</span>
+        <span className="task-alarm-emoji" style={{ fontSize: 11, flex: 'none', lineHeight: 1 }}>{alert.emoji}</span>
       ) : (
         <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', border: `1.5px solid ${hue}` }} />
       )}
@@ -1979,7 +1978,7 @@ function DayStrip({ ws, focus, onPick, onJump }: {
           <div key={date.toISOString()} style={{ display: 'flex', alignItems: 'stretch', gap: 6, flex: 'none' }}>
             {newMonth && (
               <span aria-hidden style={{
-                alignSelf: 'center', fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
+                alignSelf: 'center', fontSize: 9, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
                 color: 'var(--tx3)', writingMode: 'vertical-rl', padding: '2px 0',
               }}>
                 {date.toLocaleDateString(undefined, { month: 'short' })}
@@ -2000,7 +1999,7 @@ function DayStrip({ ws, focus, onPick, onJump }: {
                 border: `1px solid ${on ? SECHUE.calendar : 'var(--line)'}`,
                 background: on ? 'color-mix(in srgb, var(--pal-sky) 14%, transparent)' : 'transparent',
                 color: on ? SECHUE.calendar : 'var(--tx3)',
-                fontSize: 12, fontWeight: 700, letterSpacing: '.06em',
+                fontSize: 9.5, fontWeight: 700, letterSpacing: '.06em',
               }}>
               {dayLabels(prefs.weekStart)[dayIndex(date.toISOString(), weekStart(date, prefs.weekStart))]}
               <div style={{ fontSize: 14, fontWeight: 800, marginTop: 1, color: on ? 'var(--tx)' : 'var(--tx2)' }}>{date.getDate()}</div>
@@ -2041,7 +2040,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
     <div className="k-stagger" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 14, boxShadow: 'var(--sh)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
         {dayLabels(prefs.weekStart).map((d) => (
-          <div key={d} style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.11em', color: 'var(--tx3)', textAlign: 'center', paddingBottom: 5 }}>{d}</div>
+          <div key={d} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', color: 'var(--tx3)', textAlign: 'center', paddingBottom: 5 }}>{d}</div>
         ))}
         {Array.from({ length: 42 }, (_, i) => {
           const date = new Date(ws);
@@ -2065,7 +2064,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                 boxShadow: today ? 'var(--sh)' : undefined,
                 opacity: inMonth ? 1 : 0.38,
               } as React.CSSProperties}>
-              <span style={{ fontSize: 12, fontWeight: today ? 800 : 600, color: today ? SECHUE.calendar : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 11.5, fontWeight: today ? 800 : 600, color: today ? SECHUE.calendar : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
                 {date.getDate()}
               </span>
               {items.slice(0, 3).map((it, n) => {
@@ -2078,7 +2077,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                   <span key={n}
                     className={urgent ? 'red-alert-pulse' : undefined}
                     style={{
-                      fontSize: 12, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
                       opacity: isPast ? 0.48 : 1,
                       filter: isPast ? 'grayscale(20%)' : undefined,
@@ -2096,7 +2095,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                     </span>
                     {cd && cd.status !== 'past' && (
                       <span style={{
-                        fontSize: 12,
+                        fontSize: 8,
                         fontWeight: 900,
                         flex: 'none',
                         color: cd.status === 'ongoing' ? 'var(--pal-mint)' : 'var(--pal-sky)',
@@ -2108,7 +2107,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                   </span>
                 );
               })}
-              {items.length > 3 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 2 }}>+{items.length - 3} more</span>}
+              {items.length > 3 && <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 2 }}>+{items.length - 3} more</span>}
             </button>
           );
         })}
@@ -2165,7 +2164,7 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
             border: `1px solid ${today ? `color-mix(in srgb, ${SECHUE.calendar} 34%, transparent)` : 'var(--line)'}`,
           }}>
             <div style={{
-              fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase',
+              fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase',
               color: today ? SECHUE.calendar : 'var(--tx3)', marginBottom: 6,
             }}>
               {d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
@@ -2189,7 +2188,7 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
                       background: a.color, opacity: a.task ? 0.6 : 1,
                     }}
                   />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
                     {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -2198,7 +2197,7 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
                     </span>
                     {cd && cd.status !== 'past' && <CdBadge cd={cd} />}
                   </div>
-                  <span style={{ fontSize: 12, color: 'var(--tx3)', flex: 'none' }}>{a.meta}</span>
+                  <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 'none' }}>{a.meta}</span>
                 </div>
               );
             })}
@@ -2236,7 +2235,7 @@ function Countdown({ events, A }: { events: Ev[]; A: ReturnType<typeof useEventA
 
   return (
     <div className="rise" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 34, textAlign: 'center', boxShadow: 'var(--sh)' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 12 }}>Up next</div>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 12 }}>Up next</div>
       <div className={due ? 'arrive' : undefined} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 32, fontWeight: 800, letterSpacing: '-.03em', marginBottom: 7 }}>
         <span aria-hidden style={{ width: 12, height: 12, borderRadius: 4, background: next.color, flex: 'none' }} title={cat.label} />
         {next.title}
@@ -2244,7 +2243,7 @@ function Countdown({ events, A }: { events: Ev[]; A: ReturnType<typeof useEventA
       <div className="glowring" style={{ display: 'inline-block', padding: '9px 18px', borderRadius: 14, background: 'var(--card2)', fontSize: 26, fontWeight: 800, letterSpacing: '-.025em', color: SECHUE.calendar, fontVariantNumeric: 'tabular-nums' }}>
         {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
       </div>
-      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--tx2)' }}>{hhmm(hoursOf(next.starts_at))}{next.location && ` · ${next.location}`}</div>
+      <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx2)' }}>{hhmm(hoursOf(next.starts_at))}{next.location && ` · ${next.location}`}</div>
       <button onClick={() => A.snooze.mutate({ id: next.id })} className="hov k-squish"
         style={{ marginTop: 18, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 44 }}>
         Snooze 10 min
@@ -2610,7 +2609,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
               {/* Repeat on (Days of week) for weekly */}
               {(recurrence?.freq === 'weekly' || !recurrence?.freq) && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>REPEAT ON</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>REPEAT ON</div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {(['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as RecurrenceDay[]).map((d) => {
                       const isSel = (recurrence?.byDay ?? []).includes(d);
@@ -2635,7 +2634,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
                             border: `1px solid ${isSel ? 'var(--acc)' : 'var(--line2)'}`,
                             background: isSel ? 'var(--acc)' : 'var(--card)',
                             color: isSel ? 'var(--ink)' : 'var(--tx2)',
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
@@ -2650,7 +2649,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
 
               {/* Ends condition */}
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>ENDS</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginBottom: 6 }}>ENDS</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                     <input
@@ -2756,7 +2755,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
                 className="k-chip"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10,
-                  fontSize: 12, fontWeight: 700, minHeight: 34, cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 700, minHeight: 34, cursor: 'pointer',
                   border: `1px solid ${on ? `color-mix(in srgb, ${c.color} 55%, transparent)` : 'var(--line2)'}`,
                   background: on ? `color-mix(in srgb, ${c.color} 14%, var(--card))` : 'var(--card2)',
                   color: on ? 'var(--tx)' : 'var(--tx2)',
@@ -2772,7 +2771,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
             );
           })}
           <label title="Any colour" aria-label="Custom background colour"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10, fontSize: 12, fontWeight: 700, minHeight: 34, border: `1px dashed ${selectedCat.id === 'custom' ? 'var(--acc)' : 'var(--line2)'}`, background: selectedCat.id === 'custom' ? 'var(--card)' : 'var(--card2)', color: selectedCat.id === 'custom' ? 'var(--tx)' : 'var(--tx2)', cursor: 'pointer', position: 'relative' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, minHeight: 34, border: `1px dashed ${selectedCat.id === 'custom' ? 'var(--acc)' : 'var(--line2)'}`, background: selectedCat.id === 'custom' ? 'var(--card)' : 'var(--card2)', color: selectedCat.id === 'custom' ? 'var(--tx)' : 'var(--tx2)', cursor: 'pointer', position: 'relative' }}>
             <Icon name="pen" size={12} color="var(--tx3)" />
             Custom
             <input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#7C8CFF'}
@@ -2787,7 +2786,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
             <button key={k.n} onClick={() => setTextColor(k.v)} aria-pressed={textColor === k.v}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8,
-                fontSize: 12, fontWeight: 700, minHeight: 30,
+                fontSize: 11, fontWeight: 700, minHeight: 30,
                 border: `1px solid ${textColor === k.v ? 'var(--acc)' : 'var(--line2)'}`,
                 color: textColor === k.v ? 'var(--tx)' : 'var(--tx2)',
               }}>
@@ -2810,10 +2809,10 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
           background: `color-mix(in srgb, ${color} 26%, var(--card))`,
           borderLeft: `2px solid ${color}`,
           color: chipInk({ color, text_color: textColor }, dark),
-          fontSize: 12, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
         }}>
           {title || 'Untitled'}
-          <span style={{ display: 'block', fontSize: 12, opacity: 0.72, marginTop: 2 }}>
+          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2 }}>
             {selectedCat.id !== 'custom' ? `${selectedCat.label} · ` : ''}{from}–{to}
           </span>
         </div>
@@ -2834,7 +2833,7 @@ const FIELD: React.CSSProperties = {
   fontSize: 13.5, marginBottom: 10,
 };
 const LABEL: React.CSSProperties = {
-  display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: '.08em',
+  display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '.08em',
   textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 4,
 };
 
@@ -2939,12 +2938,12 @@ function EventPopover({
             </div>
           )}
           {/* What the colour means, in words — the chip never says it on its own. */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, padding: '2px 8px 2px 6px', borderRadius: 999, background: `color-mix(in srgb, ${ev.color} 16%, var(--card2))`, border: `1px solid color-mix(in srgb, ${ev.color} 36%, transparent)`, fontSize: 12, fontWeight: 800, letterSpacing: '.02em', color: 'var(--tx2)' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, padding: '2px 8px 2px 6px', borderRadius: 999, background: `color-mix(in srgb, ${ev.color} 16%, var(--card2))`, border: `1px solid color-mix(in srgb, ${ev.color} 36%, transparent)`, fontSize: 10.5, fontWeight: 800, letterSpacing: '.02em', color: 'var(--tx2)' }}>
             <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: ev.color, flex: 'none' }} />
             {cat.label}
           </div>
           {ev.short_name && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 7px', borderRadius: 6, background: 'color-mix(in srgb, var(--acc) 14%, var(--card2))', border: '1px solid color-mix(in srgb, var(--acc) 30%, transparent)', fontSize: 12, fontWeight: 700, color: 'var(--accTx, var(--tx))' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 7px', borderRadius: 6, background: 'color-mix(in srgb, var(--acc) 14%, var(--card2))', border: '1px solid color-mix(in srgb, var(--acc) 30%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--accTx, var(--tx))' }}>
               <Icon name="tag" size={10} color="inherit" />
               <span>Short name: {ev.short_name}</span>
             </div>
@@ -2969,7 +2968,7 @@ function EventPopover({
             <Icon name="files" size={15} color="var(--pal-sky)" style={{ marginTop: 2 }} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--pal-sky)' }}>Take meeting notes</div>
-              <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Start a new document to capture notes</div>
+              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>Start a new document to capture notes</div>
             </div>
           </div>
 
@@ -2986,7 +2985,7 @@ function EventPopover({
           </div>
 
           {locked && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)', marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 10 }}>
               <Icon name="lock" size={12} color="var(--tx3)" />Synced — edit it where it came from
             </div>
           )}
@@ -2996,7 +2995,7 @@ function EventPopover({
               style={{
                 display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, padding: '7px 10px',
                 width: '100%', borderRadius: 9, border: '1px solid var(--line2)',
-                fontSize: 12, fontWeight: 700, color: 'var(--pal-coral)',
+                fontSize: 11.5, fontWeight: 700, color: 'var(--pal-coral)',
               }}>
               <Icon name="trash" size={13} color="var(--pal-coral)" />
               Delete all {runDays} days of this
@@ -3169,7 +3168,7 @@ function TaskPopover({
           {countdown && (
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4,
-              fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
               padding: '2px 7px', borderRadius: 6,
               background: countdown.isOverdue || alert?.tier === 'red'
                 ? 'color-mix(in srgb, var(--pal-coral) 20%, var(--card2))'
@@ -3205,4 +3204,3 @@ function TaskPopover({
 }
 
 const ACT: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' };
-

@@ -83,7 +83,7 @@ export const DEFAULT_PREFS: Prefs = {
   contrast: 'normal',
   underlineLinks: false,
   reduceTransparency: false,
-  alwaysShowLabels: true,
+  alwaysShowLabels: false,
 
   weekStart: 'mon',
   time24: false,
@@ -149,9 +149,7 @@ export function applyPrefs(p: Prefs) {
 function read(): Prefs {
   if (typeof window === 'undefined') return DEFAULT_PREFS;
   try {
-    const raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-    const stored = { ...DEFAULT_PREFS, ...raw } as Prefs;
-    if (raw.motion === undefined) stored.motion = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const stored = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } as Prefs;
     // Everyone who never picked an accent has the old default written to disk,
     // so shipping a new one without this would change nothing for them.
     if (stored.accent === RETIRED_ACCENT) stored.accent = DEFAULT_ACCENT;

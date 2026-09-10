@@ -63,24 +63,17 @@ export type SyncResult = { ok: boolean; imported: number; message: string };
  * Replaying it after a restart would be pointless work, so it stays online-only.
  */
 export async function runSync(kind: Integration['kind']): Promise<SyncResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
-  try {
-    const { data, error } = await supabase.functions.invoke<SyncResult>('sync', { body: { kind }, signal: controller.signal });
-    if (error) {
-      const ctx = (error as { context?: Response }).context;
-      const detail = ctx ? await ctx.text().catch(() => '') : '';
-      let message = error.message;
-      try { const body = JSON.parse(detail); message = body.message || body.error || message; } catch {}
-      if (controller.signal.aborted) message = 'The connection timed out. Check your network and try Sync now again.';
-      else if (ctx?.status === 401) message = 'Your sign-in has expired. Sign in again, then retry this connection.';
-      else if (ctx?.status === 404) message = 'The sync service is unavailable. Your settings are saved; try again later.';
-      return { ok: false, imported: 0, message };
-    }
-    return data ?? { ok: false, imported: 0, message: 'The sync service returned no result. Try again.' };
-  } catch (error) {
-    return { ok: false, imported: 0, message: controller.signal.aborted ? 'Sync took too long. Check your connection and retry.' : error instanceof Error ? error.message : 'Could not reach the sync service.' };
-  } finally { clearTimeout(timeout); }
+  const { data, error } = await supabase.functions.invoke<SyncResult>('sync', { body: { kind } });
+  if (error) {
+    // Edge Functions return the failure body alongside a non-2xx, and that body
+    // carries the useful message ("401 from Canvas"), so dig it out.
+    const ctx = (error as { context?: Response }).context;
+    const detail = ctx ? await ctx.text().catch(() => '') : '';
+    let message = error.message;
+    try { message = JSON.parse(detail).message ?? message; } catch { /* plain text or empty */ }
+    return { ok: false, imported: 0, message };
+  }
+  return data ?? { ok: false, imported: 0, message: 'No response' };
 }
 
 /**

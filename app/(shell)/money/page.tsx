@@ -56,7 +56,7 @@ import { AsciiBar } from '@/components/AsciiBar';
  */
 
 const KICKER: React.CSSProperties = {
-  fontSize: 12, fontWeight: 700, letterSpacing: '.11em',
+  fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em',
   textTransform: 'uppercase', color: 'var(--tx3)',
 };
 const CARD: React.CSSProperties = {
@@ -83,7 +83,7 @@ function PinGate({ onPass }: { onPass: () => void }) {
     <div className="rise" style={{ maxWidth: 320, margin: '60px auto', textAlign: 'center' }}>
       <Icon name="money" size={26} color={PAL.mint} />
       <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em', margin: '14px 0 6px' }}>Money is PIN-locked</h1>
-      <p style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 20 }}>Enter your PIN to unlock.</p>
+      <p style={{ fontSize: 11.5, color: 'var(--tx3)', marginBottom: 20 }}>Enter your PIN to unlock.</p>
       <input value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(false); }}
         onKeyDown={(e) => e.key === 'Enter' && submit()} inputMode="numeric" autoComplete="off" placeholder="••••"
         style={{
@@ -91,7 +91,7 @@ function PinGate({ onPass }: { onPass: () => void }) {
           border: `1px solid ${err ? PAL.coral : 'var(--line2)'}`, background: 'var(--card)',
           color: 'var(--tx)', fontSize: 18, letterSpacing: '.4em',
         }} />
-      {err && <p style={{ marginTop: 10, fontSize: 12, color: PAL.coral }}>Wrong PIN.</p>}
+      {err && <p style={{ marginTop: 10, fontSize: 11.5, color: PAL.coral }}>Wrong PIN.</p>}
       <button onClick={submit} className="acc"
         style={{ marginTop: 16, width: '100%', minHeight: 44, borderRadius: 14, background: 'var(--acc)', color: '#0C0F16', fontSize: 13.5, fontWeight: 700 }}>
         Unlock
@@ -124,7 +124,7 @@ function Section({
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <h2 style={{ ...KICKER, margin: 0 }}>{title}</h2>
-        {note && <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>{note}</span>}
+        {note && <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>{note}</span>}
       </div>
       {children}
     </motion.section>
@@ -442,7 +442,7 @@ function Money() {
                 >
                   {days === null ? '—' : days}
                 </motion.span>
-                <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
+                <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
                   {days === null ? 'nothing spent yet' : `day${days === 1 ? '' : 's'} at this rate`}
                 </span>
               </div>
@@ -629,7 +629,7 @@ function Money() {
             </div>
 
             {ledger.length > 40 && (
-              <p style={{ fontSize: 12, color: 'var(--tx3)', margin: '10px 0 0', textAlign: 'center' }}>
+              <p style={{ fontSize: 10.5, color: 'var(--tx3)', margin: '10px 0 0', textAlign: 'center' }}>
                 Showing the newest 40 of {ledger.length}.
               </p>
             )}
@@ -674,18 +674,18 @@ function Money() {
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 700 }}>{g.name}</span>
                       <span className="num" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700 }}>{peso(g.saved_centavos)}</span>
-                      <span className="num" style={{ fontSize: 12, color: 'var(--tx3)' }}>of {peso(g.target_centavos)}</span>
+                      <span className="num" style={{ fontSize: 10, color: 'var(--tx3)' }}>of {peso(g.target_centavos)}</span>
                     </div>
                     <div style={{ margin: '8px 0 6px' }}>
                       <AsciiBar shape="slim" value={p} hue={p >= 70 ? MINT : PAL.indigo} label={`${g.name} saved`} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
+                      <span style={{ fontSize: 10, color: 'var(--tx3)' }}>
                         {g.due_on ? `by ${new Date(g.due_on).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}` : 'no deadline'}
                       </span>
                       <button onClick={() => GA.edit.mutate({ id: g.id, patch: { saved_centavos: g.saved_centavos + 50000 } })}
                         className="hov k-squish"
-                        style={{ marginLeft: 'auto', minHeight: 30, padding: '0 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
+                        style={{ marginLeft: 'auto', minHeight: 30, padding: '0 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>
                         + ₱500
                       </button>
                       <RowActions label={g.name} onEdit={() => setEditing(`goal:${g.id}`)}
@@ -744,7 +744,7 @@ function Money() {
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 4px', borderBottom: i < subs.length - 1 ? '1px solid var(--line)' : undefined }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.name}</div>
-                    <div className="num" style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 1 }}>
+                    <div className="num" style={{ fontSize: 9.5, color: 'var(--tx3)', marginTop: 1 }}>
                       {sub.next_charge ? `next ${new Date(sub.next_charge).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : 'no date set'}
                     </div>
                   </div>
@@ -800,7 +800,7 @@ function Money() {
                   <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</div>
                   <div className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>{peso(b.amount_centavos)}</div>
                   <button onClick={() => A.logBuy.mutate({ item: b, account_id: accounts[0]?.id ?? null })} className="acc k-squish"
-                    style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800, minHeight: 30, flex: 'none' }}>
+                    style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--acc)', color: '#0C0F16', fontSize: 10.5, fontWeight: 800, minHeight: 30, flex: 'none' }}>
                     Log
                   </button>
                   <RowActions label={b.name} onEdit={() => setEditing(`buy:${b.id}`)}
@@ -878,7 +878,7 @@ function Header({
         }}>
           {peso(balance)}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>
           across {accounts} account{accounts === 1 ? '' : 's'}
         </div>
       </div>
@@ -894,7 +894,7 @@ function Header({
 function Stat({ label, value, hue }: { label: string; value: string; hue: string }) {
   return (
     <div>
-      <div style={{ ...KICKER, fontSize: 12 }}>{label}</div>
+      <div style={{ ...KICKER, fontSize: 8.5 }}>{label}</div>
       <div className="num" style={{ fontSize: 16, fontWeight: 800, color: hue, marginTop: 3 }}>{value}</div>
     </div>
   );
@@ -909,7 +909,7 @@ function FilterPill({ label, onClear }: { label: string; onClear: () => void }) 
         display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 5px 3px 9px', borderRadius: 999,
         background: 'color-mix(in srgb, var(--acc) 16%, transparent)',
         border: '1px solid color-mix(in srgb, var(--acc) 42%, transparent)',
-        color: 'var(--accTx, var(--tx))', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+        color: 'var(--accTx, var(--tx))', fontSize: 10, fontWeight: 700, cursor: 'pointer',
       }}>
       {label}
       <Icon name="close" size={11} color="currentColor" />
@@ -951,13 +951,13 @@ function TxnRow({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
           {t.detailed === false && (
             <span className="num" style={{
-              fontSize: 12, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase',
+              fontSize: 7, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase',
               padding: '2px 4px', borderRadius: 3, flex: 'none',
               background: 'color-mix(in srgb, #FFC24B 18%, transparent)', color: '#FFC24B',
             }}>Lazy</span>
           )}
         </div>
-        <div className="num" style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="num" style={{ fontSize: 9.5, color: 'var(--tx3)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {t.category} · {account ?? '—'} · {new Date(t.occurred_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </div>
       </div>

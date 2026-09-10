@@ -33,7 +33,7 @@ const KIND: Record<string, { n: string; c: string; ic: IconName }> = {
   other: { n: 'Other', c: PAL.cyan, ic: 'files' },
 };
 
-const KICKER: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
+const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
 const kindOf = (n: string): string => {
   const e = n.split('.').pop()?.toLowerCase() ?? '';
@@ -239,7 +239,7 @@ export default function FilesPage() {
           </div>
           <div>
             <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: '-.025em', lineHeight: 1.2, whiteSpace: 'nowrap' }}>Basedly Drive</div>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>
               {folder ? `Drive › ${folders.find((f) => f.id === folder)?.name ?? '…'}` : 'Drive'} · {human(files.reduce((s, f) => s + f.size_bytes, 0))}
             </div>
           </div>
@@ -292,8 +292,8 @@ export default function FilesPage() {
             </span>
             <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 10 }}>{k.n}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3 }}>
-              <span style={{ fontSize: 12, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{human(k.size)}</span>
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{k.pct}%</span>
+              <span style={{ fontSize: 11, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>{human(k.size)}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>{k.pct}%</span>
             </div>
           </button>
         ))}
@@ -330,7 +330,7 @@ export default function FilesPage() {
                 </div>
                 <button onClick={() => setFolder(f.id)} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 11 }}>{f.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
                     {files.filter((x) => x.folder_id === f.id).length} items
                   </div>
                 </button>
@@ -361,7 +361,7 @@ export default function FilesPage() {
                 <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                <span style={{ fontSize: 12, color: 'var(--tx3)' }}>{human(f.size_bytes)}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{human(f.size_bytes)}</span>
                 <span style={{ marginLeft: 'auto' }}>
                   <RowActions label={f.name} onEdit={() => renamePrompt(f)} onDelete={() => removeFile(f)} />
                 </span>
@@ -376,7 +376,7 @@ export default function FilesPage() {
               <Icon name={KIND[f.kind]?.ic ?? 'files'} size={16} color={KIND[f.kind]?.c ?? PAL.cyan} />
               <button onClick={() => open(f)} style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                 <div style={{ fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>{human(f.size_bytes)}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{human(f.size_bytes)}</div>
               </button>
               <RowActions label={f.name} onEdit={() => renamePrompt(f)} onDelete={() => removeFile(f)} />
             </div>

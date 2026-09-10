@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { WhiteboardInk } from './WhiteboardInk';
 import { Icon } from '../Icon';
 import { ContextMenu, type CtxItem } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
@@ -680,7 +679,6 @@ function Board({
       </div>
 
       <div style={{ ...PANEL, position: 'relative', flex: 1, minHeight: phone ? 380 : 320, overflow: 'hidden' }}>
-        <WhiteboardInk key={board.id} boardId={board.id} strokes={board.settings.ink} viewport={vp} onSave={ink => A.saveBoard.mutateAsync({id:board.id,patch:{settings:{...board.settings,ink}}})} />
         <div
           ref={wrap}
           onPointerDown={onBackgroundDown}

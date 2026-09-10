@@ -11,7 +11,6 @@ import { toast } from './toast';
  * that used to import geometry from here still can.
  */
 export * from './canvasGeom';
-import type { InkStroke } from './ink';
 import type { Box, Side } from './canvasGeom';
 
 /**
@@ -87,7 +86,7 @@ export type Board = {
   color: string;
   position: number;
   viewport: { x: number; y: number; z: number };
-  settings: Partial<GraphSettings> & { ink?: InkStroke[] };
+  settings: Partial<GraphSettings>;
   updated_at: string;
 };
 

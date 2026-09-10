@@ -6,7 +6,8 @@ import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { whenLabel } from '@/lib/notes';
-import { BoardPreview } from './BoardPreview';
+import { ProgBlur } from '../core/ProgBlur';
+import { NotebookCover } from './NotebookCover';
 import type { Board, CNode } from '@/lib/canvas';
 
 /**
@@ -93,51 +94,66 @@ export function BoardShelf({
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
       )}
 
-      <div className="library-bar" style={{ paddingBottom: 0, borderBottom: 'none' }}>
-        <div className="library-heading">
-          <h1>{kind === 'graph' ? 'Graphs' : 'Whiteboards'}</h1>
-          <span className="library-meta">{rows.length} {rows.length === 1 ? noun : plural}</span>
-        </div>
-
-        <label className="library-search" style={{ width: phone ? '100%' : 280 }}>
-          <Icon name="search" size={15} color="var(--tx3)" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Find a ${noun}`}
-            aria-label={`Find ${plural}`} />
-        </label>
-
-        <button onClick={() => setDesc((v) => !v)} className="library-icon-button hov tap"
-          title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
-          style={{ width: 38, height: 38 }}>
-          <Icon name="sort" size={15} color="var(--tx2)" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={onNew} className="tap acc k-glass" style={{
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 999,
+          minHeight: 38, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
+        }}>
+          <Icon name={icon} size={15} color="var(--accInk)" />New {noun}
         </button>
 
         {kind === 'graph' && onOpenAuto && (
-          <button onClick={onOpenAuto} className="studio-button">
-            <Icon name="layers" size={14} />All notes
+          <button onClick={onOpenAuto} className="hov tap k-squish" style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 999,
+            minHeight: 38, border: '1px solid var(--line2)', background: 'var(--card)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)',
+          }}>
+            <Icon name="layers" size={14} color="var(--tx2)" />All notes
           </button>
         )}
 
-        <button onClick={onNew} className="studio-button primary">
-          <Icon name={icon} size={15} />New {noun}
+        <button onClick={() => setDesc((v) => !v)} className="hov tap"
+          title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
+          style={{ width: 38, height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', display: 'grid', placeItems: 'center' }}>
+          <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
+
+        <label style={{
+          marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8,
+          flex: phone ? '1 1 100%' : '0 0 260px',
+          padding: '0 13px', height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)',
+        }}>
+          <Icon name="search" size={14} color="var(--tx3)" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Find ${plural}`}
+            aria-label={`Find ${plural}`}
+            style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--tx)', fontFamily: 'inherit' }} />
+        </label>
       </div>
 
       <div className="navsb k-stagger" style={{
         flex: 1, minHeight: 0, overflowY: 'auto',
         display: 'grid', alignItems: 'start', alignContent: 'start',
-        gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(250px, 1fr))',
-        gap: 14, paddingRight: 2,
+        gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(225px, 1fr))',
+        gap: 12, paddingRight: 2,
       }}>
         {kind === 'graph' && onOpenAuto && !q.trim() && (
-          <button onClick={onOpenAuto} className="board-tile k-squish">
-            <span className="board-tile-art">
-              <BoardPreview seed="basedly-auto-graph" kind="graph" />
+          <button onClick={onOpenAuto} className="clay k-squish" style={{
+            position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%',
+          }}>
+            <NotebookCover seed="basedly-auto-graph" />
+            <span style={{
+              position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+              display: 'grid', placeItems: 'center',
+              background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+              border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            }}>
+              <Icon name="layers" size={12} color="var(--tx2)" />
             </span>
-            <span className="board-tile-foot">
-              <span className="notebook-spine" style={{ background: 'var(--studio-blue)' }} />
-              <span className="board-tile-text">
-                <strong>All notes</strong>
-                <small className="library-meta">Graph · automatic</small>
+            <ProgBlur edge="bottom" size={56} strength={12} />
+            <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)' }}>All notes</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
+                Automatic
               </span>
             </span>
           </button>
@@ -146,29 +162,46 @@ export function BoardShelf({
         {rows.map((b, i) => (
           <div
             key={b.id}
-            role="button" tabIndex={0} aria-label={`Open ${b.name || noun}`}
-            onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onOpen(b);}}}
-            className="board-tile k-squish"
+            className="clay k-squish"
             onClick={() => onOpen(b)}
             onContextMenu={(e) => { e.preventDefault(); openMenu(e, b); }}
-            style={{ ['--i' as string]: i, cursor: 'pointer' }}
+            style={{
+              ['--i' as string]: i,
+              position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%',
+            }}
           >
-            <span className="board-tile-art">
-              <BoardPreview seed={b.id} color={b.color} kind={kind} />
-              <button
-                onClick={(e) => openMenu(e, b)} className="board-tile-menu hov"
-                aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
-              >
-                <Icon name="dots" size={14} color="var(--tx2)" />
-              </button>
+            <NotebookCover seed={b.id} color={b.color} />
+            <span style={{
+              position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
+              display: 'grid', placeItems: 'center',
+              background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+              border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            }}>
+              <Icon name={icon} size={12} color="var(--tx2)" />
             </span>
-            <span className="board-tile-foot">
-              <span className="notebook-spine" style={{ background: b.color }} />
-              <span className="board-tile-text">
-                <strong>{b.name || `Untitled ${noun}`}</strong>
-                <small className="library-meta">
-                  {kind === 'graph' ? 'Graph' : 'Canvas'} · {counts.get(b.id) ?? 0} · {whenLabel(b.updated_at)}
-                </small>
+            <button
+              onClick={(e) => openMenu(e, b)} className="hov"
+              aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
+              style={{
+                position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
+                display: 'grid', placeItems: 'center',
+                background: 'color-mix(in srgb, var(--card) 62%, transparent)',
+                border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+              }}
+            >
+              <Icon name="dots" size={14} color="var(--tx2)" />
+            </button>
+            <ProgBlur edge="bottom" size={56} strength={12} />
+            <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{
+                fontSize: 12.5, fontWeight: 800, color: 'var(--tx)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {b.name || `Untitled ${noun}`}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+                {kind === 'graph' ? 'Graph' : 'Canvas'} · {counts.get(b.id) ?? 0} · {whenLabel(b.updated_at)}
               </span>
             </span>
           </div>

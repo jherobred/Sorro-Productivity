@@ -45,7 +45,7 @@ const VIEWS = ['board', 'list', 'timeline'] as const;
 type View = (typeof VIEWS)[number];
 const VIEW_ICON: Record<View, IconName> = { board: 'grid', list: 'agenda', timeline: 'week' };
 
-const KICKER: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
+const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
 const NEW_PROJ = defineMutation('proj.new', async (v: { id: string; name: string; color: string }) => {
   const user_id = await currentUserId();
@@ -374,7 +374,7 @@ export default function ProjectsPage() {
                   border: 'none',
                   background: folderSize === s ? 'var(--card2)' : 'transparent',
                   color: folderSize === s ? 'var(--tx)' : 'var(--tx3)',
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: 700,
                   cursor: 'pointer',
                   boxShadow: folderSize === s ? 'var(--sh)' : 'none',
@@ -386,13 +386,13 @@ export default function ProjectsPage() {
           </div>
 
           <button onClick={() => setSort(sort === 'Custom' ? 'Name' : sort === 'Name' ? 'Cards' : 'Custom')} className="hov" title="Change sort"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
             <Icon name="sort" size={14} color="var(--tx2)" />{sort}
           </button>
 
           {trashProjects.length > 0 && (
             <button onClick={() => setShowTrash(true)} className="hov k-squish" title="View archived folders in trash"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)', background: 'var(--card2)' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 11, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', background: 'var(--card2)' }}>
               <Icon name="archive" size={14} color="var(--tx3)" />Trash ({trashProjects.length})
             </button>
           )}
@@ -423,16 +423,16 @@ export default function ProjectsPage() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>
                   {trashProjects.length} folder{trashProjects.length === 1 ? '' : 's'} in Trash
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--tx3)' }}>
+                <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
                   Recover folders that were archived or dragged
                 </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-              <button onClick={() => setShowTrash(true)} className="hov k-squish" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', background: 'var(--card2)' }}>
+              <button onClick={() => setShowTrash(true)} className="hov k-squish" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer', background: 'var(--card2)' }}>
                 View Trash
               </button>
-              <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 800, color: 'var(--ink)', background: 'var(--acc)', cursor: 'pointer' }}>
+              <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 11.5, fontWeight: 800, color: 'var(--ink)', background: 'var(--acc)', cursor: 'pointer' }}>
                 Restore All ({trashProjects.length})
               </button>
             </div>
@@ -512,7 +512,7 @@ export default function ProjectsPage() {
               <span style={{ width: '100%', fontSize: titleFont, fontWeight: 600, letterSpacing: '-.01em', color: 'var(--tx)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
                 {p.name}
               </span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums' }}>
                 {p.deadline ? new Date(p.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `${p.progress}%`}
               </span>
             </button>
@@ -565,7 +565,7 @@ export default function ProjectsPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {trashProjects.length > 0 && (
-                    <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
+                    <button onClick={restoreAll} className="acc k-squish" style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
                       Restore All
                     </button>
                   )}
@@ -593,7 +593,7 @@ export default function ProjectsPage() {
                           <FolderIcon color={tp.color} count={0} size={36} icon={tp.icon} />
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{tp.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Archived</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Archived</div>
                           </div>
                         </div>
                         <button
@@ -602,7 +602,7 @@ export default function ProjectsPage() {
                           style={{
                             display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
                             borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)',
-                            fontSize: 12, fontWeight: 800, border: 'none', cursor: 'pointer',
+                            fontSize: 11.5, fontWeight: 800, border: 'none', cursor: 'pointer',
                           }}
                         >
                           <Icon name="undo" size={13} color="var(--ink)" />Restore
@@ -705,7 +705,7 @@ export default function ProjectsPage() {
             style={{ marginLeft: 'auto', width: 38, height: 38, borderRadius: 19, background: 'var(--acc)', display: 'grid', placeItems: 'center' }}>
             <Icon name={VIEW_ICON[view]} size={16} color="#0C0F16" />
           </button>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx3)', width: 62, textTransform: 'capitalize' }}>{view}</div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)', width: 62, textTransform: 'capitalize' }}>{view}</div>
         </div>
       </Cover>
 
@@ -740,7 +740,7 @@ export default function ProjectsPage() {
               }}>
               <div style={{ display: 'flex', alignItems: 'baseline', padding: '0 2px 4px' }}>
                 <div style={KICKER}>{col.n}</div>
-                <div style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--tx3)' }}>{mine.filter((c) => c.col === col.id).length}</div>
+                <div style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--tx3)' }}>{mine.filter((c) => c.col === col.id).length}</div>
               </div>
 
               {mine.filter((c) => c.col === col.id).map((c) => (
@@ -770,11 +770,11 @@ export default function ProjectsPage() {
                       return (
                         <span title={who.label} style={{
                           width: 20, height: 20, borderRadius: '50%', background: who.hue,
-                          display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, color: '#0C0F16',
+                          display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700, color: '#0C0F16',
                         }}>{who.initials}</span>
                       );
                     })() : (
-                      <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Unassigned</span>
+                      <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Unassigned</span>
                     )}
                     <span style={{ marginLeft: 'auto' }}>
                       <RowActions label={c.title}
@@ -822,8 +822,8 @@ export default function ProjectsPage() {
         <div style={{ background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' }}>
           {mine.map((c, i) => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0' }}>
-              <span style={{ fontSize: 12, color: 'var(--tx3)', width: 34, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
-              <div style={{ flex: 1, height: 22, borderRadius: 6, background: `color-mix(in srgb, ${c.color} 30%, var(--card2))`, display: 'flex', alignItems: 'center', padding: '0 9px', fontSize: 12, fontWeight: 600 }}>
+              <span style={{ fontSize: 10.5, color: 'var(--tx3)', width: 34, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+              <div style={{ flex: 1, height: 22, borderRadius: 6, background: `color-mix(in srgb, ${c.color} 30%, var(--card2))`, display: 'flex', alignItems: 'center', padding: '0 9px', fontSize: 11.5, fontWeight: 600 }}>
                 {c.title}
               </div>
             </div>
@@ -837,7 +837,7 @@ export default function ProjectsPage() {
           {comments.map((c) => (
             <div key={c.id} className="lensrow" style={{ padding: '11px 14px', borderBottom: '1px solid var(--line)' }}>
               <div style={{ fontSize: 13.5, lineHeight: 1.6, textWrap: 'pretty' }}>{c.body}</div>
-              <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 3, fontWeight: 600 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3, fontWeight: 600 }}>
                 {new Date(c.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </div>
             </div>
@@ -857,7 +857,7 @@ function AddCard({ onAdd }: { onAdd: (t: string) => void }) {
   if (!editing) {
     return (
       <button onClick={() => setEditing(true)} className="hov"
-        style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '9px 10px', borderRadius: 10, border: '1.5px dashed var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx3)' }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '9px 10px', borderRadius: 10, border: '1.5px dashed var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)' }}>
         <Icon name="plus" size={13} color="var(--tx3)" />Add card
       </button>
     );
@@ -878,7 +878,7 @@ function AddComment({ onAdd }: { onAdd: (b: string) => void }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 14px' }}>
       <input value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()}
         placeholder="Say something" style={{ flex: 1, fontSize: 13.5, color: 'var(--tx)', minHeight: 26 }} />
-      <button onClick={submit} style={{ fontSize: 12, fontWeight: 700, color: 'var(--accTx)', padding: '5px 8px', minHeight: 28 }}>Post</button>
+      <button onClick={submit} style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--accTx)', padding: '5px 8px', minHeight: 28 }}>Post</button>
     </div>
   );
 }
@@ -928,7 +928,7 @@ function NameField({ initial, color, phone, placeholder, onSave, onCancel }: {
         }}
         style={{
           width: '100%', minHeight: 30, padding: '5px 7px', borderRadius: 7, textAlign: 'center',
-          border: '1px solid var(--acc)', background: 'var(--card)', color: 'var(--tx)', fontSize: 12, fontWeight: 600,
+          border: '1px solid var(--acc)', background: 'var(--card)', color: 'var(--tx)', fontSize: 11.5, fontWeight: 600,
         }} />
     </div>
   );

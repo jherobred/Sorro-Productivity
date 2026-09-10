@@ -332,7 +332,7 @@ export default function HabitsPage() {
                     style={{
                       alignSelf: 'flex-end', padding: '6px 11px', borderRadius: 9,
                       border: '1px solid var(--line2)', background: 'var(--card2)',
-                      fontSize: 12, fontWeight: 700, color: 'var(--tx3)', cursor: 'pointer',
+                      fontSize: 11, fontWeight: 700, color: 'var(--tx3)', cursor: 'pointer',
                     }}
                   >
                     Clear all
@@ -589,7 +589,7 @@ function Hero({
                 Habits
               </h1>
               <span style={{
-                fontSize: 12, fontWeight: 800, padding: '3px 9px', borderRadius: 999,
+                fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 999,
                 background: `color-mix(in srgb, ${hue} 16%, transparent)`,
                 color: hue, letterSpacing: '.02em',
               }}>
@@ -610,7 +610,7 @@ function Hero({
           <button onClick={onReset} className="hov k-squish" title="Clear every tick from today"
             style={{
               padding: '8px 12px', borderRadius: 11, border: '1px solid var(--line2)',
-              background: 'var(--card2)', fontSize: 12, fontWeight: 700, color: 'var(--tx3)',
+              background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)',
               cursor: 'pointer',
             }}>
             Reset today
@@ -625,7 +625,7 @@ function Hero({
               display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 11,
               border: '1px solid color-mix(in srgb, #34D9A0 40%, transparent)',
               background: 'color-mix(in srgb, #34D9A0 13%, transparent)',
-              color: '#34D9A0', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+              color: '#34D9A0', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
             }}
           >
             <Icon name="check" size={13} color="#34D9A0" />
@@ -692,7 +692,7 @@ function Segmented<T extends string>({
               className="k-squish"
               style={{
                 padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 background: on ? 'var(--card)' : 'transparent',
                 color: on ? 'var(--tx)' : 'var(--tx3)',
                 boxShadow: on ? 'var(--sh)' : 'none',
@@ -716,7 +716,7 @@ function CategoryChip({
       className="k-squish"
       style={{
         display: 'flex', alignItems: 'center', gap: 6, flex: 'none', cursor: 'pointer',
-        padding: '5px 11px', borderRadius: 9, fontSize: 12, fontWeight: 700,
+        padding: '5px 11px', borderRadius: 9, fontSize: 11, fontWeight: 700,
         border: `1px solid ${on ? color : 'var(--line2)'}`,
         background: on ? `color-mix(in srgb, ${color} 15%, transparent)` : 'transparent',
         color: on ? 'var(--tx)' : 'var(--tx3)',

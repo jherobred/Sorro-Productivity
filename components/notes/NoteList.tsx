@@ -124,7 +124,7 @@ export function NoteList({
         }}>
           {notebook.name}
         </div>
-        <span style={{ fontSize: 12, color: 'var(--tx3)', flex: 'none' }}>{notes.length}</span>
+        <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 'none' }}>{notes.length}</span>
 
         <span style={{ marginLeft: 'auto' }} />
         <button onClick={(e) => setMenu({ x: e.clientX, y: e.clientY, label: 'Sort', items: sortMenu() })}
@@ -181,7 +181,7 @@ export function NoteList({
         <div className="hbar" style={{ display: 'flex', gap: 5, overflowX: 'auto', flex: 'none', paddingBottom: 2 }}>
           {allTags.map((t) => (
             <button key={t} onClick={() => setTag(tag === t ? null : t)} className="k-chip" style={{
-              flex: 'none', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+              flex: 'none', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
               border: `1px solid ${tag === t ? 'var(--acc)' : 'var(--line2)'}`,
               background: tag === t ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
               color: tag === t ? 'var(--accTx)' : 'var(--tx3)',
@@ -213,11 +213,11 @@ export function NoteList({
               </span>
               <span style={{
                 display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                fontSize: 12, lineHeight: 1.5, color: 'var(--tx3)', marginTop: 3, minHeight: 16,
+                fontSize: 11, lineHeight: 1.5, color: 'var(--tx3)', marginTop: 3, minHeight: 16,
               }}>
                 {preview(n.body, 110) || 'Empty note'}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 12, color: 'var(--tx3)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 10.5, color: 'var(--tx3)' }}>
                 <span>{whenLabel(n.updated_at)}</span>
                 {t.total > 0 && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>

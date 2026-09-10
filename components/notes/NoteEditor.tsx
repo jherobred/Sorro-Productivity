@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
-import { copyText, shareText, gmailCompose } from '@/lib/sharing';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
 import { usePrefs } from '@/lib/prefs';
@@ -582,14 +581,6 @@ export function NoteEditor({
         onLink={insertWikiLinkPrompt}
         onDelete={onDelete}
       />
-
-      <div className="note-sharing-bar">
-        <span>Your document</span>
-        <button onClick={() => void copyText(`# ${title}\n\n${body}`).then(()=>toast('Note copied')).catch(()=>toast('Could not copy. Select your note text instead.'))}><Icon name="copy" size={14}/>Copy</button>
-        <button onClick={() => { const blob=new Blob([`# ${title}\n\n${body}`],{type:'text/markdown;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${(title||'note').replace(/[<>:"/\\|?*]/g,'-')}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }}><Icon name="files" size={14}/>Export</button>
-        <a href={gmailCompose(title,body.slice(0,8000))} target="_blank" rel="noopener noreferrer" title={body.length>8000?'Email the first 8,000 characters; export for the full note':'Prepare this note in Gmail'}>Gmail</a>
-        <button onClick={() => void shareText({title,text:body}).then(r=>{if(r==='copied')toast('Note copied for sharing');}).catch(()=>toast('Could not share. Try Copy or Export.'))}><Icon name="share" size={14}/>Share</button>
-      </div>
 
       {/* Main Document Living Surface */}
       <div

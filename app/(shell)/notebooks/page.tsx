@@ -1,12 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState, useRef }
-from 'react';
-import { useSearchParams } from 'next/navigation';
-
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Icon } from '@/components/Icon';
-import { NoteToolSkeleton, WorkspaceSkeleton } from '@/components/WorkspaceSkeleton';
 import { ShelfSkeleton } from '@/components/Skeleton';
 import { TabRail } from '@/components/TabRail';
 import { PAL } from '@/lib/pal';
@@ -32,11 +28,19 @@ import { GlobalShelf } from '@/components/notes/GlobalShelf';
  * `ssr: false` because none of them render anything at export time anyway —
  * they all read canvas, window size or a query.
  */
-const NoteEditor = dynamic(() => import('@/components/notes/NoteEditor').then(m => m.NoteEditor), { ssr: false, loading: () => <NoteToolSkeleton kind="write" /> });
-const GraphView = dynamic(() => import('@/components/notes/GraphView').then(m => m.GraphView), { ssr: false, loading: () => <NoteToolSkeleton kind="graph" /> });
-const Canvas = dynamic(() => import('@/components/notes/Canvas').then(m => m.Canvas), { ssr: false, loading: () => <NoteToolSkeleton kind="canvas" /> });
-const Journal = dynamic(() => import('@/components/notes/Journal').then(m => m.Journal), { ssr: false, loading: () => <NoteToolSkeleton kind="journal" /> });
-const JavaLab = dynamic(() => import('@/components/JavaLab').then(m => m.JavaLab), { ssr: false, loading: () => <NoteToolSkeleton kind="code" /> });
+const Panel = () => (
+  <div style={{
+    flex: 1, display: 'grid', placeItems: 'center', background: 'var(--card)',
+    borderRadius: 14, boxShadow: 'var(--sh)', fontSize: 12.5, color: 'var(--tx3)',
+  }}>
+    Loading…
+  </div>
+);
+const NoteEditor = dynamic(() => import('@/components/notes/NoteEditor').then((m) => m.NoteEditor), { ssr: false, loading: Panel });
+const GraphView = dynamic(() => import('@/components/notes/GraphView').then((m) => m.GraphView), { ssr: false, loading: Panel });
+const Canvas = dynamic(() => import('@/components/notes/Canvas').then((m) => m.Canvas), { ssr: false, loading: Panel });
+const Journal = dynamic(() => import('@/components/notes/Journal').then((m) => m.Journal), { ssr: false, loading: Panel });
+const JavaLab = dynamic(() => import('@/components/JavaLab').then((m) => m.JavaLab), { ssr: false, loading: Panel });
 import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH, type Board } from '@/lib/canvas';
 
 /**
@@ -52,31 +56,29 @@ import { useBoards, useCanvasActions, useAllNodes, CANVAS_COLORS, DEFAULT_GRAPH,
  */
 
 const TABS = [
-  { id: 'shelf', label: 'Library', icon: 'layers' },
-  { id: 'notebooks', label: 'Write', icon: 'book' },
-  { id: 'canvas', label: 'Whiteboard', icon: 'grid' },
+  { id: 'shelf', label: 'Shelf', icon: 'layers' },
+  { id: 'notebooks', label: 'Notebooks', icon: 'book' },
+  { id: 'canvas', label: 'Canvas', icon: 'grid' },
   { id: 'graph', label: 'Graph', icon: 'link' },
   { id: 'journal', label: 'Journal', icon: 'pen' },
   { id: 'code', label: 'Java', icon: 'code' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
-function NotebooksPage() {
-  const params = useSearchParams();
-  const openedLink = useRef<string|null>(null);
+export default function NotebooksPage() {
   const { phone } = useLayout();
   const { prefs } = usePrefs();
   const [tab, setTab] = useState<Tab>('shelf');
 
   const { data: notebooks = [], isPending } = useNotebooks();
-  const { data: notes = [], isPending: notesPending } = useNotes();
+  const { data: notes = [] } = useNotes();
   const { data: trash = [] } = useTrash();
   const { data: tags = {} } = useTags();
   const A = useNoteActions();
 
   // Canvases and graph views are notebooks too, so the shelf lists them and the
   // page owns making one — a tab is a place to work, not the only door in.
-  const { data: boards = [], isPending: boardsPending } = useBoards();
+  const { data: boards = [] } = useBoards();
   const { data: allNodes = [] } = useAllNodes();
   const B = useCanvasActions(null);
 
@@ -161,16 +163,7 @@ function NotebooksPage() {
       window.removeEventListener('popstate', syncFocus);
       window.removeEventListener('basedly:focus', onCustomFocus);
     };
-  }, [params]);
-
-  // Direct links reopen the exact document after its data arrives.
-  useEffect(() => {
-    const target = params.get('note');
-    if (!target) {openedLink.current=null;return;}
-    if(openedLink.current===target)return;
-    const found = notes.find(n => n.id === target);
-    if (found) { openedLink.current=target; setTab('notebooks'); setNbId(found.notebook_id); setNoteId(found.id); }
-  }, [notes, params]);
+  }, []);
 
   // A notebook that goes away (deleted, or the last note moved out from under
   // the selection) must not leave the screen pointing at nothing.
@@ -201,7 +194,7 @@ function NotebooksPage() {
   };
 
   // What "back" means on this screen, in the order things were opened.
-  const canGoBack = tab === 'notebooks' && (inTrash || !!nbId || !!(phone && noteId));
+  const canGoBack = inTrash || !!nbId || !!(phone && noteId);
   const stepBack = () => {
     if (inTrash) { setInTrash(false); return; }
     if (noteId && phone) { setNoteId(null); return; }
@@ -225,18 +218,10 @@ function NotebooksPage() {
 
   const newNote = (title?: string) => {
     if (!nbId) return;
-    newNoteIn(nbId, title);
-  };
-
-  /** Make a note in a named notebook and open it — the library creates notes
-      without first navigating into the notebook they belong to. */
-  const newNoteIn = (notebook_id: string, title?: string) => {
     const id = crypto.randomUUID();
     const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const noteTitle = title || `Note · ${formattedDate}`;
-    A.newNote.mutate({ id, notebook_id, title: noteTitle, body: '' });
-    setTab('notebooks');
-    setNbId(notebook_id);
+    A.newNote.mutate({ id, notebook_id: nbId, title: noteTitle, body: '' });
     setNoteId(id);
   };
 
@@ -288,7 +273,7 @@ $$
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Top Header Navigation */}
-      {!(phone && note && tab === 'notebooks') ? (
+      {!(phone && note) ? (
         <div style={{
           flex: 'none', padding: phone ? '12px 14px 10px' : '16px 22px 12px',
           display: 'flex', alignItems: 'center', gap: phone ? 0 : 14,
@@ -303,7 +288,7 @@ $$
             </button>
           )}
 
-          <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Ways to take notes" />
+          <TabRail tabs={TABS} value={tab} onChange={setTab} phone={phone} label="Notebook views" />
 
           {!phone && tab === 'notebooks' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginLeft: 'auto' }}>
@@ -317,7 +302,7 @@ $$
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', minHeight: 32,
                   borderRadius: 9, border: `1px solid ${inTrash ? 'var(--acc)' : 'var(--line2)'}`,
-                  fontSize: 12, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 700, color: inTrash ? 'var(--accTx)' : 'var(--tx2)', cursor: 'pointer',
                 }}>
                 <Icon name="trash" size={13} color={inTrash ? 'var(--accTx)' : 'var(--tx3)'} />
                 Trash & Archive{trash.length ? ` ${trash.length}` : ''}
@@ -344,7 +329,7 @@ $$
             <Icon name="back" size={14} color="var(--tx2)" />
             <span>{notebook?.name || 'Notes'}</span>
           </button>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx3)', maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)', maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {note.title || 'Untitled Note'}
           </span>
         </div>
@@ -355,10 +340,8 @@ $$
         padding: phone ? (note ? '0' : '0 14px 20px') : '0 22px 20px',
         width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden',
       }}>
-        {tab === 'shelf' && (isPending || notesPending || boardsPending) && <WorkspaceSkeleton kind="notebooks" />}
-        {tab === 'shelf' && !isPending && !notesPending && !boardsPending && (
+        {tab === 'shelf' && (
           <GlobalShelf
-            onMoveNote={(id,notebook_id)=>A.moveNote.mutate({id,notebook_id},{onSuccess:()=>toast('Note moved')})}
             notebooks={notebooks}
             notes={notes}
             boards={boards}
@@ -370,7 +353,6 @@ $$
             }}
             onJumpTab={(t) => setTab(t)}
             onNewNotebook={() => { setTab('notebooks'); newNotebook(); }}
-            onNewNote={(id) => newNoteIn(id)}
           />
         )}
 
@@ -396,7 +378,7 @@ $$
                 <button onClick={() => setInTrash(true)} className="hov" style={{
                   display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8,
                   padding: '6px 11px', minHeight: 32, borderRadius: 9, border: '1px solid var(--line2)',
-                  fontSize: 12, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
                 }}>
                   <Icon name="trash" size={13} color="var(--tx3)" />Trash & Archive{trash.length ? ` ${trash.length}` : ''}
                 </button>
@@ -527,7 +509,7 @@ function Crumbs({
   notebook, note, inTrash, onRoot,
 }: { notebook: string | null; note: string | null; inTrash: boolean; onRoot: () => void }) {
   const s: React.CSSProperties = {
-    fontSize: 12, fontWeight: 500, color: 'var(--tx3)', minWidth: 0,
+    fontSize: 11.5, fontWeight: 500, color: 'var(--tx3)', minWidth: 0,
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   };
   if (inTrash) return <div style={s}>Bin</div>;
@@ -560,7 +542,7 @@ function TrashList({
         {notes.length > 0 && (
           <button onClick={onEmpty} className="hov k-squish" style={{
             padding: '6px 12px', minHeight: 32, borderRadius: 9, cursor: 'pointer',
-            border: '1px solid var(--line2)', fontSize: 12, fontWeight: 800, color: 'var(--pal-coral)',
+            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 800, color: 'var(--pal-coral)',
             background: 'var(--card2)',
           }}>
             Empty trash
@@ -572,7 +554,7 @@ function TrashList({
         {/* Archived Notebooks Section */}
         {archivedNotebooks.length > 0 && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--pal-amber)', marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--pal-amber)', marginBottom: 8 }}>
               Archived Notebooks ({archivedNotebooks.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -584,7 +566,7 @@ function TrashList({
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: b.color, flex: 'none' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{b.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 1 }}>Archived Notebook</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>Archived Notebook</div>
                   </div>
                   <button
                     onClick={() => onUnarchiveNotebook?.(b.id)}
@@ -592,7 +574,7 @@ function TrashList({
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
                       border: '1px solid var(--line2)', background: 'var(--card2)',
-                      fontSize: 12, fontWeight: 700, color: 'var(--pal-mint)', cursor: 'pointer',
+                      fontSize: 11.5, fontWeight: 700, color: 'var(--pal-mint)', cursor: 'pointer',
                     }}
                   >
                     <Icon name="undo" size={12} color="var(--pal-mint)" /> Unarchive
@@ -607,7 +589,7 @@ function TrashList({
                     title="Delete notebook"
                     style={{
                       padding: '6px 9px', borderRadius: 8, border: '1px solid var(--line2)',
-                      background: 'transparent', color: 'var(--pal-coral)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      background: 'transparent', color: 'var(--pal-coral)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
                     }}
                   >
                     <Icon name="trash" size={12} color="var(--pal-coral)" />
@@ -620,7 +602,7 @@ function TrashList({
 
         {/* Deleted Notes Section */}
         <div>
-          <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 8 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 8 }}>
             Deleted Notes ({notes.length})
           </div>
           {notes.length === 0 ? (
@@ -636,16 +618,16 @@ function TrashList({
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{n.title || 'Untitled'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                       {preview(n.body, 90) || 'Empty'}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--tx3)', flex: 'none' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', flex: 'none' }}>
                     {n.deleted_at ? whenLabel(n.deleted_at) : ''}
                   </div>
                   <button onClick={() => onRestore(n)} className="hov k-squish" style={{
                     flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minHeight: 32,
-                    borderRadius: 8, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--pal-mint)',
+                    borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--pal-mint)',
                     background: 'var(--card2)', cursor: 'pointer',
                   }}>
                     <Icon name="undo" size={13} color="var(--pal-mint)" />Restore
@@ -659,5 +641,3 @@ function TrashList({
     </div>
   );
 }
-
-export default function NotesRoute(){return <Suspense fallback={<WorkspaceSkeleton kind="notebooks"/>}><NotebooksPage/></Suspense>;}
