@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
+import { ColorPicker } from '../ColorPicker';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { whenLabel } from '@/lib/notes';
@@ -25,11 +26,6 @@ import type { Board, CNode } from '@/lib/canvas';
  * sits at the front rather than being replaced by the custom ones.
  */
 
-const COLOURS = [
-  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
-  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
-];
-
 export function BoardShelf({
   kind, boards, nodes, onOpen, onNew, onRename, onRecolour, onDelete, onOpenAuto,
 }: {
@@ -50,6 +46,7 @@ export function BoardShelf({
   const [q, setQ] = useState('');
   const [desc, setDesc] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxGroup[] } | null>(null);
+  const [picker, setPicker] = useState<{ x: number; y: number; value: string; apply: (c: string) => void } | null>(null);
 
   const noun = kind === 'graph' ? 'graph' : 'canvas';
   // "canvas" takes -es, "graph" takes -s. `${noun}es` gave "graphes".
@@ -76,12 +73,10 @@ export function BoardShelf({
       items: [
         { items: [{ label: 'Open', icon, run: () => onOpen(b) }] },
         { items: [{ label: 'Rename', icon: 'edit', run: () => onRename(b) }] },
-        {
-          label: 'Colour',
-          items: COLOURS.map((c) => ({
-            label: c.n, icon: 'palette' as IconName, swatch: c.v, checked: b.color === c.v, run: () => onRecolour(b, c.v),
-          })),
-        },
+        { items: [{
+          label: 'Colour', icon: 'palette' as IconName, swatch: b.color,
+          run: () => setPicker({ x: r.left - 150, y: r.bottom + 6, value: b.color, apply: (c) => onRecolour(b, c) }),
+        }] },
         { items: [{ label: `Delete ${noun}`, icon: 'trash', danger: true, run: () => onDelete(b) }] },
       ],
     });
@@ -92,6 +87,10 @@ export function BoardShelf({
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="project" label={menu.label} items={menu.items}
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+      )}
+      {picker && (
+        <ColorPicker x={picker.x} y={picker.y} value={picker.value}
+          onChange={picker.apply} onClose={() => setPicker(null)} />
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
+import { ColorPicker } from '../ColorPicker';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { ask, confirmAsk } from '@/lib/ask';
@@ -26,11 +27,6 @@ import type { Board } from '@/lib/canvas';
  * kind of notebook, and hiding them behind a tab meant you had to remember
  * they existed before you could find them.
  */
-
-const COLOURS = [
-  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
-  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
-];
 
 export function NotebookTable({
   notebooks, notes, boards, onOpen, onNew, onRename, onRecolour, onDelete, onOpenNote,
@@ -62,6 +58,7 @@ export function NotebookTable({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [desc, setDesc] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxGroup[] } | null>(null);
+  const [picker, setPicker] = useState<{ x: number; y: number; value: string; apply: (c: string) => void } | null>(null);
 
   const byBook = useMemo(() => {
     const m = new Map<string, Note[]>();
@@ -97,9 +94,8 @@ export function NotebookTable({
         { label: 'Rename', icon: 'edit', shortcut: 'F2',
           run: () => void ask('Rename notebook', { initial: b.name, placeholder: 'Notebook name' })
             .then((n) => { if (n && n !== b.name) onRename(b, n); }) },
-        { label: 'Colour', icon: 'palette', items: COLOURS.map((c) => ({
-          label: c.n, icon: 'palette' as IconName, swatch: c.v, checked: b.color === c.v, run: () => onRecolour(b, c.v),
-        })) },
+        { label: 'Colour', icon: 'palette', swatch: b.color,
+          run: () => setPicker({ x: menu?.x ?? 80, y: menu?.y ?? 80, value: b.color, apply: (c) => onRecolour(b, c) }) },
         { label: isArchived ? 'Unarchive notebook' : 'Archive notebook', icon: 'clock', run: () => onToggleArchive?.(b.id) },
         { label: 'Copy name', icon: 'copy', run: () => { void navigator.clipboard?.writeText(b.name); toast('Copied'); } },
       ] },
@@ -131,6 +127,10 @@ export function NotebookTable({
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="project" label={menu.label} items={menu.items}
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+      )}
+      {picker && (
+        <ColorPicker x={picker.x} y={picker.y} value={picker.value}
+          onChange={picker.apply} onClose={() => setPicker(null)} />
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

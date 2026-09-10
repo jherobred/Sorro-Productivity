@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { Icon, type IconName } from '../Icon';
 import { ProgBlur } from '../core/ProgBlur';
@@ -8,20 +8,16 @@ import { useLayout } from '@/lib/useLayout';
 import { usePrefs } from '@/lib/prefs';
 import { ask } from '@/lib/ask';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
+import { ColorPicker } from '../ColorPicker';
 import {
   addWallpaper, currentWallpaper, cycleWallpaper, framed, pickImage,
   removeCurrentWallpaper, setBookPrefs, setHideRecent, setWallpaperFrame, useShelfPrefs,
 } from '@/lib/shelfPrefs';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
 import { coverArt } from './NotebookCover';
+import { useImageUrls } from '@/lib/imageStore';
 import type { Framing } from '@/lib/shelfPrefs';
 import type { Board } from '@/lib/canvas';
-
-/** Recolour options, matching the notebook menus elsewhere in Notes. */
-const COLOURS = [
-  { n: 'Violet', v: '#B07CFF' }, { n: 'Indigo', v: '#7C6CFF' }, { n: 'Cyan', v: '#38D6F2' },
-  { n: 'Mint', v: '#34D9A0' }, { n: 'Amber', v: '#FFC24B' }, { n: 'Coral', v: '#FF6B6B' },
-];
 
 interface GlobalShelfProps {
   notebooks: Notebook[];
@@ -64,7 +60,18 @@ export function GlobalShelf({
   const { phone } = useLayout();
   const { prefs } = usePrefs();
   const shelf = useShelfPrefs();
+  // One lookup for every picture on screen — a hook per card is not allowed
+  // inside the grid maps, and object URLs want a single owner to revoke them.
+  const pictures = useImageUrls([
+    ...shelf.wallpapers,
+    ...Object.values(shelf.books).map((b) => b.image),
+  ]);
+  const pic = (ref: string | undefined) => (ref ? pictures[ref] : undefined);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxGroup[] } | null>(null);
+  /** The wheel, and what it recolours while it is open. */
+  const [picker, setPicker] = useState<{ x: number; y: number; value: string; apply: (c: string) => void } | null>(null);
+  /** Where the menu was opened, so the wheel lands there and not at 0,0. */
+  const pointer = useRef({ x: 0, y: 0 });
 
   /** Insert / adjust / remove, shared by notebook bands and board faces. */
   const imageGroup = (id: string, noun: string): CtxGroup => {
@@ -74,7 +81,7 @@ export function GlobalShelf({
       items: [
         {
           label: cur?.image ? 'Replace image' : 'Insert an image', icon: 'photo',
-          run: () => void pickImage('band').then((d) => { if (d) setBookPrefs(id, { image: d }); }),
+          run: () => void pickImage().then((d) => { if (d) setBookPrefs(id, { image: d }); }),
         },
         ...(cur?.image ? [
           {
@@ -105,11 +112,8 @@ export function GlobalShelf({
             .then((n) => { if (n && n !== b.name) onRenameNotebook(b, n); }),
         }] : []),
         ...(onRecolourNotebook ? [{
-          label: 'Colour', icon: 'palette' as const,
-          items: COLOURS.map((c) => ({
-            label: c.n, icon: 'palette' as const, swatch: c.v, checked: b.color === c.v,
-            run: () => onRecolourNotebook(b, c.v),
-          })),
+          label: 'Colour', icon: 'palette' as const, swatch: b.color,
+          run: () => setPicker({ x: pointer.current.x, y: pointer.current.y, value: b.color, apply: (c) => onRecolourNotebook(b, c) }),
         }] : []),
         {
           label: shelf.books[b.id]?.tag ? 'Edit tag' : 'Add tag', icon: 'tag',
@@ -129,11 +133,8 @@ export function GlobalShelf({
       items: [
         ...(onRenameBoard ? [{ label: 'Rename', icon: 'edit' as const, run: () => onRenameBoard(b) }] : []),
         ...(onRecolourBoard ? [{
-          label: 'Colour', icon: 'palette' as const,
-          items: COLOURS.map((c) => ({
-            label: c.n, icon: 'palette' as const, swatch: c.v, checked: b.color === c.v,
-            run: () => onRecolourBoard(b, c.v),
-          })),
+          label: 'Colour', icon: 'palette' as const, swatch: b.color,
+          run: () => setPicker({ x: pointer.current.x, y: pointer.current.y, value: b.color, apply: (c) => onRecolourBoard(b, c) }),
         }] : []),
       ],
     },
@@ -158,7 +159,7 @@ export function GlobalShelf({
         canvases={canvases.length}
         graphs={graphs.length}
         phone={phone}
-        wallpaper={currentWallpaper(shelf)}
+        wallpaper={pic(currentWallpaper(shelf))}
         frame={shelf.wallpaperFrame}
         count={shelf.wallpapers.length}
         at={shelf.wallpaperAt}
@@ -198,6 +199,7 @@ export function GlobalShelf({
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    pointer.current = { x: e.clientX, y: e.clientY };
                     setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: bookMenu(b) });
                   }}
                   className="clay k-squish"
@@ -214,7 +216,7 @@ export function GlobalShelf({
                       hard line. */}
                   <span aria-hidden style={{
                     position: 'relative', flex: 'none', height: phone ? 62 : 84, overflow: 'hidden',
-                    background: framed(shelf.books[b.id]?.image, shelf.books[b.id])
+                    background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
                       ?? `linear-gradient(120deg, color-mix(in srgb, ${b.color} 42%, var(--card2)), color-mix(in srgb, ${b.color} 12%, var(--card2)))`,
                   }}>
                     <ProgBlur edge="bottom" size={phone ? 30 : 40} strength={14} />
@@ -228,7 +230,8 @@ export function GlobalShelf({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: bookMenu(b) });
+                      pointer.current = { x: e.clientX, y: e.clientY };
+                    setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: bookMenu(b) });
                     }}
                     className="hov" aria-label={`Customise ${b.name}`} aria-haspopup="menu"
                     style={{
@@ -306,6 +309,7 @@ export function GlobalShelf({
                 onClick={() => onOpenBoard(b)}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  pointer.current = { x: e.clientX, y: e.clientY };
                   setMenu({ x: e.clientX, y: e.clientY, label: b.name, items: boardMenu(b) });
                 }}
                 className="clay k-squish"
@@ -317,7 +321,7 @@ export function GlobalShelf({
               >
                 <span aria-hidden style={{
                   position: 'absolute', inset: 0,
-                  background: framed(shelf.books[b.id]?.image, shelf.books[b.id])
+                  background: framed(pic(shelf.books[b.id]?.image), shelf.books[b.id])
                     ?? `linear-gradient(140deg, color-mix(in srgb, ${b.color} 46%, var(--card2)), color-mix(in srgb, ${b.color} 14%, var(--card2)))`,
                 }} />
                 <span style={{
@@ -398,6 +402,12 @@ export function GlobalShelf({
           onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
         />
       )}
+      {picker && (
+        <ColorPicker
+          x={picker.x} y={picker.y} value={picker.value}
+          onChange={picker.apply} onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }
@@ -475,7 +485,7 @@ function ShelfHero({
     {
       items: [{
         label: 'Insert a wallpaper', icon: 'photo',
-        run: () => void pickImage('wide').then((d) => { if (d) addWallpaper(d); }),
+        run: () => void pickImage().then((d) => { if (d) addWallpaper(d); }),
       }],
     },
     ...(wallpaper ? [{
@@ -529,12 +539,11 @@ function ShelfHero({
       position: 'relative', overflow: 'hidden', minHeight: phone ? 210 : 268,
       display: 'flex', alignItems: 'flex-end', padding: phone ? 16 : 22, borderRadius: 0,
     }}>
-      {/* No veil here, on purpose — the wallpaper is the point of the band.
-          The caption below carries its own scrim instead. */}
       <div aria-hidden style={{
         position: 'absolute', inset: 0,
         background: framed(wallpaper, frame) ?? coverArt('basedly-shelf-hero'),
       }} />
+      <ProgBlur edge="bottom" size={phone ? 110 : 140} strength={16} />
 
       {/* Remove sits on the wallpaper it removes, so cycling to a picture you
           are done with puts its own delete under your cursor. */}
@@ -593,11 +602,6 @@ function ShelfHero({
       <div style={{
         position: 'relative', width: '100%', display: 'flex', alignItems: 'flex-end',
         justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-        padding: wallpaper ? (phone ? '10px 12px' : '12px 14px') : 0,
-        margin: wallpaper ? (phone ? '-10px -12px' : '-12px -14px') : 0,
-        background: wallpaper ? 'color-mix(in srgb, var(--card) 72%, transparent)' : 'none',
-        backdropFilter: wallpaper ? 'blur(10px)' : 'none',
-        WebkitBackdropFilter: wallpaper ? 'blur(10px)' : 'none',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           <h1 style={{

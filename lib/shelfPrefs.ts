@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { deleteImage, storeImage } from './imageStore';
 import { toast } from './toast';
 
 /**
@@ -13,8 +14,9 @@ import { toast } from './toast';
  * are per-device; the images are wallpaper, not content, so that is the right
  * trade. Anything that must survive a new phone belongs in Supabase instead.
  *
- * Images are downscaled hard before they are stored: localStorage is ~5MB for
- * the whole origin, and a single untouched phone photo is bigger than that.
+ * Only the ids live here. The pictures themselves are Blobs in IndexedDB
+ * (see imageStore), which is what lets them stay full quality — localStorage
+ * would have capped a wallpaper at roughly a thousand pixels wide.
  */
 
 const KEY = 'bd_shelf_prefs';
@@ -23,14 +25,14 @@ const KEY = 'bd_shelf_prefs';
 export type Framing = { fit?: 'cover' | 'contain'; pos?: 'top' | 'center' | 'bottom' };
 
 export type BookPrefs = Framing & {
-  /** Data URL for the card's header band, or a board tile's whole face. */
+  /** imageStore id for the card header band, or a board tile's whole face. */
   image?: string;
   /** One short label shown beside the note count. */
   tag?: string;
 };
 
 export type ShelfPrefs = {
-  /** Every wallpaper the reader has added. The hero cycles through them. */
+  /** imageStore ids, one per wallpaper. The hero cycles through them. */
   wallpapers: string[];
   /** Which wallpaper is showing. */
   wallpaperAt: number;
@@ -84,9 +86,9 @@ export function currentWallpaper(p: ShelfPrefs): string | undefined {
   return p.wallpapers[p.wallpaperAt];
 }
 
-export function addWallpaper(dataUrl: string) {
+export function addWallpaper(id: string) {
   const p = load();
-  const wallpapers = [...p.wallpapers, dataUrl];
+  const wallpapers = [...p.wallpapers, id];
   commit({ ...p, wallpapers, wallpaperAt: wallpapers.length - 1 });
 }
 
@@ -94,6 +96,8 @@ export function addWallpaper(dataUrl: string) {
 export function removeCurrentWallpaper() {
   const p = load();
   if (!p.wallpapers.length) return;
+  const gone = p.wallpapers[p.wallpaperAt];
+  if (gone && !gone.startsWith('data:')) void deleteImage(gone);
   const wallpapers = p.wallpapers.filter((_, i) => i !== p.wallpaperAt);
   commit({ ...p, wallpapers, wallpaperAt: Math.max(0, Math.min(p.wallpaperAt, wallpapers.length - 1)) });
 }
@@ -113,6 +117,11 @@ export function setWallpaperFrame(patch: Framing) {
 export function setBookPrefs(id: string, patch: BookPrefs | null) {
   const prefs = load();
   const books = { ...prefs.books };
+  // Dropping or replacing a picture frees its bytes; nothing else points at it.
+  const old = books[id]?.image;
+  if (old && !old.startsWith('data:') && (patch === null || ('image' in patch && patch.image !== old))) {
+    void deleteImage(old);
+  }
   if (patch === null) delete books[id];
   else books[id] = { ...books[id], ...patch };
   commit({ ...prefs, books });
@@ -137,13 +146,14 @@ export function framed(image: string | undefined, frame: Framing | undefined): s
 }
 
 /**
- * Ask for an image and hand back a downscaled data URL.
+ * Ask for an image, keep the bytes, hand back the id.
  *
- * `wide` is the hero, which spans the page; a card band is smaller, so it gets
- * a smaller budget. Both are JPEG — a photo as PNG is several times the size
- * for no visible gain at these dimensions.
+ * No size tiers any more: hero and card band get the same full-quality file,
+ * because the band is 84px tall on a 1x screen and three times that on a
+ * retina one, and it is the same picture behind both. imageStore only
+ * re-encodes when a file is genuinely enormous.
  */
-export function pickImage(kind: 'wide' | 'band'): Promise<string | null> {
+export function pickImage(): Promise<string | null> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') return resolve(null);
     const input = document.createElement('input');
@@ -153,7 +163,7 @@ export function pickImage(kind: 'wide' | 'band'): Promise<string | null> {
       const file = input.files?.[0];
       if (!file) return resolve(null);
       try {
-        resolve(await shrink(file, kind === 'wide' ? 1440 : 900, kind === 'wide' ? 0.78 : 0.74));
+        resolve(await storeImage(file));
       } catch {
         toast('Could not read that image.');
         resolve(null);
@@ -161,17 +171,4 @@ export function pickImage(kind: 'wide' | 'band'): Promise<string | null> {
     };
     input.click();
   });
-}
-
-async function shrink(file: File, maxW: number, quality: number): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = bitmap.width > maxW ? maxW / bitmap.width : 1;
-  const cv = document.createElement('canvas');
-  cv.width = Math.round(bitmap.width * scale);
-  cv.height = Math.round(bitmap.height * scale);
-  const ctx = cv.getContext('2d');
-  if (!ctx) throw new Error('no 2d context');
-  ctx.drawImage(bitmap, 0, 0, cv.width, cv.height);
-  bitmap.close();
-  return cv.toDataURL('image/jpeg', quality);
 }
