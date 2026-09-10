@@ -1,4 +1,5 @@
 'use client';
+import { publicLink } from './sharing';
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from './supabase';
@@ -256,8 +257,7 @@ const BLANK_ME: Identity = { id: '', name: '', handle: null, photo: null };
 export function profileLink(handle: string | null | undefined): string | null {
   const h = (handle ?? '').trim().replace(/^@/, '');
   if (!h) return null;
-  const origin = typeof window === 'undefined' ? 'https://basedly-web.vercel.app' : window.location.origin;
-  return `${origin}/profile/?u=${encodeURIComponent(h)}`;
+  return publicLink(`/profile/?u=${encodeURIComponent(h)}`);
 }
 
 /** A stable colour per person, for the avatar behind their initials. */

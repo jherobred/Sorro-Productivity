@@ -23,7 +23,7 @@ type Person = PersonRecord;
 
 const KEY = ['people'] as const;
 const CATS = ['Classmate', 'Groupmate', 'Friend', 'Family', 'Prof'];
-const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
+const KICKER: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 
 const hueFor = (c: string) =>
   ({ Classmate: PAL.indigo, Groupmate: PAL.violet, Friend: PAL.mint, Family: PAL.amber, Prof: PAL.cyan }[c] ?? PAL.indigo);
@@ -360,7 +360,7 @@ export default function PeoplePage() {
           onClick={() => setViewTab('roster')}
           className="k-squish"
           style={{
-            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: viewTab === 'roster' ? 800 : 600,
+            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 12, fontWeight: viewTab === 'roster' ? 800 : 600,
             background: viewTab === 'roster' ? 'var(--card)' : 'transparent',
             color: viewTab === 'roster' ? 'var(--tx)' : 'var(--tx3)',
             boxShadow: viewTab === 'roster' ? 'var(--sh)' : 'none',
@@ -376,7 +376,7 @@ export default function PeoplePage() {
           onClick={() => { setViewTab('trash'); setSel(null); }}
           className="k-squish"
           style={{
-            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: viewTab === 'trash' ? 800 : 600,
+            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 12, fontWeight: viewTab === 'trash' ? 800 : 600,
             background: viewTab === 'trash' ? 'var(--card)' : 'transparent',
             color: viewTab === 'trash' ? 'var(--tx)' : 'var(--tx3)',
             boxShadow: viewTab === 'trash' ? 'var(--sh)' : 'none',
@@ -406,7 +406,7 @@ export default function PeoplePage() {
           style={{ flex: 1, minWidth: 0, fontSize: 12, border: 'none', background: 'transparent', color: 'var(--tx)', outline: 'none' }}
         />
         {q && (
-          <button onClick={() => setQ('')} style={{ border: 'none', background: 'transparent', color: 'var(--tx3)', cursor: 'pointer', fontSize: 11 }}>✕</button>
+          <button onClick={() => setQ('')} style={{ border: 'none', background: 'transparent', color: 'var(--tx3)', cursor: 'pointer', fontSize: 12 }}>✕</button>
         )}
       </div>
 
@@ -432,7 +432,7 @@ export default function PeoplePage() {
                 color: p.name === 'Untitled Person' ? 'var(--tx3)' : 'var(--tx)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{p.name}</span>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{p.category}</span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{p.category}</span>
             </span>
           </button>
         );
@@ -446,7 +446,7 @@ export default function PeoplePage() {
           border: '1px solid color-mix(in srgb, var(--pal-coral) 30%, transparent)',
           display: 'flex', flexDirection: 'column', gap: 6,
         }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--pal-coral)', letterSpacing: '.06em' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--pal-coral)', letterSpacing: '.06em' }}>
             Found in Bin:
           </div>
           {trashedPeople.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())).map((tp) => (
@@ -468,7 +468,7 @@ export default function PeoplePage() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 6,
                   background: 'var(--card)', border: '1px solid var(--line2)',
-                  fontSize: 11, fontWeight: 800, color: 'var(--pal-mint)', cursor: 'pointer', flex: 'none',
+                  fontSize: 12, fontWeight: 800, color: 'var(--pal-mint)', cursor: 'pointer', flex: 'none',
                 }}
               >
                 <Icon name="undo" size={11} color="var(--pal-mint)" /> Restore
@@ -528,7 +528,7 @@ export default function PeoplePage() {
             className="hov k-squish"
             style={{
               padding: '5px 10px', borderRadius: 7, border: '1px solid var(--line2)',
-              background: 'var(--card2)', color: 'var(--pal-coral)', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
+              background: 'var(--card2)', color: 'var(--pal-coral)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
             }}
           >
             Empty Bin
@@ -553,7 +553,7 @@ export default function PeoplePage() {
               <PersonAvatar name={p.name} color={p.color} path={p.photo_path} size={36} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)' }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>
                   {p.category} {p.deleted_at && `· Deleted ${new Date(p.deleted_at).toLocaleDateString()}`}
                 </div>
               </div>
@@ -568,7 +568,7 @@ export default function PeoplePage() {
                   className="hov k-squish"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 8,
-                    background: 'var(--card)', border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 800,
+                    background: 'var(--card)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 800,
                     color: 'var(--pal-mint)', cursor: 'pointer',
                   }}
                 >
@@ -589,7 +589,7 @@ export default function PeoplePage() {
                   title="Delete permanently"
                   style={{
                     padding: '6px 10px', borderRadius: 8, background: 'transparent',
-                    border: '1px solid var(--line2)', color: 'var(--tx3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                    border: '1px solid var(--line2)', color: 'var(--tx3)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                   }}
                 >
                   ✕

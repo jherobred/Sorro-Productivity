@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Familjen_Grotesk, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
+import './studio.css';
 import { Providers } from './providers';
 
 /* next/font downloads these at build time and emits them as static assets, so

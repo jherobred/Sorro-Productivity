@@ -13,11 +13,10 @@ export const KEYBOARD_SHORTCUTS: ShortcutItem[] = [
   { keys: ['⌘ / Ctrl', 'K'], description: 'Open Search & Command Palette', category: 'General' },
   { keys: ['/'], description: 'Quick Search (when not in input)', category: 'General' },
   { keys: ['?'], description: 'Show Keyboard Shortcuts Cheat Sheet', category: 'General' },
-  { keys: ['⌘ / Ctrl', '\\'], description: 'Toggle Sidebar Navigation', category: 'General' },
   { keys: ['⌘ / Ctrl', 'Shift', 'L'], description: 'Toggle Dark / Light Theme', category: 'General' },
 
   { keys: ['T'], description: 'Quick Create Task', category: 'Quick Actions' },
-  { keys: ['N'], description: 'Quick Create Note', category: 'Quick Actions' },
+  { keys: ['N'], description: 'Open Notes', category: 'Quick Actions' },
   { keys: ['E'], description: 'Quick Log Expense', category: 'Quick Actions' },
 
   { keys: ['Backspace / Del'], description: 'Delete Selected Calendar Event with Undo', category: 'Calendar & Tasks' },

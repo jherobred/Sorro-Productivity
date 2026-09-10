@@ -43,13 +43,13 @@ const FollowListModal = dynamic(() => import('@/components/FollowListModal').the
  * every account in the database being one tap from your inbox.
  */
 
-const KICKER: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
+const KICKER: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)' };
 const CARD: React.CSSProperties = { background: 'var(--card)', borderRadius: 16, padding: '15px 16px', boxShadow: 'var(--sh)' };
 
 /** The controls that sit on top of the cover. Dark enough to read on any photo. */
 const PILL: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', borderRadius: 999,
-  background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+  background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 12, fontWeight: 800,
   backdropFilter: 'blur(6px)',
 };
 
@@ -265,7 +265,7 @@ export default function ProfilePage() {
     <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1240, marginInline: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <h1 className="sronly">Profile</h1>
-        <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Your face across Basedly</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Your face across Basedly</div>
 
         {/* Stories Archive Modal Button */}
         <button
@@ -459,12 +459,12 @@ export default function ProfilePage() {
           <div style={{ marginTop: 18, paddingTop: 15, borderTop: '1px solid var(--line)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={KICKER}>Your creature</div>
-              <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
                 {animal ? 'Shown to everyone on challenges' : `Unset — you appear as a ${animalOf(uid || 'x')}`}
               </span>
               {animal && (
                 <button onClick={() => { setAnimal(null); setDirty(true); }} className="hov"
-                  style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 10.5, fontWeight: 700, color: 'var(--tx2)' }}>
+                  style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
                   Clear
                 </button>
               )}
@@ -483,7 +483,7 @@ export default function ProfilePage() {
                     }}>
                     <Mascot id={`pick-${a}`} animal={a} mood={on ? 'blazing' : 'keen'}
                       hue={hueOf(uid || a)} size={34} />
-                    <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'capitalize', color: on ? 'var(--tx)' : 'var(--tx3)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'capitalize', color: on ? 'var(--tx)' : 'var(--tx3)' }}>
                       {a}
                     </span>
                   </button>
@@ -499,7 +499,7 @@ export default function ProfilePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
             <div style={KICKER}>Build your avatar</div>
             <button onClick={surprise} className="hov"
-              style={{ marginLeft: 'auto', padding: '5px 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>
+              style={{ marginLeft: 'auto', padding: '5px 11px', borderRadius: 8, border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
               Surprise me
             </button>
             <button onClick={() => setBuilding(false)} className="hov" aria-label="Close the builder"
@@ -511,7 +511,7 @@ export default function ProfilePage() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
             {AV_ORDER.map((k) => (
               <button key={k} onClick={() => setCat(k)} className="tt" style={{
-                padding: '5px 11px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                padding: '5px 11px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                 border: `1px solid ${cat === k ? 'var(--acc)' : 'var(--line2)'}`,
                 background: cat === k ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent',
                 color: cat === k ? 'var(--accTx)' : 'var(--tx2)',
@@ -532,7 +532,7 @@ export default function ProfilePage() {
                   border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
                   background: swatch,
                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-                  fontSize: 9.5, fontWeight: 700, textTransform: 'capitalize',
+                  fontSize: 12, fontWeight: 700, textTransform: 'capitalize',
 color: /^#|linear/.test(swatch) ? '#0C0F16' : 'var(--tx2)',
                 }}>
                   {o.id}
@@ -824,7 +824,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
                   @{who.handle}
                 </h1>
                 <span style={{
-                  padding: '2px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 800,
+                  padding: '2px 8px', borderRadius: 999, fontSize: 12, fontWeight: 800,
                   background: 'color-mix(in srgb, var(--acc) 16%, transparent)', color: 'var(--accTx)',
                 }}>
                   {who.animal ?? animalOf(who.user_id)}
@@ -884,7 +884,7 @@ function Visitor({ handle, phone }: { handle: string; phone: boolean }) {
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--tx)' }}>{who.name || `@${who.handle}`}</div>
             {who.course && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accTx)', marginTop: 2 }}>{who.course}</div>}
-            {who.campus && <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>{who.campus}</div>}
+            {who.campus && <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 1 }}>{who.campus}</div>}
             {who.bio && (
               <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--tx2)', margin: '8px 0 0', textWrap: 'pretty' }}>
                 {who.bio}

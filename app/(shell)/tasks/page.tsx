@@ -88,7 +88,7 @@ function RowCountdown({ task, tier }: { task: Task; tier?: 'red' | 'orange' | 'y
   return (
     <span
       style={{
-        fontSize: 10.5,
+        fontSize: 12,
         fontWeight: 700,
         fontVariantNumeric: 'tabular-nums',
         padding: '1px 5px',
@@ -146,7 +146,7 @@ function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof ge
           >
             {countdown.text}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 1 }}>
             {countdown.isOverdue ? 'Passed deadline' : 'Live deadline countdown'}
           </div>
         </div>
@@ -154,7 +154,7 @@ function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof ge
 
       <span
         style={{
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 800,
           textTransform: 'uppercase',
           padding: '4px 9px',
@@ -193,7 +193,7 @@ export default function TasksPage() {
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const { data: lists = [] } = useLists();
-  const { data: tasks = [], isPending } = useTasks();
+  const { data: tasks = [], isPending, isError: tasksError, refetch: retryTasks } = useTasks();
   const A = useTaskActions();
 
   const [tsw, setTsw] = useState<{ id: string; dx: number; live: boolean } | null>(null);
@@ -257,7 +257,7 @@ export default function TasksPage() {
    * the same row, so a swipe or an inline edit behaves identically in each.
    * Only the table needs its own markup, and it says why in its own file.
    */
-  type Group = { n: string; items: Row[]; tint: string; note: string; empty: string };
+  type Group = { listId?: string | null; n: string; items: Row[]; tint: string; note: string; empty: string };
   const groups: Group[] = useMemo(() => {
     if (view === 'list') {
       return [{
@@ -266,15 +266,15 @@ export default function TasksPage() {
       }];
     }
     if (view === 'board') {
-      const cols = lists.map((l) => ({
-        n: l.name, tint: l.color || PAL.indigo,
+      const cols: Group[] = lists.map((l) => ({
+        listId: l.id, n: l.name, tint: l.color || PAL.indigo,
         items: ordered(rows.filter((r) => r.task.list_id === l.id)),
         note: `By ${order.toLowerCase()}`, empty: 'Empty.',
       }));
       const loose = ordered(rows.filter((r) => !r.task.list_id));
       // Tasks with no list still have to be somewhere, or the board quietly
       // shows fewer tasks than the count above it claims.
-      if (loose.length) cols.unshift({ n: 'Inbox', tint: PAL.indigo, items: loose, note: `By ${order.toLowerCase()}`, empty: 'Empty.' });
+      if (loose.length) cols.unshift({ listId: null, n: 'Inbox', tint: PAL.indigo, items: loose, note: `By ${order.toLowerCase()}`, empty: 'Empty.' });
       return cols;
     }
     return [
@@ -325,7 +325,7 @@ export default function TasksPage() {
               setOrder(next[order]);
               toast(`Sorted by ${next[order].toLowerCase()}`);
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}
           >
             <Icon name="sort" size={15} color="var(--tx2)" />{order}
           </button>
@@ -339,8 +339,9 @@ export default function TasksPage() {
         defaultListId={lists[0]?.id ?? null}
         onCreate={(t) => { A.create.mutate(t); toast(`Added “${t.title}”`); }} />
 
+      {tasksError && <div className="studio-load-error" role="alert">Tasks could not load. <button className="studio-text-button" onClick={() => void retryTasks()}>Try again</button></div>}
       {/* Loading Skeleton */}
-      {isPending && <TasksSkeleton tints={[PAL.coral, PAL.amber, PAL.mint]} />}
+      {isPending && <TasksSkeleton view={view} tints={[PAL.coral, PAL.amber, PAL.mint]} />}
 
       {/* The table is the one view that is not a stack of buckets. */}
       {!isPending && view === 'table' && (
@@ -359,6 +360,8 @@ export default function TasksPage() {
         } : undefined}>
         {!isPending && view !== 'table' && groups.map((g) => (
           <div key={g.n}
+            onDragOver={e => { if(view==='board' && e.dataTransfer.types.includes('application/x-basedly-task')){e.preventDefault();e.dataTransfer.dropEffect='move';} }}
+            onDrop={e => { if(view!=='board')return;e.preventDefault();const id=e.dataTransfer.getData('application/x-basedly-task');if(tasks.some(t=>t.id===id))A.update.mutate({id,patch:{list_id:g.listId??null}},{onSuccess:()=>toast(`Moved to ${g.n}`),onError:()=>toast('Could not move the task. Try again.')}); }}
             style={{
               background: 'var(--card, #1E1F22)', borderRadius: 20, padding: '14px 14px 6px', marginTop: 14,
               boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 30%, transparent)`,
@@ -372,17 +375,17 @@ export default function TasksPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, padding: '0 4px' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: g.tint }} />
               <span style={{
-                fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
                 color: prefs.theme === 'dark'
                   ? `color-mix(in srgb, ${g.tint} 100%, transparent)`
                   : `color-mix(in srgb, ${g.tint} 66%, #201E1D)`,
               }}>
                 {g.n}
               </span>
-              <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 12, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
                 {g.items.length}
               </span>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }}>{g.items.length ? g.note : ''}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>{g.items.length ? g.note : ''}</span>
             </div>
 
             {g.items.length === 0 && (
@@ -390,8 +393,8 @@ export default function TasksPage() {
             )}
 
             {g.items.map((r) => (
+              <div key={r.task.id} draggable={view==='board' && !phone && inlineEditId!==r.task.id} onDragStart={e=>{e.dataTransfer.setData('application/x-basedly-task',r.task.id);e.dataTransfer.effectAllowed='move';}}>
               <TaskRow
-                key={r.task.id}
                 row={r}
                 phone={phone}
                 accent={prefs.accent}
@@ -407,7 +410,7 @@ export default function TasksPage() {
                 onOpenMenu={(x, y) => setCtxMenu({ x, y, task: r.task })}
                 onOpenDatePicker={(anchorRect) => setDatePickerTask({ task: r.task, anchorRect })}
                 lp={lp}
-              />
+              /></div>
             ))}
           </div>
         ))}
@@ -463,7 +466,7 @@ export default function TasksPage() {
               </span>
             </div>
 
-            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+            <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
               {showCompleted ? 'Hide' : 'Show'}
             </span>
           </button>
@@ -530,7 +533,7 @@ export default function TasksPage() {
                       {l && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                           <span style={{ width: 6, height: 6, borderRadius: 2, background: l.color }} />
-                          <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{l.name}</span>
+                          <span style={{ fontSize: 12, color: 'var(--tx3)' }}>{l.name}</span>
                         </span>
                       )}
                     </div>
@@ -709,6 +712,8 @@ function TaskRow({
       >
         <div
           className={`google-task-row ${alertClass}`}
+          role="button" tabIndex={0} aria-label={`Open ${row.task.title}`}
+          onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onOpen();}}}
           style={{ cursor: 'pointer' }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -869,7 +874,7 @@ function TaskRow({
                                 background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
                                 border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
                                 color: 'var(--pal-sky)',
-                                fontSize: 10.5,
+                                fontSize: 12,
                                 fontWeight: 700,
                               }}
                             >
@@ -894,7 +899,7 @@ function TaskRow({
                                 background: 'color-mix(in srgb, var(--pal-coral) 14%, var(--card2))',
                                 border: '1px solid color-mix(in srgb, var(--pal-coral) 35%, transparent)',
                                 color: 'var(--pal-coral)',
-                                fontSize: 10.5,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 textDecoration: 'none',
                               }}
@@ -920,7 +925,7 @@ function TaskRow({
                                 background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
                                 border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
                                 color: 'var(--pal-sky)',
-                                fontSize: 10.5,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 textDecoration: 'none',
                               }}
@@ -947,7 +952,7 @@ function TaskRow({
                                 background: 'color-mix(in srgb, var(--pal-mint) 14%, var(--card2))',
                                 border: '1px solid color-mix(in srgb, var(--pal-mint) 35%, transparent)',
                                 color: 'var(--pal-mint)',
-                                fontSize: 10.5,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 textDecoration: 'none',
                               }}
@@ -1000,7 +1005,7 @@ function TaskRow({
                           : alert?.tier === 'yellow'
                           ? 'var(--pal-amber)'
                           : 'var(--tx2)',
-                        fontSize: 11.5,
+                        fontSize: 12,
                         fontWeight: 600,
                         cursor: 'pointer',
                       }}
@@ -1020,7 +1025,7 @@ function TaskRow({
                         }
                       />
                       <span>{row.dueLabel || row.task.due_on}</span>
-                      <RowCountdown task={row.task} tier={alert?.tier} />
+                      {!phone && <RowCountdown task={row.task} tier={alert?.tier} />}
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1059,7 +1064,7 @@ function TaskRow({
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                display: 'inline-flex',
+                display: phone ? 'none' : 'inline-flex',
                 alignItems: 'center',
                 gap: 0,
                 marginRight: 2,
@@ -1131,13 +1136,13 @@ function TaskRow({
 }
 
 const KICKER: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '.11em',
+  fontSize: 12, fontWeight: 700, letterSpacing: '.11em',
   textTransform: 'uppercase', color: 'var(--tx3)',
 };
 
 const CHIP = (on: boolean): React.CSSProperties => ({
   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px', borderRadius: 9,
-  fontSize: 11.5, fontWeight: 700, minHeight: 32,
+  fontSize: 12, fontWeight: 700, minHeight: 32,
   border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
   background: on ? 'var(--hov)' : 'transparent',
   color: on ? 'var(--accTx)' : 'var(--tx2)',
@@ -1507,7 +1512,7 @@ function TaskEditSidepanel({
                 background: 'none',
                 border: 'none',
                 color: 'var(--pal-sky)',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 cursor: 'pointer',
               }}
@@ -1527,7 +1532,7 @@ function TaskEditSidepanel({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 800,
                   textTransform: 'uppercase',
                   letterSpacing: '.06em',
@@ -1589,7 +1594,7 @@ function TaskEditSidepanel({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 800,
                   textTransform: 'uppercase',
                   letterSpacing: '.06em',
@@ -1662,7 +1667,7 @@ function TaskEditSidepanel({
                     border: '1px solid var(--line2)',
                     background: 'var(--card2)',
                     color: 'var(--tx)',
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 800,
                     textTransform: 'uppercase',
                     letterSpacing: '.06em',

@@ -9,21 +9,21 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { preview } from '@/lib/md';
 import { whenLabel, type Note, type Notebook } from '@/lib/notes';
-import { ProgBlur } from '../core/ProgBlur';
-import { NotebookCover } from './NotebookCover';
+import { BoardPreview } from './BoardPreview';
 import type { Board } from '@/lib/canvas';
 
 /**
- * The Notebooks tab — Evernote's landing screen, wearing covers.
+ * The Notebooks tab — Evernote's landing screen, wearing index cards.
  *
  * You do not open Evernote inside a note. You open it on a shelf of notebooks
- * and pick one. Here every notebook is a cover card: art identifies it, the
- * name sits on a progressive-blur veil, and the row menu (right-click or the
- * dots) carries rename, recolour, archive and delete. "Show notes" expands the
- * card in place, so "which notebook was that in?" is answered without leaving.
+ * and pick one. Here every notebook is an index card: a coloured spine
+ * identifies it, its own first notes read through the ruled lines, and the row
+ * menu (right-click or the dots) carries rename, recolour, archive and delete.
+ * "Show notes" expands the card in place, so "which notebook was that in?" is
+ * answered without leaving.
  *
- * Canvases and graph views sit on the same shelf as cover tiles — they are a
- * kind of notebook, and hiding them behind a tab meant you had to remember
+ * Canvases and graph views sit on the same shelf, showing a sketch of the
+ * cards actually on them — hiding them behind a tab meant you had to remember
  * they existed before you could find them.
  */
 
@@ -135,7 +135,7 @@ export function NotebookTable({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button onClick={onNew} className="tap acc k-glass" style={{
-          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px', borderRadius: 999,
+          display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px',
           minHeight: 38, background: 'var(--acc)', color: 'var(--accInk)', fontSize: 12.5, fontWeight: 800,
         }}>
           <Icon name="bookPlus" size={15} color="var(--accInk)" />New notebook
@@ -143,7 +143,7 @@ export function NotebookTable({
 
         <button onClick={() => setDesc((v) => !v)} className="hov tap"
           title={desc ? 'Sort Z to A' : 'Sort A to Z'} aria-label={desc ? 'Sort Z to A' : 'Sort A to Z'}
-          style={{ width: 38, height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)', display: 'grid', placeItems: 'center' }}>
+          style={{ width: 38, height: 38, border: '1px solid var(--line2)', background: 'var(--card)', display: 'grid', placeItems: 'center' }}>
           <Icon name="sort" size={15} color="var(--tx2)" />
         </button>
 
@@ -157,7 +157,7 @@ export function NotebookTable({
               gap: 6,
               padding: '7px 13px',
               minHeight: 38,
-              borderRadius: 999,
+              
               border: '1px solid var(--line2)',
               background: 'var(--card)',
               color: trashCount > 0 ? 'var(--pal-coral)' : 'var(--tx3)',
@@ -173,7 +173,7 @@ export function NotebookTable({
 
         <label style={{
           marginLeft: phone ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8, flex: phone ? '1 1 100%' : '0 0 240px',
-          padding: '0 13px', height: 38, borderRadius: 'var(--r-sm)', border: '1px solid var(--line2)', background: 'var(--card)',
+          padding: '0 13px', height: 38, border: '1px solid var(--line2)', background: 'var(--card)',
         }}>
           <Icon name="search" size={14} color="var(--tx3)" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find notebooks"
@@ -222,14 +222,14 @@ export function NotebookTable({
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 'none' }}>
         <button onClick={() => onNewBoard('canvas')} className="hov k-squish" style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', minHeight: 36,
-          borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
+          border: '1px solid var(--line2)', background: 'var(--card2)',
           fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
         }}>
           <Icon name="grid" size={13} color="var(--pal-cyan)" />New canvas
         </button>
         <button onClick={() => onNewBoard('graph')} className="hov k-squish" style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', minHeight: 36,
-          borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card2)',
+          border: '1px solid var(--line2)', background: 'var(--card2)',
           fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
         }}>
           <Icon name="link" size={13} color="var(--pal-violet)" />New graph
@@ -246,42 +246,25 @@ function BoardTile({
 }) {
   return (
     <div
-      className="clay k-squish"
+      className="board-tile k-squish"
       onClick={onOpen}
       onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
-      style={{ ['--i' as string]: index, position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 132, width: '100%', cursor: 'pointer' }}
+      style={{ ['--i' as string]: index, cursor: 'pointer' }}
     >
-      <NotebookCover seed={b.id} color={b.color} />
-      <span style={{
-        position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 8,
-        display: 'grid', placeItems: 'center',
-        background: 'color-mix(in srgb, var(--card) 62%, transparent)',
-        border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-      }}>
-        <Icon name={b.kind === 'graph' ? 'link' : 'grid'} size={12} color="var(--tx2)" />
+      <span className="board-tile-art">
+        <BoardPreview seed={b.id} color={b.color} kind={b.kind === 'graph' ? 'graph' : 'canvas'} height={92} />
+        <button
+          onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
+          className="board-tile-menu hov" aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
+        >
+          <Icon name="dots" size={14} color="var(--tx2)" />
+        </button>
       </span>
-      <button
-        onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
-        className="hov" aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
-        style={{
-          position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
-          display: 'grid', placeItems: 'center',
-          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
-          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-        }}
-      >
-        <Icon name="dots" size={14} color="var(--tx2)" />
-      </button>
-      <ProgBlur edge="bottom" size={52} strength={12} />
-      <span style={{ position: 'relative', padding: '9px 11px 10px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-        <span style={{
-          fontSize: 12.5, fontWeight: 800, color: 'var(--tx)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {b.name}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)' }}>
-          {b.kind === 'graph' ? 'Graph' : 'Canvas'}
+      <span className="board-tile-foot">
+        <span className="notebook-spine" style={{ background: b.color }} />
+        <span className="board-tile-text">
+          <strong>{b.name}</strong>
+          <small className="library-meta">{b.kind === 'graph' ? 'Graph' : 'Canvas'}</small>
         </span>
       </span>
     </div>
@@ -298,50 +281,41 @@ function BookCard({
   const last = kids.reduce<string | null>((a, n) => (!a || n.updated_at > a ? n.updated_at : a), null);
   return (
     <div
-      className={isOpen ? 'clay' : 'clay k-squish'}
+      className={isOpen ? '' : 'k-squish'}
       onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
       style={{
         ['--i' as string]: index,
         gridColumn: isOpen && phone ? '1 / -1' : undefined,
         position: 'relative', overflow: 'hidden', padding: 0, textAlign: 'left',
         display: 'flex', flexDirection: 'column', width: '100%',
+        border: '1px solid var(--line2)', background: 'var(--card)',
         opacity: isArchived ? 0.78 : 1,
       }}
     >
-      {/* The cover opens the notebook. Art first, name on the blur veil, and
-          never a button inside a button — the cover is a click surface, the
-          chevron and dots are separate buttons layered over it. */}
+      {/* An index card: the spine identifies it and its own first notes read
+          through the ruled lines. Never a button inside a button — the card is
+          a click surface, the chevron and dots are separate buttons over it. */}
       <div
         onClick={isOpen ? undefined : onOpen}
         role={isOpen ? undefined : 'button'}
         aria-label={isOpen ? undefined : `Open ${b.name}`}
-        style={{
-          position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-          minHeight: 132, width: '100%', cursor: isOpen ? 'default' : 'pointer', textAlign: 'left', padding: 0,
-        }}
+        style={{ display: 'flex', width: '100%', cursor: isOpen ? 'default' : 'pointer', textAlign: 'left', padding: 0 }}
       >
-        <NotebookCover seed={b.id} color={b.color} />
-        {isArchived && (
-          <span style={{
-            position: 'absolute', top: 8, left: 8, padding: '3px 8px', borderRadius: 999,
-            fontSize: 9, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
-            color: 'var(--pal-amber)', background: 'color-mix(in srgb, var(--card) 62%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--pal-amber) 32%, transparent)',
-          }}>
-            Archived
+        <span className="notebook-spine" style={{ background: b.color }} />
+        <span className="notebook-card-body" style={{ paddingRight: 80 }}>
+          <span className="notebook-card-head">
+            <strong>{b.name}</strong>
           </span>
-        )}
-        <ProgBlur edge="bottom" size={60} strength={12} />
-        <span style={{ position: 'relative', padding: '10px 12px 11px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-          <span style={{
-            fontSize: 13.5, fontWeight: 800, letterSpacing: '-.01em', color: 'var(--tx)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {b.name}
-          </span>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)' }}>
+          <small className="library-meta" style={{ display: 'block', marginTop: 3 }}>
             {kids.length} note{kids.length === 1 ? '' : 's'}{last ? ` · ${whenLabel(last)}` : ''}
-          </span>
+            {isArchived ? ' · archived' : ''}
+          </small>
+          {!isOpen && (
+            <span className="notebook-peek-lines">
+              {kids.slice(0, 3).map((n) => <span key={n.id}>{n.title || 'Untitled'}</span>)}
+              {!kids.length && <span className="is-empty">Nothing written yet.</span>}
+            </span>
+          )}
         </span>
       </div>
 
@@ -350,10 +324,9 @@ function BookCard({
         aria-expanded={isOpen} aria-label={isOpen ? 'Hide notes' : 'Show notes'}
         className="hov"
         style={{
-          position: 'absolute', top: 6, right: 40, width: 30, height: 30, borderRadius: 9,
+          position: 'absolute', top: 8, right: 40, width: 28, height: 28,
           display: 'grid', placeItems: 'center',
-          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
-          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+          background: 'var(--card)', border: '1px solid var(--line2)',
         }}
       >
         <Icon name="chev" size={13} color="var(--tx2)"
@@ -364,10 +337,9 @@ function BookCard({
         onClick={(e) => { e.stopPropagation(); onMenu(e.clientX, e.clientY); }}
         className="hov" aria-label={`Actions for ${b.name}`} aria-haspopup="menu"
         style={{
-          position: 'absolute', top: 6, right: 6, width: 30, height: 30, borderRadius: 9,
+          position: 'absolute', top: 8, right: 8, width: 28, height: 28,
           display: 'grid', placeItems: 'center',
-          background: 'color-mix(in srgb, var(--card) 62%, transparent)',
-          border: '1px solid var(--line2)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+          background: 'var(--card)', border: '1px solid var(--line2)',
         }}
       >
         <Icon name="dots" size={14} color="var(--tx2)" />
@@ -378,12 +350,12 @@ function BookCard({
         <div style={{ borderTop: '1px solid var(--line)', background: 'var(--card)', padding: 8, display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }} className="navsb">
           {kids.map((n) => (
             <button key={n.id} onClick={(e) => { e.stopPropagation(); onOpenNote(n.id); }}
-              className="row" style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 10 }}>
+              className="row" style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px' }}>
               <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {n.title || 'Untitled'}
               </span>
               <span style={{
-                display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 1,
+                display: 'block', fontSize: 12, color: 'var(--tx3)', marginTop: 1,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {preview(n.body, 70) || 'Empty'} · {whenLabel(n.updated_at)}
@@ -391,7 +363,7 @@ function BookCard({
             </button>
           ))}
           {kids.length === 0 && (
-            <div style={{ padding: '10px', fontSize: 11, color: 'var(--tx3)', textAlign: 'center' }}>Empty notebook.</div>
+            <div style={{ padding: '10px', fontSize: 12, color: 'var(--tx3)', textAlign: 'center' }}>Empty notebook.</div>
           )}
         </div>
       )}

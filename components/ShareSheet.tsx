@@ -1,5 +1,6 @@
 'use client';
 
+import { publicLink, copyText, shareText, gmailCompose } from '@/lib/sharing';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
@@ -29,7 +30,7 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
   const [quoting, setQuoting] = useState(false);
   const [quoteThoughts, setQuoteThoughts] = useState('');
 
-  const link = typeof location === 'undefined' ? '' : `${location.origin}/community/#${item.kind}-${item.id}`;
+  const link = publicLink(`/community/#${item.kind}-${item.id}`);
   const label = item.title || item.body || 'a post';
   const isReposted = isItemReposted(item.id, me);
 
@@ -84,15 +85,16 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
   const sendTo = async (row: { kind: 'chat' | 'person'; id: string; key: string; label: string }) => {
     const cid = row.kind === 'chat' ? row.id : await startDm(row.id);
     if (!cid) return;
-    A.say(cid, note.trim(), { kind: item.kind, id: item.id });
+    try { await A.send.mutateAsync({ id:crypto.randomUUID(),conversation_id:cid,author_id:me,body:note.trim(),share_kind:item.kind,share_id:item.id,attach_path:null,attach_name:null,attach_kind:null,attach_size:null,created_at:new Date().toISOString() }); } catch { toast('Could not send. Try again.'); return; }
     setSent((s) => new Set([...s, row.key]));
     toast(`Sent to ${row.label}`);
   };
 
   const native = async () => {
     try {
-      await navigator.share?.({ title: label.slice(0, 60), text: label.slice(0, 140), url: link });
-    } catch { /* dismissed */ }
+      const result = await shareText({ title: label.slice(0, 60), text: label.slice(0, 140), url: link });
+      if(result === 'copied') toast('Link copied');
+    } catch { toast('Could not share. Copy the link instead.'); }
   };
 
   const body = (
@@ -211,7 +213,7 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
             const done = sent.has(r.key);
             const who = displayOf(profiles, r.face, me);
             return (
-              <button key={r.key} onClick={() => void sendTo(r)} disabled={done} className="hov"
+              <button key={r.key} onClick={() => void sendTo(r)} disabled={done || A.send.isPending} className="hov"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 11,
                   textAlign: 'left', minHeight: 46, opacity: done ? 0.6 : 1,
@@ -237,11 +239,13 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
           })}
         </div>
 
+        <input readOnly aria-label="Shareable post link" value={link} onFocus={e=>e.target.select()} style={{margin:'12px 16px',padding:10,border:'1px solid var(--line2)',borderRadius:8,fontSize:12}} />
         <div style={{ display: 'flex', gap: 8, padding: '10px 16px 14px', borderTop: '1px solid var(--line)' }}>
-          <button onClick={() => { void navigator.clipboard?.writeText(link); toast('Link copied'); }}
+          <button onClick={() => { void copyText(link).then(() => toast('Link copied')).catch(() => toast('Copy failed. Select the link below to copy it.')); }}
             className="hov k-squish" style={FOOT}>
             <Icon name="link" size={14} color="var(--tx2)" />Copy link
           </button>
+          <a href={gmailCompose(label.slice(0,100),link)} target="_blank" rel="noopener noreferrer" className="hov" style={FOOT}>Gmail</a>
           {typeof navigator !== 'undefined' && 'share' in navigator && (
             <button onClick={() => void native()} className="hov k-squish" style={FOOT}>
               <Icon name="share" size={14} color="var(--tx2)" />More…

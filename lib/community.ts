@@ -504,3 +504,22 @@ export function useCommunityActions(me: string) {
     },
   };
 }
+
+/** A shared post stays addressable even after it leaves the latest forty rows. */
+export function useSharedPost(kind: Kind | null, id: string | null) {
+  return useQuery({
+    queryKey: ['shared_post',kind,id], enabled: !!kind && !!id,
+    queryFn: async (): Promise<Item | null> => {
+      if(!kind || !id)return null;
+      const table=kind==='photo'?'bd_posts':'bd_threads';
+      const cols=kind==='photo'?'id,author_id,title,caption,tag,image_path,created_at':'id,author_id,title,body,tag,created_at';
+      const {data,error}=await supabase.from(table).select(cols).eq('id',id).is('deleted_at',null).maybeSingle();
+      if(error)throw error;if(!data)return null;
+      const row=data as unknown as Record<string, string | null>;
+      const image_path=row.image_path || null;
+      const {data:images,error:imagesError}=await supabase.from('bd_post_images').select('path').eq('post_id',id).order('position');
+      if(imagesError)throw imagesError;
+      return {id:row.id!,kind,author_id:row.author_id!,title:row.title||'',body:row.caption||row.body||'',tag:row.tag||'',image_path,images:[...new Set([...(image_path?[image_path]:[]),...(images||[]).map(i=>i.path)])],created_at:row.created_at!};
+    },
+  });
+}

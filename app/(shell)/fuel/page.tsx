@@ -236,7 +236,7 @@ export default function FuelPage() {
                 Fuel
               </h1>
               <span style={{
-                fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 999,
+                fontSize: 12, fontWeight: 800, padding: '3px 9px', borderRadius: 999,
                 background: `color-mix(in srgb, ${HUE_LIME} 16%, transparent)`, color: HUE_LIME,
               }}>
                 {meals.length === 0 && sips.length === 0
@@ -386,7 +386,7 @@ export default function FuelPage() {
                 }}>
                   {slept !== null ? <><CountUp value={slept} animate={animate} format={(n) => String(n)} /> h</> : '—'}
                 </span>
-                <span className="num metaline" style={{ fontSize: 11 }}>
+                <span className="num metaline" style={{ fontSize: 12 }}>
                   {from && to ? `${from} – ${to}` : 'tap to set your window'}
                 </span>
               </div>
@@ -396,7 +396,7 @@ export default function FuelPage() {
                 hue={HUE_SLEEP}
                 animate={animate}
               />
-              <span className="metaline" style={{ fontSize: 10.5 }}>
+              <span className="metaline" style={{ fontSize: 12 }}>
                 {slept === null
                   ? 'No sleep logged for last night'
                   : slept >= GOALS.sleep
@@ -450,7 +450,7 @@ export default function FuelPage() {
                         }}
                       >
                         <span className="num" style={{
-                          fontSize: 11, color: 'var(--tx3)', width: 38, flex: 'none',
+                          fontSize: 12, color: 'var(--tx3)', width: 38, flex: 'none',
                         }}>
                           {timeStr}
                         </span>
@@ -469,7 +469,7 @@ export default function FuelPage() {
                               ? `${Math.max(1, Math.round(r.ml / CUP_ML))} cup${r.ml >= CUP_ML * 2 ? 's' : ''}`
                               : r.meal?.name}
                           </div>
-                          <div className="num metaline" style={{ fontSize: 10.5, marginTop: 1 }}>
+                          <div className="num metaline" style={{ fontSize: 12, marginTop: 1 }}>
                             {isWater
                               ? `${r.ml} ml`
                               : `${r.meal?.kcal ?? 0} kcal · ${r.meal?.protein ?? 0}p ${r.meal?.carbs ?? 0}c ${r.meal?.fat ?? 0}f`}
@@ -526,7 +526,7 @@ export default function FuelPage() {
                           <Icon name={SLOT_ICON[g.slot] ?? 'food'} size={11} color={shue} />
                         </span>
                         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--tx)' }}>{g.slot}</span>
-                        <span className="num metaline" style={{ marginLeft: 'auto', fontSize: 11 }}>
+                        <span className="num metaline" style={{ marginLeft: 'auto', fontSize: 12 }}>
                           {kcal.toLocaleString()} kcal · {shareOfDay}%
                         </span>
                       </div>
@@ -542,11 +542,11 @@ export default function FuelPage() {
                               display: 'inline-flex', alignItems: 'center', gap: 6,
                               padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
                               border: '1px solid var(--line2)', background: 'var(--card2)',
-                              fontSize: 11, fontWeight: 700, color: 'var(--tx2)',
+                              fontSize: 12, fontWeight: 700, color: 'var(--tx2)',
                             }}
                           >
                             {m.name}
-                            <span className="num" style={{ color: shue, fontSize: 10 }}>{m.kcal}</span>
+                            <span className="num" style={{ color: shue, fontSize: 12 }}>{m.kcal}</span>
                           </motion.button>
                         ))}
                       </div>
@@ -706,8 +706,8 @@ function MacroChip({
       background: 'var(--card2)', border: '1px solid var(--line2)',
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-        <span className="metaline" style={{ fontSize: 10 }}>{label}</span>
-        <span className="num" style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, color: hue }}>
+        <span className="metaline" style={{ fontSize: 12 }}>{label}</span>
+        <span className="num" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 800, color: hue }}>
           <CountUp value={val} animate={animate} />g
         </span>
       </div>

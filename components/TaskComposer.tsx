@@ -327,7 +327,7 @@ export function TaskComposer({
             {/* Submission Link */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{
-                width: 56, flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: '.07em',
+                width: 56, flex: 'none', fontSize: 12, fontWeight: 800, letterSpacing: '.07em',
                 textTransform: 'uppercase', color: submissionLink ? 'var(--pal-coral)' : 'var(--tx3)',
               }}>
                 Submit
@@ -357,7 +357,7 @@ export function TaskComposer({
             {/* Google Docs Link */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{
-                width: 56, flex: 'none', fontSize: 9, fontWeight: 800, letterSpacing: '.07em',
+                width: 56, flex: 'none', fontSize: 12, fontWeight: 800, letterSpacing: '.07em',
                 textTransform: 'uppercase', color: googleDocsLink ? 'var(--pal-sky)' : 'var(--tx3)',
               }}>
                 GDocs
@@ -399,7 +399,7 @@ export function TaskComposer({
                     ...FIELD,
                     width: 56,
                     padding: '0 6px',
-                    fontSize: 9.5,
+                    fontSize: 12,
                     fontWeight: 800,
                     textTransform: 'uppercase',
                   }}
@@ -437,7 +437,7 @@ export function TaskComposer({
                 className="k-chip"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, padding: '0 10px',
-                  borderRadius: 999, fontSize: 11, fontWeight: 700, border: '1px dashed var(--line2)',
+                  borderRadius: 999, fontSize: 12, fontWeight: 700, border: '1px dashed var(--line2)',
                   background: 'transparent', color: 'var(--pal-sky)', cursor: 'pointer',
                 }}
               >
@@ -532,7 +532,7 @@ export function TaskComposer({
               style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)' }}>
               Cancel
             </button>
-            <span style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 10.5, color: 'var(--tx3)' }}>
+            <span style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 12, color: 'var(--tx3)' }}>
               Enter to add
             </span>
           </div>
@@ -546,7 +546,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
       <span style={{
-        width: 56, flex: 'none', fontSize: 9.5, fontWeight: 800, letterSpacing: '.09em',
+        width: 56, flex: 'none', fontSize: 12, fontWeight: 800, letterSpacing: '.09em',
         textTransform: 'uppercase', color: 'var(--tx3)',
       }}>
         {label}
@@ -563,7 +563,7 @@ function Chip({ on, tint, onClick, children }: {
     <button onClick={onClick} aria-pressed={on} className="k-chip"
       style={{
         display: 'inline-flex', alignItems: 'center', minHeight: 30, padding: '0 11px', borderRadius: 999,
-        fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
+        fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
         border: `1px solid ${on ? (tint ?? 'var(--acc)') : 'var(--line2)'}`,
         background: on ? `color-mix(in srgb, ${tint ?? 'var(--acc)'} 16%, transparent)` : 'transparent',
         color: on ? 'var(--tx)' : 'var(--tx2)',
@@ -575,7 +575,7 @@ function Chip({ on, tint, onClick, children }: {
 
 const FIELD: React.CSSProperties = {
   minHeight: 30, padding: '0 9px', borderRadius: 8, border: '1px solid var(--line2)',
-  background: 'var(--card2)', color: 'var(--tx)', fontSize: 11.5, fontWeight: 600,
+  background: 'var(--card2)', color: 'var(--tx)', fontSize: 12, fontWeight: 600,
 };
 
 export type { IconName };

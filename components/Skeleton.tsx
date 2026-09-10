@@ -55,10 +55,12 @@ function Frame({ label, children, style }: { label: string; children: React.Reac
  * The tints are the real ones, so Overdue is already red before its count
  * lands and the eye is in the right place when it does.
  */
-export function TasksSkeleton({ tints }: { tints: [string, string, string] }) {
+export function TasksSkeleton({ tints, view = 'groups' }: { tints: [string, string, string]; view?: string }) {
+  if(view==='table')return <Frame label="Loading your tasks" style={{...CARD,marginTop:12,overflow:'hidden'}}>{Array.from({length:7},(_,i)=><div key={i} style={{display:'grid',gridTemplateColumns:'minmax(130px,2fr) repeat(3,minmax(45px,1fr))',gap:20,padding:18,borderBottom:'1px solid var(--line)'}}>{[0,1,2,3].map(j=><Bar key={j} w={j===0?'80%':'70%'} h={i===0?12:16}/>)}</div>)}</Frame>;
+  if(view==='board')return <div style={{display:'flex',gap:12,overflow:'hidden'}}>{tints.map(tint=><div key={tint} style={{flex:'0 0 360px'}}><TasksSkeleton tints={[tint,tint,tint]} view="list"/></div>)}</div>;
   return (
     <Frame label="Loading your tasks">
-      {tints.map((tint, g) => (
+      {(view==='list'?tints.slice(0,1):tints).map((tint, g) => (
         <div key={tint} style={{
           ...CARD, padding: '14px 14px 6px', marginTop: g === 0 ? 12 : 12,
           border: `1px solid color-mix(in srgb, ${tint} 34%, transparent)`,
@@ -184,7 +186,9 @@ export function FolderGridSkeleton({ count = 8, phone, label }: { count?: number
 /* --------------------------------------------------------------- calendar */
 
 /** The week grid: a day header strip over a ruled body. */
-export function CalendarSkeleton({ days = 7 }: { days?: number }) {
+export function CalendarSkeleton({ days = 7, view = 'week' }: { days?: number; view?: string }) {
+  if(view==='agenda'||view==='countdown')return <RowsSkeleton rows={5} label="Loading your calendar" lead="none"/>;
+  if(view==='month')return <Frame label="Loading your calendar" style={{...CARD,display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',overflow:'hidden'}}>{Array.from({length:35},(_,i)=><div key={i} style={{minHeight:100,padding:10,borderRight:'1px solid var(--line)',borderBottom:'1px solid var(--line)'}}><Bar w={18} h={14}/>{i%3===0&&<Bar h={18} style={{marginTop:16}}/>}</div>)}</Frame>;
   return (
     <Frame label="Loading your calendar" style={{ ...CARD, overflow: 'hidden', marginTop: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: `44px repeat(${days}, 1fr)`, borderBottom: '1px solid var(--line)' }}>

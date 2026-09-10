@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
-import { SHELL_LAYOUTS } from '@/lib/shellLayouts';
 import { usePrefs, type Prefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
@@ -284,7 +283,7 @@ export function SettingsModal({
               if (items.length === 0) return null;
               return (
                 <div key={grp} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', color: 'var(--tx3)', padding: '6px 10px', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: 'var(--tx3)', padding: '6px 10px', textTransform: 'uppercase' }}>
                     {grp}
                   </div>
                   {items.map((it) => {
@@ -443,11 +442,11 @@ export function SettingsModal({
                   <div style={{ fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {fullName || 'Basedly User'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     @{handle || 'student'}
                   </div>
                 </div>
-                <div style={{ padding: '3px 8px', borderRadius: 6, background: 'var(--acc)', color: '#0C0F16', fontSize: 10, fontWeight: 800 }}>
+                <div style={{ padding: '3px 8px', borderRadius: 6, background: 'var(--acc)', color: '#0C0F16', fontSize: 12, fontWeight: 800 }}>
                   PRO
                 </div>
               </div>
@@ -495,12 +494,7 @@ export function SettingsModal({
                   previewColor={prefs.accent}
                   onClick={() => setPhoneSubPage('appearance')}
                 />
-                <PhoneRow
-                  icon="expand"
-                  label="Navigation Panel"
-                  sub={prefs.sidebar === 'compact' ? 'Compact Icons (64px)' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'Hidden (Chevron)' : 'Expanded (236px)')}
-                  onClick={() => setPhoneSubPage('appearance')}
-                />
+
                 <PhoneRow
                   icon="habit"
                   label="Mascot Display"
@@ -720,7 +714,7 @@ export function SettingsModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line2)' }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Feature Onboarding Tours</div>
-                    <div style={{ fontSize: 11, color: 'var(--tx3)' }}>Re-enable interactive spotlight walkthroughs across all tabs</div>
+                    <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Re-enable interactive spotlight walkthroughs across all tabs</div>
                   </div>
                   <button
                     onClick={() => {
@@ -736,7 +730,7 @@ export function SettingsModal({
                       borderRadius: 8,
                       border: '1px solid var(--line2)',
                       background: 'var(--card2)',
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: 700,
                       color: 'var(--tx)',
                       cursor: 'pointer',
@@ -773,15 +767,15 @@ export function SettingsModal({
                     <Face name={a.name} photo={a.photo} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{a.name || 'Account'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--tx3)' }}>{a.email || 'Google Account'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--tx3)' }}>{a.email || 'Google Account'}</div>
                     </div>
                     {isCurrent ? (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accTx)' }}>Active</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accTx)' }}>Active</span>
                     ) : (
                       <button
                         onClick={() => switchTo(a.user_id)}
                         className="hov k-squish"
-                        style={{ padding: '5px 10px', borderRadius: 6, background: 'var(--card)', fontSize: 11, fontWeight: 700 }}
+                        style={{ padding: '5px 10px', borderRadius: 6, background: 'var(--card)', fontSize: 12, fontWeight: 700 }}
                       >
                         Switch
                       </button>
@@ -827,7 +821,7 @@ export function SettingsModal({
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: w.color || 'var(--acc)' }} />
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{w.name}</span>
                   {w.id === prefs.workspace && (
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accTx)' }}>CURRENT</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accTx)' }}>CURRENT</span>
                   )}
                 </div>
               ))}
@@ -860,44 +854,7 @@ export function SettingsModal({
       case 'appearance':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={SECTION_TITLE}>Shell layout</div>
-            <Field label="How the app is arranged"
-              hint="Each one moves the same twelve sections into a different frame. Switching takes effect immediately.">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {SHELL_LAYOUTS.map((l) => {
-                  const on = (prefs.shellLayout ?? 'L3') === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => setPref('shellLayout', l.id)}
-                      aria-pressed={on}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 11,
-                        padding: '11px 13px',
-                        borderRadius: 11,
-                        textAlign: 'left',
-                        background: on ? 'color-mix(in srgb, var(--acc) 14%, var(--card2))' : 'var(--card2)',
-                        border: `1px solid ${on ? 'color-mix(in srgb, var(--acc) 42%, var(--line2))' : 'var(--line2)'}`,
-                      }}
-                    >
-                      <span className="num" style={{
-                        flex: 'none', width: 26, height: 22, borderRadius: 6, marginTop: 1,
-                        display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
-                        background: on ? 'var(--acc)' : 'var(--card)',
-                        color: on ? 'var(--ink)' : 'var(--tx3)',
-                        border: on ? 'none' : '1px solid var(--line2)',
-                      }}>{l.id}</span>
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{l.name}</span>
-                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{l.blurb}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
+            <div style={SECTION_TITLE}>Your workspace</div><p style={{fontSize:14,lineHeight:1.65,color:'var(--tx2)'}}>Calendar, Tasks, and Notes stay close in the sidebar on desktop and the labeled navigation bar on mobile. Explore opens every other feature.</p>
 
             <div style={SECTION_TITLE}>Theme & Color</div>
             <Field label="Theme Mode">
@@ -981,7 +938,7 @@ export function SettingsModal({
                     >
                       <span>{m.n}</span>
                       <span style={{
-                        fontSize: 9.5,
+                        fontSize: 12,
                         fontWeight: 500,
                         opacity: active ? 0.85 : 0.6,
                       }}>
@@ -993,47 +950,7 @@ export function SettingsModal({
               </div>
             </Field>
 
-            <Field label="Navigation Panel Layout (Desktop)">
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[
-                  { v: 'open', n: 'Expanded', hint: 'Full sidebar (236px)' },
-                  { v: 'compact', n: 'Compact Icons', hint: 'Tab logos only (64px)' },
-                  { v: 'hidden', n: 'Hidden', hint: 'Top-bar chevron trigger' },
-                ].map((s) => {
-                  const active = prefs.sidebar === s.v || (s.v === 'hidden' && prefs.sidebar === 'collapsed');
-                  return (
-                    <button
-                      key={s.v}
-                      onClick={() => setPref('sidebar', s.v as Prefs['sidebar'])}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 3,
-                        padding: '9px 10px',
-                        borderRadius: 10,
-                        background: active ? 'var(--acc)' : 'var(--card2)',
-                        color: active ? '#0C0F16' : 'var(--tx)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        border: '1px solid var(--line2)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{s.n}</span>
-                      <span style={{
-                        fontSize: 9.5,
-                        fontWeight: 500,
-                        opacity: active ? 0.85 : 0.6,
-                      }}>
-                        {s.hint}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
+            
 
             <Field label="Density">
               <div style={{ display: 'flex', gap: 8 }}>
@@ -1116,7 +1033,7 @@ export function SettingsModal({
                     }}
                   >
                     <Mascot id="preview" animal={a} size={38} mood="blazing" />
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: active ? 'var(--accTx)' : 'var(--tx)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'capitalize', color: active ? 'var(--accTx)' : 'var(--tx)' }}>
                       {a}
                     </span>
                   </button>
@@ -1147,7 +1064,7 @@ export function SettingsModal({
                   }}
                 >
                   <span style={{ fontSize: 13, fontWeight: 800 }}>{m.n}</span>
-                  <span style={{ fontSize: 10, opacity: 0.8 }}>{m.hint}</span>
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>{m.hint}</span>
                 </button>
               ))}
             </div>
@@ -1169,7 +1086,7 @@ export function SettingsModal({
               <Mascot id="preview" animal={selectedAnimal} size={64} variant={prefs.mascotVariant} mood="celebrating" />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800, textTransform: 'capitalize' }}>{selectedAnimal} Buddy</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>Ready for study sprint & quests</div>
+                <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>Ready for study sprint & quests</div>
               </div>
             </div>
           </div>
@@ -1227,7 +1144,7 @@ export function SettingsModal({
                         style={{
                           padding: '5px 10px',
                           borderRadius: 8,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: 700,
                           background: active ? 'var(--acc)' : 'var(--card2)',
                           color: active ? '#0C0F16' : 'var(--tx2)',
@@ -1297,7 +1214,7 @@ export function SettingsModal({
             <div style={SECTION_TITLE}>Application Information</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--card)', borderRadius: 14, border: '1px solid var(--line)' }}>
               <BasedlyLogo size={24} />
-              <span style={{ fontSize: 11.5, color: 'var(--tx3)', fontWeight: 600 }}>v{APP_VERSION}</span>
+              <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>v{APP_VERSION}</span>
             </div>
             <div style={{ background: 'var(--card2)', padding: 14, borderRadius: 14, border: '1px solid var(--line2)', fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1354,7 +1271,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 5, color: 'var(--tx)' }}>{label}</div>
       {children}
-      {hint && <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 4 }}>{hint}</div>}
     </div>
   );
 }
@@ -1371,7 +1288,7 @@ function ThemeBtn({ active, icon, label, onClick }: { active: boolean; icon: Ico
         borderRadius: 6,
         background: active ? 'var(--acc)' : 'transparent',
         color: active ? '#0C0F16' : 'var(--tx2)',
-        fontSize: 11.5,
+        fontSize: 12,
         fontWeight: 700,
         border: 'none',
       }}
@@ -1387,7 +1304,7 @@ function ToggleRow({ label, hint, on, onChange }: { label: string; hint: string;
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>
       <div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{label}</div>
-        <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{hint}</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{hint}</div>
       </div>
       <button
         role="switch"
@@ -1474,7 +1391,7 @@ function PhoneRow({
       <Icon name={icon} size={17} color="var(--tx2)" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)' }}>{label}</div>
-        {sub && <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{sub}</div>}
+        {sub && <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{sub}</div>}
       </div>
       {previewColor && (
         <span style={{ width: 14, height: 14, borderRadius: '50%', background: previewColor, marginRight: 4 }} />

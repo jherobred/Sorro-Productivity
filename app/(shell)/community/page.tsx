@@ -1,5 +1,7 @@
 'use client';
 
+import { parseCommunityLink } from '@/lib/sharing';
+import { useSharedPost } from '@/lib/community';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
@@ -62,6 +64,9 @@ export default function CommunityPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [composing, setComposing] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [sharedTarget,setSharedTarget]=useState<ReturnType<typeof parseCommunityLink>>(null);
+  const sharedPost=useSharedPost(sharedTarget?.kind||null,sharedTarget?.id||null);
+  useEffect(()=>{const read=()=>{const target=parseCommunityLink(location.hash);setSharedTarget(target);if(target){setTab('feed');setViewing(`${target.kind}:${target.id}`);}};read();window.addEventListener('hashchange',read);return()=>window.removeEventListener('hashchange',read);},[]);
   const [sharing, setSharing] = useState<Item | null>(null);
   const [tippingItem, setTippingItem] = useState<Item | null>(null);
   const [buyingItem, setBuyingItem] = useState<Item | null>(null);
@@ -164,7 +169,7 @@ export default function CommunityPage() {
   }, [rawItems, subTab, searchQuery, counts, reposts, bookmarks, profiles]);
 
   const photos = items.filter((i) => i.image_path);
-  const open_ = viewing ? items.find((i) => key(i) === viewing) ?? null : null;
+  const open_ = viewing ? items.find((i) => key(i) === viewing) ?? (sharedPost.data && key(sharedPost.data) === viewing ? sharedPost.data : null) : null;
 
   const storeBasedlyUsers = useMemo(() => {
     const list: Array<{
@@ -313,7 +318,7 @@ export default function CommunityPage() {
                   <h1 style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: 'var(--tx)' }}>
                     Community Feed
                   </h1>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 600 }}>
+                  <div style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>
                     {items.length} {items.length === 1 ? 'post' : 'posts'}
                   </div>
                 </div>
@@ -436,7 +441,7 @@ export default function CommunityPage() {
                         padding: '2px 7px',
                         borderRadius: 999,
                         background: 'rgba(0,0,0,0.3)',
-                        fontSize: 9.5,
+                        fontSize: 12,
                         fontWeight: 800,
                         backdropFilter: 'blur(4px)',
                       }}>
@@ -517,7 +522,7 @@ export default function CommunityPage() {
                 borderBottom: '1px solid var(--line)',
                 background: 'var(--card)',
               }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--tx3)', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--tx3)', marginBottom: 8 }}>
                   People matching &ldquo;{searchQuery}&rdquo;
                 </div>
                 <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
@@ -550,7 +555,7 @@ export default function CommunityPage() {
                           </span>
                           <div>
                             <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--tx)', whiteSpace: 'nowrap' }}>{m.name}</div>
-                            <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>@{m.handle}</div>
+                            <div style={{ fontSize: 12, color: 'var(--tx3)' }}>@{m.handle}</div>
                           </div>
                         </div>
                         <button
@@ -559,7 +564,7 @@ export default function CommunityPage() {
                           style={{
                             padding: '4px 10px',
                             borderRadius: 8,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: 800,
                             background: isFollowed ? 'var(--card)' : 'var(--acc)',
                             color: isFollowed ? 'var(--tx)' : 'var(--ink)',
@@ -581,7 +586,7 @@ export default function CommunityPage() {
             {!loading && items.length === 0 && (
               <div style={{ padding: '60px 16px', textAlign: 'center', fontSize: 13, color: 'var(--tx3)', lineHeight: 1.8 }}>
                 No posts found {searchQuery ? `matching "${searchQuery}"` : 'in this tab.'}<br />
-                <span style={{ fontSize: 11.5 }}>Be the first to share an update or photo with the community!</span>
+                <span style={{ fontSize: 12 }}>Be the first to share an update or photo with the community!</span>
               </div>
             )}
 
@@ -655,7 +660,7 @@ export default function CommunityPage() {
                       display: 'grid',
                       placeItems: 'center',
                       cursor: 'pointer',
-                      fontSize: 11,
+                      fontSize: 12,
                     }}>
                     ✕
                   </button>
@@ -705,7 +710,7 @@ export default function CommunityPage() {
                             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {s.name}
                             </span>
-                            <span style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                            <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
                               @{s.handle}
                             </span>
                           </div>
@@ -775,9 +780,9 @@ export default function CommunityPage() {
                       className="hov"
                       style={{ cursor: 'pointer' }}
                     >
-                      <div style={{ fontSize: 10.5, color: 'var(--tx3)', fontWeight: 600 }}>{t.cat}</div>
+                      <div style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 600 }}>{t.cat}</div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)', margin: '1px 0' }}>{t.tag}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{t.count}</div>
+                      <div style={{ fontSize: 12, color: 'var(--tx3)' }}>{t.count}</div>
                     </div>
                   ))}
                 </div>
@@ -804,7 +809,7 @@ export default function CommunityPage() {
                 </button>
               </div>
 
-              <div style={{ fontSize: 11, color: 'var(--tx3)', lineHeight: 1.6, padding: '0 8px' }}>
+              <div style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.6, padding: '0 8px' }}>
                 <span>Terms of Service</span> · <span>Privacy Policy</span> · <span>Cookie Policy</span><br />
                 <span>Accessibility</span> · <span>Ads Info</span> · <span>© 2026 Basedly Corp.</span>
               </div>
@@ -826,6 +831,7 @@ export default function CommunityPage() {
         />
       )}
 
+      {sharedTarget && viewing && !open_ && !sharedPost.isPending && <div className="shared-post-unavailable" role="alert"><p>{sharedPost.isError ? 'Could not load this shared post.' : 'This post was removed or is not available to your account.'}</p><button onClick={()=>void sharedPost.refetch()}>Try again</button><button onClick={()=>{setViewing(null);setSharedTarget(null);}}>Close</button></div>}
       {open_ && (
         <PostView
           item={open_} items={photos} me={me} profiles={profiles}
@@ -939,8 +945,8 @@ function XPostCard({
             </span>
           </div>
 
-          <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 500 }}>·</span>
-          <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 500 }}>·</span>
+          <span style={{ fontSize: 12, color: 'var(--tx3)', fontWeight: 500 }}>
             {ago(item.created_at)}
           </span>
 
@@ -950,7 +956,7 @@ function XPostCard({
               className="hov k-squish"
               title={`Filter by ${item.tag}`}
               style={{
-                marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 800,
+                marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 800,
                 color: who.hue, background: `color-mix(in srgb, ${who.hue} 16%, transparent)`,
                 border: 'none', cursor: 'pointer',
               }}
@@ -1042,7 +1048,7 @@ function XPostCard({
             size="sm"
           />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 12, fontWeight: 600 }}>
             <Icon name="eye" size={14} color="var(--tx3)" />
             <span>{viewCount}</span>
           </div>
@@ -1103,9 +1109,9 @@ function CommentPanel({
       flexDirection: 'column',
       gap: 10,
     }}>
-      {isLoading && <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading replies…</div>}
+      {isLoading && <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Loading replies…</div>}
       {!isLoading && comments.length === 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No replies yet. Post your thought!</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>No replies yet. Post your thought!</div>
       )}
 
       {comments.map((c) => {
@@ -1121,7 +1127,7 @@ function CommentPanel({
               <Avatar id={c.author_id} profiles={profiles} me={me} size={28} />
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
                 {who.label} · <span style={{ color: 'var(--tx3)', fontWeight: 500 }}>{ago(c.created_at)}</span>
               </div>
               <div style={{ fontSize: 12, lineHeight: 1.55, textWrap: 'pretty', color: 'var(--tx2)' }}>{c.body}</div>
@@ -1314,7 +1320,7 @@ function PostImages({ paths, tint, alt, onOpen }: { paths: string[]; tint: strin
 
       <span style={{
         position: 'absolute', right: 10, top: 10, padding: '3px 9px', borderRadius: 8,
-        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+        background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: 12, fontWeight: 800,
         fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', zIndex: 10,
       }}>
         {at + 1}/{paths.length}
@@ -1329,7 +1335,7 @@ function Chip({
   return (
     <button onClick={onClick} aria-pressed={on} className="k-chip" style={{
       display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, minHeight: 28,
-      fontSize: 11, fontWeight: 700,
+      fontSize: 12, fontWeight: 700,
       border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
       background: on ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
       color: on ? 'var(--accTx)' : 'var(--tx2)',
@@ -1344,7 +1350,7 @@ function Chip({
 function BotTag() {
   return (
     <span style={{
-      flex: 'none', padding: '1px 6px', borderRadius: 5, fontSize: 8.5,
+      flex: 'none', padding: '1px 6px', borderRadius: 5, fontSize: 12,
       fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase',
       color: 'var(--tx3)', border: '1px solid var(--line2)',
     }}>
@@ -1483,7 +1489,7 @@ function ItemEdit({
               {i === 0 && (
                 <span style={{
                   position: 'absolute', left: 4, top: 4, padding: '1px 5px', borderRadius: 4,
-                  background: 'rgba(0,0,0,.7)', color: '#fff', fontSize: 8, fontWeight: 800,
+                  background: 'rgba(0,0,0,.7)', color: '#fff', fontSize: 12, fontWeight: 800,
                 }}>
                   COVER
                 </span>
@@ -1522,7 +1528,7 @@ function ItemEdit({
           }}
         >
           <Icon name="image" size={14} color="var(--tx3)" />
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>
             {busy ? 'Uploading…' : images.length ? 'Add more pictures' : 'Add pictures / media'}
           </span>
           <input
@@ -1540,7 +1546,7 @@ function ItemEdit({
 
       {/* Tag Selection Chips */}
       <div>
-        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>
           Tag
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -1557,7 +1563,7 @@ function ItemEdit({
                   padding: '3px 10px',
                   borderRadius: 999,
                   minHeight: 26,
-                  fontSize: 10.5,
+                  fontSize: 12,
                   fontWeight: 700,
                   border: `1px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
                   background: on ? 'color-mix(in srgb, var(--acc) 16%, transparent)' : 'transparent',
@@ -1580,7 +1586,7 @@ function ItemEdit({
           className="hov k-squish"
           style={{
             minHeight: 34, padding: '0 14px', borderRadius: 9,
-            border: '1px solid var(--line2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
+            border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx2)', cursor: 'pointer',
           }}
         >
           Cancel
