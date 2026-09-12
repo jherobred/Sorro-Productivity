@@ -605,7 +605,7 @@ export function NoteEditor({
           boxSizing: 'border-box',
         }}
       >
-        <div style={{ width: '100%', maxWidth: '100%', minHeight: '100%', position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, boxSizing: 'border-box' }}>
+        <div style={{ width: '100%', maxWidth: '100%', minHeight: '100%', position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 0 auto', boxSizing: 'border-box' }}>
           {/* Note Metadata Header */}
           <div className="kicker" style={{ color: 'var(--accTx)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>Edited {whenLabel(note.updated_at)}</span>
@@ -629,6 +629,7 @@ export function NoteEditor({
               width: '100%',
               maxWidth: '100%',
               resize: 'none',
+              flexShrink: 0,
               overflow: 'hidden',
               fontFamily: 'inherit',
               fontSize: phone ? 22 : 28,
@@ -654,7 +655,7 @@ export function NoteEditor({
           <div style={{
             display: 'flex',
             alignItems: 'stretch',
-            flex: '1 1 auto',
+            flex: '0 0 auto',
             minHeight: phone ? 280 : 360,
             width: '100%',
             maxWidth: '100%',

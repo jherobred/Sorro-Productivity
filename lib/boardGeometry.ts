@@ -17,6 +17,11 @@ export function strokeBounds(points:number[][],color:string,width:number,id:stri
   const x=Math.min(...points.map(p=>p[0]));const y=Math.min(...points.map(p=>p[1]));
   return {id,type:'stroke',x,y,w:Math.max(1,Math.max(...points.map(p=>p[0]))-x),h:Math.max(1,Math.max(...points.map(p=>p[1]))-y),color,width,points:points.map(p=>[p[0]-x,p[1]-y,p[2]??.5])};
 }
+/** Hit the entire stroke, including long segments between coalesced samples. */
+export function strokeHit(item:BoardItem,p:{x:number;y:number},radius:number):boolean {
+ const points=item.points||[];const x=p.x-item.x,y=p.y-item.y;
+ return points.some((a,index)=>{const b=points[Math.min(index+1,points.length-1)];const dx=b[0]-a[0],dy=b[1]-a[1];const length=dx*dx+dy*dy;const t=length?Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/length)):0;return Math.hypot(x-a[0]-t*dx,y-a[1]-t*dy)<=radius+(item.width||3)*(.3+Math.max(a[2]??.5,b[2]??.5))/2;});
+}
 /** A filled outline follows the pen's per-sample pressure without SVG segments. */
 export function pressurePath(points:number[][],width:number):string {
   if(!points.length)return '';

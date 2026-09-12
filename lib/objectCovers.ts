@@ -13,6 +13,8 @@ const EMPTY: Snapshot = { owner: null, covers: {} };
 let state = EMPTY;
 let initialized = false;
 let syncing = false;
+let poll:ReturnType<typeof setInterval>|undefined;
+const migrations=new Set<string>();
 const listeners = new Set<() => void>();
 const keyOf = (kind: CoverKind, id: string) => `${kind}:${id}`;
 const storageKey = (uid: string) => `bd_object_covers:${uid}`;
@@ -36,12 +38,12 @@ async function loadOwner() {
 }
 
 async function refreshRemote(uid: string) {
-  if (uid === 'me' || !navigator.onLine) return;
+  if (uid === 'me' || !navigator.onLine) return false;
   const prefix = `${uid}/object-covers`;
   const remote: Record<string, CoverRef> = {};
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.storage.from('bd-files').list(prefix, { limit: 1000, offset });
-    if (error || !data) return;
+    if (error || !data) return false;
     for (const row of data) {
       const match = /^(notebook|task)__(.+)__(\d+)\.png$/.exec(row.name);
       if (!match) continue;
@@ -51,12 +53,13 @@ async function refreshRemote(uid: string) {
     }
     if (data.length < 1000) break;
   }
-  if (state.owner !== uid) return;
+  if (state.owner !== uid) return false;
   const merged = { ...state.covers };
   for (const [key, ref] of Object.entries(remote)) {
     if (!merged[key]?.pending && (!merged[key] || merged[key].updatedAt < ref.updatedAt)) merged[key] = ref;
   }
   try { persist(uid, merged); } catch { /* Cached covers remain usable when storage is full. */ }
+  return true;
 }
 
 async function uploadPending(uid: string, key: string, ref: CoverRef) {
@@ -91,11 +94,12 @@ export async function syncPending() {
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
+  if(!poll&&typeof window!=='undefined')poll=setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine&&state.owner){void refreshRemote(state.owner);void syncPending();}},30_000);
   if (!initialized && typeof window !== 'undefined') {
     initialized = true;
     void loadOwner();
     supabase.auth.onAuthStateChange(() => { queueMicrotask(() => void loadOwner()); });
-    window.addEventListener('online', () => { void syncPending(); });
+    window.addEventListener('online', () => { if(state.owner)void refreshRemote(state.owner);void syncPending(); });
     window.addEventListener('focus', () => { if (state.owner) void refreshRemote(state.owner); void syncPending(); });
     window.addEventListener('storage', (event) => {
       if (state.owner && event.key === storageKey(state.owner)) {
@@ -103,7 +107,22 @@ function subscribe(listener: () => void) {
       }
     });
   }
-  return () => { listeners.delete(listener); };
+  return () => { listeners.delete(listener);if(!listeners.size){clearInterval(poll);poll=undefined;} };
+}
+
+/** Promote legacy device-only wallpapers only after checking for newer cloud covers. */
+export async function migrateNotebookCovers(books:{id:string;name:string;color:string}[],images:Record<string,{image?:string}>){
+ const uid=await currentUserId().catch(()=>null);if(!uid||uid==='me')return;
+ if(state.owner!==uid)await loadOwner();
+ /* This runs on every notebook refetch, so nothing to promote must cost no storage listing. */
+ const unmigrated=(book:{id:string})=>!!images[book.id]?.image&&!state.covers[keyOf('notebook',book.id)]&&!migrations.has(uid+':'+book.id);
+ if(!books.some(unmigrated))return;
+ if(!await refreshRemote(uid))return;
+ for(const book of books){const localId=images[book.id]?.image,key=keyOf('notebook',book.id),attempt=uid+':'+book.id;
+  if(!localId||state.owner!==uid||state.covers[key]||migrations.has(attempt))continue;
+  migrations.add(attempt);
+  try{const blob=await getImage(localId);if(!blob)continue;const {prepareCover}=await import('./coverProcessing');const png=await prepareCover(new File([blob],'wallpaper',{type:blob.type}));if(state.owner!==uid||state.covers[key])continue;await saveObjectCover({kind:'notebook',id:book.id,title:book.name,color:book.color},png);}catch{migrations.delete(attempt);}
+ }
 }
 
 export function useObjectCover(kind: CoverKind, id: string) {

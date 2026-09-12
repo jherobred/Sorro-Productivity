@@ -10,8 +10,8 @@ function hash(seed: string) {
 }
 
 /** Flat, printed colour and halftone texture, derived from the user's posters. */
-export function coverArt(seed: string, _color?: string): string {
-  return COLORS[hash(seed || 'notebook') % COLORS.length];
+export function coverArt(seed: string, color?: string): string {
+  return color || COLORS[hash(seed || 'notebook') % COLORS.length];
 }
 
 export function NotebookCover({ seed, color, className, style, targetKind = 'notebook', imageUrl }: {
