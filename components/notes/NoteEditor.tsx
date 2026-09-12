@@ -25,6 +25,10 @@ import 'katex/dist/katex.min.css';
 /**
  * KaTeX and the two modals are loaded on demand.
  */
+const DocumentTools = dynamic(
+  () => import('./DocumentTools').then((m) => m.DocumentTools),
+  { ssr: false },
+);
 const MathEquationEditor = dynamic(
   () => import('./MathEquationEditor').then((m) => m.MathEquationEditor),
   { ssr: false },
@@ -141,6 +145,7 @@ export function NoteEditor({
   const { prefs } = usePrefs();
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
   const [initialMathFormula, setInitialMathFormula] = useState('');
@@ -276,6 +281,17 @@ export function NoteEditor({
     queue(t, body);
     recordHistory(t, body, 0);
   };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setToolsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const setBodyAndQueue = (b: string) => {
     setBody(b);
@@ -566,6 +582,7 @@ export function NoteEditor({
         onUndo={handleUndo}
         onRedo={handleRedo}
         onToggleLineNumbers={toggleLineNumbers}
+        onOpenTools={() => setToolsOpen(true)}
         onChangePaperStyle={changePaperStyle}
         onLineFormat={applyLineFormat}
         onTextColor={applyTextColor}
@@ -747,6 +764,14 @@ export function NoteEditor({
         </div>
       </div>
 
+      {toolsOpen && typeof document !== 'undefined' && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(0,0,0,0.5)', display: 'grid', placeItems: 'start center', padding: 14, overflowY: 'auto' }}
+          onPointerDown={(e) => { if (e.target === e.currentTarget) setToolsOpen(false); }}>
+          <DocumentTools body={body} onChangeBody={setBodyAndQueue} onClose={() => setToolsOpen(false)} />
+        </div>,
+        document.body,
+      )}
+
       {/* LaTeX Formula Composer Modal */}
       {mathEditorOpen && typeof document !== 'undefined' && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 14 }}>
@@ -772,7 +797,7 @@ export function NoteEditor({
 
 function Toolbar({
   phone, dirty, canUndo, canRedo, paperStyle, showLineNumbers,
-  onBack, onUndo, onRedo, onToggleLineNumbers, onChangePaperStyle,
+  onBack, onUndo, onRedo, onToggleLineNumbers, onChangePaperStyle, onOpenTools,
   onLineFormat, onTextColor, onHighlight, onOpenMath, onOpenSketch,
   onInsertImageUpload, onInsertImageUrl, onInsertVideo, onInsertTable, onInsertColumns,
   onDivider, onLink, onDelete,
@@ -787,6 +812,7 @@ function Toolbar({
   onUndo: () => void;
   onRedo: () => void;
   onToggleLineNumbers: () => void;
+  onOpenTools: () => void;
   onChangePaperStyle: (style: PaperStyle) => void;
   onLineFormat: (k: LineKind) => void;
   onTextColor: (colorHex: string) => void;
@@ -923,6 +949,7 @@ function Toolbar({
       {/* Undo & Redo */}
       {btn('Undo (Ctrl+Z)', 'undo', onUndo, undefined, false, !canUndo)}
       {btn('Redo (Ctrl+Y)', 'redo', onRedo, undefined, false, !canRedo)}
+      {btn('Find & replace (Ctrl+F)', 'search', onOpenTools)}
       {rule}
 
       {/* Headings */}

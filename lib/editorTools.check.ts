@@ -4,6 +4,7 @@ import {javaTokens} from './javaTokens.ts';
 import {strokeBounds,strokeHit} from './boardGeometry.ts';
 import {readBoard,writeBoard,type BoardDocument} from './pageKinds.ts';
 import {attachNoteToTask,detachNoteFromTask,taskLinksNote} from './noteTaskLinks.ts';
+import {countMatches,replaceAll,readingMinutes} from './findReplace.ts';
 
 test('Java highlighting preserves source verbatim including incomplete edits and HTML',()=>{
  for(const source of ['public class Example {\n String s = "<img>"; // class\n}', '/* unfinished\npublic class', 'String s = """\n hello\n""";', '@Override\nvoid run(){ int a=0xff; }', '"unclosed', "char x='\\n';"]){assert.equal(javaTokens(source).map(t=>t.text).join(''),source);}
@@ -19,4 +20,19 @@ test('schema cards and connections retain coordinates and old moodboard formats'
 });
 test('task note links are idempotent and preserve unrelated notes and links',()=>{
  const notes='Do the reading.\n🔗 Course page: https://school.example/lesson';const linked=attachNoteToTask(notes,'note-1','https://basedly.example');assert.equal(taskLinksNote(linked,'note-1'),true);assert.equal(taskLinksNote(linked,'note-10'),false);assert.equal(attachNoteToTask(linked,'note-1','https://other.example'),linked);assert.equal(detachNoteFromTask(linked,'note-1'),notes);
+});
+test('find and replace treats the search term and the replacement as text, not patterns',()=>{
+ const body='Total cost (total) is 5. TOTAL again.';
+ assert.equal(countMatches(body,'(total)'),1);
+ assert.equal(countMatches(body,'.*'),0);
+ assert.equal(countMatches(body,'total'),3);
+ assert.equal(countMatches(body,'total',true),1);
+ assert.equal(countMatches(body,''),0);
+ assert.equal(replaceAll(body,'',''),body);
+ assert.equal(replaceAll('a b','b','$& $1'),'a $& $1');
+ assert.equal(replaceAll(body,'(total)','[sum]'),'Total cost [sum] is 5. TOTAL again.');
+ assert.equal(replaceAll(body,'total','x',true),'Total cost (x) is 5. TOTAL again.');
+});
+test('reading time never rounds a short note down to zero minutes',()=>{
+ assert.equal(readingMinutes(0),1);assert.equal(readingMinutes(12),1);assert.equal(readingMinutes(440),2);
 });
