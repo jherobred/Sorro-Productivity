@@ -55,11 +55,11 @@ export function TabRail<T extends string>({
               padding: phone ? '7px 10px' : '6px 14px', borderRadius: 9,
               fontSize: phone ? 11 : 12, fontWeight: 700, whiteSpace: 'nowrap',
               background: 'transparent',
-              color: on ? 'var(--accInk)' : 'var(--tx2)',
+              color: on ? '#fff' : 'var(--tx2)',
             }}>
             {on && (
               <motion.span aria-hidden layoutId={`tabpill-${rid}`}
-                style={{ position: 'absolute', inset: 0, borderRadius: 9, background: prefs.accent }}
+                style={{ position: 'absolute', inset: 0, borderRadius: 9, background: 'var(--poster-blue)' }}
                 transition={motionOn ? { type: 'spring', stiffness: 520, damping: 42 } : { duration: 0 }} />
             )}
             <span style={{
@@ -68,7 +68,7 @@ export function TabRail<T extends string>({
             }}>
               {/* Icons are a desktop nicety. On a 375px phone five of them is five
                   guesses, so the label is what survives. */}
-              {t.icon && !phone && <Icon name={t.icon} size={13} color={on ? 'var(--accInk)' : 'var(--tx3)'} />}
+              {t.icon && !phone && <Icon name={t.icon} size={13} color={on ? '#fff' : 'var(--tx3)'} />}
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
               {t.count !== undefined && (
                 <span style={{ fontSize: 10, fontWeight: 800, opacity: 0.72 }}>{t.count}</span>

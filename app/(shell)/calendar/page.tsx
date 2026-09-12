@@ -403,12 +403,12 @@ export default function CalendarPage() {
 
   return (
     <div style={{
-      padding: phone ? '6px 12px 12px' : '18px 22px 20px',
+      padding: '0 0 20px',
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: phone ? 9 : 14, flexWrap: 'wrap', flex: 'none' }}>
         {showHeading && (
-          <h1 className="k-stagger" style={{ fontSize: phone ? 17 : 24, fontWeight: 800, letterSpacing: '-.028em', '--i': 0 } as React.CSSProperties}>{heading}</h1>
+          <h1 className="k-stagger" style={{ fontSize: phone ? 24 : 36, fontWeight: 750, letterSpacing: '-.035em', '--i': 0 } as React.CSSProperties}>{heading}</h1>
         )}
 
         {/* The toolbar owns the right edge on desktop and wraps below the

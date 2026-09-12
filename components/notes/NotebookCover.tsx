@@ -1,81 +1,40 @@
 'use client';
 
-/**
- * Generative cover art for notebooks, canvases and the shelf hero.
- *
- * The art is derived from a hash of the notebook's id, so the same notebook
- * wears the same cover in every session, and the notebook's own colour stays
- * visible as the base tint — recolouring a notebook visibly changes its cover.
- * Everything is CSS gradients plus one shared noise tile: no network, no image
- * payloads, offline-safe in the Capacitor APK, correct in both themes because
- * every layer mixes against var(--card).
- *
- * `coverArt()` returns the background string alone (for the shelf hero band);
- * `NotebookCover` wraps it as an element that fills its parent.
- */
+import { useObjectCover, type CoverKind } from '@/lib/objectCovers';
 
-import { PAL } from '@/lib/pal';
-
-const HUES = [
-  PAL.coral, PAL.indigo, PAL.cyan, PAL.mint, PAL.violet,
-  PAL.amber, PAL.pink, PAL.sky, PAL.lime,
-];
-
-/** One grain tile, shared by every cover. fractalNoise at high frequency. */
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")`;
-
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
+const COLORS = ['#ffcd38', '#3985ed', '#fa614e', '#73b88b', '#d4b6e6', '#f0cbb5'];
+function hash(seed: string) {
+  let value = 2166136261;
+  for (const character of seed) { value ^= character.charCodeAt(0); value = Math.imul(value, 16777619); }
+  return value >>> 0;
 }
 
-/**
- * A layered CSS background: three pastel blobs drifting over the notebook's
- * colour tint, a sheen across the top, and grain on top of everything.
- */
-export function coverArt(seed: string, color?: string): string {
-  const h = hash(seed || 'notebook');
-  const hueA = HUES[h % HUES.length];
-  const hueB = HUES[(h >>> 3) % HUES.length];
-  const hueC = HUES[(h >>> 6) % HUES.length];
-  // Blob anchors drift with the hash so covers do not all lean the same way.
-  const ax = 8 + (h % 44);
-  const ay = 4 + ((h >>> 5) % 36);
-  const bx = 52 + ((h >>> 9) % 40);
-  const by = 8 + ((h >>> 12) % 42);
-  const cx = 24 + ((h >>> 15) % 56);
-
-  return [
-    `radial-gradient(120% 95% at ${ax}% ${ay}%, color-mix(in srgb, ${hueA} 52%, transparent) 0%, transparent 56%)`,
-    `radial-gradient(110% 85% at ${bx}% ${by}%, color-mix(in srgb, ${hueB} 46%, transparent) 0%, transparent 54%)`,
-    `radial-gradient(150% 130% at ${cx}% 118%, color-mix(in srgb, ${hueC} 58%, transparent) 0%, transparent 62%)`,
-    `linear-gradient(150deg, rgba(255,255,255,.12) 0%, transparent 42%)`,
-    color
-      ? `color-mix(in srgb, ${color} 26%, var(--card))`
-      : 'var(--card2)',
-  ].join(', ');
+/** Flat, printed colour and halftone texture, derived from the user's posters. */
+export function coverArt(seed: string, _color?: string): string {
+  return COLORS[hash(seed || 'notebook') % COLORS.length];
 }
 
-export function NotebookCover({
-  seed, color, className, style,
-}: {
-  seed: string;
-  /** The notebook's colour — the base tint of its cover. */
-  color?: string;
-  className?: string;
-  style?: React.CSSProperties;
+export function NotebookCover({ seed, color, className, style, targetKind = 'notebook', imageUrl }: {
+  seed: string; color?: string; className?: string; style?: React.CSSProperties;
+  targetKind?: CoverKind; imageUrl?: string;
 }) {
-  return (
-    <div aria-hidden className={className} style={{
-      position: 'absolute', inset: 0, background: coverArt(seed, color), overflow: 'hidden', ...style,
-    }}>
-      <div style={{
-        position: 'absolute', inset: 0, backgroundImage: GRAIN, opacity: .07, mixBlendMode: 'overlay',
-      }} />
-    </div>
-  );
+  const cover = useObjectCover(targetKind, seed);
+  const source = cover.url || imageUrl;
+  const variation = hash(seed) % 3;
+  return <div aria-hidden className={className} data-object-cover={`${targetKind}:${seed}`} style={{ position: 'absolute', inset: 0, background: coverArt(seed, color), overflow: 'hidden', ...style }}>
+    {!source && <>
+      <div style={{ position: 'absolute', width: '80%', aspectRatio: '1', right: '-25%', top: '-55%', border: '28px solid #141414', borderRadius: variation === 1 ? '50%' : 18, transform: `rotate(${variation === 2 ? 25 : -17}deg)`, opacity: .9 }} />
+      <div style={{ position: 'absolute', inset: '20% 5% -30% 52%', transform: 'rotate(20deg)', backgroundImage: 'radial-gradient(#141414 1px, transparent 1px)', backgroundSize: '5px 5px', opacity: .4 }} />
+      <div style={{ position: 'absolute', height: 16, width: '40%', left: '7%', bottom: '22%', background: '#fff4', transform: 'rotate(-12deg)' }} />
+    </>}
+    {source && <img src={source} alt="" loading="lazy" draggable={false} style={{ position: 'absolute', inset: cover.url ? '8%' : 0, width: cover.url ? '84%' : '100%', height: cover.url ? '84%' : '100%', objectFit: cover.url ? 'contain' : 'cover', filter: cover.url ? 'drop-shadow(0 6px 3px #0002)' : undefined }} />}
+  </div>;
+}
+
+export function ObjectCoverImage({ targetKind, targetId, className, style }: {
+  targetKind: CoverKind; targetId: string; className?: string; style?: React.CSSProperties;
+}) {
+  const cover = useObjectCover(targetKind, targetId);
+  if (!cover.url) return null;
+  return <img data-object-cover={`${targetKind}:${targetId}`} className={className} src={cover.url} alt="" loading="lazy" draggable={false} style={{ width: 44, height: 44, objectFit: 'contain', flex: 'none', ...style }} />;
 }

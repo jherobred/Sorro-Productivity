@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import { createInvalidationQueue } from './liveInvalidation';
 
 /**
  * One socket for the whole app.
@@ -50,17 +51,7 @@ const TABLES = [
   'bd_transactions', 'bd_accounts', 'bd_budgets', 'bd_to_buy', 'bd_subscriptions',
   // body
   'bd_body_days', 'bd_meals', 'bd_workouts', 'bd_workout_sets', 'bd_gym_days',
-  // work
-  'bd_projects', 'bd_cards', 'bd_project_comments', 'bd_project_members',
-  'bd_files', 'bd_folders', 'bd_java_files',
-  // people and community
-  'bd_posts', 'bd_threads', 'bd_post_likes', 'bd_thread_votes',
-  'bd_post_comments', 'bd_thread_replies', 'bd_post_saves',
-  'bd_conversations', 'bd_conversation_members', 'bd_messages',
-  'bd_people', 'bd_profiles', 'bd_notifications',
-  'bd_workspaces', 'bd_workspace_members',
-  // challenges
-  'bd_challenges', 'bd_challenge_members', 'bd_challenge_days', 'bd_challenge_stars',
+  'bd_java_files', 'bd_profiles', 'bd_notifications',
 ] as const;
 
 /** Screens that cache a table under a name other than its own. */
@@ -97,65 +88,34 @@ const CATCHUP_AFTER_MS = 30_000;
  * Changes arrive one row at a time; a fifteen-row insert is fifteen events for
  * one screen. Collect the tables that spoke and refetch each once.
  */
+function hasExecutingWrites(qc: QueryClient) {
+  return qc.getMutationCache().findAll({ status: 'pending' }).some(m => !m.state.isPaused);
+}
+
 function batcher(qc: QueryClient) {
-  const hot = new Set<string>();
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  return (table: string) => {
-    for (const p of prefixesFor(table)) hot.add(p);
-    if (timer) return;
-    timer = setTimeout(() => {
-      timer = null;
-      flush();
-    }, 120);
-
-    function flush() {
-      const keys = [...hot];
-      const stillWriting: string[] = [];
-      for (const k of keys) {
-        const mutating = qc.isMutating({
-          predicate: (mutation) => {
-            const mKey = mutation.options.mutationKey;
-            if (!mKey || !Array.isArray(mKey)) return false;
-            const first = String(mKey[0]).toLowerCase();
-            return first.startsWith(k) || first.includes(`.${k}`) || first.startsWith(`${k}.`);
-          },
-        }) > 0;
-
-        if (mutating) {
-          stillWriting.push(k);
-        } else {
-          hot.delete(k);
-          void qc.invalidateQueries({ queryKey: [k] });
-        }
-      }
-
-      if (stillWriting.length > 0) {
-        timer = setTimeout(() => {
-          timer = null;
-          flush();
-        }, 350);
-      }
-    }
-  };
+  return createInvalidationQueue({
+    busy: () => hasExecutingWrites(qc),
+    invalidate: key => { void qc.invalidateQueries({ queryKey: [key] }); },
+    schedule: (run, delay) => setTimeout(run, delay),
+    cancel: timer => clearTimeout(timer),
+  });
 }
 
 /**
  * Mount once, in the Shell. Everything below it stays live.
  *
- * ponytail: one channel with ~50 bindings. If Realtime ever starts complaining
- * about binding count, split TABLES across two channels — the batcher does not
- * care how many sockets fed it.
+ * Only the retained app sections subscribe to change events.
  */
 export function useLiveSync() {
   const qc = useQueryClient();
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEV_FIXTURES === '1' && process.env.NODE_ENV !== 'production') return;
     const bump = batcher(qc);
     const channel = supabase.channel('bd:live');
 
     for (const table of TABLES) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => bump(table));
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => bump.add(prefixesFor(table)));
     }
 
     /**
@@ -164,7 +124,10 @@ export function useLiveSync() {
      * the only thing that makes a catch-up worth its round trips.
      */
     let dropped = false;
-    channel.subscribe((status) => { if (status !== 'SUBSCRIBED') dropped = true; });
+    channel.subscribe((status) => {
+      if (status !== 'SUBSCRIBED') dropped = true;
+      else if (dropped) wake();
+    });
 
     /**
      * The backstop. Realtime can drop a socket without either side noticing —
@@ -186,22 +149,26 @@ export function useLiveSync() {
      * which is the same freshness promise every query has anyway.
      */
     let wakeTimer: ReturnType<typeof setTimeout> | null = null;
-    let hiddenAt = 0;
-    const wake = () => {
+    let hiddenAt: number | null = document.visibilityState === 'hidden' ? Date.now() : null;
+    function wake() {
+      if (wakeTimer) { clearTimeout(wakeTimer); wakeTimer = null; }
       if (document.visibilityState !== 'visible') { hiddenAt = Date.now(); return; }
-      if (!dropped && Date.now() - hiddenAt < CATCHUP_AFTER_MS) return;
+      if (!navigator.onLine) return;
+      if (!dropped && (hiddenAt === null || Date.now() - hiddenAt < CATCHUP_AFTER_MS)) return;
       // Still writing: mirror batcher()'s own retry rather than dropping the
       // catch-up — this is the one moment it exists to cover. A paused
       // mutation (offline, queued) is parked, not executing, so it must not
       // count here or this retries forever while offline.
-      const busy = qc.getMutationCache().findAll({ status: 'pending' }).some((m) => !m.state.isPaused);
+      const busy = hasExecutingWrites(qc);
       if (busy) { wakeTimer = setTimeout(wake, 400); return; }
       dropped = false;
+      hiddenAt = null;
       void qc.invalidateQueries({ type: 'active' });
     };
     document.addEventListener('visibilitychange', wake);
 
     return () => {
+      bump.dispose();
       document.removeEventListener('visibilitychange', wake);
       if (wakeTimer) clearTimeout(wakeTimer);
       void supabase.removeChannel(channel);

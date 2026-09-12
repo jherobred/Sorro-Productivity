@@ -3,107 +3,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
-import { SHELL_LAYOUTS } from '@/lib/shellLayouts';
 import { usePrefs, type Prefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { supabase, currentUserId } from '@/lib/supabase';
-import { toast } from '@/lib/toast';
+import { luminance } from '@/lib/contrast';
 import { PAL } from '@/lib/pal';
-import { ON_ACCENT } from '@/lib/glass';
-import { ANIMALS, animalOf, type Animal, type Mood, type Accessory } from '@/lib/mascot';
-import { Mascot } from './challenges/Mascot';
+import { DESTINATIONS } from '@/lib/destinations';
 import { Face } from './AccountSheet';
-import { useAccounts, switchTo, addAccount, forget, signOutAll } from '@/lib/accounts';
-import { useWorkspaces, useWorkspaceActions, type Workspace } from '@/lib/workspaces';
-import { SpaceSheet } from './SpaceSheet';
+import { useAccounts, switchTo, addAccount, signOutAll } from '@/lib/accounts';
 import { Integrations } from './Integrations';
-import { useAppUpdate, useFullscreen, APP_VERSION, UPDATE_URL } from '@/lib/appUpdate';
+import { APP_VERSION } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
-import { useProfiles } from '@/lib/people';
-import { BasedlyLogo, BirdMascot } from './BasedlyLogo';
+import { BasedlyLogo } from './BasedlyLogo';
 
 
-/**
- * Unified Settings & Profile Center.
- *
- * Centralizes profile details, mascot customization, avatar building,
- * theme preferences, audio controls, account management, and integrations.
- *
- * Desktop View: Claude Code dual-pane settings with sidebar navigation,
- *   search filter, structured profile fields, and visual previews.
- *
- * Phone View: Claude Code mobile settings with grouped inset lists,
- *   account header card, inline toggles, and seamless subpage drill-downs.
- */
-
+/** Shared settings for desktop, phone, and tablet. */
 export type SettingsTab =
   | 'general'
   | 'account'
   | 'appearance'
-  | 'mascot'
-  | 'avatar'
   | 'audio'
   | 'integrations'
   | 'app';
 
-const ACCENTS = ['#7C6CFF', '#38D6F2', '#34D9A0', '#FFC24B', '#FF6B6B', '#FF6FA8', '#B07CFF', '#A3E635'];
-
-const AV_ORDER = ['bg', 'skin', 'face', 'hair', 'eyes', 'glasses', 'hat'] as const;
-type AvKey = (typeof AV_ORDER)[number];
-
-const AV: Record<AvKey, { id: string; v: string }[]> = {
-  bg: [
-    { id: 'violet', v: '#7C6CFF,#38D6F2' },
-    { id: 'sunset', v: '#FF6B6B,#FFC24B' },
-    { id: 'mint', v: '#34D9A0,#38BDF8' },
-    { id: 'rose', v: '#FF6FA8,#B07CFF' },
-    { id: 'slate', v: '#3A3550,#211F2C' },
-    { id: 'cyber', v: '#0F2027,#2C5364' },
-    { id: 'neon', v: '#F72585,#7209B7' },
-    { id: 'aurora', v: '#0575E6,#00F260' },
-  ],
-  skin: [
-    { id: 'porcelain', v: '#F3D7C2' },
-    { id: 'sand', v: '#E7BE9A' },
-    { id: 'tan', v: '#C98F63' },
-    { id: 'bronze', v: '#A56A3E' },
-    { id: 'deep', v: '#6E4326' },
-  ],
-  face: [
-    { id: 'oval', v: 'M50 22c16 0 25 12 25 28s-11 30-25 30-25-14-25-30 9-28 25-28z' },
-    { id: 'round', v: 'M50 22c17 0 27 13 27 29S67 80 50 80 23 67 23 51s10-29 27-29z' },
-    { id: 'square', v: 'M27 26h46v30c0 14-10 24-23 24S27 70 27 56z' },
-  ],
-  hair: [
-    { id: 'short', v: 'M24 44c0-16 11-26 26-26s26 10 26 26c0-8-9-13-26-13s-26 5-26 13z' },
-    { id: 'wave', v: 'M23 46c2-18 12-28 27-28s25 10 27 28c-4-10-12-14-27-14s-23 4-27 14z' },
-    { id: 'bun', v: 'M24 44c0-16 11-26 26-26s26 10 26 26c0-8-9-13-26-13s-26 5-26 13zM50 8a7 7 0 1 1 0 14 7 7 0 0 1 0-14z' },
-    { id: 'spikes', v: 'M22 42 L26 22 L34 30 L42 16 L50 28 L58 16 L66 30 L74 22 L78 42 C78 30 65 24 50 24 C35 24 22 30 22 42 Z' },
-    { id: 'fade', v: 'M26 38 C26 22 36 18 50 18 C64 18 74 22 74 38 C74 30 65 25 50 25 C35 25 26 30 26 38 Z' },
-    { id: 'curtain', v: 'M22 46 C24 22 36 20 50 26 C64 20 76 22 78 46 C76 34 68 28 50 32 C32 28 24 34 22 46 Z' },
-    { id: 'bald', v: '' },
-  ],
-  eyes: [
-    { id: 'classic', v: 'M40 50a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm26 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0z' },
-    { id: 'spark', v: 'M37 48l1.5 3.5 3.5 1.5-3.5 1.5L37 58l-1.5-3.5L32 53l3.5-1.5zM63 48l1.5 3.5 3.5 1.5-3.5 1.5L63 58l-1.5-3.5L58 53l3.5-1.5z' },
-    { id: 'keen', v: 'M34 50h6M60 50h6' },
-  ],
-  glasses: [
-    { id: 'none', v: '' },
-    { id: 'round', v: 'M30 46a8 8 0 1 0 16 0 8 8 0 1 0-16 0zm24 0a8 8 0 1 0 16 0 8 8 0 1 0-16 0zM46 46h8' },
-    { id: 'square', v: 'M30 42h16v12H30zM54 42h16v12H54zM46 47h8' },
-    { id: 'aviator', v: 'M28 42h18v10q-4 6-9 6q-5 0-9-6z M54 42h18v10q-4 6-9 6q-5 0-9-6z M46 44h8 M44 48h12' },
-  ],
-  hat: [
-    { id: 'none', v: '' },
-    { id: 'cap', v: 'M26 30c0-10 11-16 24-16s24 6 24 16H26zM46 30h32' },
-    { id: 'beanie', v: 'M28 32c0-12 10-18 22-18s22 6 22 18H28zM46 14a4 4 0 1 1 8 0 4 4 0 0 1-8 0z' },
-    { id: 'headphones', v: 'M22 38 A28 28 0 0 1 78 38 M20 34 h6 v14 h-6 z M74 34 h6 v14 h-6 z' },
-  ],
-};
-
-const ROLES = ['Student', 'Software Engineer', 'Researcher', 'Product Designer', 'Founder / Creator', 'Other'];
+const ACCENTS = ['#2864F0', '#E24C3B', '#F2C438', '#37A06A', '#38A8C4', '#A781C8'];
 
 export function SettingsModal({
   initialTab = 'general',
@@ -114,6 +38,7 @@ export function SettingsModal({
 }) {
   const { phone, viewMode, setViewMode } = useLayout();
   const { prefs, update } = usePrefs();
+  const accentInk = luminance(prefs.accent) > 0.2 ? '#141414' : '#FFFFFF';
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [search, setSearch] = useState('');
   const [phoneSubPage, setPhoneSubPage] = useState<SettingsTab | null>(null);
@@ -122,25 +47,11 @@ export function SettingsModal({
   const [userId, setUserId] = useState<string>('');
   const [fullName, setFullName] = useState('');
   const [handle, setHandle] = useState('');
-  const [role, setRole] = useState('Student');
-  const [instructions, setInstructions] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [selectedAnimal, setSelectedAnimal] = useState<Animal>('fox');
-  const [avatarPieces, setAvatarPieces] = useState<Record<string, string>>({
-    bg: 'violet', skin: 'porcelain', face: 'oval', hair: 'short', eyes: 'classic', glasses: 'none', hat: 'none',
-  });
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  // Accounts & Workspaces
   const accounts = useAccounts();
-  const { data: workspaces = [] } = useWorkspaces();
-  const WA = useWorkspaceActions();
-  const [managingSpace, setManagingSpace] = useState<Workspace | null>(null);
 
-  useOverlayBack(true, () => {
-    if (phoneSubPage) setPhoneSubPage(null);
-    else onClose();
-  });
+  useOverlayBack(true, onClose);
+  useOverlayBack(!!phoneSubPage, () => setPhoneSubPage(null));
 
   // Load user profile
   useEffect(() => {
@@ -149,38 +60,16 @@ export function SettingsModal({
         const uid = await currentUserId();
         if (!uid) return;
         setUserId(uid);
-        const { data } = await supabase.from('bd_profiles').select('*').eq('user_id', uid).maybeSingle();
+        const { data } = await supabase.from('bd_profiles').select('name,handle,photo_url').eq('user_id', uid).maybeSingle();
         if (data) {
           setFullName(data.name || '');
           setHandle(data.handle || '');
           setPhotoUrl(data.photo_url || null);
-          if (data.animal && ANIMALS.includes(data.animal as Animal)) {
-            setSelectedAnimal(data.animal as Animal);
-          } else {
-            setSelectedAnimal(animalOf(uid));
-          }
-          if (data.avatar_pieces && typeof data.avatar_pieces === 'object') {
-            setAvatarPieces((prev) => ({ ...prev, ...data.avatar_pieces }));
-          }
+
         }
       } catch {}
     })();
   }, []);
-
-  const saveProfileField = async (field: string, value: unknown) => {
-    if (!userId) return;
-    try {
-      setSavingProfile(true);
-      // Postgrest resolves with `{ error }` rather than throwing, so without
-      // this a row RLS refused still reported "Profile updated".
-      const { error } = await supabase.from('bd_profiles').update({ [field]: value }).eq('user_id', userId);
-      toast(error ? `Failed to save profile — ${error.message}` : 'Profile updated');
-    } catch {
-      toast('Failed to save profile');
-    } finally {
-      setSavingProfile(false);
-    }
-  };
 
   const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
     playTick();
@@ -191,8 +80,6 @@ export function SettingsModal({
     { id: 'general', label: 'General', icon: 'cog', group: 'Settings' },
     { id: 'account', label: 'Account', icon: 'people', group: 'Settings' },
     { id: 'appearance', label: 'Appearance', icon: 'moon', group: 'Settings' },
-    { id: 'mascot', label: 'Mascot & Pet', icon: 'spark', group: 'Settings' },
-    { id: 'avatar', label: 'Avatar Builder', icon: 'focus', group: 'Customize' },
     { id: 'audio', label: 'Audio & Focus', icon: 'habit', group: 'Customize' },
     { id: 'integrations', label: 'Integrations', icon: 'files', group: 'Customize' },
     { id: 'app', label: 'App & Info', icon: 'mind', group: 'Customize' },
@@ -260,7 +147,8 @@ export function SettingsModal({
             </span>
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search settings"
+              aria-label="Search settings"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -406,7 +294,7 @@ export function SettingsModal({
           )}
 
           <div style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 700, color: 'var(--tx)' }}>
-            {phoneSubPage ? (phoneSubPage === 'general' ? 'Profile' : phoneSubPage) : ''}
+            {phoneSubPage ? (phoneSubPage === 'general' ? 'General' : phoneSubPage) : ''}
           </div>
 
           <button
@@ -447,37 +335,12 @@ export function SettingsModal({
                     @{handle || 'student'}
                   </div>
                 </div>
-                <div style={{ padding: '3px 8px', borderRadius: 6, background: 'var(--acc)', color: '#0C0F16', fontSize: 10, fontWeight: 800 }}>
-                  PRO
-                </div>
+
               </div>
 
-              {/* Group 1: Profile & Identity */}
               <PhoneGroup>
-                <PhoneRow
-                  icon="people"
-                  label="Profile & Bio"
-                  sub={fullName || 'Edit details'}
-                  onClick={() => setPhoneSubPage('general')}
-                />
-                <PhoneRow
-                  icon="spark"
-                  label="Mascot & Pet"
-                  sub={selectedAnimal}
-                  onClick={() => setPhoneSubPage('mascot')}
-                />
-                <PhoneRow
-                  icon="focus"
-                  label="Vector Avatar"
-                  sub="Customize facial features"
-                  onClick={() => setPhoneSubPage('avatar')}
-                />
-                <PhoneRow
-                  icon="files"
-                  label="Workspaces"
-                  sub={`${workspaces.length} active`}
-                  onClick={() => setPhoneSubPage('account')}
-                />
+                <PhoneRow icon="cog" label="General" sub="Launch, calendar, and feedback" onClick={() => setPhoneSubPage('general')} />
+                <PhoneRow icon="people" label="Accounts" sub="Sign-in and devices" onClick={() => setPhoneSubPage('account')} />
               </PhoneGroup>
 
               {/* Group 2: Appearance & Style */}
@@ -500,12 +363,6 @@ export function SettingsModal({
                   label="Navigation Panel"
                   sub={prefs.sidebar === 'compact' ? 'Compact Icons (64px)' : (prefs.sidebar === 'hidden' || prefs.sidebar === 'collapsed' ? 'Hidden (Chevron)' : 'Expanded (236px)')}
                   onClick={() => setPhoneSubPage('appearance')}
-                />
-                <PhoneRow
-                  icon="habit"
-                  label="Mascot Display"
-                  sub={prefs.mascotVariant === 'full' ? 'Full Body' : 'Classic Head'}
-                  onClick={() => setPhoneSubPage('mascot')}
                 />
               </PhoneGroup>
 
@@ -580,173 +437,20 @@ export function SettingsModal({
       case 'general':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Profile Block */}
-            <div>
-              <div style={SECTION_TITLE}>Profile</div>
-
-              {/* Avatar Row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '14px 0 18px' }}>
-                <Face name={fullName} photo={photoUrl} size={54} />
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => setTab('avatar')}
-                    className="hov k-squish"
-                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}
-                  >
-                    Edit Vector Avatar
-                  </button>
-                  <button
-                    onClick={() => setTab('mascot')}
-                    className="hov k-squish"
-                    style={{ padding: '7px 12px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}
-                  >
-                    Choose Mascot
-                  </button>
-                </div>
-              </div>
-
-              {/* Full Name Input */}
-              <Field label="Full name">
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  onBlur={() => saveProfileField('name', fullName)}
-                  placeholder="Your Name"
-                  style={INPUT_STYLE}
-                />
-              </Field>
-
-              {/* Handle Input */}
-              <Field label="What should Basedly call you?">
-                <input
-                  type="text"
-                  value={handle}
-                  onChange={(e) => setHandle(e.target.value)}
-                  onBlur={() => saveProfileField('handle', handle)}
-                  placeholder="handle or nickname"
-                  style={INPUT_STYLE}
-                />
-              </Field>
-
-              {/* Role Dropdown */}
-              <Field label="What best describes your work?">
-                <select
-                  value={role}
-                  onChange={(e) => {
-                    setRole(e.target.value);
-                    saveProfileField('role', e.target.value);
-                  }}
-                  style={{ ...INPUT_STYLE, cursor: 'pointer' }}
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              {/* Custom Bio / Instructions */}
-              <Field label="Instructions for Basedly / Bio" hint="Goals or study preferences Basedly remembers across all views.">
-                <textarea
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  onBlur={() => saveProfileField('bio', instructions)}
-                  placeholder="e.g., Focus on CS courses, keep notifications minimal during exams..."
-                  rows={3}
-                  style={{ ...INPUT_STYLE, height: 'auto', resize: 'vertical' }}
-                />
-              </Field>
-            </div>
-
-            {/* Preferences Block */}
-            <div style={{ paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-              <div style={SECTION_TITLE}>Quick Preferences</div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Appearance</div>
-                  <div style={{ display: 'flex', gap: 4, background: 'var(--card2)', padding: 3, borderRadius: 8, border: '1px solid var(--line2)' }}>
-                    <ThemeBtn
-                      active={prefs.theme === 'light'}
-                      icon="spark"
-                      label="Light"
-                      onClick={() => setPref('theme', 'light')}
-                    />
-                    <ThemeBtn
-                      active={prefs.theme === 'dark'}
-                      icon="moon"
-                      label="Dark"
-                      onClick={() => setPref('theme', 'dark')}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Accent Color</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {ACCENTS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setPref('accent', c)}
-                        className={`k-swatch${prefs.accent === c ? ' on' : ''}`}
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 6,
-                          background: c,
-                          border: prefs.accent === c ? '2px solid #FFFFFF' : 'none',
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <ToggleRow
-                  label="Audio Soundscapes & Feedback"
-                  hint="Procedural clicks, bells, and ambient lo-fi sounds"
-                  on={prefs.soundEnabled ?? true}
-                  onChange={(v) => setPref('soundEnabled', v)}
-                />
-
-                <ToggleRow
-                  label="UI Motion & Springs"
-                  hint="Card bounces and background kinetics"
-                  on={prefs.motion}
-                  onChange={(v) => setPref('motion', v)}
-                />
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line2)' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>Feature Onboarding Tours</div>
-                    <div style={{ fontSize: 11, color: 'var(--tx3)' }}>Re-enable interactive spotlight walkthroughs across all tabs</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        localStorage.removeItem('basedly-seen-onboardings-v1');
-                      }
-                      toast('Feature tours reset! Visit any tab to play its interactive walkthrough.');
-                      onClose();
-                    }}
-                    className="hov k-squish"
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 8,
-                      border: '1px solid var(--line2)',
-                      background: 'var(--card2)',
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      color: 'var(--tx)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Reset & Replay Tours
-                  </button>
-                </div>
-              </div>
-            </div>
+            <Field label="Open Basedly on">
+              <select aria-label="Open Basedly on" style={INPUT_STYLE} value={DESTINATIONS.some(d => d.id === prefs.landing) ? prefs.landing : 'home'} onChange={e => setPref('landing', e.target.value)}>
+                {DESTINATIONS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </Field>
+            <Field label="First day of the week">
+              <select aria-label="First day of the week" style={INPUT_STYLE} value={prefs.weekStart} onChange={e => setPref('weekStart', e.target.value as Prefs['weekStart'])}>
+                <option value="mon">Monday</option><option value="sun">Sunday</option>
+              </select>
+            </Field>
+            <ToggleRow label="24-hour clock" hint="Show times as 14:30 instead of 2:30 PM" on={prefs.time24} onChange={v => setPref('time24', v)} />
+            <ToggleRow label="Motion & animation" hint="Page transitions and small visual feedback" on={prefs.motion} onChange={v => setPref('motion', v)} />
+            <ToggleRow label="Haptic feedback" hint="Gentle taps on supported phones and tablets" on={prefs.haptics} onChange={v => setPref('haptics', v)} />
+            <ToggleRow label="Sound effects" hint="Soft confirmation sounds and focus bells" on={prefs.soundEnabled} onChange={v => setPref('soundEnabled', v)} />
           </div>
         );
 
@@ -809,30 +513,6 @@ export function SettingsModal({
               </button>
             </div>
 
-            <div style={{ ...SECTION_TITLE, marginTop: 14 }}>Workspaces & Spaces</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {workspaces.map((w) => (
-                <div
-                  key={w.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '10px 12px',
-                    borderRadius: 12,
-                    background: 'var(--card2)',
-                    border: '1px solid var(--line2)',
-                  }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: w.color || 'var(--acc)' }} />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{w.name}</span>
-                  {w.id === prefs.workspace && (
-                    <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accTx)' }}>CURRENT</span>
-                  )}
-                </div>
-              ))}
-            </div>
-
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
               <button
                 onClick={async () => {
@@ -860,45 +540,6 @@ export function SettingsModal({
       case 'appearance':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={SECTION_TITLE}>Shell layout</div>
-            <Field label="How the app is arranged"
-              hint="Each one moves the same twelve sections into a different frame. Switching takes effect immediately.">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {SHELL_LAYOUTS.map((l) => {
-                  const on = (prefs.shellLayout ?? 'L3') === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      onClick={() => setPref('shellLayout', l.id)}
-                      aria-pressed={on}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 11,
-                        padding: '11px 13px',
-                        borderRadius: 11,
-                        textAlign: 'left',
-                        background: on ? 'color-mix(in srgb, var(--acc) 14%, var(--card2))' : 'var(--card2)',
-                        border: `1px solid ${on ? 'color-mix(in srgb, var(--acc) 42%, var(--line2))' : 'var(--line2)'}`,
-                      }}
-                    >
-                      <span className="num" style={{
-                        flex: 'none', width: 26, height: 22, borderRadius: 6, marginTop: 1,
-                        display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
-                        background: on ? 'var(--acc)' : 'var(--card)',
-                        color: on ? 'var(--ink)' : 'var(--tx3)',
-                        border: on ? 'none' : '1px solid var(--line2)',
-                      }}>{l.id}</span>
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>{l.name}</span>
-                        <span style={{ display: 'block', fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{l.blurb}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-
             <div style={SECTION_TITLE}>Theme & Color</div>
             <Field label="Theme Mode">
               <div style={{ display: 'flex', gap: 8 }}>
@@ -908,6 +549,7 @@ export function SettingsModal({
                 ].map((t) => (
                   <button
                     key={t.v}
+                    aria-pressed={prefs.theme === t.v}
                     onClick={() => setPref('theme', t.v as Prefs['theme'])}
                     style={{
                       flex: 1,
@@ -918,13 +560,13 @@ export function SettingsModal({
                       padding: '10px 14px',
                       borderRadius: 10,
                       background: prefs.theme === t.v ? 'var(--acc)' : 'var(--card2)',
-                      color: prefs.theme === t.v ? '#0C0F16' : 'var(--tx)',
+                      color: prefs.theme === t.v ? accentInk : 'var(--tx)',
                       fontSize: 13,
                       fontWeight: 700,
                       border: '1px solid var(--line2)',
                     }}
                   >
-                    <Icon name={t.ic as IconName} size={15} color={prefs.theme === t.v ? '#0C0F16' : 'var(--tx)'} />
+                    <Icon name={t.ic as IconName} size={15} color={prefs.theme === t.v ? accentInk : 'var(--tx)'} />
                     {t.n}
                   </button>
                 ))}
@@ -936,6 +578,8 @@ export function SettingsModal({
                 {ACCENTS.map((c) => (
                   <button
                     key={c}
+                    aria-label={`Accent ${c}`}
+                    aria-pressed={prefs.accent === c}
                     onClick={() => setPref('accent', c)}
                     className={`k-swatch${prefs.accent === c ? ' on' : ''}`}
                     style={{
@@ -962,6 +606,7 @@ export function SettingsModal({
                   return (
                     <button
                       key={m.v}
+                      aria-pressed={active}
                       onClick={() => setViewMode(m.v as 'auto' | 'phone' | 'web')}
                       style={{
                         flex: 1,
@@ -972,7 +617,7 @@ export function SettingsModal({
                         padding: '9px 10px',
                         borderRadius: 10,
                         background: active ? 'var(--acc)' : 'var(--card2)',
-                        color: active ? '#0C0F16' : 'var(--tx)',
+                        color: active ? accentInk : 'var(--tx)',
                         fontSize: 12,
                         fontWeight: 700,
                         border: '1px solid var(--line2)',
@@ -1004,6 +649,7 @@ export function SettingsModal({
                   return (
                     <button
                       key={s.v}
+                      aria-pressed={active}
                       onClick={() => setPref('sidebar', s.v as Prefs['sidebar'])}
                       style={{
                         flex: 1,
@@ -1014,7 +660,7 @@ export function SettingsModal({
                         padding: '9px 10px',
                         borderRadius: 10,
                         background: active ? 'var(--acc)' : 'var(--card2)',
-                        color: active ? '#0C0F16' : 'var(--tx)',
+                        color: active ? accentInk : 'var(--tx)',
                         fontSize: 12,
                         fontWeight: 700,
                         border: '1px solid var(--line2)',
@@ -1043,13 +689,14 @@ export function SettingsModal({
                 ].map((d) => (
                   <button
                     key={d.v}
+                    aria-pressed={prefs.density === d.v}
                     onClick={() => setPref('density', d.v as Prefs['density'])}
                     style={{
                       flex: 1,
                       padding: '9px 12px',
                       borderRadius: 9,
                       background: prefs.density === d.v ? 'var(--acc)' : 'var(--card2)',
-                      color: prefs.density === d.v ? '#0C0F16' : 'var(--tx)',
+                      color: prefs.density === d.v ? accentInk : 'var(--tx)',
                       fontSize: 12,
                       fontWeight: 700,
                       border: '1px solid var(--line2)',
@@ -1064,6 +711,7 @@ export function SettingsModal({
             <Field label={`Scale (${Math.round(prefs.fontScale * 100)}%)`}>
               <input
                 type="range"
+                aria-label="Text scale"
                 min={0.875}
                 max={1.375}
                 step={0.125}
@@ -1075,173 +723,16 @@ export function SettingsModal({
 
             <ToggleRow
               label="High Contrast"
-              hint="Lifts text and border contrast for WCAG AAA accessibility"
+              hint="Increase text and border contrast"
               on={prefs.contrast === 'high'}
               onChange={(v) => setPref('contrast', v ? 'high' : 'normal')}
             />
             <ToggleRow
               label="Reduce Transparency"
-              hint="Turns frosted glass into solid dark surfaces"
+              hint="Use solid surfaces in place of frosted glass"
               on={prefs.reduceTransparency}
               onChange={(v) => setPref('reduceTransparency', v)}
             />
-          </div>
-        );
-
-      case 'mascot':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={SECTION_TITLE}>Mascot Species (14 Options)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 10 }}>
-              {ANIMALS.map((a) => {
-                const active = selectedAnimal === a;
-                return (
-                  <button
-                    key={a}
-                    onClick={() => {
-                      playClick();
-                      setSelectedAnimal(a);
-                      saveProfileField('animal', a);
-                    }}
-                    className="k-chip"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '10px 8px',
-                      borderRadius: 14,
-                      background: active ? 'color-mix(in srgb, var(--acc) 18%, var(--card2))' : 'var(--card2)',
-                      border: active ? '2px solid var(--acc)' : '1px solid var(--line2)',
-                    }}
-                  >
-                    <Mascot id="preview" animal={a} size={38} mood="blazing" />
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: active ? 'var(--accTx)' : 'var(--tx)' }}>
-                      {a}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ ...SECTION_TITLE, marginTop: 12 }}>Display Style</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
-                { v: 'head', n: 'Classic Head', hint: 'Compact 48px avatar' },
-                { v: 'full', n: 'Full Body', hint: 'Expressive pose with gear' },
-              ].map((m) => (
-                <button
-                  key={m.v}
-                  onClick={() => setPref('mascotVariant', m.v as Prefs['mascotVariant'])}
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 3,
-                    padding: '12px',
-                    borderRadius: 12,
-                    background: prefs.mascotVariant === m.v ? 'var(--acc)' : 'var(--card2)',
-                    color: prefs.mascotVariant === m.v ? '#0C0F16' : 'var(--tx)',
-                    border: '1px solid var(--line2)',
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 800 }}>{m.n}</span>
-                  <span style={{ fontSize: 10, opacity: 0.8 }}>{m.hint}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Live Preview */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 16,
-                padding: 16,
-                borderRadius: 16,
-                background: 'var(--card2)',
-                border: '1px solid var(--line2)',
-                marginTop: 6,
-              }}
-            >
-              <Mascot id="preview" animal={selectedAnimal} size={64} variant={prefs.mascotVariant} mood="celebrating" />
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 800, textTransform: 'capitalize' }}>{selectedAnimal} Buddy</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>Ready for study sprint & quests</div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'avatar':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={SECTION_TITLE}>Vector Avatar Builder</div>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-              <div
-                style={{
-                  width: 90,
-                  height: 90,
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  background: `linear-gradient(135deg, ${AV.bg.find((b) => b.id === avatarPieces.bg)?.v || '#7C6CFF,#38D6F2'})`,
-                  boxShadow: 'var(--sh)',
-                  display: 'grid',
-                  placeItems: 'center',
-                }}
-              >
-                <svg viewBox="0 0 100 100" width={90} height={90}>
-                  {/* Face */}
-                  <path d={AV.face.find((f) => f.id === avatarPieces.face)?.v || AV.face[0].v} fill={AV.skin.find((s) => s.id === avatarPieces.skin)?.v || AV.skin[0].v} />
-                  {/* Hair */}
-                  {avatarPieces.hair !== 'bald' && (
-                    <path d={AV.hair.find((h) => h.id === avatarPieces.hair)?.v} fill="#242132" />
-                  )}
-                  {/* Eyes */}
-                  <path d={AV.eyes.find((e) => e.id === avatarPieces.eyes)?.v} fill="#1C1A24" />
-                  {/* Glasses */}
-                  {avatarPieces.glasses !== 'none' && (
-                    <path d={AV.glasses.find((g) => g.id === avatarPieces.glasses)?.v} stroke="#1C1A24" strokeWidth="2.5" fill="none" />
-                  )}
-                </svg>
-              </div>
-            </div>
-
-            {AV_ORDER.map((layer) => (
-              <div key={layer}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'capitalize', marginBottom: 6 }}>{layer}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {AV[layer]?.map((opt) => {
-                    const active = avatarPieces[layer] === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => {
-                          playClick();
-                          const updated = { ...avatarPieces, [layer]: opt.id };
-                          setAvatarPieces(updated);
-                          saveProfileField('avatar_pieces', updated);
-                        }}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: 8,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: active ? 'var(--acc)' : 'var(--card2)',
-                          color: active ? '#0C0F16' : 'var(--tx2)',
-                          border: '1px solid var(--line2)',
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {opt.id}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
           </div>
         );
 
@@ -1250,8 +741,8 @@ export function SettingsModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={SECTION_TITLE}>Sound Design & Cues</div>
             <ToggleRow
-              label="Enable Procedural Web Audio"
-              hint="Zero-download sound synthesis for checkmarks, level ups, and study bells"
+              label="Sound effects"
+              hint="Soft confirmation sounds and focus bells"
               on={prefs.soundEnabled ?? true}
               onChange={(v) => setPref('soundEnabled', v)}
             />
@@ -1263,21 +754,21 @@ export function SettingsModal({
                 className="hov k-squish"
                 style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700 }}
               >
-                🎵 Tactile Pop
+                Task complete
               </button>
               <button
                 onClick={playCelebration}
                 className="hov k-squish"
                 style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700 }}
               >
-                🎉 Quest Fanfare
+                Celebration
               </button>
               <button
                 onClick={playFocusBell}
                 className="hov k-squish"
                 style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--card2)', border: '1px solid var(--line2)', fontSize: 12, fontWeight: 700 }}
               >
-                🔔 Focus Bell
+                Focus bell
               </button>
             </div>
           </div>
@@ -1304,14 +795,7 @@ export function SettingsModal({
                 <span style={{ color: 'var(--tx3)' }}>Version</span>
                 <span style={{ fontWeight: 700 }}>v{APP_VERSION}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--tx3)' }}>Framework</span>
-                <span style={{ fontWeight: 700 }}>Next.js Static + Capacitor</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--tx3)' }}>Offline Storage</span>
-                <span style={{ fontWeight: 700, color: PAL.mint }}>Synced</span>
-              </div>
+              <p style={{ color: 'var(--tx2)', lineHeight: 1.6, margin: 0 }}>Your space for study, plans, and everyday progress.</p>
             </div>
           </div>
         );
@@ -1356,29 +840,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>{hint}</div>}
     </div>
-  );
-}
-
-function ThemeBtn({ active, icon, label, onClick }: { active: boolean; icon: IconName; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '5px 10px',
-        borderRadius: 6,
-        background: active ? 'var(--acc)' : 'transparent',
-        color: active ? '#0C0F16' : 'var(--tx2)',
-        fontSize: 11.5,
-        fontWeight: 700,
-        border: 'none',
-      }}
-    >
-      <Icon name={icon} size={13} color={active ? '#0C0F16' : 'var(--tx2)'} />
-      {label}
-    </button>
   );
 }
 

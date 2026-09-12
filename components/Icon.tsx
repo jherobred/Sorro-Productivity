@@ -8,6 +8,13 @@
  */
 
 export const ICONS = {
+  cursor: 'M4 3 20 13l-7 1-4 7z',
+  camera: 'M4 6h4l1.5-3h5L16 6h4v14H4zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  arrowRight: 'M4 12h16M13 5l7 7-7 7',
+  arrowR: 'M4 12h16M13 5l7 7-7 7',
+  panelLeft: 'M3 4h18v16H3zM9 4v16M6 9v6',
+  chevR: 'm9 5 7 7-7 7',
+  sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19',
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z',
   cal: 'M3 5h18v16H3zM8 3v4M16 3v4M3 11h18',
   task: 'M3 3h18v18H3zm5 9 3 3 5-6',
@@ -57,6 +64,7 @@ export const ICONS = {
   gym: 'M3 9v6M6 6.5v11M9.5 12h5M18 6.5v11M21 9v6',
   code: 'm8 8-5 4 5 4M16 8l5 4-5 4M13.5 4.5l-3 15',
   play: 'M7 4.5v15l13-7.5z',
+  pause: 'M8 5v14M16 5v14',
   back: 'M15 6l-6 6 6 6',
   moon: 'M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z',
   drop: 'M12 3c3.5 4.2 5.5 7 5.5 9.6A5.5 5.5 0 0 1 6.5 12.6C6.5 10 8.5 7.2 12 3z',

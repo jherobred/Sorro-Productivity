@@ -1,192 +1,43 @@
 'use client';
-
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Icon, type IconName } from './Icon';
-import { supabase } from '@/lib/supabase';
-import { usePrefs } from '@/lib/prefs';
-import { toast } from '@/lib/toast';
-import { COMMUNITY_PROFILES } from '@/lib/people';
-
-/**
- * Search + command palette. Ported from Basedly.dc.html markup 2572–2590 —
- * a `rise` panel, 520px wide, grouped rows under 9.5px kickers.
- */
-
-type Row = { id: string; n: string; m: string; ic: IconName; go: () => void };
-type Group = { g: string; items: Row[] };
-
-const SECTIONS: [string, string, IconName][] = [
-  ['home', 'Home', 'home'], ['calendar', 'Calendar', 'cal'], ['tasks', 'Tasks', 'task'],
-  ['notebooks', 'Notebooks', 'book'], ['projects', 'Projects', 'proj'], ['habits', 'Habits', 'habit'],
-  ['gym', 'Gym', 'heart'], ['fuel', 'Fuel', 'food'],
-  ['money', 'Money', 'money'], ['community', 'Community', 'chat'],
-  ['files', 'Files', 'files'], ['people', 'People', 'people'], ['profile', 'Profile', 'focus'],
-];
-
-export function SearchPalette({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
-  const { prefs, update } = usePrefs();
-  const [q, setQ] = useState('');
-  const [hits, setHits] = useState<Group[]>([]);
-  // Bumped on every debounced fetch; a response only lands if it's still the
-  // latest, so a slow earlier keystroke can't overwrite newer results.
-  const reqIdRef = useRef(0);
-
-  useEffect(() => {
-    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    const term = q.trim();
-    if (!term) { setHits([]); return; }
-    const t = setTimeout(async () => {
-      const id = ++reqIdRef.current;
-      const like = `%${term}%`;
-      const needle = term.replace(/^@/, '').toLowerCase();
-      const [tasks, notes, events, people, profilesRes, projectsRes] = await Promise.all([
-        supabase.from('bd_tasks').select('id,title').is('deleted_at', null).ilike('title', like).limit(5),
-        supabase.from('bd_notes').select('id,title,body').is('deleted_at', null)
-          .or(`title.ilike.${like},body.ilike.${like}`).limit(5),
-        supabase.from('bd_events').select('id,title,starts_at').is('deleted_at', null).ilike('title', like).limit(5),
-        supabase.from('bd_people').select('id,name,category').ilike('name', like).limit(5),
-        supabase.from('bd_profiles').select('user_id,name,handle,animal').or(`name.ilike.${like},handle.ilike.${like}`).limit(5),
-        supabase.from('bd_projects').select('id,name').is('deleted_at', null).ilike('name', like).limit(5),
-      ]);
-      if (id !== reqIdRef.current) return;
-      const g: Group[] = [];
-      const jump = (path: string) => () => { router.push(path); onClose(); };
-
-      const foundPeople: Row[] = [];
-      const seenHandles = new Set<string>();
-
-      if (profilesRes.data?.length) {
-        for (const p of profilesRes.data) {
-          const h = (p.handle || p.name || p.user_id).replace(/^@/, '');
-          seenHandles.add(h.toLowerCase());
-          foundPeople.push({ id: p.user_id, n: p.name || `@${h}`, m: `@${h} · View profile`, ic: 'focus', go: jump(`/profile/?u=${encodeURIComponent(h)}`) });
-        }
-      }
-
-      for (const [key, p] of Object.entries(COMMUNITY_PROFILES)) {
-        const h = (p.handle || key).toLowerCase();
-        if ((h.includes(needle) || p.name.toLowerCase().includes(needle)) && !seenHandles.has(h)) {
-          seenHandles.add(h);
-          foundPeople.push({ id: p.user_id, n: p.name, m: `@${p.handle} · Basedly Community`, ic: 'focus', go: jump(`/profile/?u=${encodeURIComponent(p.handle || h)}`) });
-        }
-      }
-
-      if (people.data?.length) {
-        for (const p of people.data) {
-          const h = p.name.toLowerCase().replace(/\s+/g, '');
-          if (!seenHandles.has(h)) {
-            seenHandles.add(h);
-            foundPeople.push({ id: p.id, n: p.name, m: `${p.category} · View profile`, ic: 'people', go: jump(`/profile/?u=${encodeURIComponent(h)}`) });
-          }
-        }
-      }
-
-      if (foundPeople.length) g.push({ g: 'People', items: foundPeople });
-      if (tasks.data?.length) g.push({ g: 'Tasks', items: tasks.data.map((r) => ({ id: r.id, n: r.title, m: 'Task', ic: 'task', go: jump(`/tasks/?detail=${r.id}`) })) });
-      if (notes.data?.length) g.push({ g: 'Notes', items: notes.data.map((r) => ({ id: r.id, n: r.title || 'Untitled', m: r.title.toLowerCase().includes(term.toLowerCase()) ? 'Note' : 'In the text', ic: 'book', go: jump(`/notebooks/?open=${r.id}`) })) });
-      if (events.data?.length) g.push({ g: 'Calendar Events', items: events.data.map((r) => ({ id: r.id, n: r.title, m: new Date(r.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), ic: 'cal', go: jump('/calendar/') })) });
-      if (projectsRes.data?.length) g.push({ g: 'Projects', items: projectsRes.data.map((r) => ({ id: r.id, n: r.name, m: 'Project', ic: 'proj', go: jump(`/projects/${r.id}/`) })) });
-      setHits(g);
-    }, 180);
-    return () => clearTimeout(t);
-  }, [q, router, onClose]);
-
-  const quickCommands = useMemo<Group[]>(() => {
-    const term = q.trim().toLowerCase();
-    const dark = prefs.theme === 'dark';
-    const allCommands: Row[] = [
-      { id: 'cmd-task', n: 'Create new task', m: 'Quick action (T)', ic: 'taskPlus', go: () => { onClose(); router.push('/tasks/'); } },
-      { id: 'cmd-note', n: 'Create new note', m: 'Quick action (N)', ic: 'bookPlus', go: () => { onClose(); router.push('/notebooks/'); } },
-      { id: 'cmd-expense', n: 'Log new expense', m: 'Quick action (E)', ic: 'money', go: () => { onClose(); router.push('/money/'); } },
-      { id: 'cmd-theme', n: dark ? 'Switch to Light Theme' : 'Switch to Dark Theme', m: 'Preferences (⌘+Shift+L)', ic: 'moon', go: () => { void update({ theme: dark ? 'light' : 'dark' }); toast(dark ? 'Switched to Light theme' : 'Switched to Dark theme'); onClose(); } },
-    ];
-    const filtered = allCommands.filter(c => !term || c.n.toLowerCase().includes(term) || c.m.toLowerCase().includes(term));
-    return filtered.length ? [{ g: 'Quick Actions & Commands', items: filtered }] : [];
-  }, [q, prefs.theme, update, router, onClose]);
-
-  const groups = q.trim() ? [...quickCommands, ...hits] : [...quickCommands];
-  const allItems = useMemo(() => groups.flatMap(g => g.items), [groups]);
-  const [selIndex, setSelIndex] = useState(0);
-
-  useEffect(() => { setSelIndex(0); }, [allItems.length]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); setSelIndex(i => (i + 1) % (allItems.length || 1)); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIndex(i => (i - 1 + allItems.length) % (allItems.length || 1)); }
-      else if (e.key === 'Enter') { e.preventDefault(); if (allItems[selIndex]) allItems[selIndex].go(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, allItems, selIndex]);
-
-  const getGroupStyle = (g: string) => {
-    if (g === 'Quick Actions & Commands') return { bg: 'color-mix(in srgb, var(--acc) 15%, transparent)', fg: 'var(--accTx)' };
-    if (g === 'Tasks') return { bg: 'color-mix(in srgb, var(--pal-coral) 15%, transparent)', fg: 'var(--pal-coral)' };
-    if (g === 'Notes') return { bg: 'color-mix(in srgb, var(--pal-amber) 15%, transparent)', fg: 'var(--pal-amber)' };
-    if (g === 'Calendar Events') return { bg: 'color-mix(in srgb, var(--pal-mint) 15%, transparent)', fg: 'var(--pal-mint)' };
-    if (g === 'People') return { bg: 'color-mix(in srgb, var(--pal-sky) 15%, transparent)', fg: 'var(--pal-sky)' };
-    if (g === 'Projects') return { bg: 'color-mix(in srgb, var(--pal-lavender) 15%, transparent)', fg: 'var(--pal-lavender)' };
-    return { bg: 'var(--card2)', fg: 'var(--tx2)' };
-  };
-
-  return (
-    <>
-      <div onClick={onClose} className="fade" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.34)', zIndex: 50 }} />
-      <div className="rise" style={{
-        position: 'fixed', top: 8, left: '50%', transform: 'translateX(-50%)',
-        width: 520, maxWidth: 'calc(100% - 36px)', zIndex: 51,
-        background: 'var(--card)', borderRadius: 16, boxShadow: 'var(--shl)',
-        padding: 8, maxHeight: '70%', overflowY: 'auto',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 10px' }}>
-          <Icon name="search" size={16} color="var(--tx2)" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search everything or type a command…"
-            style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--tx)', border: 'none', outline: 'none', background: 'transparent' }} />
-          <kbd style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--card2)', color: 'var(--tx3)', border: '1px solid var(--line2)' }}>ESC</kbd>
-          <button onClick={onClose} className="hov" style={{ width: 24, height: 24, borderRadius: 7, color: 'var(--tx3)', fontSize: 14 }}>×</button>
-        </div>
-
-        {groups.map((g) => (
-          <div key={g.g} style={{ marginBottom: 6 }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)', padding: '8px 10px 5px' }}>
-              {g.g}
-            </div>
-            {g.items.map((r, i) => {
-              const globalIndex = groups.slice(0, groups.indexOf(g)).reduce((acc, curr) => acc + curr.items.length, 0) + i;
-              const selected = selIndex === globalIndex;
-              const style = getGroupStyle(g.g);
-              return (
-                <button key={`${g.g}-${r.id}`} onClick={r.go} className={`hov lensrow ${selected ? 'selected' : ''}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', borderRadius: 9, textAlign: 'left', background: selected ? 'var(--card2)' : 'transparent', border: 'none', cursor: 'pointer' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: style.bg, flex: 'none' }}>
-                    <Icon name={r.ic} size={15} color={style.fg} />
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: selected ? 700 : 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.n}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{r.m}</span>
-                  </span>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--tx3)' }}>{g.g}</span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
-
-        {q.trim() && groups.length === 0 && (
-          <div style={{ fontSize: 12.5, color: 'var(--tx3)', padding: '10px 12px 14px' }}>Nothing matches “{q.trim()}”.</div>
-        )}
-      </div>
-    </>
-  );
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {useRouter} from 'next/navigation';
+import {Icon,type IconName} from './Icon';
+import {DESTINATIONS} from '@/lib/destinations';
+import {useOverlayBack} from '@/lib/nav';
+import {supabase} from '@/lib/supabase';
+import {queryClient} from '@/lib/offline';
+type Hit={id:string;title:string;group:string;icon:IconName;path:string};
+export function SearchPalette({onClose}:{onClose:()=>void}){
+ const router=useRouter(),input=useRef<HTMLInputElement>(null),close=useRef(onClose);close.current=onClose;
+ const [q,setQ]=useState(''),[hits,setHits]=useState<Hit[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(false),[selected,setSelected]=useState(0);
+ useOverlayBack(true,onClose);
+ useEffect(()=>{input.current?.focus();},[]);
+ useEffect(()=>{
+  const term=q.trim();const abort=new AbortController();setSelected(0);setError(false);
+  if(!term){setHits([]);setBusy(false);return;}
+  const cached:Hit[]=[];
+  for(const [key,group,icon,path] of [['tasks','Tasks','task','/tasks/?detail='],['notes','Pages','book','/notebooks/?open=']] as const){
+   const rows=queryClient.getQueryData<{id:string;title:string}[]>([key])||[];
+   for(const row of rows)if(row.title.toLowerCase().includes(term.toLowerCase()))cached.push({id:row.id,title:row.title,group,icon,path:path+row.id});
+  }setHits(cached.slice(0,12));setBusy(true);
+  const timer=setTimeout(async()=>{
+   try{const like='%'+term.replace(/[%_]/g,'')+'%';
+    const results=await Promise.all([
+     supabase.from('bd_tasks').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
+     supabase.from('bd_notes').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
+     supabase.from('bd_events').select('id,title').is('deleted_at',null).ilike('title',like).limit(5).abortSignal(abort.signal)
+    ]);if(abort.signal.aborted)return;
+    const remote:Hit[]=[];results.forEach((r,i)=>{for(const row of r.data||[])remote.push({id:row.id,title:row.title,group:['Tasks','Pages','Calendar'][i],icon:(['task','book','cal'] as const)[i],path:['/tasks/?detail=','/notebooks/?open=','/calendar/?event='][i]+row.id});});
+    setHits([...new Map([...cached,...remote].map(r=>[r.group+r.id,r])).values()].slice(0,20));setError(results.some(r=>r.error));setBusy(false);
+   }catch{if(!abort.signal.aborted){setError(true);setBusy(false);}}
+  },180);return()=>{abort.abort();clearTimeout(timer);};
+ },[q]);
+ const destinations=useMemo(()=>DESTINATIONS.filter(d=>!q||d.name.toLowerCase().includes(q.toLowerCase())).map(d=>({id:d.id,title:d.name,group:'Go to',icon:d.icon,path:'/'+d.id+'/'})),[q]);
+ const rows=[...hits,...destinations];const go=(row:Hit)=>{close.current();router.push(row.path);};
+ return <div className="search-backdrop" onClick={onClose}><section className="search-dialog" role="dialog" aria-modal="true" aria-label="Search your workspace" onClick={e=>e.stopPropagation()} onKeyDown={e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();setSelected(i=>(i+1)%Math.max(1,rows.length));}
+  if(e.key==='ArrowUp'){e.preventDefault();setSelected(i=>(i-1+rows.length)%Math.max(1,rows.length));}
+  if(e.key==='Enter'&&rows[selected]){e.preventDefault();go(rows[selected]);}
+  if(e.key==='Tab'){const list=Array.from(e.currentTarget.querySelectorAll<HTMLElement>('input,button'));const first=list[0],last=list.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}
+ }}><header><Icon name="search" size={22}/><input ref={input} aria-label="Search tasks, pages and calendar" placeholder="Find a task, page or place…" value={q} onChange={e=>setQ(e.target.value)} /><button aria-label="Close search" onClick={onClose}><Icon name="close" size={18}/></button></header><div className="search-results">{rows.map((r,i)=><button key={r.group+r.id} className={i===selected?'is-selected':''} onClick={()=>go(r)}><Icon name={r.icon} size={19}/><span>{r.title||'Untitled'}<small>{r.group}</small></span><Icon name="arrowR" size={15}/></button>)}{busy&&<p role="status">Searching…</p>}{!busy&&!rows.length&&<p>No matches. Try a different title.</p>}{error&&<p role="status">Online search is unavailable. Showing results saved on this device.</p>}</div><footer>↑ ↓ to move · Enter to open · Esc to close</footer></section></div>;
 }

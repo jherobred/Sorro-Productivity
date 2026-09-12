@@ -106,13 +106,14 @@ function PinGate({ onPass }: { onPass: () => void }) {
  * them while To buy and Subscriptions had one.
  */
 function Section({
-  title, note, children, delay = 0,
+  title, note, children, delay = 0, flat = false,
 }: {
   title: string;
   /** The right-hand caption: a count, a period, a filter, a state. */
   note?: React.ReactNode;
   children: React.ReactNode;
   delay?: number;
+  flat?: boolean;
 }) {
   const { prefs } = usePrefs();
   return (
@@ -120,7 +121,7 @@ function Section({
       initial={prefs.motion ? { opacity: 0, y: 12 } : false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...SPRING, delay }}
-      style={CARD}
+      style={flat ? {padding:'4px 0',minWidth:0} : CARD}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <h2 style={{ ...KICKER, margin: 0 }}>{title}</h2>
@@ -379,7 +380,7 @@ function Money() {
 
   if (isPending) {
     return (
-      <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1480, marginInline: 'auto' }}>
+      <div style={{ padding: '0 0 28px', maxWidth: 1480, marginInline: 'auto' }}>
         <MoneySkeleton />
       </div>
     );
@@ -389,7 +390,7 @@ function Money() {
      it — it is the same tab zoomed in, not another panel to scroll past. */
   if (inside && openJar) {
     return (
-      <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 860, marginInline: 'auto' }}>
+      <div style={{ padding: '0 0 28px', maxWidth: 860, marginInline: 'auto' }}>
         <JarPage
           jar={openJar}
           txns={txns}
@@ -404,7 +405,7 @@ function Money() {
   }
 
   return (
-    <div style={{ padding: phone ? '14px 14px 24px' : '20px 24px 28px', maxWidth: 1480, marginInline: 'auto' }}>
+    <div style={{ padding: '0 0 28px', maxWidth: 1480, marginInline: 'auto' }}>
       <Header
         phone={phone}
         balance={balance}
@@ -415,9 +416,8 @@ function Money() {
 
       {/* Three columns on a desktop, one on a phone. The proportions put the
           pad in a rail it fits rather than one it has to be stretched across. */}
-      <div style={{
+      <div className="money-columns" style={{
         display: 'grid',
-        gridTemplateColumns: phone ? '1fr' : 'minmax(280px, 320px) minmax(0, 1.25fr) minmax(300px, 0.95fr)',
         gap: 14, alignItems: 'start', marginTop: 14,
       }}>
 
@@ -499,6 +499,7 @@ function Money() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Section
             title="Jars"
+            flat
             note={
               <span style={{ color: armedJar ? MINT : 'var(--tx3)', fontWeight: armedJar ? 700 : 400 }}>
                 {armedJar ? `Logging into ${armedJar.category}` : 'Tap to aim · twice to open'}
@@ -872,7 +873,7 @@ function Header({
       style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}
     >
       <div>
-        <h1 style={{ ...KICKER, margin: 0 }}>Money</h1>
+        <h1 className="section-title">Money</h1>
         <div className="num" style={{
           fontSize: phone ? 30 : 38, fontWeight: 800, letterSpacing: '-.045em', lineHeight: 1.05, marginTop: 4,
         }}>

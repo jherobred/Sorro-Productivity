@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { BirdMascot } from '@/components/BasedlyLogo';
+
 
 
 /**
@@ -27,25 +27,12 @@ export default function AuthCallback() {
         return;
       }
 
-      const userId = data.session.user.id;
-      const { data: profile } = await supabase
-        .from('bd_profiles')
-        .select('onboarded_at')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      // Where they were headed before the sign-in interrupted them — a shared
-      // profile link, usually. Onboarding still wins the first time round,
-      // because a half-made account has nothing to show anybody.
       let back: string | null = null;
       try {
         back = sessionStorage.getItem('basedly-after-auth');
         sessionStorage.removeItem('basedly-after-auth');
       } catch { /* private mode */ }
 
-      if (!profile?.onboarded_at) { router.replace('/onboarding/'); return; }
       // Only same-origin app paths, so a stored value can never become an
       // open redirect: it must start with a single slash.
       router.replace(back && /^\/[^/]/.test(back) ? back : '/home/');
@@ -76,7 +63,7 @@ export default function AuthCallback() {
           </button>
         </div>
       ) : (
-        <BirdMascot size={36} className="glowring" />
+        <span role="status">Opening your workspace…</span>
       )}
     </main>
   );

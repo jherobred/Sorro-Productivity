@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
 import { useLayout } from '@/lib/useLayout';
@@ -10,7 +10,6 @@ import { usePrefs } from '@/lib/prefs';
 import { useWorkspaces, useWorkspaceActions, type Workspace } from '@/lib/workspaces';
 import { SpaceSheet } from './SpaceSheet';
 import { useAccounts, switchTo, addAccount, forget, signOutAll } from '@/lib/accounts';
-import { profileLink } from '@/lib/people';
 import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { PAL } from '@/lib/pal';
@@ -36,35 +35,16 @@ export function AccountSheet({
   onClose: () => void;
   onSettings: () => void;
 }) {
-  const router = useRouter();
+
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const { data: workspaces = [] } = useWorkspaces();
   const WA = useWorkspaceActions();
   const accounts = useAccounts();
-  const [copied, setCopied] = useState(false);
+
   /** The space being managed, on top of this sheet. */
   const [managing, setManaging] = useState<Workspace | null>(null);
   useOverlayBack(true, onClose);
-
-  const link = profileLink(me.handle);
-
-  const go = (href: string) => { onClose(); router.push(href); };
-
-  /**
-   * Copy, or hand off to the system share sheet where there is one. Both, in
-   * that order, because `navigator.share` needs a gesture and a secure context
-   * and is simply absent on most desktop browsers.
-   */
-  const share = async () => {
-    if (!link) { toast('Set a handle first — your link is built from it'); go('/profile/'); return; }
-    try {
-      if (navigator.share) { await navigator.share({ title: me.name || 'Basedly', url: link }); return; }
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      toast('Link copied');
-    } catch { /* dismissed the share sheet, or no clipboard permission */ }
-  };
 
   const body = (
     <div onClick={onClose} style={{
@@ -100,35 +80,13 @@ export function AccountSheet({
                 {me.name || 'Your account'}
               </span>
               <span style={{ display: 'block', fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {me.handle ? `@${me.handle}` : 'No handle yet'}
+                {'Personal workspace'}
               </span>
             </span>
-            <button onClick={() => go('/profile/')} className="hov k-squish" title="Edit your profile"
-              aria-label="Edit your profile"
-              style={{ width: 34, height: 34, flex: 'none', borderRadius: 10, border: '1px solid var(--line2)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="pen" size={15} color="var(--tx2)" />
-            </button>
+
           </div>
 
-          {/* Your link. A handle is the only thing that makes one, which is why
-              this says so rather than showing a dead button. */}
-          <button onClick={() => void share()} className="hov k-squish"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 11px',
-              borderRadius: 11, border: '1px dashed var(--line2)', minHeight: 44, marginBottom: 12,
-            }}>
-            <Icon name={copied ? 'check' : 'upload'} size={14} color="var(--accTx)" />
-            <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-              <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
-                {me.handle ? 'Share your profile link' : 'Set a handle to get a link'}
-              </span>
-              <span style={{ display: 'block', fontSize: 10, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {link ?? 'People need it to message you'}
-              </span>
-            </span>
-          </button>
-
-          {/* ----------------------------------------------------- accounts */}
+          {/* Account switching remains available on every device. */}
           <Kicker>Accounts</Kicker>
 
           {accounts.map((a) => {

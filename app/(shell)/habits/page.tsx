@@ -23,7 +23,7 @@ import {
   type TimeOfDay,
   HABIT_CATEGORIES,
 } from '@/lib/habits';
-import { Buddy } from '@/components/Buddy';
+
 /* Only on screen while you are making or editing a habit. */
 const HabitCreatorModal = dynamic(() => import('@/components/habits/HabitCreatorModal').then((m) => m.HabitCreatorModal), { ssr: false });
 const HabitTimerModal = dynamic(() => import('@/components/habits/HabitTimerModal').then((m) => m.HabitTimerModal), { ssr: false });
@@ -165,7 +165,7 @@ export default function HabitsPage() {
 
   return (
     <div style={{
-      padding: phone ? '14px 14px 30px' : 'clamp(18px, 2.2vw, 30px) clamp(20px, 2.6vw, 40px) 48px',
+      padding: '0 0 32px',
       maxWidth: 1720,
       marginInline: 'auto',
       width: '100%',
@@ -551,39 +551,16 @@ function Hero({
         padding: phone ? '15px 15px 17px' : '18px 22px 20px',
       }}
     >
-      {/* A wash that leans harder the more of today is done. */}
-      <motion.span
-        aria-hidden
-        initial={false}
-        animate={{ opacity: 0.35 + (pct / 100) * 0.65 }}
-        transition={{ duration: 0.8 }}
-        style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: `radial-gradient(90% 140% at 8% 0%, color-mix(in srgb, ${hue} 16%, transparent) 0%, transparent 58%)`,
-        }}
-      />
 
       <div style={{
         position: 'relative', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-          <Buddy
-            daysSince={g.todayCompleted > 0 ? 0 : 1}
-            size={phone ? 46 : 54}
-            racing={g.todayCompleted > 0}
-            note={
-              g.isPerfectToday
-                ? 'Every habit done today.'
-                : g.todayCompleted > 0
-                  ? `${g.activeCount - g.todayCompleted} left before midnight.`
-                  : 'Nothing ticked yet today.'
-            }
-          />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{
-                fontSize: phone ? 21 : 25, fontWeight: 800, margin: 0,
+                fontSize: phone ? 30 : 40, fontWeight: 800, margin: 0,
                 letterSpacing: '-.03em', color: 'var(--tx)',
               }}>
                 Habits

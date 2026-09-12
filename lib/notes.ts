@@ -49,8 +49,12 @@ const pending = new Map<string, { title: string; body: string }>();
 export const markPending = (id: string, v: { title: string; body: string }) => { pending.set(id, v); };
 export const clearPending = (id: string) => { pending.delete(id); };
 
-const overlay = (rows: Note[]): Note[] =>
-  rows.map((n) => (pending.has(n.id) ? { ...n, ...pending.get(n.id)! } : n));
+const overlay = (rows: Note[]): Note[] => {
+  const known = new Set(rows.map(n => n.id));
+  const drafts = (queryClient.getQueryData<Note[]>(NOTE_KEY) ?? [])
+    .filter(n => !known.has(n.id) && !n.deleted_at && pending.has(n.id));
+  return [...drafts, ...rows].map(n => pending.has(n.id) ? {...n, ...pending.get(n.id)!} : n);
+};
 
 /* ------------------------------------------------------------------- reads */
 
@@ -162,8 +166,10 @@ const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
 
 const NEW_NOTE = defineMutation('nb2.newNote', async (v: { id: string; notebook_id: string; title: string; body: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_notes').insert({ ...v, user_id, position: 0 });
+  const { error } = await supabase.from('bd_notes').upsert({ ...v, user_id, position: 0 }, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw error;
+  const draft = pending.get(v.id);
+  if (draft?.title === v.title && draft.body === v.body) pending.delete(v.id);
 });
 
 /** Rule 1: upsert, so a save can never lose a race with its own insert. */
@@ -257,12 +263,14 @@ export function useNoteActions() {
 
   const newNote = useMutation<unknown, Error, { id: string; notebook_id: string; title: string; body: string }, Note[]>({
     mutationKey: NEW_NOTE,
-    onMutate: (v) => patchNotes((p) => [{
+    onMutate: (v) => { markPending(v.id, v); return patchNotes((p) => [{
       ...v, position: 0, created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(), deleted_at: null,
-    }, ...p]),
-    onError: rollbackNotes,
-    onSettled: settle,
+    }, ...p]); },
+    // Keep a newly opened page if creation fails while its editor is already
+    // saving. A rollback here would remove newer work from the library.
+    onError: (e) => toast(`Page kept on this device — ${e.message}`),
+    onSuccess: settle,
   });
 
   /**

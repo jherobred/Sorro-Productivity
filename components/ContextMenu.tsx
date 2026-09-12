@@ -6,6 +6,7 @@ import { Icon, type IconName } from './Icon';
 import { lg } from '@/lib/glass';
 import { PAL } from '@/lib/pal';
 import { useLayout } from '@/lib/useLayout';
+import { useOverlayBack } from '@/lib/nav';
 
 /**
  * One row. `run` OR `items` — a row that opens a submenu does not also act,
@@ -55,18 +56,15 @@ export function ContextMenu({
   items: CtxContent; onClose: () => void; accent: string; dark: boolean;
 }) {
   const { phone } = useLayout();
+  useOverlayBack(true, onClose);
 
   useEffect(() => {
     const close = () => onClose();
-    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     // Defer so the opening gesture's own pointerup does not close it.
     const t = setTimeout(() => window.addEventListener('pointerdown', close, { once: true }), 0);
-    window.addEventListener('keydown', onKey);
     return () => {
       clearTimeout(t);
       window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
 

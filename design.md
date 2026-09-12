@@ -1,125 +1,213 @@
-# Basedly design.md — the Sundae system
+---
+name: Basedly
+description: A motivating student workspace with bold discovery and calm work.
+colors:
+  dark-poster-blue: "#345cff"
+  dark-poster-yellow: "#f5df4d"
+  dark-poster-red: "#f26047"
+  poster-blue: "#3165f5"
+  poster-yellow: "#f4d65d"
+  poster-red: "#f16d56"
+  dark-bg: "#111315"
+  dark-panel: "#17191c"
+  dark-card: "#1c1f22"
+  dark-card2: "#25292d"
+  dark-text: "#f5f4ef"
+  dark-text-secondary: "#c2c5c8"
+  dark-text-muted: "#959bA1"
+  dark-line: "#ffffff12"
+  dark-line-strong: "#ffffff26"
+  dark-editor-paper: "#191c1f"
+  light-bg: "#f7f7f2"
+  light-panel: "#efefea"
+  light-card: "#fff"
+  light-card2: "#eeefea"
+  light-text: "#171a1d"
+  light-text-secondary: "#52595e"
+  light-text-muted: "#636b71"
+  light-line: "#171a1d12"
+  light-line-strong: "#171a1d24"
+  cover-label: "#f8f6ef"
+typography:
+  display:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    fontSize: "clamp(40px,4.6vw,65px)"
+    fontWeight: 650
+    lineHeight: 1.02
+    letterSpacing: "-.04em"
+  body:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+    fontSize: "14px"
+  title:
+    fontSize: "21px"
+    fontWeight: 650
+    letterSpacing: "-.025em"
+  label:
+    fontSize: "13px"
+    fontWeight: 550
+  mono:
+    fontFamily: 'ui-monospace, "SFMono-Regular", Consolas, monospace'
+  wordmark:
+    fontFamily: "Familjen Grotesk, sans-serif"
+    fontSize: "28px"
+    fontWeight: 800
+    lineHeight: 1
+    letterSpacing: "-.03em"
+rounded:
+  label: "3px"
+  badge: "5px"
+  control: "10px"
+  navigation: "11px"
+  cover: "12px"
+  capture: "13px"
+  priority: "15px"
+  dialog: "22px"
+spacing:
+  compact: "8px"
+  control: "12px"
+  related: "16px"
+  phone-gutter: "18px"
+  panel: "24px"
+  desktop-gutter: "38px"
+components:
+  button-primary:
+    backgroundColor: "var(--poster-blue)"
+    textColor: "#fff"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
+  button-secondary:
+    backgroundColor: "var(--card)"
+    textColor: "var(--tx)"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
+  input:
+    backgroundColor: "var(--card)"
+    textColor: "var(--tx)"
+    rounded: "{rounded.control}"
+    padding: "11px 13px"
+  navigation:
+    textColor: "var(--tx2)"
+    rounded: "{rounded.navigation}"
+    padding: "10px 13px"
+  page-kind:
+    backgroundColor: "var(--card2)"
+    textColor: "var(--tx2)"
+    rounded: "{rounded.badge}"
+    padding: "6px 9px"
+  priority-panel:
+    backgroundColor: "var(--poster-blue)"
+    textColor: "#fff"
+    rounded: "{rounded.priority}"
+    padding: "24px 27px"
+---
 
-Source of truth for the 2026 friendly-pastel rebrand. Read this before touching
-any component's visuals. Repo rules in `GEMINI.md`; save-behaviour landmines in
-`HANDOFF.md`; the previous (obsidian) look survives only in git history.
+# Design System: Basedly
 
-## Concept
+## Overview
 
-**A desk covered in candy-coloured paper.** Basedly is a friendly productivity
-world with otter mascots; the UI should feel like a well-made stationery shop:
-cream paper, plum ink, candy spot-colours, clay-soft shadows, rounded corners
-you want to poke. Everything is image-led before it is word-led: covers,
-swatches and colour carry the hierarchy; labels stay short.
+**Creative North Star: "Bold discovery, calm work"**
 
-Two themes, one personality:
+A motivating student workspace: confident printed color helps people find a next step, while neutral working surfaces let their own writing and drawings lead. Native platform typography gives the app familiar reading and interaction, with the original lowercase Familjen Grotesk wordmark preserving its identity.
 
-- **Paper (light, default surface for content)** — warm cream ground, off-white
-  cards, plum ink, tinted plum shadows. Never clinical white-on-white.
-- **Plum (dark)** — a warm plum night, not obsidian. Cards are lifted plum,
-  lines are lavender alpha, shadows go soft black. Same candy accents.
+The user pinned this direction in a code-led redesign. It replaces the earlier Sundae, plum, candy and mascot guidance. There is no approved raster composition. This document records the implemented studio system, primarily the final overrides in app/studio.css, Shell, Today, Notebooks and CoverCapture.
 
-## Tokens
+**Key Characteristics:**
 
-Names never change (hundreds of components read `var(--card)` etc.); values
-did. Defined in `app/globals.css` theme blocks.
+- Neutral near-black and soft-white themes.
+- Electric blue, yellow and red printed accents.
+- Geometric notebook covers and optional real-object cutouts.
+- Grouped rounded navigation, direct libraries and restrained editors.
 
-| Token | Paper (light) | Plum (dark) | Role |
-| --- | --- | --- | --- |
-| `--bg` | `#F3F0EA` | `#141120` | App ground (warm cream / warm plum) |
-| `--panel` | `#ECE8E0` | `#191527` | Rails, wells behind cards |
-| `--card` | `#FDFCF9` | `#201B31` | Any raised surface |
-| `--card2` | `#F5F1E9` | `#2A2440` | Inset surface, chips, tracks |
-| `--line` / `--line2` | plum alpha `.10` / `.20` | lavender alpha `.13` / `.26` | Hairlines |
-| `--tx` / `--tx2` / `--tx3` | `#241F33` / `#5D5875` / `#8B86A3` | `#F2EFFA` / `#B3ACD4` / `#7E7899` | Ink scale |
-| `--sh` | `0 10px 30px rgba(84,58,138,.10), 0 2px 8px rgba(84,58,138,.07)` | `0 10px 30px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3)` | Clay-soft card shadow, tinted plum in light |
-| `--shl` | larger, same hue | same idea | Hover/overlay lift |
-| `--acc` | user-settable, default `#8B7CFF` grape | same | One accent, user-owned |
-| `--pal-*` | coral/indigo/cyan/mint/violet/amber/deep/pink/sky/lime (unchanged) | same | Candy spot colours |
+## Colors
 
-Rules: one accent per surface (`--acc`); spot pastels are category colours, not
-decor; no pure black or white anywhere; shadows always tinted, never grey-black
-on cream.
+The palette combines neutral working surfaces with clear poster colors. The unprefixed poster tokens describe light theme (and an unset theme attribute). The dark-poster tokens describe explicit dark theme: the earlier theme-qualified CSS rule has greater specificity than the later plain-root declarations. Components must read the live CSS variables to preserve this actual theme difference.
 
-## Shape
+### Primary
 
-One scale, documented and reused. Buttons and pills are full-round; cards and
-sheets take the big radii; chips and inputs the middle sizes.
+Electric blue identifies primary actions and the next calendar priority. White text on blue is fixed in either theme.
 
-- `--r-xs: 10` · `--r-sm: 14` · `--r-md: 18` · `--r-lg: 24` · `--r-xl: 32`
-- Cards / covers / shelves: `--r-lg` (24). Sheets and modals: `--r-xl`.
-- Buttons: pill (`999`). Chips, tags, inputs: `--r-sm`. Icon buttons: `--r-sm`.
-- Shape lock: no square corners inside a card, no mixed square pills.
+### Secondary
 
-## Type
+Poster yellow highlights the next or overdue task with dark ink. It also appears in printed imagery and selection feedback.
 
-Unchanged families (self-hosted via next/font, offline-safe for the APK):
-Familjen Grotesk headings, IBM Plex Sans body, IBM Plex Mono labels/numbers.
-Weight and colour carry hierarchy; sizes stay from the existing scale.
+### Tertiary
 
-## Covers — image-led notebooks
+Poster red provides a third printed accent. It is not a universal error token: existing validation and task status treatments retain their own semantic colors.
 
-Every notebook, canvas and graph gets generated cover art
-(`components/notes/NotebookCover.tsx`):
+### Neutral
 
-- Deterministic from the notebook `id`: hash picks 2–3 spot colours, blob
-  positions and rotation. Same notebook, same art, every theme.
-- Built from CSS radial gradients over a `color-mix` of the notebook colour —
-  no network, no image payloads, works in the Capacitor APK offline.
-- The notebook's own colour stays visible as the base tint, so recolouring a
-  notebook visibly changes its cover.
-- Text lives on a progressive-blur veil, never directly on the art.
+The paired dark and light tokens map to the existing bg, panel, card, card2, tx, tx2, tx3, line and line2 CSS variables. The editor uses its paper surface. Cover titles sit on an opaque soft-white label to stay readable over both geometry and photos.
 
-### Progressive blur (`components/core/ProgBlur.tsx`)
+**The Working Surface Rule.** Keep reading and editing grounds neutral; use poster color for discovery, priority and specific actions.
 
-Stacked backdrop-filter layers, blur increasing toward one edge, masked so they
-blend — the iOS-style frosted edge. Used on cover veils and the shelf hero.
+## Typography
 
-- Props: `edge` (bottom/top/left/right), `size`, `strength`, `tint`.
-- Degrades to a tinted gradient scrim where `backdrop-filter` is unsupported.
-- Purely visual: `pointer-events: none`, honours `--anim: paused` (no cost when
-  motion is off since it has no animation).
+Display and body use the native system stacks in the frontmatter. The mono stack serves code and time. The lowercase basedly wordmark alone keeps Familjen Grotesk, provided by the existing font variable.
 
-## Motion (cinematic)
+Display headings are compact and tightly spaced. Library display becomes (48px) on phones. Today has its own greeting scale, from (32px) to (54px), and (35px) on phones. Section titles use the title role. Navigation uses the label role. Note titles currently use (28px) desktop and (22px) phone at weight (800); use the editor's current styles rather than historical title sizes.
 
-Vocabulary lives in `app/kinetics.css` (spring/expo/over/swift curves, squish,
-stagger, ripple, glass) — extend it, never scatter one-off transitions inline.
-Product-motion off switch: `.nomo` flattens every effect; new classes must be
-added to the `.nomo` blocks.
+**The Native Type Rule.** Preserve the original wordmark while all application reading and headings follow the platform font stack.
 
-Layers, cheapest first:
+## Layout
 
-1. **Press feedback on everything tappable** — `.k-squish` (cards, rows) or
-   `.k-chip` (chips, swatches). Non-negotiable baseline.
-2. **Arrival** — `.k-stagger` with `--i` indexes on grids and lists; sections
-   cascade in on tab switch. `.k-bloom` for popovers/palettes.
-3. **Shared-element transitions** — `motion/react` (`motion` v13, installed):
-   `layoutId` pills for active tabs and segmented controls, `AnimatePresence`
-   for sheets. One `useId()` namespace per rail instance.
-4. **Delight** — springy hover lifts (`whileHover`), animated counters in the
-   shelf hero, `k-glass` specular sweeps on primary CTAs.
+The desktop shell has a grouped sidebar (236px), a compact option (72px), a topbar (62px), and a separately scrolling main area. Main padding is (32px 38px 56px). Today has a centered maximum width (1350px). Its two priority panels use a (1.65:1) split; the capture and habits workbench uses (1.2:1).
 
-Rules: animate only `transform`/`opacity`; springs, never linear; every effect
-survives `.nomo` and `prefers-reduced-motion`; motion communicates (feedback,
-arrival, state), it never decorates. No perpetual loops on informational
-surfaces.
+At (1100px) and below, the sidebar narrows to (204px), main gutters become (25px), and library covers use two columns. At (760px) and below, navigation moves to four chosen labeled destinations plus More at the bottom. Main gutters become (18px), safe-area space is retained, and Today panels stack. The library retains two cover columns. At large desktop widths (1600px), the library grows to four columns; otherwise its default is three.
 
-## Component contracts
+Notebook pages open directly from the library. Add page presents a responsive type chooser, followed by quiet full-width rows with title, preview and type. Do not insert a tools dashboard between the library and its pages. Whiteboards and PDF annotation need a navigable canvas beyond the document edges.
 
-- **Buttons**: pill, `min-height 36` desktop / `44` phone (touch target);
-  primary = `--acc` fill with `--ink` text; secondary = `--card` with hairline.
-- **Cards**: `--r-lg`, `--card` fill, `--line2` hairline, `--sh`; hover raises
-  shadow to `--shl` and lifts `-2px`; press squishes.
-- **Covers (notebook/canvas/graph cards)**: art fills the top, name + one
-  metadata line on the blur veil. Words on a card: name, count, when — nothing
-  else. No bullet preview lists on covers.
-- **Empty states**: otter mascot (`public/mascots`) + one sentence + one action.
-- **Both layouts in every pass**: design phone and desktop together; the audit
-  in `research/ux-audit.md` is the regression list (F14/F15 live in notebooks).
+## Elevation & Depth
 
-## Bans (AI-tell list, enforced)
+Tonal layering and fine dividers do most of the work. Small shadows belong to floating surfaces and interactions; overlays have stronger separation. Notebook covers lift on hover (5px) with a short shadow. Cutout objects get a compact drop shadow to read as objects placed on a cover.
 
-No em-dashes in any UI string; no AI-purple glow; no pure `#000`/`#FFF`; no
-three-equal feature cards; no div fake screenshots; no decorative status dots;
-no version footers; no scroll cues; icons stay on the in-house `Icon` mask
-system (2px round-cap, do not swap libraries).
+Motion communicates hover, press, arrival or progress. The studio honors both prefers-reduced-motion and the app motion setting for its animated cover and interface transitions. Preserve that behavior when extending these components. Exact shadow and motion snippets live in the sidecar.
+
+## Shapes
+
+Controls have modest rounded corners, navigation slightly softer corners, and notebook covers and priority panels larger corners. Covers combine flat geometric arcs, rings, bars and halftone texture. Their title label has a tighter corner than the cover. Avoid making every element a pill.
+
+**The Printed Color Rule.** Use solid color and geometric texture for the identity. Do not add decorative gradient fills to the shell or navigation. The transparency checkerboard in the photo preview is functional, not an identity gradient.
+
+## Components
+
+### Buttons
+
+Primary buttons use blue and white; secondary buttons use the current card and text tokens with a fine border. They have a minimum height (42px), compact padding and a press scale (.97). Hover brightens slightly. Keyboard focus is a visible blue outline (2px), offset (4px). Disabled controls remain identifiable and cannot act.
+
+### Inputs / Fields
+
+Search and ordinary form inputs use card backgrounds, fine strong dividers and rounded control corners. Quick capture groups its border around the writing area and actions, with a blue border on focus within. Document title and writing surfaces retain their clean, borderless treatment; do not copy form chrome into the note.
+
+### Navigation
+
+Desktop destinations are grouped under Plan, Think and Self. The active item uses a blue tint, subtle inset outline and short left accent bar, with readable text. Mobile retains labels and a More sheet. Search, settings, theme and account controls remain utilities.
+
+### Chips
+
+Page-type badges use the secondary card surface, muted text and compact rounded blocks. Capture-type toggles show their selected state with a tonal fill. Preserve visible state alongside concise labels.
+
+### Cards / Containers
+
+Priority panels are bold, spacious and immediately actionable. Other content uses neutral surfaces or divided rows. Notebook cover titles use opaque labels over generated geometry or an applied photo. The library cover and its rename/photo utilities are distinct actions.
+
+### Photo covers
+
+Camera or upload leads to photo review, optional on-device cutout, a preview with the real notebook or task title, then Apply. The desktop dialog is at most (600px) wide with (22px) corners. On phones it becomes a bottom sheet with safe-area padding. Keep the model download disclosure, progress, cancel, retry and full-photo path legible. A processed preview is not yet an applied cover. See docs/PHOTO-COVERS.md for the processing, storage and validation contract.
+
+## Do's and Don'ts
+
+### Do:
+
+- Do preserve the lowercase Familjen wordmark and native application fonts.
+- Do keep both themes readable, including fixed ink on printed panels.
+- Do use bold covers and priorities alongside calm reading and editing.
+- Do preserve labeled mobile navigation, visible keyboard focus and reduced motion.
+- Do keep original content and distinct page types reachable in the notebook library.
+
+### Don't:
+
+- Don't restore the old plum, candy, otter or buddy design contract.
+- Don't add decorative gradients to navigation or shell surfaces.
+- Don't gate the direct library behind a tool gallery or onboarding.
+- Don't require background removal to use a photo cover.
+- Don't describe camera hardware, Xiaomi stylus or authenticated cross-device sync as verified without device or session evidence.

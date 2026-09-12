@@ -149,7 +149,8 @@ export function applyPrefs(p: Prefs) {
 function read(): Prefs {
   if (typeof window === 'undefined') return DEFAULT_PREFS;
   try {
-    const stored = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(LS_KEY) || '{}') } as Prefs;
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    const stored = { ...DEFAULT_PREFS, motion: !window.matchMedia('(prefers-reduced-motion: reduce)').matches, ...saved } as Prefs;
     // Everyone who never picked an accent has the old default written to disk,
     // so shipping a new one without this would change nothing for them.
     if (stored.accent === RETIRED_ACCENT) stored.accent = DEFAULT_ACCENT;

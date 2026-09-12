@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -28,11 +27,6 @@ export function ImageAdjuster({
   onClose: () => void;
 }) {
   useOverlayBack(true, onClose);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onClose]);
 
   if (typeof document === 'undefined') return null;
 

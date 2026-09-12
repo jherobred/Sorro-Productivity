@@ -23,15 +23,9 @@ export type Layout = {
 
 export function isPhoneDevice(): boolean {
   if (typeof window === 'undefined') return false;
-  const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-  if (cap?.isNativePlatform?.()) return true;
-
-  const ua = navigator.userAgent || '';
-  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(ua);
-  const isCoarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-  const isNarrow = window.innerWidth < 900;
-
-  return isMobileUA || (isCoarse && isNarrow) || isNarrow;
+  // Tablets and Android WebViews get the same roomy layout as an equally
+  // sized browser. Input capabilities must not force a phone composition.
+  return window.innerWidth <= 760;
 }
 
 const LS_KEY = 'basedly-viewmode';
@@ -47,6 +41,7 @@ function readViewMode(): ViewMode {
 
 let currentViewMode: ViewMode = 'auto';
 let initialized = false;
+let listening = false;
 
 const listeners = new Set<() => void>();
 const emit = () => { for (const l of listeners) l(); };
@@ -102,7 +97,8 @@ export function setViewMode(mode: ViewMode) {
 }
 
 function subscribe(callback: () => void) {
-  if (!initialized && typeof window !== 'undefined') {
+  if (!listening && typeof window !== 'undefined') {
+    listening = true;
     initialized = true;
     currentViewMode = readViewMode();
     cachedLayout = computeLayout();

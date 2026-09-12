@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
-import { Familjen_Grotesk, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
+import { Familjen_Grotesk } from 'next/font/google';
 import './globals.css';
+import './studio.css';
 import { Providers } from './providers';
 
 /* next/font downloads these at build time and emits them as static assets, so
@@ -8,12 +9,6 @@ import { Providers } from './providers';
    --font-body and --font-mono, which is what every component actually reads. */
 const display = Familjen_Grotesk({
   subsets: ['latin'], weight: ['500', '600', '700'], variable: '--f-display', display: 'swap',
-});
-const body = IBM_Plex_Sans({
-  subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--f-body', display: 'swap',
-});
-const mono = IBM_Plex_Mono({
-  subsets: ['latin'], weight: ['400', '500', '600'], variable: '--f-mono', display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -44,7 +39,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning
-      className={`${display.variable} ${body.variable} ${mono.variable}`}>
+      className={display.variable}>
       <head>
         {/* The same policy vercel.json sends as a header, repeated here because
             the Android shell never sees that header — Capacitor serves this HTML
@@ -68,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             development at build time — the shipped export never carries it. */}
         <meta
           httpEquiv="Content-Security-Policy"
-          content={`default-src 'self'; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com https://lh3.googleusercontent.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'`}
+          content={`default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://jdkbnsjczanvmmpsovhm.supabase.co https://images.unsplash.com https://lh3.googleusercontent.com; media-src 'self' blob: https://jdkbnsjczanvmmpsovhm.supabase.co; connect-src 'self' https://jdkbnsjczanvmmpsovhm.supabase.co wss://jdkbnsjczanvmmpsovhm.supabase.co https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.xethub.hf.co https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'`}
         />
 
         {/* Every screen's first job is a Supabase call, and ~65% of that first
@@ -96,7 +91,7 @@ var ac=p.accent==='#7C6CFF'?'#8B7CFF':p.accent;
 if(ac){r.style.setProperty('--acc',ac);
 r.style.setProperty('--accTx','color-mix(in srgb, '+ac+(p.theme==='light'?' 62%, #1C1A26)':' 82%, #FFFFFF)'));
 r.style.setProperty('--gl2','color-mix(in srgb, '+ac+' 55%, transparent)');}
-var mo=p.motion!==false;
+var mo=typeof p.motion==='boolean'?p.motion:!matchMedia('(prefers-reduced-motion: reduce)').matches;
 r.setAttribute('data-motion',mo?'on':'off');
 if(!mo){r.style.setProperty('--anim','paused');r.classList.add('nomo');}
 }catch(e){}})();`,

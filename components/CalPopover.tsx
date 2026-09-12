@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -31,13 +31,6 @@ export function CalPopover({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   useOverlayBack(true, onClose);
-
-  useEffect(() => {
-    // preventDefault so useBackGuard's Escape does not also pop the overlay stack.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   useLayoutEffect(() => {
     const el = ref.current;

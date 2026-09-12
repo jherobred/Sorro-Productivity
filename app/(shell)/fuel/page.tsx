@@ -194,7 +194,7 @@ export default function FuelPage() {
 
   return (
     <div style={{
-      padding: phone ? '14px 14px 32px' : 'clamp(18px, 2.2vw, 30px) clamp(20px, 2.6vw, 40px) 52px',
+      padding: '0 0 32px',
       maxWidth: 1720,
       marginInline: 'auto',
       color: 'var(--tx)',
@@ -212,16 +212,6 @@ export default function FuelPage() {
           boxShadow: 'var(--sh)', padding: phone ? '15px 15px 17px' : '18px 22px 20px',
         }}
       >
-        <motion.span
-          aria-hidden
-          initial={false}
-          animate={{ opacity: 0.35 + (kcalPct / 100) * 0.65 }}
-          transition={{ duration: 0.8 }}
-          style={{
-            position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: `radial-gradient(90% 140% at 8% 0%, color-mix(in srgb, ${HUE_LIME} 15%, transparent) 0%, transparent 58%)`,
-          }}
-        />
 
         <div style={{
           position: 'relative', display: 'flex', alignItems: 'center',
@@ -230,7 +220,7 @@ export default function FuelPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
               <h1 style={{
-                fontSize: phone ? 21 : 25, fontWeight: 800, margin: 0,
+                fontSize: phone ? 30 : 40, fontWeight: 800, margin: 0,
                 letterSpacing: '-.03em', color: 'var(--tx)',
               }}>
                 Fuel

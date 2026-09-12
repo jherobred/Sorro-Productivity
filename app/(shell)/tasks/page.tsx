@@ -1,4 +1,5 @@
 'use client';
+import { useOverlayBack } from '@/lib/nav';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
@@ -19,6 +20,8 @@ import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
 import { ContextMenu } from '@/components/ContextMenu';
 import { SwipeableRow } from '@/components/SwipeableRow';
+import { ObjectCoverImage } from '@/components/notes/NotebookCover';
+const CoverCapture = dynamic(() => import('@/components/notes/CoverCapture').then((m) => m.CoverCapture), { ssr: false });
 
 /* Only on screen once you tap a due date. The inline composer above it stays
    static - it is the first thing on the page. */
@@ -81,31 +84,6 @@ function useSecond(): number {
   return ms;
 }
 
-/** The countdown pill on a row. Overdue always implies a red alert tier. */
-function RowCountdown({ task, tier }: { task: Task; tier?: 'red' | 'orange' | 'yellow' }) {
-  const countdown = formatTaskCountdown(task, useSecond());
-  if (!countdown) return null;
-  return (
-    <span
-      style={{
-        fontSize: 10.5,
-        fontWeight: 700,
-        fontVariantNumeric: 'tabular-nums',
-        padding: '1px 5px',
-        borderRadius: 6,
-        background: countdown.isOverdue || tier === 'red'
-          ? 'color-mix(in srgb, var(--pal-coral) 25%, transparent)'
-          : tier === 'orange'
-          ? 'color-mix(in srgb, #FF9A3C 25%, transparent)'
-          : 'color-mix(in srgb, var(--pal-amber) 20%, transparent)',
-        marginLeft: 4,
-      }}
-    >
-      ⏱️ {countdown.text}
-    </span>
-  );
-}
-
 /** The same countdown, card-sized, for the detail panel. */
 function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof getTaskAlert> }) {
   const countdown = formatTaskCountdown(task, useSecond());
@@ -131,9 +109,7 @@ function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof ge
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className="task-alarm-emoji" style={{ fontSize: 20 }}>
-          {alert?.emoji || '⏱️'}
-        </span>
+        <Icon name="clock" size={20}/>
         <div>
           <div
             style={{
@@ -755,6 +731,8 @@ function TaskRow({
             }}
           />
 
+          <ObjectCoverImage targetKind="task" targetId={row.task.id} />
+
           {/* Title Area + Sub-details */}
           <div style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
             {editing ? (
@@ -817,20 +795,7 @@ function TaskRow({
                   >
                     {row.task.title}
                   </span>
-                  {alert && (
-                    <span
-                      className="task-alarm-emoji"
-                      title={`${alert.label} (${alert.tier} deadline alert)`}
-                      style={{
-                        fontSize: 14,
-                        lineHeight: 1,
-                        cursor: 'help',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {alert.emoji}
-                    </span>
-                  )}
+
                 </div>
 
                 {/* Details / Notes snippet & Structured Link Badges */}
@@ -962,85 +927,7 @@ function TaskRow({
                   );
                 })()}
 
-                {/* Date / Time Pill Chip */}
-                {row.task.due_on && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 5 }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenDatePicker(e.currentTarget.getBoundingClientRect());
-                      }}
-                      className="k-squish"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '2px 8px',
-                        borderRadius: 14,
-                        background: alert?.tier === 'red'
-                          ? 'color-mix(in srgb, var(--pal-coral) 20%, transparent)'
-                          : alert?.tier === 'orange'
-                          ? 'color-mix(in srgb, #FF9A3C 18%, transparent)'
-                          : row.late
-                          ? 'color-mix(in srgb, var(--pal-coral) 16%, transparent)'
-                          : 'var(--card2, #282A2C)',
-                        border: `1px solid ${
-                          alert?.tier === 'red' || row.late
-                            ? 'var(--pal-coral)'
-                            : alert?.tier === 'orange'
-                            ? '#FF9A3C'
-                            : alert?.tier === 'yellow'
-                            ? 'var(--pal-amber)'
-                            : 'var(--line2)'
-                        }`,
-                        color: alert?.tier === 'red' || row.late
-                          ? 'var(--pal-coral)'
-                          : alert?.tier === 'orange'
-                          ? '#FFA54C'
-                          : alert?.tier === 'yellow'
-                          ? 'var(--pal-amber)'
-                          : 'var(--tx2)',
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                      title="Change date/time"
-                    >
-                      <Icon
-                        name="clock"
-                        size={11}
-                        color={
-                          alert?.tier === 'red' || row.late
-                            ? 'var(--pal-coral)'
-                            : alert?.tier === 'orange'
-                            ? '#FFA54C'
-                            : alert?.tier === 'yellow'
-                            ? 'var(--pal-amber)'
-                            : 'var(--tx3)'
-                        }
-                      />
-                      <span>{row.dueLabel || row.task.due_on}</span>
-                      <RowCountdown task={row.task} tier={alert?.tier} />
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPatch({ due_on: null, due_at: null });
-                          toast('Date cleared');
-                        }}
-                        title="Clear date"
-                        style={{
-                          marginLeft: 2,
-                          fontSize: 12,
-                          opacity: 0.6,
-                          padding: '0 2px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        ×
-                      </span>
-                    </button>
-                  </div>
-                )}
+                {row.task.due_on && <div className="task-deadline-row"><button className="task-deadline" data-overdue={!!row.late || !!row.task.due_at && new Date(row.task.due_at).getTime() < Date.now()} title="Change date/time" onClick={e=>{e.stopPropagation();onOpenDatePicker(e.currentTarget.getBoundingClientRect());}}><Icon name="clock" size={13}/><span>{row.late ? row.late+'d overdue' : row.dueLabel || row.task.due_on}{!row.late && row.task.due_at ? ' · '+new Date(row.task.due_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}) : ''}</span></button><button className="task-clear-date" aria-label="Clear date" onClick={e=>{e.stopPropagation();onPatch({due_on:null,due_at:null});toast('Date cleared');}}><Icon name="close" size={12}/></button></div>}
               </div>
             )}
           </div>
@@ -1090,11 +977,11 @@ function TaskRow({
                     <span
                       style={{
                         fontSize: 13.5,
-                        color: filled ? 'var(--pal-amber, #F9AB00)' : 'var(--line2, #44474E)',
+                        color: filled ? 'var(--task-star)' : 'var(--tx3)',
                         transition: 'color .15s ease, transform .15s ease',
                       }}
                     >
-                      ★
+                      <Icon name="star" size={14}/>
                     </span>
                   </button>
                 );
@@ -1165,6 +1052,7 @@ function TaskEditSidepanel({
 
   const initialParsed = parseTaskLinks(task.notes ?? '');
   const [title, setTitle] = useState(task.title);
+  const [captureCover, setCaptureCover] = useState(false);
   const [course, setCourse] = useState(task.course || initialParsed.course || '');
   const [cleanNotes, setCleanNotes] = useState(initialParsed.cleanNotes);
   const [submissionLink, setSubmissionLink] = useState(initialParsed.submissionLink);
@@ -1255,17 +1143,10 @@ function TaskEditSidepanel({
     patchWithLatest();
     onClose();
   }, [patchWithLatest, onClose]);
+  useOverlayBack(true, handleClose);
 
-  // Close on Escape
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose]);
+  // The shared overlay stack owns Escape and mouse Back. A second listener
+  // here also closed the task underneath its date picker or cover camera.
 
   const dues: { n: string; v: string | null }[] = [
     { n: 'Today', v: new Date().toISOString().slice(0, 10) },
@@ -1381,6 +1262,12 @@ function TaskEditSidepanel({
         {/* Live Countdown Timer Card — its own timer, so the seconds do not
             re-render the panel's title field while you are typing in it. */}
         <DeadlineCard task={task} alert={alert} />
+
+        <button type="button" className="hov" onClick={() => setCaptureCover(true)} style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: 14, borderRadius: 14, background: 'var(--card2)', marginBottom: 20, textAlign: 'left', border: '1px solid var(--line2)' }}>
+          <ObjectCoverImage targetKind="task" targetId={task.id} style={{ width: 64, height: 64 }} />
+          <span style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: 14 }}>Give this task a cover</strong><span style={{ display: 'block', color: 'var(--tx3)', fontSize: 12, marginTop: 4 }}>Turn a photo into something you recognise.</span></span>
+          <Icon name="image" size={20} />
+        </button>
 
         {/* Title Input */}
         <div style={{ marginBottom: 18 }}>
@@ -1915,6 +1802,7 @@ function TaskEditSidepanel({
           </button>
         </div>
       </div>
+      {captureCover && <CoverCapture target={{ kind: 'task', id: task.id, title: title || task.title }} onClose={() => setCaptureCover(false)} />}
     </>
   ), document.body);
 }

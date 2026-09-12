@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { useOverlayBack } from '@/lib/nav';
@@ -79,11 +79,6 @@ export function ColorPicker({
   const wheel = useRef<HTMLDivElement>(null);
 
   useOverlayBack(true, onClose);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onClose]);
 
   const emit = (next: HSL, a: number) => {
     const hex = hslToHex(next, a);
