@@ -2,6 +2,43 @@
 
 For Claude Code, Gemini Antigravity, or the next Codex session. Baseline release: `b981642`, deployed to master on September 12, 2026. The second pass below is saved in the working tree, NOT committed or deployed. The last deployed baseline remains b981642. This guide distinguishes implemented source, verified behavior and pending work.
 
+## Status: September 13, 2026 (Claude Code session)
+
+The second pass described below is no longer uncommitted. It was verified and
+shipped as `4a6d9b3`, and a first slice of N5 shipped as `be4e4f9`. Both are
+live on basedly-web.vercel.app (Vercel reported READY for each) and both are
+in the debug APK, which was rebuilt after `npx cap sync android`.
+
+Corrections to the notes below, which were written before that work landed:
+
+- `npm run apk` does not build an APK from Git Bash. Its gradle step is
+  `cd android && gradlew.bat assembleDebug`, and `gradlew.bat` is not on PATH
+  there, so the script syncs the web assets and then silently does nothing.
+  Piping it through `tail` also hides the failure. Build with
+  `gradlew.bat -p android assembleDebug` from PowerShell, and always run
+  `npx cap sync android` after the last `npm run build` or the APK ships the
+  previous bundle.
+- `migrateNotebookCovers` listed private storage on every notebook refetch,
+  because the React Query data identity changes on each one. It now returns
+  before the listing when no notebook has a legacy wallpaper left to promote.
+- The checklist item about legacy `NoteSketchpad` is resolved: nothing in the
+  live tree imports it any more. Only stale copies under `.claude/worktrees/`
+  still do. Legacy `Canvas` remains, reachable only from the Earlier
+  disclosure for reading old boards.
+- Test count is 47, not 45. `lib/editorTools.check.ts` gained find/replace
+  escaping and reading-time cases.
+
+N5 is being built in slices, document shell first, by the user's decision.
+`be4e4f9` is slice one: find, replace and document statistics on the existing
+Markdown editor, with no new dependency and no serialisation change. Still
+open, in the order the plan below gives them: alignment, indent and page
+layout (these need the versioned rich document record first), then the
+editor engine, CRDT, membership, invitations, comments and suggestions.
+
+Still unverified, unchanged from below: authenticated cross-device cover
+sync, camera hardware, Xiaomi stylus pressure and palm rejection, physical
+mouse side buttons, and APK behaviour on a real device.
+
 ## Cutoff status: September 12, 2026
 
 The account usage tool reached **95% weekly usage**, the user's explicit cutoff. Implementation stopped. All changes remain local and uncommitted on master. Do not assume they exist on the live site. `git diff --check`, TypeScript, production build and 45 automated tests passed. The production build emitted nonfatal autoprefixer warnings about `align-items:start`.
