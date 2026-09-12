@@ -8,6 +8,7 @@ import {countMatches,replaceAll,readingMinutes} from './findReplace.ts';
 import {typeCharacter,deleteBackward,newline} from './codeEdit.ts';
 import {codeTokens,isRunnable,previewDocument} from './codeTokens.ts';
 import {readJournal,writeJournal,monthGrid,localDay} from './journalPage.ts';
+import {pdfMargin,pdfFieldWidth,pdfOpenView,LEGACY_MARGIN,IMPORT_MARGIN} from './pdfLayout.ts';
 
 test('Java highlighting preserves source verbatim including incomplete edits and HTML',()=>{
  for(const source of ['public class Example {\n String s = "<img>"; // class\n}', '/* unfinished\npublic class', 'String s = """\n hello\n""";', '@Override\nvoid run(){ int a=0xff; }', '"unclosed', "char x='\\n';"]){assert.equal(javaTokens(source).map(t=>t.text).join(''),source);}
@@ -94,4 +95,31 @@ test('the month grid is six fixed weeks starting on a Monday',()=>{
  assert.equal(cells[0].day,'2026-08-31');
  assert.equal(cells.filter(c=>c.inMonth).length,30);
  assert.equal(localDay(new Date(2026,0,5)),'2026-01-05');
+});
+test('a PDF saved before margins were adjustable keeps its original layout',()=>{
+ const old={pages:[{w:760,h:990,y:0}]};
+ assert.equal(pdfMargin(old),LEGACY_MARGIN);
+ assert.equal(pdfFieldWidth(old),1480);
+ assert.equal(pdfMargin({pages:[],margin:-5}),LEGACY_MARGIN);
+ assert.equal(pdfMargin({pages:[],margin:0}),0);
+});
+test('a new import gets a wider field without shrinking the page on screen',()=>{
+ const old={pages:[{w:760,h:990,y:0}]},fresh={pages:[{w:760,h:990,y:0}],margin:IMPORT_MARGIN};
+ assert.ok(pdfFieldWidth(fresh)>pdfFieldWidth(old));
+ assert.equal(pdfFieldWidth(fresh),IMPORT_MARGIN*2+760);
+ const a=pdfOpenView(old,1480),b=pdfOpenView(fresh,1480);
+ assert.equal(a.scale,b.scale);
+ assert.equal(a.x+pdfMargin(old)*a.scale, b.x+pdfMargin(fresh)*b.scale);
+});
+test('the widest page decides the field so a landscape page still gets margins',()=>{
+ assert.equal(pdfFieldWidth({pages:[{w:760,h:10,y:0},{w:1100,h:10,y:20}],margin:100}),1300);
+ assert.equal(pdfFieldWidth({pages:[],margin:100}),960);
+});
+test('a stored PDF margin survives a round trip and a bad one is refused',()=>{
+ const asset={localId:'a',name:'x.pdf'};
+ const board:BoardDocument={version:1,kind:'pdf',items:[],pdf:{asset,pages:[{w:760,h:990,y:0}],margin:IMPORT_MARGIN}};
+ assert.deepEqual(readBoard(writeBoard(board)),board);
+ const legacy:BoardDocument={version:1,kind:'pdf',items:[],pdf:{asset,pages:[{w:760,h:990,y:0}]}};
+ assert.deepEqual(readBoard(writeBoard(legacy)),legacy);
+ assert.equal(readBoard(writeBoard({...board,pdf:{asset,pages:[{w:760,h:990,y:0}],margin:-40}})),null);
 });

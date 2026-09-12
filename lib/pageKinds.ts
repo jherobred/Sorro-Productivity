@@ -12,7 +12,7 @@ export const PAGE_TYPES = [
 export type PageAsset = {localId:string;path?:string;name:string};
 export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number};
 export type BoardConnection = {id:string;from:string;to:string};
-export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[]};
+export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number};
 export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource};
 export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;text:string;done:boolean}[]};
 export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[]};
@@ -29,7 +29,7 @@ export function readBoard(body:string):BoardDocument|null {
   try {
     const data: unknown=JSON.parse(body.slice(BOARD_MARKER.length));
     if(!record(data)||data.version!==1||!['whiteboard','moodboard','pdf'].includes(String(data.kind))||!Array.isArray(data.items))return null;
-    if(data.pdf!==undefined&&(!record(data.pdf)||!validAsset(data.pdf.asset)||!Array.isArray(data.pdf.pages)||!data.pdf.pages.every(p=>record(p)&&finite(p.w)&&p.w>0&&finite(p.h)&&p.h>0&&finite(p.y))))return null;
+    if(data.pdf!==undefined&&(!record(data.pdf)||!validAsset(data.pdf.asset)||!Array.isArray(data.pdf.pages)||!data.pdf.pages.every(p=>record(p)&&finite(p.w)&&p.w>0&&finite(p.h)&&p.h>0&&finite(p.y))||(data.pdf.margin!==undefined&&(!finite(data.pdf.margin)||Number(data.pdf.margin)<0))))return null;
     const ids = new Set<string>();
     for(const item of data.items){
       if(!record(item)||!str(item.id)||ids.has(item.id)||!['text','image','stroke','schema'].includes(String(item.type))||!['x','y','w','h'].every(k=>finite(item[k]))||Number(item.w)<0||Number(item.h)<0||!str(item.color))return null;
