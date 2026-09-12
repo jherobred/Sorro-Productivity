@@ -60,6 +60,13 @@ export type Prefs = {
 
   /* Which kinds of event may raise a notification. */
   notify: { tasks: boolean; events: boolean; social: boolean; challenges: boolean; canvas: boolean };
+
+  /**
+   * A colour picked for a page in a notebook, by page id. Pages have no column
+   * for it, and this rides the same synced profile prefs as everything above,
+   * so it follows the account to other devices without a migration.
+   */
+  noteColors: Record<string, string>;
 };
 
 export const DEFAULT_PREFS: Prefs = {
@@ -95,6 +102,8 @@ export const DEFAULT_PREFS: Prefs = {
   mascotVariant: 'head',
 
   notify: { tasks: true, events: true, social: true, challenges: true, canvas: true },
+
+  noteColors: {},
 };
 
 const LS_KEY = 'basedly-prefs';

@@ -7,6 +7,8 @@ import { usePrefs } from '@/lib/prefs';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { preview } from '@/lib/md';
+import { pagePreview } from '@/lib/pageKinds';
+import { isDocBody } from '@/lib/docFormat';
 import type { Note } from '@/lib/notes';
 import {
   useBoards, useNodes, useEdges, useCanvasActions, anchor, edgePath, bestSides, bounds, blankNode,
@@ -918,7 +920,7 @@ function Card({
         <CardEditor text={n.text} onChange={onEdited} onDone={onDoneEditing} />
       ) : n.kind === 'note' ? (
         <CardBody icon="book" kicker={note ? 'Note' : 'Note — missing'} color={n.color}
-          title={note?.title || n.text || 'Untitled'} body={note ? preview(note.body, 120) : 'This note has been deleted.'} />
+          title={note?.title || n.text || 'Untitled'} body={note ? (isDocBody(note.body) ? pagePreview(note.body).slice(0, 120) : preview(note.body, 120)) : 'This note has been deleted.'} />
       ) : n.kind === 'canvas' ? (
         <CardBody icon="grid" kicker="Canvas" color={target?.color ?? n.color}
           title={target?.name || n.text || 'Canvas'} body={target ? 'Double-click to open this board.' : 'This canvas has been deleted.'} />

@@ -180,3 +180,64 @@ button:disabled{cursor:not-allowed}
 .context-panel{position:fixed;z-index:10020;width:260px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:6px;background:var(--card);color:var(--tx);border-radius:12px;box-shadow:0 12px 38px #0004;font-family:var(--font-body);animation:context-in .12s ease-out}.context-title{display:flex;align-items:center;gap:6px;padding:7px 8px 10px;font-size:12px;color:var(--tx2)}.context-title>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.context-title button{display:grid;place-items:center;width:25px;height:25px;color:var(--tx3)}.context-group+.context-group{border-top:1px solid var(--line2);margin-top:5px;padding-top:5px}.context-group-title{display:block;font-size:11px;color:var(--tx3);padding:8px 9px}.context-group>button{width:100%;display:flex;align-items:center;gap:11px;min-height:39px;padding:9px 10px;border-radius:7px;text-align:left;font-size:13px;color:var(--tx)}.context-group>button:hover,.context-group>button:focus-visible{background:var(--poster-blue);color:#fff;outline:none}.context-group>button.danger{color:var(--task-overdue)}.context-group>button.danger:hover,.context-group>button.danger:focus-visible{background:var(--task-overdue);color:var(--bg)}.context-group>button:disabled{opacity:.45;cursor:default;background:transparent;color:var(--tx2)}.context-item-label{flex:1;min-width:0}.context-item-label small{display:block;font-size:10px;line-height:1.5;color:var(--tx3);margin-top:3px}.context-group kbd{font:10px var(--font-body);opacity:.75}.context-swatch{width:17px;height:17px;border-radius:4px;flex:none}@keyframes context-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}@media(max-width:600px){.context-group>button{min-height:44px}}@media(prefers-reduced-motion:reduce){.context-panel{animation:none}}
 .studio-progress{display:flex;flex-direction:column;justify-content:center;gap:7px;width:100%;min-width:0;flex:none}.progress-words{display:flex;justify-content:space-between;gap:12px;font-size:11px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--tx2)}.progress-track{position:relative;display:block;height:7px;width:100%;border-radius:3px;background:var(--line);overflow:hidden}.progress-fill{display:block;position:absolute;inset:0;transform-origin:left center;border-radius:inherit}.progress-slim .progress-track{height:6px}.progress-edge .progress-track{height:4px;border-radius:0}.progress-jar .progress-track{height:9px}.progress-vertical{width:34px;min-height:64px;position:relative;justify-content:end}.progress-vertical .progress-track{width:100%;height:100%;border-radius:6px}.progress-vertical .progress-fill{transform-origin:center bottom}.progress-vertical .progress-words{position:absolute;z-index:1;bottom:5px;left:5px;right:5px;padding:5px 3px;background:var(--card);border-radius:3px;writing-mode:vertical-rl;transform:rotate(180deg);align-items:center;font-size:10px}.studio-progress .progress-fill{box-shadow:none}@media(prefers-reduced-motion:reduce){.progress-fill{transition:none!important}}
 progress{appearance:none;border:0;border-radius:3px;overflow:hidden;background:var(--line)}progress::-webkit-progress-bar{background:var(--line)}progress::-webkit-progress-value{background:var(--poster-blue);border-radius:3px}progress::-moz-progress-bar{background:var(--poster-blue);border-radius:3px}
+
+/* Calendar owns the whole workspace height: the grid scrolls inside itself, so
+   nothing is left blank under it and the header never scrolls away. */
+.studio-main[data-page='calendar']{display:flex;flex-direction:column;overflow:hidden;padding-top:16px;padding-bottom:14px}
+.studio-main[data-page='calendar']>.calendar-page{flex:1 1 auto;height:auto!important}
+@media(max-width:760px){.studio-main[data-page='calendar']{padding-top:12px;padding-bottom:calc(80px + env(safe-area-inset-bottom))}}
+
+/* Focus ring: the Focus page and the top bar draw the same one. */
+.focus-ring{position:relative;display:inline-grid;place-items:center;flex:none}
+.focus-ring>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.focus-ring-track{stroke:var(--line2)}
+.focus-ring-fill{stroke:var(--poster-blue)}
+.focus-ring.is-break .focus-ring-fill{stroke:#2fb27a}
+.focus-ring.is-done .focus-ring-fill{stroke:var(--poster-yellow)}
+.focus-ring-fill.is-smooth{transition:stroke-dashoffset 1s linear}
+.focus-ring-center{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;line-height:1}
+.focus-station-ring{width:min(340px,76vw)!important;height:min(340px,76vw)!important;margin:22px 0 6px}
+.focus-station-ring .focus-clock{font-size:clamp(52px,6vw,84px);line-height:1}
+.focus-station .focus-mode{margin-top:26px}
+@media(prefers-reduced-motion:reduce){.focus-ring-fill.is-smooth{transition:none}}
+[data-motion='off'] .focus-ring-fill.is-smooth{transition:none}
+
+/* A short description on hover or keyboard focus, for buttons that are only a picture. */
+.tip{position:relative}
+.tip::after{content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 8px);transform:translate(-50%,-3px);padding:6px 9px;border-radius:7px;background:#0f1113;color:#fff;font:600 12px/1.25 var(--font-body,system-ui,sans-serif);letter-spacing:0;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s ease,transform .12s ease;z-index:30;box-shadow:0 6px 18px #0005}
+.tip:hover::after,.tip:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+@media(hover:none){.tip:hover::after{opacity:0}}
+
+/* What next, once a run ends. */
+.focus-choices{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;max-width:250px}
+.focus-choice{position:relative;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--card2);color:var(--tx);border:1px solid var(--line2);transition:transform .15s ease,background .15s ease}
+.focus-choice:hover{transform:translateY(-2px)}
+.focus-choice.is-break{background:#2fb27a;color:#fff;border-color:transparent}
+.focus-choice.is-again{background:var(--poster-blue);color:#fff;border-color:transparent}
+.focus-choice.is-done{background:var(--tx);color:var(--bg);border-color:transparent}
+.focus-choice.is-amount{width:auto;height:auto;border:0;background:none;border-radius:50%}
+.focus-choice.is-amount .focus-ring-center{font-size:14px;font-weight:750;font-variant-numeric:tabular-nums}
+.focus-choice.is-back{width:44px;height:44px}
+.focus-choice-badge{position:absolute;right:-3px;bottom:-3px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;display:grid;place-items:center;background:var(--card);color:var(--tx);border:1px solid var(--line2);font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.focus-choices.is-small .focus-choice{width:54px;height:54px}
+.focus-choices.is-small .focus-choice.is-amount{width:auto;height:auto}
+.focus-choices.is-small .focus-choice.is-back{width:40px;height:40px}
+
+/* The timer in the top bar and its panel. */
+.studio-top-actions>.focus-top-clock{width:auto;min-width:0;height:34px;min-height:34px;padding:0 11px 0 7px;gap:7px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--tx);font-size:13px;font-weight:650;font-variant-numeric:tabular-nums;margin-right:4px}
+.studio-top-actions>.focus-top-clock:hover{background:color-mix(in srgb,var(--card2) 70%,var(--tx) 8%)}
+.focus-top-clock.is-done{border-color:var(--poster-yellow);animation:focus-done-pulse 1.8s ease-in-out infinite}
+@keyframes focus-done-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--poster-yellow) 55%,transparent)}60%{box-shadow:0 0 0 7px transparent}}
+[data-motion='off'] .focus-top-clock.is-done{animation:none}
+.focus-top-panel{position:fixed;z-index:120;width:272px;padding:20px 18px 18px;border-radius:18px;background:var(--card);border:1px solid var(--line2);box-shadow:var(--shl);display:flex;flex-direction:column;align-items:center;gap:16px;color:var(--tx)}
+.focus-top-big{font-size:30px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.focus-top-mode{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3)}
+.focus-top-row,.focus-top-length,.focus-top-presets{display:flex;align-items:center;justify-content:center;gap:8px}
+.focus-icon-button{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--card2);color:var(--tx);border:1px solid var(--line)}
+.focus-icon-button:hover{border-color:var(--line2)}
+.focus-icon-button:disabled{opacity:.4;cursor:default}
+.focus-icon-button.is-primary{background:var(--poster-blue);border-color:transparent;color:#fff}
+.focus-top-length>span{min-width:70px;text-align:center;font-size:14px;font-weight:650;font-variant-numeric:tabular-nums}
+.focus-top-presets button{min-width:44px;height:30px;border-radius:15px;background:var(--card2);color:var(--tx2);font-size:12px;font-weight:700}
+.focus-top-presets button[aria-pressed='true']{background:var(--poster-blue);color:#fff}
+@media(max-width:760px){.studio-top-actions>.focus-top-clock{height:32px;min-height:32px;padding:0 9px 0 6px;font-size:12px;margin-right:2px}}

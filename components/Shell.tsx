@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { FireworksHost } from './FireworksHost';
+import { FocusTopClock } from './FocusTopClock';
 import { usePrefs } from '@/lib/prefs';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { supabase } from '@/lib/supabase';
@@ -76,7 +77,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="studio-sidebar-bottom"><button className="studio-account" onClick={() => setAccount(true)}><span className="studio-avatar">{(storedMe?.name || me.name).charAt(0)}</span><span><strong>{storedMe?.name || me.name}</strong><small>Personal workspace</small></span><Icon name="chevR" size={15} /></button></div>
     </aside>
     <div className="studio-workspace">
-      <header className="studio-topbar"><Link href="/home/" className="studio-mobile-brand basedly-wordmark">basedly</Link><span className="studio-location">Your workspace <span>/</span> {current?.name || 'Today'}</span><div className="studio-top-actions">{devFixturesOn() && <span className="demo-label">Preview data</span>}{!online && <span role="status">Offline · changes queued</span>}<button aria-label="Search" onClick={() => setSearch(true)}><Icon name="search" size={19} /></button><button aria-label="Settings" onClick={() => setSettings(true)}><Icon name="set" size={19} /></button><button aria-label={prefs.theme === 'dark' ? 'Use light theme' : 'Use dark theme'} className="theme-switch" onClick={() => update({ theme: prefs.theme === 'dark' ? 'light' : 'dark' })}><Icon name={prefs.theme === 'dark' ? 'sun' : 'moon'} size={18} /></button></div></header>
+      <header className="studio-topbar"><Link href="/home/" className="studio-mobile-brand basedly-wordmark">basedly</Link><span className="studio-location">Your workspace <span>/</span> {current?.name || 'Today'}</span><div className="studio-top-actions">{devFixturesOn() && <span className="demo-label">Preview data</span>}{!online && <span role="status">Offline · changes queued</span>}<FocusTopClock /><button aria-label="Search" onClick={() => setSearch(true)}><Icon name="search" size={19} /></button><button aria-label="Settings" title="Settings" onClick={() => setSettings(true)}><Icon name="cog" size={19} /></button><button aria-label={prefs.theme === 'dark' ? 'Use light theme' : 'Use dark theme'} className="theme-switch" onClick={() => update({ theme: prefs.theme === 'dark' ? 'light' : 'dark' })}><Icon name={prefs.theme === 'dark' ? 'sun' : 'moon'} size={18} /></button></div></header>
       <main id="workspace" className="studio-main" data-page={current?.id} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
     </div>
     <nav className="studio-bottom-nav" aria-label="Mobile navigation">{nav(mobileNav)}<button className="studio-nav-link" aria-expanded={more} onClick={() => setMore(true)}><Icon name="more" size={20} /><span>More</span></button></nav>

@@ -1,3 +1,4 @@
+import {readDoc,docText} from './docFormat.ts';
 export type PageKind = 'document' | 'whiteboard' | 'moodboard' | 'pdf' | 'journal' | 'code' | 'checklist' | 'flashcards' | 'cornell';
 export const PAGE_TYPES = [
   {kind:'document',name:'Document',icon:'text',description:'Notes, lists and equations'},
@@ -66,16 +67,19 @@ export function pageKind(body:string):PageKind {
   // beginning with a code fence must keep everything after that first fence.
   return readBoard(body)?.kind || readStudy(body)?.kind || (body.startsWith('# Journal · ')?'journal':'document');
 }
-export function initialBody(kind:PageKind):string {
+export function initialBody(kind:PageKind,day?:string):string {
   if(kind==='whiteboard'||kind==='moodboard'||kind==='pdf')return writeBoard({version:1,kind,items:[]});
   if(kind==='checklist')return writeStudy({version:1,kind,items:[]});
   if(kind==='flashcards')return writeStudy({version:1,kind,cards:[]});
   if(kind==='cornell')return writeStudy({version:1,kind,cues:'',notes:'',summary:''});
-  if(kind==='journal')return '# Journal · '+new Date().toLocaleDateString()+'\n\nWhat happened today?\n\n\nWhat am I thinking about?\n\n\nOne thing for tomorrow\n\n';
+  // Written as YYYY-MM-DD so a page kept for another day files under that day
+  // on the journal calendar. See journalDay in journalPage.ts.
+  if(kind==='journal'){const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;return '# Journal · '+(day||today)+'\n\nWhat happened today?\n\n\nWhat am I thinking about?\n\n\nOne thing for tomorrow\n\n';}
   if(kind==='code')return writeStudy({version:1,kind,language:'java',code:''});
   return '';
 }
 export function pagePreview(body:string) {
+  const doc=readDoc(body);if(doc)return docText(doc).replace(/\[\[|\]\]/g,'').replace(/\s+/g,' ').trim().slice(0,150);
   const board=readBoard(body);if(board)return board.kind==='pdf'?`${board.pdf?.pages.length||0} PDF pages · ${board.items.length} annotations`:board.items.length+' objects · board';
   const study=readStudy(body);
   if(study?.kind==='checklist')return `${study.items.filter(i=>i.done).length} of ${study.items.length} done`;

@@ -402,8 +402,7 @@ export default function CalendarPage() {
   const showPager = !phone || view !== 'day';
 
   return (
-    <div style={{
-      padding: '0 0 20px',
+    <div className="calendar-page" style={{
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: phone ? 9 : 14, flexWrap: 'wrap', flex: 'none' }}>
@@ -494,7 +493,7 @@ export default function CalendarPage() {
         onTouchEnd={handleTouchEnd}
         style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', touchAction: 'pan-y' }}
       >
-        <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: view === 'agenda' || view === 'countdown' ? 'auto' : undefined }}>
           {/* The chrome above is not data-dependent and paints immediately;
               only the grid waits, so only the grid is outlined. */}
           {isPending && (
@@ -2036,9 +2035,29 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
     return m;
   }, [events, tasks]);
 
+  // The rows stretch to fill the screen, so a tall window has room for more
+  // than three events a day. Count how many chips one cell can actually show.
+  const grid = useRef<HTMLDivElement>(null);
+  const [fits, setFits] = useState(3);
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const measure = () => {
+      const cell = el.querySelector<HTMLElement>('[data-month-cell]');
+      if (!cell) return;
+      const chip = el.querySelector<HTMLElement>('[data-month-chip]');
+      const row = (chip?.offsetHeight ?? 13) + 3;
+      setFits(Math.max(1, Math.floor((cell.clientHeight - 30) / row)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="k-stagger" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 14, boxShadow: 'var(--sh)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+    <div className="k-stagger" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 14, boxShadow: 'var(--sh)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      <div ref={grid} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(6, minmax(64px, 1fr))', gap: 6, flex: 1, minHeight: 0 }}>
         {dayLabels(prefs.weekStart).map((d) => (
           <div key={d} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', color: 'var(--tx3)', textAlign: 'center', paddingBottom: 5 }}>{d}</div>
         ))}
@@ -2052,12 +2071,13 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
           // trailing out-of-month days dim — the standard month-grid read.
           // (The old bug was different: the title month itself was computed
           // from the week-start, so in-month rows dimmed by mistake.)
+          const shown = items.length > fits ? Math.max(0, fits - 1) : fits;
           return (
-            <button key={i} onClick={() => onPickDay(date)} className="hov k-squish"
+            <button key={i} data-month-cell onClick={() => onPickDay(date)} className="hov k-squish"
               aria-label={date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
               style={{
                 ['--i' as string]: i * 0.16,   // ~7ms per cell: a sweep, not a parade
-                minHeight: 74, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 3,
+                minHeight: 0, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 3,
                 padding: '5px 6px', textAlign: 'left', overflow: 'hidden',
                 border: `1px solid ${today ? 'color-mix(in srgb, var(--pal-sky) 55%, transparent)' : 'transparent'}`,
                 background: today ? 'color-mix(in srgb, var(--pal-sky) 10%, transparent)' : 'transparent',
@@ -2067,17 +2087,17 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
               <span style={{ fontSize: 11.5, fontWeight: today ? 800 : 600, color: today ? SECHUE.calendar : 'var(--tx2)', fontVariantNumeric: 'tabular-nums' }}>
                 {date.getDate()}
               </span>
-              {items.slice(0, 3).map((it, n) => {
+              {items.slice(0, shown).map((it, n) => {
                 const isNext = it.id === nextEventId;
                 const isPast = it.ends_at ? new Date(it.ends_at).getTime() < nowMs : (date.getTime() + 86400000 < nowMs);
                 const cd = !isPast && isNext && it.starts_at && it.ends_at ? formatEventCountdown(it.starts_at, it.ends_at, nowMs) : null;
                 const urgent = isUrgentEvent(it.color) && !isPast;
 
                 return (
-                  <span key={n}
+                  <span key={n} data-month-chip
                     className={urgent ? 'red-alert-pulse' : undefined}
                     style={{
-                      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, flex: 'none',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
                       opacity: isPast ? 0.48 : 1,
                       filter: isPast ? 'grayscale(20%)' : undefined,
@@ -2107,7 +2127,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                   </span>
                 );
               })}
-              {items.length > 3 && <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 2 }}>+{items.length - 3} more</span>}
+              {items.length > shown && <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--tx3)', paddingLeft: 2 }}>+{items.length - shown} more</span>}
             </button>
           );
         })}
