@@ -108,3 +108,14 @@
  .cornell-page textarea{flex:none;min-height:210px;resize:vertical}
  .cornell-summary textarea{min-height:150px}
 }
+
+/* The editor fills whatever room is actually there.
+   Its height used to be 100dvh minus a constant standing in for the chrome
+   above it. Whenever that guess was wrong the pane came up short and left a
+   dead band under the page. Flex measures the space instead of predicting
+   it, so every page type fills the window at any size or zoom. The selector
+   outranks the earlier height rules whichever order the sheets load in. */
+.studio-main:has(.editor-room){display:flex;flex-direction:column;overflow:hidden;padding:8px 18px 10px}
+.studio-main:has(.editor-room) .editor-room{flex:1 1 auto;height:auto;min-height:0;gap:10px}
+.studio-main:has(.editor-room) .editor-breadcrumb{margin-bottom:0;min-height:28px}
+.studio-main:has(.editor-room) .editor-content{flex:1 1 auto;min-height:0}
