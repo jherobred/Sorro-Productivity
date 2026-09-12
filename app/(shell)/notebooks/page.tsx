@@ -58,7 +58,7 @@ export default function NotebooksPage(){
  const deletePage=(n:Note)=>{A.deleteWithUndo(n);setNoteId(null);};
  const renderNote=(n:Note)=>{const kind=summaries.get(n.id)!.kind;const save=(v:{title:string;body:string})=>A.saveNote.mutate({id:n.id,notebook_id:n.notebook_id,...v});
   if(kind==='whiteboard'||kind==='moodboard'||kind==='pdf')return <FreeBoard key={n.id} note={n} onSave={save}/>;
-  if(kind==='journal')return <JournalPage key={n.id} note={n} onSave={save}/>;
+  if(kind==='journal')return <JournalPage key={n.id} note={n} notes={notes} onSave={save} onOpen={id=>{const x=notes.find(m=>m.id===id);if(x)openNote(x);}}/>;
   if(kind==='code')return <CodePage key={n.id} note={n} onSave={save}/>;
   if(kind==='checklist'||kind==='flashcards'||kind==='cornell')return <StudyPage key={n.id} note={n} onSave={save}/>;
   return <DocumentWorkspace key={n.id} note={n}><NoteEditor key={n.id} note={n} notes={notes} tags={tags[n.id]||[]} phone={phone} onSave={save} onDelete={()=>deletePage(n)} onPickNote={id=>{const x=notes.find(n=>n.id===id);if(x)openNote(x);}} onNewNote={title=>createPage('document',title)} onSetTags={t=>A.setTags.mutate({note_id:n.id,tags:t})}/></DocumentWorkspace>;

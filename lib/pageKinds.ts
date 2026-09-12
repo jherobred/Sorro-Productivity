@@ -7,7 +7,7 @@ export const PAGE_TYPES = [
   {kind:'cornell',name:'Cornell notes',icon:'week',description:'Cues, lecture notes and a summary'},
   {kind:'pdf',name:'PDF annotation',icon:'files',description:'Read, mark up and think in the margins'},
   {kind:'journal',name:'Journal',icon:'book',description:'Reflect on today, plan tomorrow'},
-  {kind:'code',name:'Java',icon:'code',description:'A focused Java coding workspace'},
+  {kind:'code',name:'Code',icon:'code',description:'Java, HTML, CSS and JavaScript'},
 ] as const;
 export type PageAsset = {localId:string;path?:string;name:string};
 export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number};
