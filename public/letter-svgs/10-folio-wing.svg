@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" fill="none">
+  <!-- Folio & Wing 'b' -->
+  <defs>
+    <linearGradient id="folioGrad" x1="12" y1="24" x2="24" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38D6F2"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+    <linearGradient id="wingGrad" x1="24" y1="8" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38D6F2"/>
+      <stop offset="45%" stop-color="#8B7CFF"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left Open Book Page -->
+  <path d="M 12 26 C 16 26, 21 23, 24 20 L 24 48 C 21 51, 16 52, 12 51 Z" fill="url(#folioGrad)"/>
+  <path d="M 10 30 C 13 30, 18 27, 22 24 L 22 47 C 18 49, 13 50, 10 49 Z" fill="#0EA5E9" opacity="0.45"/>
+
+  <!-- Ascending Wing Feathers (Upper Ascender) -->
+  <path d="M 24 20 C 26 14, 31 8, 38 7 C 35 12, 33 17, 33 22 C 37 15, 41 12, 45 13 C 41 17, 38 22, 37 28 L 24 32 Z" fill="#38D6F2"/>
+  <path d="M 33 20 C 37 18, 42 18, 46 21 C 41 24, 38 28, 36 33 L 26 33 Z" fill="#8B7CFF" opacity="0.9"/>
+
+  <!-- Lower Bowl of 'b' -->
+  <path d="M 24 20 C 28 20, 36 24, 42 29 C 48 34, 49 42, 45 47 C 40 52, 31 53, 24 48 Z" fill="url(#wingGrad)"/>
+
+  <!-- Inner Counter Core Cutout -->
+  <circle cx="34" cy="38" r="6" fill="#141120"/>
+</svg>
