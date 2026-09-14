@@ -5,12 +5,14 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { TasksSkeleton } from '@/components/Skeleton';
 import { Page } from '@/components/Page';
 import { TaskComposer } from '@/components/TaskComposer';
 import { K, PAL } from '@/lib/pal';
-import { usePrefs } from '@/lib/prefs';
+import { usePrefs, type TaskSortKey } from '@/lib/prefs';
+import { sortTasks, filterTasks, agendaSections, boardColumns, courseNames, SORT_LABELS, NO_FILTER, INBOX, NONE, type TaskSort, type TaskFilter, type BoardBy } from '@/lib/taskViews';
+import { courseIs } from '@/lib/tagList';
 import { useRegisterSidePanel } from '@/lib/sidePanel';
 import { TabRail } from '@/components/TabRail';
 import { TaskTable } from '@/components/tasks/TaskTable';
@@ -18,7 +20,7 @@ import { useLayout } from '@/lib/useLayout';
 import { useLists, useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, parseTaskLinks, serializeTaskWithLinks, type Task, type List, type CustomTaskLink } from '@/lib/tasks';
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
-import { ContextMenu } from '@/components/ContextMenu';
+import { ContextMenu, type CtxContent } from '@/components/ContextMenu';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { ObjectCoverImage } from '@/components/notes/NotebookCover';
 const CoverCapture = dynamic(() => import('@/components/notes/CoverCapture').then((m) => m.CoverCapture), { ssr: false });
@@ -146,9 +148,6 @@ function DeadlineCard({ task, alert }: { task: Task; alert: ReturnType<typeof ge
   );
 }
 
-/** High sorts above Med above Low. */
-const PRI_RANK: Record<Row['pri'], number> = { High: 3, Med: 2, Low: 1 };
-
 const priOf = (p: string | null): Row['pri'] =>
   p === 'high' ? 'High' : p === 'med' ? 'Med' : 'Low';
 
@@ -164,6 +163,20 @@ function dueInfo(due: string | null): { late: number; label: string } {
   if (days === 1) return { late: 0, label: 'Tomorrow' };
   return { late: 0, label: d.toLocaleDateString(undefined, { weekday: 'short' }) };
 }
+
+/** Local YYYY-MM-DD, so an evening in Manila is still today. */
+const localYmd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const SORT_ICONS: Record<TaskSortKey, IconName> = { smart: 'spark', due: 'clock', priority: 'flag', stars: 'star', title: 'text', created: 'plus' };
+const SORT_HINTS: Record<TaskSortKey, string> = {
+  smart: 'Late work first, then what is due soonest, the most important first',
+  due: 'Soonest deadline first, tasks with no date last',
+  priority: 'High, then medium, then low',
+  stars: 'Most stars first',
+  title: 'A to Z',
+  created: 'The task you added most recently first',
+};
+const PRIORITY_NAMES: Record<string, string> = { high: 'High', med: 'Medium', low: 'Low', [NONE]: 'No priority' };
 
 export default function TasksPage() {
   const { phone } = useLayout();
@@ -186,9 +199,16 @@ export default function TasksPage() {
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const lp = useLongPress();
-  const [order, setOrder] = useState<'Due' | 'Priority' | 'Stars' | 'Title'>('Due');
-  const view = prefs.taskView ?? 'groups';
+  const view = prefs.taskView === 'list' ? 'agenda' : prefs.taskView ?? 'groups';
+  const sort: TaskSort = prefs.taskSort ?? { key: 'smart', desc: false };
+  const boardBy: BoardBy = prefs.taskBoardBy ?? 'list';
+  const tags = prefs.tags ?? [];
+  const [filter, setFilter] = useState<TaskFilter>(NO_FILTER);
+  const [toolMenu, setToolMenu] = useState<{ x: number; y: number; label: string; items: CtxContent } | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  // Minute precision is enough to tell what is late; the countdowns have their own timer.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
 
   // Google Tasks Date Picker Modal state
   const [datePickerTask, setDatePickerTask] = useState<{
@@ -204,63 +224,49 @@ export default function TasksPage() {
   } | null>(null);
 
   const byList = new Map(lists.map((l) => [l.id, l]));
-  const completedTasks = tasks.filter((t) => t.done);
+  const today = localYmd(new Date(now));
+  const open = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
+  const shown = useMemo(() => sortTasks(filterTasks(open, filter), sort, now), [open, filter, sort, now]);
+  const completedTasks = filterTasks(tasks.filter((t) => t.done), filter);
+  const filterCount = [filter.list, filter.course, filter.priority].filter((v) => v !== null).length;
 
-  const rows: Row[] = tasks
-    .filter((t) => !t.done)
-    .map((t) => {
-      const l = t.list_id ? byList.get(t.list_id) : undefined;
-      const { late, label } = dueInfo(t.due_on);
-      return {
-        task: t,
-        listName: l?.name ?? 'Inbox',
-        listColor: l?.color ?? PAL.indigo,
-        late,
-        dueLabel: label,
-        pri: priOf(t.priority),
-      };
-    });
+  const rowOf = (t: Task): Row => {
+    const l = t.list_id ? byList.get(t.list_id) : undefined;
+    const { late, label } = dueInfo(t.due_on);
+    return { task: t, listName: l?.name ?? 'Inbox', listColor: l?.color ?? PAL.indigo, late, dueLabel: label, pri: priOf(t.priority) };
+  };
+  const rows: Row[] = shown.map(rowOf);
 
-  const ordered = (items: Row[]) => [...items].sort((a, b) =>
-    order === 'Priority' ? PRI_RANK[b.pri] - PRI_RANK[a.pri]
-      : order === 'Stars' ? b.task.stars - a.task.stars
-      : order === 'Title' ? a.task.title.localeCompare(b.task.title)
-      : (a.task.due_on ?? '9999').localeCompare(b.task.due_on ?? '9999'));
+  const sortNote = SORT_LABELS[sort.key] + (sort.key === 'smart' ? ' order' : '') + (sort.desc ? ', reversed' : '');
 
   /**
-   * Which buckets the rows fall into is the view. Groups asks "when", board
-   * asks "where", list asks nothing and just sorts — and all three render with
-   * the same row, so a swipe or an inline edit behaves identically in each.
-   * Only the table needs its own markup, and it says why in its own file.
+   * The buckets a view shows. Groups asks "when", Agenda lays the days out,
+   * Board splits by list, course or priority. All of them render the same
+   * row, so a swipe or an inline edit behaves identically in each. Only the
+   * table needs its own markup, and it says why in its own file.
    */
-  type Group = { n: string; items: Row[]; tint: string; note: string; empty: string };
+  type Group = { n: string; hint?: string; items: Row[]; tint: string; note: string; empty: string };
   const groups: Group[] = useMemo(() => {
-    if (view === 'list') {
-      return [{
-        n: 'All open', items: ordered(rows), tint: PAL.indigo,
-        note: `By ${order.toLowerCase()}`, empty: 'Nothing open.',
-      }];
+    if (view === 'agenda') {
+      const tone = { late: PAL.coral, today: PAL.amber, soon: PAL.mint, later: PAL.indigo, none: 'var(--tx3)' } as const;
+      return agendaSections(shown, today, sort, now).map((s) => ({
+        n: s.title, hint: s.hint, items: s.tasks.map(rowOf), tint: tone[s.tone],
+        note: s.tone === 'today' || s.tone === 'soon' ? 'Timed tasks by time' : sortNote, empty: '',
+      }));
     }
     if (view === 'board') {
-      const cols = lists.map((l) => ({
-        n: l.name, tint: l.color || PAL.indigo,
-        items: ordered(rows.filter((r) => r.task.list_id === l.id)),
-        note: `By ${order.toLowerCase()}`, empty: 'Empty.',
+      return boardColumns(shown, boardBy, lists, tags, sort, now).map((c) => ({
+        n: c.title, items: c.tasks.map(rowOf), tint: c.color, note: sortNote, empty: 'Empty.',
       }));
-      const loose = ordered(rows.filter((r) => !r.task.list_id));
-      // Tasks with no list still have to be somewhere, or the board quietly
-      // shows fewer tasks than the count above it claims.
-      if (loose.length) cols.unshift({ n: 'Inbox', tint: PAL.indigo, items: loose, note: `By ${order.toLowerCase()}`, empty: 'Empty.' });
-      return cols;
     }
     return [
-      { n: 'Overdue', items: ordered(rows.filter((r) => r.late > 0)), tint: PAL.coral, note: order === 'Due' ? 'Oldest first' : `By ${order.toLowerCase()}`, empty: 'Nothing late.' },
-      { n: 'Today', items: ordered(rows.filter((r) => !r.late && r.dueLabel === 'Today')), tint: PAL.amber, note: 'Due before midnight', empty: 'Nothing due today.' },
-      { n: 'Upcoming', items: ordered(rows.filter((r) => !r.late && r.dueLabel !== 'Today')), tint: PAL.mint, note: 'The rest of the week', empty: 'Nothing scheduled yet.' },
+      { n: 'Overdue', items: rows.filter((r) => r.late > 0), tint: PAL.coral, note: sortNote, empty: 'Nothing late.' },
+      { n: 'Today', items: rows.filter((r) => !r.late && r.dueLabel === 'Today'), tint: PAL.amber, note: 'Due before midnight', empty: 'Nothing due today.' },
+      { n: 'Upcoming', items: rows.filter((r) => !r.late && r.dueLabel !== 'Today'), tint: PAL.mint, note: 'Everything after today', empty: 'Nothing scheduled yet.' },
     ];
-    // `ordered` closes over `order`, which is in the dep list.
+    // rowOf and sortNote are derived from the values in the dependency list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, rows, order, lists]);
+  }, [view, shown, rows, sort, lists, tags, boardBy, today, now]);
 
   const complete = (r: Row, e?: React.MouseEvent) => {
     if (leaving.has(r.task.id)) return;
@@ -273,37 +279,66 @@ export default function TasksPage() {
     }, K.taskExitMs);
   };
 
+  const setSort = (next: TaskSort) => void update({ taskSort: next });
+  const menuAt = (e: React.MouseEvent<HTMLElement>, label: string, items: CtxContent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setToolMenu({ x: r.left, y: r.bottom + 6, label, items });
+  };
+  const openSort = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Sort tasks', [
+    { items: (Object.keys(SORT_LABELS) as TaskSortKey[]).map((key) => ({ icon: SORT_ICONS[key], label: SORT_LABELS[key], hint: SORT_HINTS[key], checked: sort.key === key, run: () => setSort({ key, desc: false }) })) },
+    { items: [{ icon: 'sort', label: sort.desc ? 'Back to normal order' : 'Reverse the order', run: () => setSort({ ...sort, desc: !sort.desc }) }] },
+  ]);
+  const courses = courseNames(open, tags);
+  const openFilter = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Filter tasks', [
+    { label: 'List', items: [
+      { icon: 'list', label: 'Every list', checked: filter.list === null, run: () => setFilter((f) => ({ ...f, list: null })) },
+      { icon: 'list', label: 'Inbox', checked: filter.list === INBOX, run: () => setFilter((f) => ({ ...f, list: INBOX })) },
+      ...lists.map((l) => ({ icon: 'list' as const, label: l.name, swatch: l.color, checked: filter.list === l.id, run: () => setFilter((f) => ({ ...f, list: l.id })) })),
+    ] },
+    { label: 'Course', items: [
+      { icon: 'book', label: 'Any course', checked: filter.course === null, run: () => setFilter((f) => ({ ...f, course: null })) },
+      ...courses.map((name) => ({ icon: 'book' as const, label: name, swatch: tags.find((t) => courseIs(name, t))?.color, checked: filter.course !== null && filter.course !== NONE && courseIs(filter.course, { id: '', name, color: '' }), run: () => setFilter((f) => ({ ...f, course: name })) })),
+      { icon: 'book', label: 'No course', checked: filter.course === NONE, run: () => setFilter((f) => ({ ...f, course: NONE })) },
+    ] },
+    { label: 'Priority', items: [
+      { icon: 'flag', label: 'Any priority', checked: filter.priority === null, run: () => setFilter((f) => ({ ...f, priority: null })) },
+      ...(['high', 'med', 'low', NONE] as const).map((p) => ({ icon: 'flag' as const, label: PRIORITY_NAMES[p], checked: filter.priority === p, run: () => setFilter((f) => ({ ...f, priority: p })) })),
+    ] },
+  ]);
+  const filterChips = [
+    filter.list !== null && { key: 'list' as const, label: 'List: ' + (filter.list === INBOX ? 'Inbox' : byList.get(filter.list)?.name ?? 'Unknown') },
+    filter.course !== null && { key: 'course' as const, label: 'Course: ' + (filter.course === NONE ? 'None' : filter.course) },
+    filter.priority !== null && { key: 'priority' as const, label: 'Priority: ' + PRIORITY_NAMES[filter.priority] },
+  ].filter((chip): chip is { key: 'list' | 'course' | 'priority'; label: string } => !!chip);
+
   const detailTask = tasks.find((t) => t.id === detail) ?? null;
+  const toolStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' };
 
   return (
     <Page
       name="My Tasks"
       width={view === 'table' || view === 'board' ? 'wide' : 'list'}
-      meta={`${rows.length} open across every list`}
+      meta={filterCount ? `${rows.length} of ${open.length} open` : `${open.length} open across every list`}
       actions={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <TabRail
             label="Task view"
+            phone={phone}
             tabs={[
               { id: 'groups', label: 'Groups', icon: 'layers' },
-              { id: 'list', label: 'List', icon: 'list' },
-              { id: 'table', label: 'Table', icon: 'grid' },
+              { id: 'agenda', label: 'Agenda', icon: 'agenda' },
               { id: 'board', label: 'Board', icon: 'proj' },
+              { id: 'table', label: 'Table', icon: 'grid' },
             ] as const}
             value={view}
             onChange={(v) => void update({ taskView: v })} />
-          <button
-            className="hov k-squish"
-            title={`Sorted by ${order.toLowerCase()} — click to change`}
-            aria-label={`Sorted by ${order.toLowerCase()}. Change sort.`}
-            onClick={() => {
-              const next = { Due: 'Priority', Priority: 'Stars', Stars: 'Title', Title: 'Due' } as const;
-              setOrder(next[order]);
-              toast(`Sorted by ${next[order].toLowerCase()}`);
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line2)', flex: 'none', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}
-          >
-            <Icon name="sort" size={15} color="var(--tx2)" />{order}
+          <button className="hov k-squish" aria-haspopup="menu" aria-label={'Sort: ' + SORT_LABELS[sort.key] + (sort.desc ? ', reversed' : '')} title={SORT_HINTS[sort.key]} onClick={openSort} style={toolStyle}>
+            <Icon name="sort" size={15} color="var(--tx2)" />{!phone && SORT_LABELS[sort.key]}{sort.desc && <Icon name="undo" size={12} color="var(--tx3)" />}
+          </button>
+          <button className="hov k-squish" aria-haspopup="menu" aria-label={filterCount ? `Filter, ${filterCount} on` : 'Filter'} aria-pressed={filterCount > 0} onClick={openFilter}
+            style={{ ...toolStyle, border: `1px solid ${filterCount ? 'var(--acc)' : 'var(--line2)'}`, color: filterCount ? 'var(--tx)' : 'var(--tx2)' }}>
+            <Icon name="filter" size={15} color={filterCount ? 'var(--tx)' : 'var(--tx2)'} />{!phone && 'Filter'}
+            {filterCount > 0 && <span style={{ minWidth: 17, height: 17, padding: '0 5px', borderRadius: 9, display: 'grid', placeItems: 'center', background: 'var(--acc)', color: '#fff', fontSize: 10 }}>{filterCount}</span>}
           </button>
         </div>
       }
@@ -315,15 +350,48 @@ export default function TasksPage() {
         defaultListId={lists[0]?.id ?? null}
         onCreate={(t) => { A.create.mutate(t); toast(`Added “${t.title}”`); }} />
 
+      {filterChips.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+          {filterChips.map((chip) => (
+            <button key={chip.key} className="hov k-squish" aria-label={`Remove filter ${chip.label}`}
+              onClick={() => setFilter((f) => ({ ...f, [chip.key]: null }))}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 30, padding: '0 10px', borderRadius: 999, border: '1px solid var(--line2)', background: 'var(--card)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx)' }}>
+              {chip.label}<Icon name="close" size={11} color="var(--tx3)" />
+            </button>
+          ))}
+          {filterChips.length > 1 && (
+            <button className="hov" onClick={() => setFilter(NO_FILTER)} style={{ minHeight: 30, padding: '0 8px', fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)' }}>Clear all</button>
+          )}
+        </div>
+      )}
+
       {/* Loading Skeleton */}
       {isPending && <TasksSkeleton tints={[PAL.coral, PAL.amber, PAL.mint]} />}
+
+      {!isPending && view === 'board' && (
+        <div role="group" aria-label="Board columns" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', marginRight: 2 }}>Columns by</span>
+          {(['list', 'course', 'priority'] as const).map((by) => (
+            <button key={by} aria-pressed={boardBy === by} className="hov k-squish" onClick={() => void update({ taskBoardBy: by })}
+              style={{ minHeight: 30, padding: '0 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, border: `1px solid ${boardBy === by ? 'var(--acc)' : 'var(--line2)'}`, background: boardBy === by ? 'color-mix(in srgb, var(--acc) 14%, transparent)' : 'transparent', color: boardBy === by ? 'var(--tx)' : 'var(--tx2)' }}>
+              {by === 'list' ? 'List' : by === 'course' ? 'Course' : 'Priority'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* The table is the one view that is not a stack of buckets. */}
       {!isPending && view === 'table' && (
         <TaskTable
-          rows={rows} phone={phone}
+          rows={rows} phone={phone} sort={sort} onSort={(key) => setSort(sort.key === key ? { key, desc: !sort.desc } : { key, desc: false })}
           onOpen={(t) => setDetail(t.id)}
           onCheck={(t) => A.complete.mutate({ id: t.id, done: true })} />
+      )}
+
+      {!isPending && view === 'agenda' && groups.length === 0 && (
+        <div style={{ marginTop: 14, padding: '30px 14px', borderRadius: 16, textAlign: 'center', background: 'var(--card)', border: '1px solid var(--line)', fontSize: 13, color: 'var(--tx3)' }}>
+          {filterCount ? 'No open tasks match these filters.' : 'Nothing open. Add a task above and it shows up on its day.'}
+        </div>
       )}
 
       {/* Task Groups. Board is the same buckets turned on their side, so the
@@ -334,7 +402,7 @@ export default function TasksPage() {
           overflowX: 'auto', overflowY: 'hidden', paddingBottom: 6,
         } : undefined}>
         {!isPending && view !== 'table' && groups.map((g) => (
-          <div key={g.n}
+          <div key={g.n + (g.hint ?? '')}
             style={{
               background: 'var(--card, #1E1F22)', borderRadius: 20, padding: '14px 14px 6px', marginTop: 14,
               boxShadow: 'var(--sh)', border: `1px solid color-mix(in srgb, ${g.tint} 30%, transparent)`,
@@ -342,10 +410,10 @@ export default function TasksPage() {
                 // 300px left the title about 120px once the row had reserved
                 // its checkbox, stars and due chip, and "problem set 4" wrapped
                 // one character at a time. The row needs ~200px to read.
-                ? { flex: '0 0 360px', width: 360, marginTop: 14, alignSelf: 'stretch' }
+                ? { flex: phone ? '0 0 min(320px, 86vw)' : '0 0 360px', width: phone ? 'min(320px, 86vw)' : 360, marginTop: 14, alignSelf: 'stretch' }
                 : null),
             }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, padding: '0 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, padding: '0 4px', flexWrap: 'wrap' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', flex: 'none', background: g.tint }} />
               <span style={{
                 fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
@@ -355,6 +423,7 @@ export default function TasksPage() {
               }}>
                 {g.n}
               </span>
+              {g.hint && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)' }}>{g.hint}</span>}
               <span style={{ padding: '2px 8px', borderRadius: 7, fontSize: 10, fontWeight: 800, color: 'var(--tx3)', border: '1px solid var(--line2)', fontVariantNumeric: 'tabular-nums' }}>
                 {g.items.length}
               </span>
@@ -592,6 +661,10 @@ export default function TasksPage() {
         />
       )}
 
+      {toolMenu && (
+        <ContextMenu x={toolMenu.x} y={toolMenu.y} kind="tasks" label={toolMenu.label} items={toolMenu.items} onClose={() => setToolMenu(null)} />
+      )}
+
       {/* Google Tasks Date & Time Picker Modal */}
       {datePickerTask && (
         <TaskDatePicker
@@ -647,6 +720,7 @@ function TaskRow({
   onStartInlineEdit?: () => void;
   onEndInlineEdit?: () => void;
 }) {
+  const tags = usePrefs().prefs.tags ?? [];
   const [localEditing, setLocalEditing] = useState(false);
   const editing = isEditingInline || localEditing;
   const [titleVal, setTitleVal] = useState(row.task.title);
@@ -822,26 +896,31 @@ function TaskRow({
 
                       {(row.task.course || p.course || p.submissionLink || p.googleDocsLink || p.customLinks.length > 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
-                          {(row.task.course || p.course) && (
-                            <span
-                              title={`Course: ${row.task.course || p.course}`}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                padding: '2px 7px',
-                                borderRadius: 6,
-                                background: 'color-mix(in srgb, var(--pal-sky) 14%, var(--card2))',
-                                border: '1px solid color-mix(in srgb, var(--pal-sky) 35%, transparent)',
-                                color: 'var(--pal-sky)',
-                                fontSize: 10.5,
-                                fontWeight: 700,
-                              }}
-                            >
-                              <Icon name="book" size={10} color="var(--pal-sky)" />
-                              <span>{row.task.course || p.course}</span>
-                            </span>
-                          )}
+                          {(row.task.course || p.course) && (() => {
+                            // A course that is one of the kept tags wears that tag's colour.
+                            const tag = tags.find((t) => courseIs(row.task.course || p.course, t));
+                            const tint = tag?.color ?? 'var(--pal-sky)';
+                            return (
+                              <span
+                                title={`Course: ${row.task.course || p.course}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px',
+                                  borderRadius: 6,
+                                  background: `color-mix(in srgb, ${tint} 14%, var(--card2))`,
+                                  border: `1px solid color-mix(in srgb, ${tint} 35%, transparent)`,
+                                  color: tag ? 'var(--tx)' : 'var(--pal-sky)',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <Icon name={tag ? 'tag' : 'book'} size={10} color={tint} />
+                                <span>{row.task.course || p.course}</span>
+                              </span>
+                            );
+                          })()}
 
                           {p.submissionLink && (
                             <a
@@ -1351,6 +1430,27 @@ function TaskEditSidepanel({
               </button>
             )}
           </div>
+          {/* The courses and tags kept on the notebook library, one tap each. */}
+          {(prefs.tags ?? []).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {(prefs.tags ?? []).map((tag) => {
+                const on = courseIs(course, tag);
+                return (
+                  <button key={tag.id} type="button" aria-pressed={on} style={CHIP(on)}
+                    onClick={() => {
+                      const next = on ? '' : tag.name;
+                      // patchWithLatest reads the ref, and state only reaches it on the next render.
+                      courseRef.current = next;
+                      setCourse(next);
+                      patchWithLatest();
+                    }}>
+                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: tag.color }} />
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Description / Notes */}

@@ -153,6 +153,8 @@ export const ICONS = {
   reply: 'M10 7 5 12l5 5M5 12h9a5 5 0 0 1 5 5v1',
   moreVert: 'M12 6h.01M12 12h.01M12 18h.01',
   horizontalLine: 'M4 12h16',
+  crop: 'M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14',
+  rotate: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
 } as const;
 
 export type IconName = keyof typeof ICONS;

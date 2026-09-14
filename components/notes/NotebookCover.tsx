@@ -14,12 +14,25 @@ export function coverArt(seed: string, color?: string): string {
   return color || COLORS[hash(seed || 'notebook') % COLORS.length];
 }
 
-export function NotebookCover({ seed, color, className, style, targetKind = 'notebook', imageUrl }: {
+/**
+ * A cover photo sits inside the cover with a margin of the cover colour around
+ * it, and grows until it meets that margin across its full width or its full
+ * height, whichever comes first. Its shape is the one it was cropped to, so it
+ * is never cropped again here.
+ */
+export const COVER_PHOTO_STYLE: React.CSSProperties = {
+  position: 'absolute', inset: '5%', width: '90%', height: '90%', objectFit: 'contain', filter: 'drop-shadow(0 6px 4px #00000024)',
+};
+
+export function NotebookCover({ seed, color, className, style, targetKind = 'notebook', imageUrl, framed = false }: {
   seed: string; color?: string; className?: string; style?: React.CSSProperties;
   targetKind?: CoverKind; imageUrl?: string;
+  /** Show `imageUrl` the way an applied cover photo shows, rather than as an old full-bleed wallpaper. */
+  framed?: boolean;
 }) {
   const cover = useObjectCover(targetKind, seed);
   const source = cover.url || imageUrl;
+  const asCover = !!cover.url || framed;
   const variation = hash(seed) % 3;
   return <div aria-hidden className={className} data-object-cover={`${targetKind}:${seed}`} style={{ position: 'absolute', inset: 0, background: coverArt(seed, color), overflow: 'hidden', ...style }}>
     {!source && <>
@@ -27,7 +40,7 @@ export function NotebookCover({ seed, color, className, style, targetKind = 'not
       <div style={{ position: 'absolute', inset: '20% 5% -30% 52%', transform: 'rotate(20deg)', backgroundImage: 'radial-gradient(#141414 1px, transparent 1px)', backgroundSize: '5px 5px', opacity: .4 }} />
       <div style={{ position: 'absolute', height: 16, width: '40%', left: '7%', bottom: '22%', background: '#fff4', transform: 'rotate(-12deg)' }} />
     </>}
-    {source && <img src={source} alt="" loading="lazy" draggable={false} style={{ position: 'absolute', inset: cover.url ? '8%' : 0, width: cover.url ? '84%' : '100%', height: cover.url ? '84%' : '100%', objectFit: cover.url ? 'contain' : 'cover', filter: cover.url ? 'drop-shadow(0 6px 3px #0002)' : undefined }} />}
+    {source && <img src={source} alt="" loading="lazy" draggable={false} style={asCover ? COVER_PHOTO_STYLE : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
   </div>;
 }
 

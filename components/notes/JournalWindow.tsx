@@ -50,7 +50,8 @@ const STARS = [
   [28, 38], [70, 41], [128, 39], [172, 44], [104, 46],
 ] as const;
 
-export function JournalWindow() {
+/** `compact` is the phone's half-width tile: the window and the greeting, without the longer line. */
+export function JournalWindow({ compact = false }: { compact?: boolean }) {
   // The clock moves under a window left open, and a pane that says "good
   // afternoon" at seven in the evening is worse than no pane at all. Starting
   // at a fixed hour and correcting on mount keeps the server's first paint and
@@ -77,9 +78,9 @@ export function JournalWindow() {
   const id = night ? 'jw-night' : `jw-${p}`;
 
   return (
-    <div style={{
-      background: 'var(--card)', borderRadius: 14, boxShadow: 'var(--sh)', padding: 11,
-      display: 'flex', flexDirection: 'column', gap: 8,
+    <div className="journal-window" style={{
+      background: 'var(--card)', borderRadius: 14, boxShadow: 'var(--sh)', padding: compact ? 8 : 11,
+      display: 'flex', flexDirection: 'column', gap: compact ? 6 : 8, minWidth: 0,
     }}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`A window: ${LINE[p]}`}
         style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 9 }}>
@@ -129,9 +130,11 @@ export function JournalWindow() {
         <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)' }}>
           {HELLO[p]}
         </div>
-        <div style={{ fontSize: 10.5, lineHeight: 1.5, color: 'var(--tx3)', marginTop: 1 }}>
-          {LINE[p]}
-        </div>
+        {!compact && (
+          <div style={{ fontSize: 10.5, lineHeight: 1.5, color: 'var(--tx3)', marginTop: 1 }}>
+            {LINE[p]}
+          </div>
+        )}
       </div>
     </div>
   );

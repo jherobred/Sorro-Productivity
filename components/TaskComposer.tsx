@@ -6,6 +6,8 @@ import { PAL } from '@/lib/pal';
 import type { List, NewTask, CustomTaskLink } from '@/lib/tasks';
 import { serializeTaskWithLinks } from '@/lib/tasks';
 import { TextLoop } from '@/components/core/text-loop';
+import { usePrefs } from '@/lib/prefs';
+import { courseIs } from '@/lib/tagList';
 
 /**
  * Creating a task was one text field and nothing else.
@@ -67,6 +69,7 @@ export function TaskComposer({
   const [showLinksSection, setShowLinksSection] = useState(false);
   const [listId, setListId] = useState<string | null>(defaultListId);
   const box = useRef<HTMLDivElement>(null);
+  const tags = usePrefs().prefs.tags ?? [];
 
   useEffect(() => setListId((v) => v ?? defaultListId), [defaultListId]);
 
@@ -471,6 +474,12 @@ export function TaskComposer({
                 </button>
               )}
             </div>
+            {/* The courses and tags kept on the notebook library, one tap each. */}
+            {tags.map((tag) => (
+              <Chip key={tag.id} on={courseIs(course, tag)} tint={tag.color} onClick={() => setCourse(courseIs(course, tag) ? '' : tag.name)}>
+                <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: tag.color, marginRight: 6 }} />{tag.name}
+              </Chip>
+            ))}
           </Row>
 
           <Row label="Due">

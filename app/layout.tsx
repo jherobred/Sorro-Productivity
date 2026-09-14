@@ -38,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning
+    <html lang="en" data-theme="light" suppressHydrationWarning
       className={display.variable}>
       <head>
         {/* The same policy vercel.json sends as a header, repeated here because
@@ -86,10 +86,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var p=JSON.parse(localStorage.getItem('basedly-prefs')||'{}');
 var r=document.documentElement;
-r.setAttribute('data-theme',p.theme==='light'?'light':'dark');
+r.setAttribute('data-theme',p.theme==='dark'?'dark':'light');
 var ac=p.accent==='#7C6CFF'?'#8B7CFF':p.accent;
 if(ac){r.style.setProperty('--acc',ac);
-r.style.setProperty('--accTx','color-mix(in srgb, '+ac+(p.theme==='light'?' 62%, #1C1A26)':' 82%, #FFFFFF)'));
+r.style.setProperty('--accTx','color-mix(in srgb, '+ac+(p.theme==='dark'?' 82%, #FFFFFF)':' 62%, #1C1A26)'));
 r.style.setProperty('--gl2','color-mix(in srgb, '+ac+' 55%, transparent)');}
 var mo=typeof p.motion==='boolean'?p.motion:!matchMedia('(prefers-reduced-motion: reduce)').matches;
 r.setAttribute('data-motion',mo?'on':'off');

@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { DEFAULT_ACCENT, RETIRED_ACCENT } from './pal';
 import { DEFAULT_SHELL, isShellLayout, type ShellLayout } from './shellLayouts';
 import { EMPTY_PLAN } from './lift';
+import type { Tag } from './tagList';
 
 export type Prefs = {
   theme: 'dark' | 'light';
@@ -12,8 +13,13 @@ export type Prefs = {
   motion: boolean;
   navPicks: string[];
   calView: 'week' | 'month' | 'day' | 'agenda' | 'countdown';
-  /** How the Tasks page lays its rows out. See app/(shell)/tasks/page.tsx. */
-  taskView: 'groups' | 'list' | 'table' | 'board';
+  /**
+   * How the Tasks page lays its rows out. See app/(shell)/tasks/page.tsx.
+   * 'list' is the retired flat list, still found in saved prefs; it opens Agenda.
+   */
+  taskView: 'groups' | 'agenda' | 'table' | 'board' | 'list';
+  /** What the Tasks board splits into columns by. */
+  taskBoardBy: 'list' | 'course' | 'priority';
   sidebar: 'open' | 'compact' | 'hidden' | 'collapsed';
   /** Which of the five shells draws the chrome. See lib/shellLayouts.ts. */
   shellLayout: ShellLayout;
@@ -67,15 +73,27 @@ export type Prefs = {
    * so it follows the account to other devices without a migration.
    */
   noteColors: Record<string, string>;
+
+  /** Courses and tags kept on the notebook library. See lib/tagList.ts. */
+  tags: Tag[];
+  /** Tag ids on each notebook, by notebook id. */
+  notebookTags: Record<string, string[]>;
+  /** How My Tasks sorts, and which way. */
+  taskSort: { key: TaskSortKey; desc: boolean };
 };
 
+export type TaskSortKey = 'smart' | 'due' | 'priority' | 'stars' | 'title' | 'created';
+
 export const DEFAULT_PREFS: Prefs = {
-  theme: 'dark', // README: dark is the product default
+  // New accounts start light. Anyone who already chose a theme keeps it, since
+  // a saved theme always wins over this default.
+  theme: 'light',
   accent: DEFAULT_ACCENT,
   motion: true,
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
   calView: 'week',
   taskView: 'groups',
+  taskBoardBy: 'list',
   sidebar: 'open',
   shellLayout: DEFAULT_SHELL,
   workspace: null,
@@ -104,6 +122,10 @@ export const DEFAULT_PREFS: Prefs = {
   notify: { tasks: true, events: true, social: true, challenges: true, canvas: true },
 
   noteColors: {},
+
+  tags: [],
+  notebookTags: {},
+  taskSort: { key: 'smart', desc: false },
 };
 
 const LS_KEY = 'basedly-prefs';

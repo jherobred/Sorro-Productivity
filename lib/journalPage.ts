@@ -59,6 +59,114 @@ export function writeJournal(journal: JournalBody): string {
   return journal.prefix + journal.prose + tail;
 }
 
+/**
+ * A journal page that holds many days.
+ *
+ * Writing on another day used to make another page, so a week of journaling
+ * was seven pages. Now every day lives in the page it was written in. The day
+ * the page started with keeps the prose straight after the first line, exactly
+ * where a single-day journal keeps it. Every other day follows under its own
+ * comment line, which renders as nothing in Markdown:
+ *
+ *   # Journal · 2026-09-14
+ *   the 14th
+ *   <!-- basedly-journal-day:2026-09-15 -->
+ *   the 15th
+ *   <!-- basedly-journal-photos:v2 -->{"2026-09-15":[…]}
+ *
+ * A page that only has its first day is written in the old single-day format,
+ * byte for byte, so existing journals are unchanged until a second day is
+ * written in them.
+ */
+export type JournalEntry = { prose: string; photos: Polaroid[] };
+export type JournalBook = { prefix: string; start: string; entries: Record<string, JournalEntry> };
+
+const MARKER_V2 = '<!-- basedly-journal-photos:v2 -->';
+const DAY_LINE = /\n?<!-- basedly-journal-day:(\d{4}-\d{2}-\d{2}) -->\n?/g;
+
+function parsePhotoDays(json: string): Record<string, Polaroid[]> | null {
+  try {
+    const data: unknown = JSON.parse(json);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    const out: Record<string, Polaroid[]> = {};
+    for (const [day, list] of Object.entries(data as Record<string, unknown>)) {
+      if (!parseDay(day)) return null;
+      const photos = parsePhotos(JSON.stringify(list));
+      if (!photos) return null;
+      out[day] = photos;
+    }
+    return out;
+  } catch { return null; }
+}
+
+/** True when a day has anything in it worth keeping. */
+export const hasEntry = (entry: JournalEntry | undefined) => !!entry && (!!entry.prose.trim() || entry.photos.length > 0);
+
+export function readJournalBook(note: { body: string; created_at: string }): JournalBook {
+  const start = journalDay(note);
+  const body = note.body;
+  const split = body.indexOf('\n');
+  const prefix = split < 0 ? body + '\n' : body.slice(0, split + 1);
+  let rest = split < 0 ? '' : body.slice(split + 1);
+  const entries: Record<string, JournalEntry> = {};
+
+  let photoDays: Record<string, Polaroid[]> = {};
+  const v2 = rest.lastIndexOf(MARKER_V2);
+  if (v2 >= 0) {
+    const parsed = parsePhotoDays(rest.slice(v2 + MARKER_V2.length));
+    // A damaged marker stays in the writing, the same rule as the old format.
+    if (parsed) { photoDays = parsed; rest = rest.slice(0, v2).replace(/\n$/, ''); }
+  } else {
+    const old = readJournal(body);
+    if (old.photos.length) { photoDays = { [start]: old.photos }; rest = old.prose; }
+  }
+
+  DAY_LINE.lastIndex = 0;
+  let day = start, from = 0;
+  for (let match = DAY_LINE.exec(rest); match; match = DAY_LINE.exec(rest)) {
+    if (!parseDay(match[1])) continue;
+    const prose = rest.slice(from, match.index);
+    entries[day] = { prose: (entries[day]?.prose ? entries[day].prose + '\n\n' : '') + prose, photos: [] };
+    day = match[1]; from = match.index + match[0].length;
+  }
+  const last = rest.slice(from);
+  entries[day] = { prose: (entries[day]?.prose ? entries[day].prose + '\n\n' : '') + last, photos: [] };
+  for (const [photoDay, photos] of Object.entries(photoDays)) {
+    entries[photoDay] = { prose: entries[photoDay]?.prose ?? '', photos };
+  }
+  return { prefix, start, entries };
+}
+
+export function writeJournalBook(book: JournalBook): string {
+  const first = book.entries[book.start] ?? { prose: '', photos: [] };
+  const others = Object.keys(book.entries).filter((day) => day !== book.start && hasEntry(book.entries[day])).sort();
+  if (!others.length) return writeJournal({ prefix: book.prefix, prose: first.prose, photos: first.photos });
+  let text = book.prefix + first.prose;
+  for (const day of others) text += `\n<!-- basedly-journal-day:${day} -->\n` + book.entries[day].prose;
+  const photos: Record<string, Polaroid[]> = {};
+  for (const day of [book.start, ...others]) if (book.entries[day]?.photos.length) photos[day] = book.entries[day].photos;
+  return Object.keys(photos).length ? text + '\n' + MARKER_V2 + JSON.stringify(photos) : text;
+}
+
+/** Days with writing or photos, oldest first. */
+export const bookDays = (book: JournalBook) => Object.keys(book.entries).filter((day) => hasEntry(book.entries[day])).sort();
+
+/**
+ * Put every day of another journal page into this one. Where both pages wrote
+ * the same day, the writing is kept one after the other and the photos are
+ * joined, so nothing from either page is lost.
+ */
+export function combineJournals(into: JournalBook, from: JournalBook): JournalBook {
+  const entries = { ...into.entries };
+  for (const day of bookDays(from)) {
+    const mine = entries[day], theirs = from.entries[day];
+    if (!hasEntry(mine)) { entries[day] = theirs; continue; }
+    const prose = [mine.prose.trim() ? mine.prose.replace(/\s+$/, '') : '', theirs.prose.trim() ? theirs.prose.replace(/^\s+/, '') : ''].filter(Boolean).join('\n\n');
+    entries[day] = { prose, photos: [...mine.photos, ...theirs.photos] };
+  }
+  return { ...into, entries };
+}
+
 /** Local calendar day, not UTC, so a late entry is not filed as tomorrow. */
 export function localDay(value: Date | string): string {
   const d = typeof value === 'string' ? new Date(value) : value;

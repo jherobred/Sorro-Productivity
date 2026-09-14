@@ -1,4 +1,5 @@
 import {readDoc,docText} from './docFormat.ts';
+import {readJournalBook,bookDays} from './journalPage.ts';
 export type PageKind = 'document' | 'whiteboard' | 'moodboard' | 'pdf' | 'journal' | 'code' | 'checklist' | 'flashcards' | 'cornell';
 export const PAGE_TYPES = [
   {kind:'document',name:'Document',icon:'text',description:'Notes, lists and equations'},
@@ -67,14 +68,14 @@ export function pageKind(body:string):PageKind {
   // beginning with a code fence must keep everything after that first fence.
   return readBoard(body)?.kind || readStudy(body)?.kind || (body.startsWith('# Journal · ')?'journal':'document');
 }
-export function initialBody(kind:PageKind,day?:string):string {
+export function initialBody(kind:PageKind):string {
   if(kind==='whiteboard'||kind==='moodboard'||kind==='pdf')return writeBoard({version:1,kind,items:[]});
   if(kind==='checklist')return writeStudy({version:1,kind,items:[]});
   if(kind==='flashcards')return writeStudy({version:1,kind,cards:[]});
   if(kind==='cornell')return writeStudy({version:1,kind,cues:'',notes:'',summary:''});
-  // Written as YYYY-MM-DD so a page kept for another day files under that day
-  // on the journal calendar. See journalDay in journalPage.ts.
-  if(kind==='journal'){const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;return '# Journal · '+(day||today)+'\n\nWhat happened today?\n\n\nWhat am I thinking about?\n\n\nOne thing for tomorrow\n\n';}
+  // Written as YYYY-MM-DD, the day this journal starts on. Its later days are
+  // kept in the same page. See readJournalBook in journalPage.ts.
+  if(kind==='journal'){const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;return '# Journal · '+today+'\n\nWhat happened today?\n\n\nWhat am I thinking about?\n\n\nOne thing for tomorrow\n\n';}
   if(kind==='code')return writeStudy({version:1,kind,language:'java',code:''});
   return '';
 }
@@ -86,5 +87,8 @@ export function pagePreview(body:string) {
   if(study?.kind==='flashcards')return `${study.cards.length} cards to practice`;
   if(study?.kind==='cornell')return study.notes.slice(0,150)||'Cues, notes and a summary';
   if(study?.kind==='code')return `${study.language} · ${study.code.split('\n').length} lines`;
+  // A journal's photo list and day markers are comments, not writing. Show the
+  // newest day's words instead of the raw page.
+  if(body.startsWith('# Journal · ')){const book=readJournalBook({body,created_at:'1970-01-01T12:00:00'});const day=bookDays(book).filter(d=>book.entries[d].prose.trim()).at(-1);return day?book.entries[day].prose.replace(/\s+/g,' ').trim().slice(0,150):'';}
   return body.replace(/!\[[^\]]*\]\([^)]*\)/g,'[Image]').replace(/[#*`_\[\]]/g,'').slice(0,150);
 }

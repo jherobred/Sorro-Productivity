@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { env, pipeline } from '@huggingface/transformers';
+import { env, pipeline, RawImage } from '@huggingface/transformers';
 
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 // Keep the UI, camera controls and browser Back responsive during inference.
@@ -7,8 +7,12 @@ env.allowLocalModels = false;
 if (env.backends.onnx.wasm) env.backends.onnx.wasm.numThreads = 1;
 
 worker.onmessage = async (event: MessageEvent<Blob>) => {
-  const inputUrl = URL.createObjectURL(event.data);
   try {
+    // Decode the photo here instead of handing the pipeline a blob: URL. The
+    // pipeline fetches URL inputs, and the site's connect-src does not allow
+    // blob:, so every cutout on the website was refused the moment the model
+    // finished loading.
+    const input = await RawImage.fromBlob(event.data);
     const segment = await pipeline('background-removal', 'studioludens/birefnet-lite-512', {
       device: 'wasm', dtype: 'fp32',
       revision: '4a3c40c36c94093cc1e724d9ea428b8fa4b57dc7',
@@ -19,7 +23,7 @@ worker.onmessage = async (event: MessageEvent<Blob>) => {
       },
     });
     worker.postMessage({ type: 'progress', progress: { phase: 'processing' } });
-    const [result] = await segment(inputUrl);
+    const [result] = await segment(input);
     const canvas = new OffscreenCanvas(result.width, result.height);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Your browser cannot finish this cutout. Use the original photo instead.');
@@ -45,5 +49,5 @@ worker.onmessage = async (event: MessageEvent<Blob>) => {
     if (process.env.NODE_ENV !== 'production') console.error('Cutout worker:', error);
     worker.postMessage({ type: 'error', message: error instanceof Error && /subject|browser/.test(error.message)
       ? error.message : process.env.NODE_ENV !== 'production' ? String(error) : 'The cutout could not finish. Check your connection or try another photo. You can also keep the original.' });
-  } finally { URL.revokeObjectURL(inputUrl); }
+  }
 };
