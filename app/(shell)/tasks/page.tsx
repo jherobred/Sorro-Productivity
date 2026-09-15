@@ -13,6 +13,7 @@ import { TaskItem } from '@/components/tasks/TaskItem';
 import { QuickAdd } from '@/components/tasks/QuickAdd';
 import { TaskPanel } from '@/components/tasks/TaskPanel';
 import { TaskRail, SMART_SCOPES } from '@/components/tasks/TaskRail';
+import { OpenInProjects } from '@/components/tasks/ProjectsLink';
 import { BulkBar, type BulkDay } from '@/components/tasks/BulkBar';
 import { CanvasLmsColumn } from '@/components/lms/CanvasLms';
 import { K, PAL } from '@/lib/pal';
@@ -448,6 +449,7 @@ export default function TasksPage() {
           <div className="tasks-head-title">
             <h1 className="section-title">{title}</h1>
             <p>{subline}</p>
+            {scopeList && <OpenInProjects list={scopeList} />}
           </div>
           {scope !== 'done' && (
             <div className="tasks-today" aria-label="Today's progress">

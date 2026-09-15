@@ -5,6 +5,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { INBOX, type TaskScope } from '@/lib/taskViews';
 import type { List } from '@/lib/tasks';
 import type { Tag } from '@/lib/tagList';
+import { ProjectsLink } from './ProjectsLink';
 
 export const SMART_SCOPES: { id: TaskScope; label: string; icon: IconName }[] = [
   { id: 'all', label: 'All open', icon: 'task' },
@@ -53,12 +54,15 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
     );
   };
 
+  const openInProjects = lists.reduce((n, l) => n + (counts[`list:${l.id}`] ?? 0), 0);
+
   if (phone) {
     return (
       <nav className="task-rail is-phone hbar" aria-label="Task views">
         {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={14} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
         {item(`list:${INBOX}`, 'Inbox', <i className="task-rail-dot" style={{ background: '#7c8cff' }} />)}
         {lists.map((l) => item(`list:${l.id}`, l.name, <i className="task-rail-dot" style={{ background: l.color }} />))}
+        <ProjectsLink lists={lists} open={openInProjects} variant="chip" />
         {courses.map((c) => item(`course:${c}`, c, <Icon name="tag" size={13} color={tags.find((t) => t.name === c)?.color} />))}
       </nav>
     );
@@ -85,6 +89,7 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
               if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAdding(null); }
             }} />
         )}
+        <ProjectsLink lists={lists} open={openInProjects} variant="rail" />
       </div>
       {courses.length > 0 && (
         <div className="task-rail-group">

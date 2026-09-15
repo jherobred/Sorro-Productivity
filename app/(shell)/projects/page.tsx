@@ -58,6 +58,11 @@ export default function ProjectsPage() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
   useOverlayBack(!!openId, () => { setOpenId(null); setShowDone(false); });
+  // My Tasks links straight to a project with ?open=<id>.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('open');
+    if (id) setOpenId(id);
+  }, []);
 
   const meta = prefs.projectMeta;
   const tags = prefs.tags ?? [];
