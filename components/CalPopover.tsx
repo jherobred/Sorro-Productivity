@@ -80,12 +80,16 @@ export function CalPopover({
           top: pos?.top ?? -9999,
           width,
           maxWidth: 'calc(100vw - 20px)',
+          // The bubbles hold their own padding. A tall one on a short phone
+          // screen scrolls inside itself instead of running off the bottom.
+          maxHeight: 'calc(100dvh - 20px)',
+          overflowY: 'auto',
           zIndex: 89,
           background: 'var(--card)',
           border: '1px solid var(--line2)',
-          borderRadius: 20,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
-          padding: '16px 20px 18px',
+          borderRadius: 18,
+          boxShadow: 'var(--shl, 0 16px 48px rgba(0,0,0,0.3))',
+          padding: 0,
           visibility: pos ? 'visible' : 'hidden',
         }}>
         {children}

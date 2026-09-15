@@ -6,7 +6,8 @@ import { Icon } from '@/components/Icon';
 import { useOverlayBack } from '@/lib/nav';
 import { makeCutout, prepareCover, type CutoutProgress } from '@/lib/coverProcessing';
 import { saveObjectCover, type CoverTarget } from '@/lib/objectCovers';
-import { coverArt, COVER_PHOTO_STYLE } from './NotebookCover';
+import { coverArt, COVER_PHOTO_STYLE, COVER_FILL_STYLE } from './NotebookCover';
+import { usePrefs } from '@/lib/prefs';
 import { PhotoAdjust, type CropShape } from './PhotoAdjust';
 import styles from './CoverCapture.module.css';
 
@@ -40,6 +41,9 @@ export function CoverCapture({ target, onClose, onApplied }: {
   const [returnTo, setReturnTo] = useState<'photo' | 'review'>('photo');
   // Measured once: the card behind the dialog does not change size while it is open.
   const [cover] = useState(() => measureCover(target));
+  const { prefs, update: updatePrefs } = usePrefs();
+  // Whether the photo sits inside the cover's margin or fills the whole cover, previewed here and saved with the cover.
+  const [fill, setFill] = useState(() => target.kind === 'notebook' && !!prefs.coverFill?.[target.id]);
   const video = useRef<HTMLVideoElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const nativeInput = useRef<HTMLInputElement>(null);
@@ -162,6 +166,11 @@ export function CoverCapture({ target, onClose, onApplied }: {
     setError(''); setPhase('applying');
     try {
       const saved = await saveObjectCover(target, shown);
+      if (target.kind === 'notebook') {
+        const next = { ...(prefs.coverFill ?? {}) };
+        if (fill) next[target.id] = true; else delete next[target.id];
+        void updatePrefs({ coverFill: next });
+      }
       onApplied?.();
       if (!alive.current) return;
       setSaveState(saved); setPhase('done');
@@ -217,7 +226,7 @@ export function CoverCapture({ target, onClose, onApplied }: {
             // The same shape as the card it goes on, with the photo placed the way the card places it.
             <div className={styles.coverPreview} style={{ aspectRatio: String(coverAspect), width: `min(calc(100% - ${phoneWidth ? 40 : 52}px), calc(min(52dvh, 480px) * ${coverAspect}))` }}>
               <div className={styles.coverArt} style={{ background: coverArt(target.id, target.color) }}>
-                {preview && <img ref={photo} src={preview} alt={cutout ? 'Your photo with the background removed' : 'Your selected cover photo'} style={COVER_PHOTO_STYLE} />}
+                {preview && <img ref={photo} src={preview} alt={cutout ? 'Your photo with the background removed' : 'Your selected cover photo'} style={fill ? COVER_FILL_STYLE : COVER_PHOTO_STYLE} />}
               </div>
               {phase === 'done' && <span className={styles.savedBadge}><Icon name="check" size={14} />On your {target.kind === 'notebook' ? 'library shelf' : 'task'}</span>}
             </div>
@@ -236,7 +245,7 @@ export function CoverCapture({ target, onClose, onApplied }: {
             {phase === 'camera' && <><div className={styles.actions}><button className={styles.secondary} aria-label="Switch camera" onClick={() => void openCamera(facing === 'environment' ? 'user' : 'environment')} disabled={cameraPending}><Icon name="refresh" size={20} /></button><button className={styles.shutter} aria-label="Take photo" onClick={() => void capture()} disabled={!cameraReady} /><button className={styles.secondary} onClick={() => fileInput.current?.click()}>Photos</button></div><button className={styles.textButton} onClick={() => nativeInput.current?.click()}>Use my device’s camera app</button></>}
             {phase === 'photo' && <><div className={styles.actions}><button className={styles.primary} onClick={() => void removeBackground()}>Remove background</button><button className={styles.secondary} onClick={() => setPhase('review')}>Keep full photo</button><button className={styles.secondary} onClick={() => adjust('photo')}><Icon name="crop" size={17} />Crop</button></div><p className={styles.caption}>Free processing on your device. First use downloads about 220 MB of AI tools, then reuses the browser cache. A cutout can take a minute on a phone. Wi-Fi recommended.</p><button className={styles.textButton} onClick={() => fileInput.current?.click()}>Choose another photo</button></>}
             {processing && <div className={styles.progress} role="status" aria-live="polite"><strong>{progress.phase === 'download' ? 'Getting the cutout tools…' : 'Finding the edges of your object…'}</strong><p>{progress.phase === 'download' ? progress.total ? `${mb(progress.loaded ?? 0)} of ${mb(progress.total)}` : 'Checking the model cache and connection' : 'Working on your device. Your photo is not sent to an AI service.'}</p><div className={styles.progressTrack} role="progressbar" aria-label="Background removal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.phase === 'download' && percent !== null ? percent : undefined}><span style={{ width: percent !== null && progress.phase === 'download' ? `${percent}%` : '35%' }} className={progress.phase === 'processing' || percent === null ? styles.indeterminate : undefined} /></div><button className={styles.textButton} onClick={() => { operation.current?.abort(); setPhase('photo'); }}>Cancel processing</button></div>}
-            {phase === 'review' && <><p className={styles.reviewCopy}>Here’s how it will look on <strong>{target.title}</strong>.</p><div className={styles.actions}><button className={styles.primary} onClick={() => void apply()}>Apply to {target.kind}<Icon name="arrowRight" size={17} /></button><button className={styles.secondary} onClick={() => adjust('review')}><Icon name="crop" size={17} />Crop</button><button className={styles.secondary} onClick={() => { setCutout(null); setPhase('photo'); }}>Try again</button></div></>}
+            {phase === 'review' && <><p className={styles.reviewCopy}>Here’s how it will look on <strong>{target.title}</strong>.</p>{target.kind === 'notebook' && <div className={styles.fitChoice} role="radiogroup" aria-label="How the photo sits on the cover"><button type="button" role="radio" aria-checked={!fill} onClick={() => setFill(false)}>Inside a margin</button><button type="button" role="radio" aria-checked={fill} onClick={() => setFill(true)}>Fill the whole cover</button></div>}<div className={styles.actions}><button className={styles.primary} onClick={() => void apply()}>Apply to {target.kind}<Icon name="arrowRight" size={17} /></button><button className={styles.secondary} onClick={() => adjust('review')}><Icon name="crop" size={17} />Crop</button><button className={styles.secondary} onClick={() => { setCutout(null); setPhase('photo'); }}>Try again</button></div></>}
             {phase === 'applying' && <p className={styles.reviewCopy} role="status">Saving your cover…</p>}
             {phase === 'done' && <><p className={styles.reviewCopy} role="status">{saveState === 'synced' ? 'Saved and ready on your other devices.' : 'Saved on this device. It will sync when you’re connected and signed in.'}</p><button className={styles.primary} onClick={onClose}>Done<Icon name="check" size={17} /></button></>}
           </div>

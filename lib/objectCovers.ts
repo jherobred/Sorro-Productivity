@@ -7,7 +7,13 @@ import { useSignedUrl } from './uploads';
 
 export type CoverKind = 'notebook' | 'task';
 export type CoverTarget = { kind: CoverKind; id: string; title: string; color?: string };
-type CoverRef = { localId?: string; path?: string; updatedAt: number; pending?: boolean };
+/**
+ * `removed` marks a cover taken off. It stays as a marker, newer than any file
+ * still listed in storage, so a refresh cannot bring the old picture back while
+ * the delete is waiting for a connection. `pending` on it means the stored files
+ * still need deleting.
+ */
+type CoverRef = { localId?: string; path?: string; updatedAt: number; pending?: boolean; removed?: boolean };
 type Snapshot = { owner: string | null; covers: Record<string, CoverRef> };
 const EMPTY: Snapshot = { owner: null, covers: {} };
 let state = EMPTY;
@@ -39,6 +45,7 @@ async function loadOwner() {
 
 async function refreshRemote(uid: string) {
   if (uid === 'me' || !navigator.onLine) return false;
+  const startedAt = Date.now();
   const prefix = `${uid}/object-covers`;
   const remote: Record<string, CoverRef> = {};
   for (let offset = 0; ; offset += 1000) {
@@ -58,11 +65,34 @@ async function refreshRemote(uid: string) {
   for (const [key, ref] of Object.entries(remote)) {
     if (!merged[key]?.pending && (!merged[key] || merged[key].updatedAt < ref.updatedAt)) merged[key] = ref;
   }
+  // A synced cover whose file is gone was removed on another device. Covers
+  // chosen in the last few minutes are left alone: their upload may have
+  // finished after this listing was taken.
+  for (const [key, ref] of Object.entries(merged)) {
+    if (ref.path && !ref.pending && !ref.removed && !remote[key] && ref.updatedAt < startedAt - 300_000) delete merged[key];
+  }
   try { persist(uid, merged); } catch { /* Cached covers remain usable when storage is full. */ }
   return true;
 }
 
+/** Deletes every stored file for one cover. */
+async function deleteRemote(uid: string, key: string) {
+  const split = key.indexOf(':');
+  const stem = `${key.slice(0, split)}__${encodeURIComponent(key.slice(split + 1))}__`;
+  const prefix = `${uid}/object-covers`;
+  const { data, error } = await supabase.storage.from('bd-files').list(prefix, { limit: 1000, search: stem });
+  if (error || !data) return false;
+  const paths = data.filter((row) => row.name.startsWith(stem)).map((row) => `${prefix}/${row.name}`);
+  if (paths.length) {
+    const { error: removeError } = await supabase.storage.from('bd-files').remove(paths);
+    if (removeError) return false;
+  }
+  if (state.owner === uid && state.covers[key]?.removed) persist(uid, { ...state.covers, [key]: { ...state.covers[key], pending: false } });
+  return true;
+}
+
 async function uploadPending(uid: string, key: string, ref: CoverRef) {
+  if (ref.removed) return deleteRemote(uid, key);
   if (!ref.localId || uid === 'me') return false;
   const blob = await getImage(ref.localId);
   if (!blob || state.owner !== uid) return false;
@@ -127,10 +157,32 @@ export async function migrateNotebookCovers(books:{id:string;name:string;color:s
 
 export function useObjectCover(kind: CoverKind, id: string) {
   const snapshot = useSyncExternalStore(subscribe, () => state, () => EMPTY);
-  const ref = snapshot.covers[keyOf(kind, id)];
+  const found = snapshot.covers[keyOf(kind, id)];
+  const ref = found?.removed ? undefined : found;
   const local = useImageUrls([ref?.localId]);
   const remote = useSignedUrl('bd-files', ref?.path);
   return { url: (ref?.localId ? local[ref.localId] : undefined) || remote, pending: !!ref?.pending, exists: !!ref };
+}
+
+/** Whether a cover is set right now, for menus built outside a render. */
+export const hasObjectCover = (kind: CoverKind, id: string) => {
+  const ref = state.covers[keyOf(kind, id)];
+  return !!ref && !ref.removed;
+};
+
+/**
+ * Takes a cover off. The picture goes from this device at once, and from
+ * storage now or, when offline, the next time the covers sync.
+ */
+export async function removeObjectCover(kind: CoverKind, id: string): Promise<void> {
+  const uid = await currentUserId();
+  if (state.owner !== uid) await loadOwner();
+  const key = keyOf(kind, id);
+  const old = state.covers[key];
+  if (!old || old.removed) return;
+  persist(uid, { ...state.covers, [key]: { updatedAt: Date.now(), removed: true, pending: uid !== 'me' } });
+  if (old.localId) void deleteImage(old.localId).catch(() => undefined);
+  if (uid !== 'me' && navigator.onLine) void deleteRemote(uid, key).catch(() => false);
 }
 
 /** Pixels go to IndexedDB before the network. Only the selected result syncs. */

@@ -58,6 +58,11 @@ export function ToastHost() {
             fontWeight: 600,
           }}
         >
+          {(t.icon || t.tone) && (
+            <span aria-hidden className="toast-mark" data-tone={t.tone ?? 'info'}>
+              <Icon name={t.icon ?? (t.tone === 'success' ? 'check' : t.tone === 'danger' ? 'trash' : 'bell')} size={13} />
+            </span>
+          )}
           <span style={{ flex: 1, textWrap: 'pretty' }}>{t.text}</span>
 
           {t.undo && (
@@ -76,8 +81,8 @@ export function ToastHost() {
                 minHeight: 24,
               }}
             >
-              <Icon name="undo" size={13} color="var(--accTx)" />
-              Undo
+              {!t.action && <Icon name="undo" size={13} color="var(--accTx)" />}
+              {t.action ?? 'Undo'}
             </button>
           )}
 

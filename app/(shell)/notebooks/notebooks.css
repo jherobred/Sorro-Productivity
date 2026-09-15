@@ -326,3 +326,17 @@ button.polaroid-window:focus-visible{outline:2px solid var(--poster-blue);outlin
 .cover-tags>span{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--tag) 15%,transparent);color:var(--tx2);font-size:11px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cover-tags>span::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--tag)}
 @media(max-width:600px){.cover-tags{padding:7px 15px 0}.tag-add input{width:118px}.tag-shelf{padding-bottom:18px}}
+/* Full screen: the open page takes the whole window, without the app's own bars. */
+html[data-note-fullscreen] .studio-sidebar,html[data-note-fullscreen] .studio-topbar,html[data-note-fullscreen] .studio-bottom-nav{display:none!important}
+html[data-note-fullscreen] .studio-main:has(.editor-room){padding:8px 12px calc(8px + env(safe-area-inset-bottom))!important}
+@media(max-width:760px){html[data-note-fullscreen] .studio-main:has(.editor-room){padding:calc(6px + env(safe-area-inset-top)) 6px calc(6px + env(safe-area-inset-bottom))!important}}
+.editor-actions button[aria-pressed=true]{color:var(--poster-blue)}
+/* A photo on the board as a polaroid: a white frame, a square-cut window and a line to write under it. */
+.board-object.image.polaroid{background:transparent}
+.board-polaroid{display:flex;flex-direction:column;width:100%;height:100%;padding:6% 6% 0;border-radius:3px;background:#fdfcf7;box-shadow:0 8px 22px #0000002e;transform-origin:center}
+.board-polaroid-window{flex:1;min-height:0;overflow:hidden;background:#e8e5dc}
+.board-object.polaroid .board-polaroid-window img{object-fit:cover}
+.board-polaroid-caption{flex:none;display:flex;align-items:center;justify-content:center;width:100%;height:19%;min-height:30px;padding:0 6px;border:0;outline:none;background:transparent;color:#2b2823;font:16px/1.3 var(--font-body);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.board-polaroid-caption.is-empty{color:#a29d92}
+input.board-polaroid-caption{user-select:text;touch-action:auto}
+input.board-polaroid-caption::placeholder{color:#a29d92}

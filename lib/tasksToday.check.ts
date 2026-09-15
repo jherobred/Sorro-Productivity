@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sortTasks, filterTasks, agendaSections, boardColumns, courseNames, NO_FILTER, INBOX, NONE } from './taskViews.ts';
-import { upcomingCycle, eventCountdown, countdownText } from './todayCycle.ts';
+import { sortTasks, filterTasks, agendaSections, boardColumns, courseNames, inScope, searchTasks, NO_FILTER, INBOX, NONE } from './taskViews.ts';
+import { upcomingCycle, eventCountdown, countdownText, deadlineOf, deadlineClock, hashtags, nextTimedEvent, dayCountdown } from './todayCycle.ts';
 import type { Task } from './tasks.ts';
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
@@ -72,8 +72,19 @@ test('the Today card cycles late work first, then the week by importance', () =>
     task('late', { due_on: '2026-09-14' }),
     task('done', { due_on: '2026-09-15', done: true }),
   ];
-  assert.deepEqual(upcomingCycle(tasks, '2026-09-15', '2026-09-22').map((t) => t.id), ['late', 'soon-high', 'soon-low']);
-  assert.deepEqual(upcomingCycle([task('far', { due_on: '2026-12-01' })], '2026-09-15', '2026-09-22').map((t) => t.id), ['far']);
+  assert.deepEqual(upcomingCycle(tasks, '2026-09-15', '2026-09-22').map((t) => t.id), ['late', 'soon-high', 'soon-low', 'next-week-high']);
+  // Two tasks due far away still give the card something to turn to.
+  assert.deepEqual(upcomingCycle([task('far', { due_on: '2026-12-01' }), task('farther', { due_on: '2026-12-09' })], '2026-09-15', '2026-09-22').map((t) => t.id), ['far', 'farther']);
+});
+
+test('deadlines count down to the second, with days, and keep counting once late', () => {
+  const due = deadlineOf(task('a', { due_on: '2026-09-17' }))!;
+  assert.equal(new Date(due).getHours(), 23);
+  const now = new Date(2026, 8, 15, 19, 46, 37).getTime();
+  assert.deepEqual(deadlineClock(due, now), { text: '2d 04:13:22', late: false });
+  assert.deepEqual(deadlineClock(now - 3_725_000, now), { text: '01:02:05', late: true });
+  assert.equal(deadlineOf(task('b')), null);
+  assert.deepEqual(hashtags('Essay #draft', 'see #Draft and #cs-191 but not a#b'), ['draft', 'cs-191']);
 });
 
 test('the Up next bar measures the gap before an event, then the event itself', () => {
@@ -88,4 +99,45 @@ test('the Up next bar measures the gap before an event, then the event itself', 
   assert.equal(during.share, 0.5);
   assert.equal(countdownText(90_500), '1m 30s');
   assert.equal(countdownText(-5), '0s');
+});
+
+test('scopes: today takes in late work, done shows only finished tasks, lists and courses match', () => {
+  const tasks = [
+    task('late', { due_on: '2026-09-12', list_id: 'school' }),
+    task('today', { due_on: '2026-09-15', course: 'CS 191', stars: 2 }),
+    task('friday', { due_on: '2026-09-18' }),
+    task('far', { due_on: '2026-10-30' }),
+    task('undated'),
+    task('finished', { due_on: '2026-09-15', done: true }),
+  ];
+  const ids = (scope: Parameters<typeof inScope>[1]) => tasks.filter((t) => inScope(t, scope, '2026-09-15', '2026-09-22')).map((t) => t.id);
+  assert.deepEqual(ids('today'), ['late', 'today']);
+  assert.deepEqual(ids('upcoming'), ['friday']);
+  assert.deepEqual(ids('overdue'), ['late']);
+  assert.deepEqual(ids('nodate'), ['undated']);
+  assert.deepEqual(ids('starred'), ['today']);
+  assert.deepEqual(ids('done'), ['finished']);
+  assert.deepEqual(ids('list:school'), ['late']);
+  assert.deepEqual(ids('list:inbox'), ['today', 'friday', 'far', 'undated']);
+  assert.deepEqual(ids('course:cs 191'), ['today']);
+  assert.deepEqual(searchTasks(tasks, 'CS to').map((t) => t.id), ['today']);
+});
+
+test('the calendar timers follow the event now or next, and count today down to 11:59 PM', () => {
+  const iso = (h: number, m = 0) => new Date(2026, 8, 15, h, m).toISOString();
+  const events = [
+    { id: 'all-day', starts_at: iso(0), ends_at: iso(23, 59), all_day: true },
+    { id: 'lecture', starts_at: iso(9), ends_at: iso(10, 30) },
+    { id: 'lab', starts_at: iso(13), ends_at: iso(15) },
+    { id: 'gone', starts_at: iso(11), ends_at: iso(12), deleted_at: iso(8) },
+  ];
+  const at = (h: number, m = 0) => new Date(2026, 8, 15, h, m).getTime();
+  assert.deepEqual([nextTimedEvent(events, at(8)).next?.id, nextTimedEvent(events, at(8)).previousEnd], ['lecture', null]);
+  assert.equal(nextTimedEvent(events, at(9, 30)).next?.id, 'lecture');
+  assert.deepEqual([nextTimedEvent(events, at(11)).next?.id, nextTimedEvent(events, at(11)).previousEnd], ['lab', iso(10, 30)]);
+  assert.equal(nextTimedEvent(events, at(16)).next, null);
+  const noon = dayCountdown(at(12));
+  assert.equal(noon.msLeft, (11 * 60 + 59) * 60_000);
+  assert.ok(Math.abs(noon.share - 720 / 1439) < 1e-9);
+  assert.equal(dayCountdown(at(23, 59) + 30_000).msLeft, 0);
 });

@@ -153,6 +153,10 @@ export const ICONS = {
   reply: 'M10 7 5 12l5 5M5 12h9a5 5 0 0 1 5 5v1',
   moreVert: 'M12 6h.01M12 12h.01M12 18h.01',
   horizontalLine: 'M4 12h16',
+  minimize: 'M9 4v5H4M15 4v5h5M4 15h5v5M20 15h-5v5',
+  repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3',
+  mapPin: 'M12 21s-6.5-5.4-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.6-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  hourglass: 'M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9',
   crop: 'M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14',
   rotate: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
 } as const;

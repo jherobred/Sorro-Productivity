@@ -70,8 +70,87 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
 
   /* ------------------------------------------------------------- scanning */
 
+  function parseIcsToRows(text: string): Row[] {
+    const lines = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+    const rows: Row[] = [];
+    let summary = '';
+    let dtstart = '';
+    let dtend = '';
+    let loc = '';
+
+    const parseDate = (v: string): Date => {
+      const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(v);
+      if (m) {
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+      }
+      return new Date(v);
+    };
+
+    const flush = () => {
+      if (!summary || !dtstart) return;
+      const sDate = parseDate(dtstart);
+      const eDate = dtend ? parseDate(dtend) : new Date(sDate.getTime() + 3600000);
+      const dow = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][sDate.getDay()] as Day;
+      const sh = String(sDate.getHours()).padStart(2, '0');
+      const sm = String(sDate.getMinutes()).padStart(2, '0');
+      const eh = String(eDate.getHours()).padStart(2, '0');
+      const em = String(eDate.getMinutes()).padStart(2, '0');
+
+      let kind: Kind = 'other';
+      const lower = summary.toLowerCase();
+      if (lower.includes('study') || lower.includes('review') || lower.includes('read')) kind = 'work';
+      else if (lower.includes('nap') || lower.includes('sleep') || lower.includes('rest') || lower.includes('break')) kind = 'break';
+      else if (lower.includes('class') || lower.includes('lecture')) kind = 'class';
+      else if (lower.includes('exam') || lower.includes('test')) kind = 'class';
+      else if (lower.includes('travel') || lower.includes('transit')) kind = 'travel';
+      else if (lower.includes('dinner') || lower.includes('breakfast') || lower.includes('hydration')) kind = 'personal';
+
+      rows.push({
+        id: crypto.randomUUID().slice(0, 8),
+        title: summary,
+        kind,
+        code: '',
+        location: loc,
+        teacher: '',
+        days: [dow],
+        start: `${sh}:${sm}`,
+        end: `${eh}:${em}`,
+        raw: summary,
+        confidence: 1,
+        include: true,
+        color: KIND_COLOR[kind],
+        problems: [],
+      });
+    };
+
+    for (const l of lines) {
+      if (l === 'BEGIN:VEVENT') { summary = ''; dtstart = ''; dtend = ''; loc = ''; }
+      else if (l === 'END:VEVENT') { flush(); }
+      else if (l.startsWith('SUMMARY:')) { summary = l.slice(8).trim(); }
+      else if (l.startsWith('LOCATION:')) { loc = l.slice(9).trim(); }
+      else if (l.startsWith('DTSTART')) { dtstart = l.slice(l.indexOf(':') + 1).trim(); }
+      else if (l.startsWith('DTEND')) { dtend = l.slice(l.indexOf(':') + 1).trim(); }
+    }
+    return rows;
+  }
+
   const scan = async (file: File) => {
-    if (!file.type.startsWith('image/')) { toast('That is not an image'); return; }
+    if (file.name.endsWith('.ics') || file.type === 'text/calendar') {
+      try {
+        const text = await file.text();
+        const found = parseIcsToRows(text);
+        if (!found.length) { toast('No events found in .ics file'); return; }
+        setRows(found);
+        setNotes('Read directly from calendar (.ics) file');
+        setScanInfo({ model: 'iCalendar', verified: true });
+        setStage('review');
+        return;
+      } catch (e) {
+        toast('Could not read that .ics file');
+        return;
+      }
+    }
+    if (!file.type.startsWith('image/')) { toast('Please choose an image or .ics file'); return; }
     setStage('scanning');
     try {
       const { dataUrl, base64, mime } = await downscale(file);
@@ -220,19 +299,18 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
                 border: '1.5px dashed var(--line2)', borderRadius: 16,
               }}>
               <Icon name="cal" size={26} color="var(--tx3)" />
-              <div style={{ fontSize: 13, fontWeight: 700 }}>Drop a picture of your week</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Drop a picture or .ics file</div>
               <div style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.7, maxWidth: 420 }}>
-                A screenshot of Google Calendar, the student portal, a photo of the printed sheet, a
-                picture of the whiteboard. It reads classes <em>and</em> everything around them —
-                travel, wake-ups, shifts, study blocks. Paste works too. Nothing goes on your
-                calendar until you have read it back.
+                A screenshot, photo of a timetable, or an <code>.ics</code> calendar file (like <code>study_schedule.ics</code>).
+                It reads classes, study blocks, breaks, naps and exam sessions.
+                Nothing goes on your calendar until you have reviewed it.
               </div>
               <label className="k-squish" style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11,
                 background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
               }}>
-                <Icon name="image" size={14} color="var(--ink)" />Choose an image
-                <input type="file" accept="image/*" hidden
+                <Icon name="cal" size={14} color="var(--ink)" />Choose an image or .ics
+                <input type="file" accept="image/*,.ics,text/calendar" hidden
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) void scan(f); e.target.value = ''; }} />
               </label>
             </div>

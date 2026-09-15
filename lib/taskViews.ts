@@ -156,3 +156,37 @@ export function boardColumns(tasks: Task[], by: BoardBy, lists: List[], tags: Ta
   if (loose.length) columns.unshift({ id: INBOX, title: 'Inbox', color: '#7c8cff', tasks: sortTasks(loose, sort, now) });
   return columns;
 }
+
+/**
+ * Where My Tasks is looking: a smart view, one list, or one course. Today
+ * takes in late work too, because late work is due now. Done is the only
+ * scope that shows finished tasks.
+ */
+export type TaskScope = 'all' | 'today' | 'upcoming' | 'overdue' | 'nodate' | 'starred' | 'done' | `list:${string}` | `course:${string}`;
+
+export function inScope(task: Task, scope: TaskScope, today: string, weekEnd: string): boolean {
+  if (task.deleted_at) return false;
+  if (scope === 'done') return task.done;
+  if (task.done) return false;
+  if (scope === 'today') return !!task.due_on && task.due_on <= today;
+  if (scope === 'upcoming') return !!task.due_on && task.due_on > today && task.due_on <= weekEnd;
+  if (scope === 'overdue') return !!task.due_on && task.due_on < today;
+  if (scope === 'nodate') return !task.due_on;
+  if (scope === 'starred') return (task.stars || 0) > 0;
+  if (scope.startsWith('list:')) {
+    const id = scope.slice(5);
+    return id === INBOX ? !task.list_id : task.list_id === id;
+  }
+  if (scope.startsWith('course:')) return courseKey(task.course) === courseKey(scope.slice(7));
+  return true;
+}
+
+/** Every word of the search has to appear in the title, the notes or the course. */
+export function searchTasks(tasks: Task[], query: string): Task[] {
+  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return tasks;
+  return tasks.filter((t) => {
+    const text = `${t.title} ${t.notes ?? ''} ${t.course ?? ''}`.toLocaleLowerCase();
+    return words.every((w) => text.includes(w));
+  });
+}

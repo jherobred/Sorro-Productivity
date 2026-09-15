@@ -518,7 +518,8 @@ export function useTaskActions() {
       if (v.done) {
         triggerFireworks();
       }
-      return optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done } : t)));
+      // completed_at moves with done, as it does on the server, so "done today" counts at once.
+      return optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done, completed_at: v.done ? new Date().toISOString() : null } : t)));
     },
     onError: rollback,
     onSettled: settle,
@@ -545,4 +546,129 @@ export function useTaskActions() {
   };
 
   return { create, update, complete, remove, restore, removeWithUndo };
+}
+
+/* ---- Subtasks and lists ------------------------------------------------ */
+
+/** A step inside a task. bd_subtasks has no timestamps, so order is `position`. */
+export type Subtask = { id: string; task_id: string; title: string; done: boolean; position: number };
+
+const SUBTASKS_KEY = ['subtasks'] as const;
+
+/** Every step of every task in one query, so a row can show "2/5" without a request per task. */
+export function useSubtasks() {
+  return useQuery({
+    queryKey: SUBTASKS_KEY,
+    queryFn: async (): Promise<Subtask[]> => {
+      const { data, error } = await supabase
+        .from('bd_subtasks')
+        .select('id,task_id,title,done,position')
+        .order('position')
+        .limit(2000);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+const SUB_CREATE = defineMutation('subtask.create', async (v: Subtask) => {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('bd_subtasks').insert({ ...v, user_id });
+  if (error) throw error;
+});
+
+const SUB_UPDATE = defineMutation('subtask.update', async (v: { id: string; patch: Partial<Pick<Subtask, 'title' | 'done' | 'position'>> }) => {
+  const { error } = await supabase.from('bd_subtasks').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+
+const SUB_DELETE = defineMutation('subtask.delete', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_subtasks').delete().eq('id', v.id);
+  if (error) throw error;
+});
+
+function patchSubtasks(fn: (prev: Subtask[]) => Subtask[]) {
+  const prev = queryClient.getQueryData<Subtask[]>(SUBTASKS_KEY) ?? [];
+  queryClient.setQueryData<Subtask[]>(SUBTASKS_KEY, fn(prev));
+  return prev;
+}
+
+const rollbackSubtasks = (_e: unknown, _v: unknown, ctx: Subtask[] | undefined) => {
+  if (ctx) queryClient.setQueryData(SUBTASKS_KEY, ctx);
+};
+
+export function useSubtaskActions() {
+  const qc = useQueryClient();
+  const settle = settler(qc, SUBTASKS_KEY);
+
+  const create = useMutation({
+    mutationKey: SUB_CREATE,
+    onMutate: (v: Subtask) => patchSubtasks((prev) => [...prev, v]),
+    onError: (err, v, ctx) => {
+      rollbackSubtasks(err, v, ctx);
+      toast(err instanceof Error ? `Step not added: ${err.message}` : 'Step not added');
+    },
+    onSettled: settle,
+  });
+
+  const update = useMutation({
+    mutationKey: SUB_UPDATE,
+    onMutate: (v: { id: string; patch: Partial<Pick<Subtask, 'title' | 'done' | 'position'>> }) =>
+      patchSubtasks((prev) => prev.map((s) => (s.id === v.id ? { ...s, ...v.patch } : s))),
+    onError: rollbackSubtasks,
+    onSettled: settle,
+  });
+
+  const remove = useMutation({
+    mutationKey: SUB_DELETE,
+    onMutate: (v: { id: string }) => patchSubtasks((prev) => prev.filter((s) => s.id !== v.id)),
+    onError: rollbackSubtasks,
+    onSettled: settle,
+  });
+
+  return { create, update, remove };
+}
+
+const LIST_CREATE = defineMutation('list.create', async (v: List) => {
+  const user_id = await currentUserId();
+  const { error } = await supabase.from('bd_lists').insert({ ...v, user_id });
+  if (error) throw error;
+});
+
+const LIST_UPDATE = defineMutation('list.update', async (v: { id: string; patch: Partial<Pick<List, 'name' | 'color'>> }) => {
+  const { error } = await supabase.from('bd_lists').update(v.patch).eq('id', v.id);
+  if (error) throw error;
+});
+
+function patchLists(fn: (prev: List[]) => List[]) {
+  const prev = queryClient.getQueryData<List[]>(LISTS_KEY) ?? [];
+  queryClient.setQueryData<List[]>(LISTS_KEY, fn(prev));
+  return prev;
+}
+
+/** Making and renaming lists. Lists are not deleted here: what happens to their tasks is not settled. */
+export function useListActions() {
+  const qc = useQueryClient();
+  const settle = settler(qc, LISTS_KEY);
+  const rollback = (_e: unknown, _v: unknown, ctx: List[] | undefined) => { if (ctx) queryClient.setQueryData(LISTS_KEY, ctx); };
+
+  const create = useMutation({
+    mutationKey: LIST_CREATE,
+    onMutate: (v: List) => patchLists((prev) => [...prev, v]),
+    onError: (err, v, ctx) => {
+      rollback(err, v, ctx);
+      toast(err instanceof Error ? `List not created: ${err.message}` : 'List not created');
+    },
+    onSettled: settle,
+  });
+
+  const update = useMutation({
+    mutationKey: LIST_UPDATE,
+    onMutate: (v: { id: string; patch: Partial<Pick<List, 'name' | 'color'>> }) =>
+      patchLists((prev) => prev.map((l) => (l.id === v.id ? { ...l, ...v.patch } : l))),
+    onError: rollback,
+    onSettled: settle,
+  });
+
+  return { create, update };
 }

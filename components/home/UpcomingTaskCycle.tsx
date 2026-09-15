@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Icon } from '@/components/Icon';
-import { formatTaskCountdown, getTaskAlert, parseTaskLinks, useTaskActions, type Task } from '@/lib/tasks';
-import { upcomingCycle } from '@/lib/todayCycle';
+import { parseTaskLinks, useLists, useTaskActions, type Task } from '@/lib/tasks';
+import { deadlineClock, deadlineOf, hashtags, upcomingCycle } from '@/lib/todayCycle';
+import { courseIs } from '@/lib/tagList';
 import { usePrefs } from '@/lib/prefs';
 
 const CYCLE = 7;
@@ -13,31 +14,31 @@ const RING = 2 * Math.PI * 13;
 const PRIORITY: Record<string, string> = { high: 'High priority', med: 'Medium priority', low: 'Low priority' };
 
 /**
- * The upcoming task card on Today, cycling through what is due the way the
- * old rotating card did: a new task every seven seconds with a ring counting
- * down to it, arrows, a swipe, and dots to jump. It holds still while it is
- * pointed at or focused, and the ring pauses it, so a task never moves away
- * under a finger that is reaching for Mark done.
+ * The upcoming task card on Today. It turns to the next task every seven
+ * seconds, with a ring counting down to it, arrows, a swipe and dots to jump.
+ * It only stops when the ring is pressed to pause it: an earlier version also
+ * held still under the pointer and while anything inside had focus, so one tap
+ * on it left it frozen and it looked as if it never moved.
  */
 export function UpcomingTaskCycle({ tasks, today, weekEnd }: { tasks: Task[]; today: string; weekEnd: string }) {
   const { prefs } = usePrefs();
   const A = useTaskActions();
+  const { data: lists = [] } = useLists();
   const list = useMemo(() => upcomingCycle(tasks, today, weekEnd), [tasks, today, weekEnd]);
   const count = list.length;
   const [index, setIndex] = useState(0);
   const [left, setLeft] = useState(CYCLE);
   const [paused, setPaused] = useState(false);
-  const [held, setHeld] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const remaining = useRef(CYCLE);
-  const stopped = useRef(false);
-  stopped.current = paused || held;
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
   const direction = useRef(1);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-      if (count < 2 || stopped.current) return;
+      if (count < 2 || pausedRef.current) return;
       remaining.current -= 1;
       if (remaining.current <= 0) {
         remaining.current = CYCLE;
@@ -59,11 +60,14 @@ export function UpcomingTaskCycle({ tasks, today, weekEnd }: { tasks: Task[]; to
 
   const at = count ? index % count : 0;
   const task = list[at];
-  const late = !!task?.due_on && (task.due_at ? new Date(task.due_at).getTime() < now : task.due_on < today);
-  const countdown = task ? formatTaskCountdown(task, now) : null;
-  const alert = task ? getTaskAlert(task) : null;
-  const course = task ? task.course || parseTaskLinks(task.notes || '').course : '';
-  const notes = task ? parseTaskLinks(task.notes || '').cleanNotes : '';
+  const deadline = task ? deadlineOf(task) : null;
+  const clock = deadline !== null ? deadlineClock(deadline, now) : null;
+  const late = !!clock?.late;
+  const parsed = task ? parseTaskLinks(task.notes || '') : null;
+  const course = task ? task.course || parsed?.course || '' : '';
+  const courseTag = course ? (prefs.tags ?? []).find((t) => courseIs(course, t)) : undefined;
+  const taskList = task?.list_id ? lists.find((l) => l.id === task.list_id) : undefined;
+  const tags = task ? hashtags(task.title, parsed?.cleanNotes ?? '') : [];
   const dueTime = task?.due_at ? new Date(task.due_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !prefs.time24 }) : '';
   const dueDay = !task?.due_on ? 'No deadline'
     : task.due_on === today ? 'Due today'
@@ -71,13 +75,9 @@ export function UpcomingTaskCycle({ tasks, today, weekEnd }: { tasks: Task[]; to
   const motionOn = prefs.motion;
 
   return (
-    <section className="upcoming-task-panel task-cycle" aria-roledescription="carousel" aria-label="Upcoming tasks"
-      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHeld(true); }}
-      onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHeld(false); }}
-      onFocus={() => setHeld(true)}
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false); }}>
+    <section className="upcoming-task-panel task-cycle" aria-roledescription="carousel" aria-label="Upcoming tasks">
       <div className="overview-label">
-        <h2>{task ? (late ? 'Overdue task' : 'Upcoming tasks') : 'Upcoming tasks'}</h2>
+        <h2>{task && late ? 'Overdue task' : 'Upcoming tasks'}</h2>
         {count > 1 ? (
           <div className="task-cycle-controls">
             <button type="button" className="task-cycle-ring" onClick={() => setPaused((p) => !p)}
@@ -88,7 +88,7 @@ export function UpcomingTaskCycle({ tasks, today, weekEnd }: { tasks: Task[]; to
                 <circle cx="16" cy="16" r="13" className="task-cycle-fill" strokeDasharray={RING}
                   strokeDashoffset={RING * (1 - left / CYCLE)} style={{ transition: motionOn ? 'stroke-dashoffset .9s linear' : 'none' }} />
               </svg>
-              {paused ? <Icon name="pause" size={11} /> : <b>{left}</b>}
+              {paused ? <Icon name="play" size={11} /> : <b>{left}</b>}
             </button>
             <button type="button" onClick={() => go(-1)} aria-label="Previous task" title="Previous task"><Icon name="chevronLeft" size={16} /></button>
             <button type="button" onClick={() => go(1)} aria-label="Next task" title="Next task"><Icon name="chevronRight" size={16} /></button>
@@ -111,13 +111,22 @@ export function UpcomingTaskCycle({ tasks, today, weekEnd }: { tasks: Task[]; to
             }}>
             {task ? <>
               <div className="task-cycle-tags">
-                {course && <span><Icon name="book" size={12} />{course}</span>}
+                {course && (
+                  <span className="is-course" style={courseTag ? { '--tag': courseTag.color } as React.CSSProperties : undefined}>
+                    <i aria-hidden="true" />{course}
+                  </span>
+                )}
+                {taskList && <span className="is-list" style={{ '--tag': taskList.color } as React.CSSProperties}><Icon name="list" size={12} />{taskList.name}</span>}
                 {task.priority && <span className={'is-' + task.priority}>{PRIORITY[task.priority]}</span>}
-                <span className={late ? 'is-late' : undefined}><Icon name="clock" size={12} />{dueDay}{dueTime ? ' · ' + dueTime : ''}</span>
-                {countdown && <span className={'task-cycle-countdown' + (countdown.isOverdue || alert?.tier === 'red' ? ' is-late' : '')}>{countdown.text}</span>}
+                {tags.map((tag) => <span key={tag} className="is-hash">#{tag}</span>)}
               </div>
               <h3>{task.title}</h3>
-              <p>{notes ? notes.slice(0, 140) : 'One thing at a time is still moving forward.'}</p>
+              <p>{parsed?.cleanNotes ? parsed.cleanNotes.slice(0, 140) : 'One thing at a time is still moving forward.'}</p>
+              <div className={'task-cycle-deadline' + (late ? ' is-late' : '')} role="timer" aria-live="off">
+                <Icon name="clock" size={14} />
+                <span>{dueDay}{dueTime ? ' · ' + dueTime : ''}</span>
+                {clock && <strong>{late ? 'Overdue by ' : ''}{clock.text}{late ? '' : ' left'}</strong>}
+              </div>
             </> : <>
               <h3>Room for something new.</h3>
               <p>Add a task whenever you’re ready.</p>

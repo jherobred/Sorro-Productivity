@@ -78,6 +78,8 @@ export type Prefs = {
   tags: Tag[];
   /** Tag ids on each notebook, by notebook id. */
   notebookTags: Record<string, string[]>;
+  /** Notebooks whose cover photo fills the whole cover instead of sitting inside a margin. */
+  coverFill: Record<string, boolean>;
   /** How My Tasks sorts, and which way. */
   taskSort: { key: TaskSortKey; desc: boolean };
 };
@@ -125,6 +127,7 @@ export const DEFAULT_PREFS: Prefs = {
 
   tags: [],
   notebookTags: {},
+  coverFill: {},
   taskSort: { key: 'smart', desc: false },
 };
 

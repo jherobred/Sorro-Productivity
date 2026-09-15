@@ -12,7 +12,8 @@ export const PAGE_TYPES = [
   {kind:'code',name:'Code',icon:'code',description:'Java, HTML, CSS and JavaScript'},
 ] as const;
 export type PageAsset = {localId:string;path?:string;name:string};
-export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number};
+/** frame 'polaroid' draws a photo as a polaroid with its caption under it, leaning by tilt degrees. All three are optional, so older boards read unchanged. */
+export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number;frame?:'polaroid';caption?:string;tilt?:number};
 export type BoardConnection = {id:string;from:string;to:string};
 export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number};
 export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource};
@@ -42,6 +43,7 @@ export function readBoard(body:string):BoardDocument|null {
       if(item.type==='image'&&!validAsset(item.asset)&&(!str(item.src)||!/^data:image\/(png|jpeg|webp);base64,/.test(item.src)))return null;
       if(item.type==='stroke'&&(!Array.isArray(item.points)||!item.points.every(p=>Array.isArray(p)&&p.length>=2&&p.every(finite))))return null;
       if(item.width!==undefined&&(!finite(item.width)||item.width<=0))return null;
+      if((item.frame!==undefined&&item.frame!=='polaroid')||(item.caption!==undefined&&!str(item.caption))||(item.tilt!==undefined&&!finite(item.tilt)))return null;
       ids.add(item.id);
     }
     if(data.connections!==undefined&&(!Array.isArray(data.connections)||!data.connections.every(c=>record(c)&&str(c.id)&&str(c.from)&&str(c.to)&&ids.has(c.from)&&ids.has(c.to))))return null;

@@ -9,8 +9,14 @@ import { Icon, type IconName } from '@/components/Icon';
 import { CalendarSkeleton } from '@/components/Skeleton';
 /* Behind the Import button — nothing draws it until you press that. */
 const ScheduleImport = dynamic(() => import('@/components/ScheduleImport').then((m) => m.ScheduleImport), { ssr: false });
-import { CalPopover, PopoverActions } from '@/components/CalPopover';
+import { EventBubble } from '@/components/calendar/EventBubble';
+import { TaskBubble } from '@/components/calendar/TaskBubble';
+import { CalendarTimers } from '@/components/calendar/CalendarTimers';
+import { NextView } from '@/components/calendar/NextView';
 import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
+import { useNotebooks, useNoteActions, NOTE_KEY, type Note } from '@/lib/notes';
+import { queryClient } from '@/lib/offline';
+import './calendar.css';
 import { K, SECHUE } from '@/lib/pal';
 import { EVENT_CATEGORIES, resolveCategory, isUrgentEvent, chipLabel } from '@/lib/eventCategories';
 import { usePrefs } from '@/lib/prefs';
@@ -18,12 +24,11 @@ import { useLayout } from '@/lib/useLayout';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
-import { useTasks, useTaskActions, getTaskAlert, formatTaskCountdown, type Task } from '@/lib/tasks';
+import { useTasks, useTaskActions, useLists, getTaskAlert, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
   computeVacantIntervals, formatVacantCountdown, formatDurationHours, displayedWeekNumber, gridRange,
-  formatRecurrenceLabel,
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
 
@@ -131,8 +136,20 @@ export default function CalendarPage() {
 
   const { data: events = [], isPending } = useEvents(windowStart, windowDays);
   const { data: tasks = [] } = useTasks();
+  const { data: lists = [] } = useLists();
+  const { data: notebooks = [] } = useNotebooks();
   const A = useEventActions(ws);
   const TA = useTaskActions();
+  const NA = useNoteActions();
+  const router = useRouter();
+  // The timers follow the real week, whichever week the grid is paged to. On
+  // the current week this is the same cached window the grid already reads.
+  const liveWeek = useMemo(() => weekStart(new Date(), prefs.weekStart), [prefs.weekStart]);
+  const { data: liveEvents = [] } = useEvents(liveWeek, 7);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showTimers, setShowTimers] = useState(() => {
+    try { return localStorage.getItem('cal_show_timers') !== 'false'; } catch { return true; }
+  });
 
   // Only the single immediate next event (or currently ongoing event) displays the countdown timer
   const nextEventId = useMemo(() => {
@@ -156,16 +173,21 @@ export default function CalendarPage() {
     return true;
   });
 
-  const toggleVacant = useCallback(() => {
-    setShowVacant((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('cal_show_vacant', String(next));
-      }
-      toast(next ? 'Vacant slots visible' : 'Vacant slots hidden');
-      return next;
-    });
-  }, []);
+  // The toast is sent outside the state setter: React may run a setter twice,
+  // and a toast from inside one was shown twice and warned about.
+  const toggleVacant = () => {
+    const next = !showVacant;
+    setShowVacant(next);
+    try { localStorage.setItem('cal_show_vacant', String(next)); } catch { /* the choice lasts for this visit */ }
+    toast(next ? 'Free time shown between events' : 'Free time hidden');
+  };
+
+  const toggleTimers = () => {
+    const next = !showTimers;
+    setShowTimers(next);
+    try { localStorage.setItem('cal_show_timers', String(next)); } catch { /* the choice lasts for this visit */ }
+    toast(next ? 'Timers shown' : 'Timers hidden');
+  };
 
   const setCalView = useCallback((v: View) => {
     setView(v);
@@ -235,11 +257,34 @@ export default function CalendarPage() {
     setFocusDay(dayIndex(today.toISOString(), w));
   };
 
-  const heading = view === 'month'
-    ? ws.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  /* The title names the month; the line under it says which days and how much is on them. */
+  const weekEnd = new Date(at(ws, 6, 12));
+  const monthShown = new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + 6);
+  const heading = view === 'countdown'
+    ? 'Up next'
     : view === 'day'
-      ? new Date(at(ws, focusDay, 12)).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
-      : `${ws.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(at(ws, 6, 12)).toLocaleDateString(undefined, { day: 'numeric' })}`;
+      ? new Date(at(ws, focusDay, 12)).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+      : view === 'month'
+        ? monthShown.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : ws.getMonth() === weekEnd.getMonth()
+          ? ws.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+          : `${ws.toLocaleDateString(undefined, { month: 'short' })} – ${weekEnd.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`;
+  const [rangeFrom, rangeTo] = view === 'day'
+    ? [Date.parse(at(ws, focusDay, 0)), Date.parse(at(ws, focusDay + 1, 0))]
+    : view === 'month'
+      ? [new Date(monthShown.getFullYear(), monthShown.getMonth(), 1).getTime(), new Date(monthShown.getFullYear(), monthShown.getMonth() + 1, 1).getTime()]
+      : [Date.parse(at(ws, 0, 0)), Date.parse(at(ws, 7, 0))];
+  const eventsShown = events.filter((e) => !e.deleted_at && Date.parse(e.starts_at) >= rangeFrom && Date.parse(e.starts_at) < rangeTo).length;
+  const tasksShown = tasks.filter((t) => !t.done && !t.deleted_at && t.due_on
+    && new Date(`${t.due_on}T12:00:00`).getTime() >= rangeFrom && new Date(`${t.due_on}T12:00:00`).getTime() < rangeTo).length;
+  const subline = view === 'countdown'
+    ? new Date(nowMs).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    : [
+      view === 'month' ? null : `Week ${displayedWeekNumber(ws, prefs.weekStart)}`,
+      view === 'week' || view === 'agenda' ? `${ws.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString(undefined, { month: ws.getMonth() === weekEnd.getMonth() ? undefined : 'short', day: 'numeric' })}` : null,
+      `${eventsShown} ${eventsShown === 1 ? 'event' : 'events'}`,
+      tasksShown ? `${tasksShown} ${tasksShown === 1 ? 'task' : 'tasks'} due` : null,
+    ].filter(Boolean).join(' · ');
 
   /* Tasks that belong on this calendar: anything dated inside the window. */
   const windowTasks = useMemo(() => {
@@ -352,7 +397,15 @@ export default function CalendarPage() {
   /** A draft stops being disposable the moment it shows a real title or intent. */
   const commitDraft = () => { draftEventRef.current = null; draftTaskRef.current = null; };
 
+  /**
+   * Set when a bubble action leaves the page. The route change closes the
+   * bubble while React is committing the next page, where a state update is
+   * not allowed, and the page is going away with it anyway.
+   */
+  const leavingRef = useRef(false);
+
   const closePop = () => {
+    if (leavingRef.current) return;
     const draftId = draftEventRef.current;
     if (draftId) {
       draftEventRef.current = null;
@@ -366,6 +419,95 @@ export default function CalendarPage() {
       toast('Empty task discarded');
     }
     setPop(null);
+  };
+
+  /**
+   * The Event and Task switch on a new, untitled item. The draft that was
+   * made for the slot is dropped quietly and the other kind is made in the
+   * same place, so nothing is left behind whichever one is kept.
+   */
+  const switchDraft = () => {
+    if (!pop || pop.kind === 'slot') return;
+    const { x, y } = pop;
+    if (pop.kind === 'event' && draftEventRef.current === pop.ev.id) {
+      A.remove.mutate({ id: pop.ev.id });
+      draftEventRef.current = null;
+      const ev = pop.ev;
+      openSlot(dayIndex(ev.starts_at, ws), ev.all_day ? GRID_START : hoursOf(ev.starts_at), x, y, ev.all_day, undefined, 'task');
+    } else if (pop.kind === 'task' && draftTaskRef.current?.id === pop.task.id) {
+      TA.remove.mutate({ id: pop.task.id });
+      draftTaskRef.current = null;
+      const t = pop.task;
+      const day = t.due_on ? dayIndex(`${t.due_on}T12:00:00`, ws) : 0;
+      openSlot(day, t.due_at ? hoursOf(t.due_at) : GRID_START, x, y, !t.due_at, undefined, 'event');
+    }
+  };
+
+  /** When the last event before this one ended on the same day, where the wait for it began. */
+  const previousEndOf = (ev: Ev): string | null => {
+    const start = Date.parse(ev.starts_at);
+    const day = new Date(ev.starts_at).toDateString();
+    let best: string | null = null;
+    for (const e of events) {
+      if (e.id === ev.id || e.all_day || e.deleted_at) continue;
+      const end = Date.parse(e.ends_at);
+      if (end <= start && new Date(e.ends_at).toDateString() === day && (!best || end > Date.parse(best))) best = e.ends_at;
+    }
+    return best;
+  };
+
+  /**
+   * Take notes starts a page for the event in the notebook written in most
+   * recently, or in a new Notes notebook when there is none yet, and opens it.
+   *
+   * The bubble stays open until the route changes. Closing it first sends
+   * the browser Back that removes its history entry, and that Back cancels
+   * the route push.
+   */
+  const takeNotes = async (ev: Ev) => {
+    commitDraft();
+    const recent = (queryClient.getQueryData<Note[]>(NOTE_KEY) ?? [])
+      .find((n) => !n.deleted_at && notebooks.some((b) => b.id === n.notebook_id));
+    let book = notebooks.find((b) => b.id === recent?.notebook_id) ?? [...notebooks].sort((a, b) => a.position - b.position)[0];
+    if (!book) {
+      const created = { id: crypto.randomUUID(), name: 'Notes', color: '#345cff', position: 0 };
+      try { await NA.newNotebook.mutateAsync(created); } catch { toast('Could not make a notebook for these notes'); return; }
+      book = { ...created, created_at: new Date().toISOString() };
+    }
+    const start = new Date(ev.starts_at);
+    const day = start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    const when = ev.all_day ? day : `${day} · ${hhmm(hoursOf(ev.starts_at))} – ${hhmm(hoursOf(ev.ends_at))}`;
+    const label = ev.title?.trim() && ev.title !== '(No title)' ? chipLabel(ev) : 'Event';
+    const id = crypto.randomUUID();
+    NA.newNote.mutate({
+      id, notebook_id: book.id,
+      title: `${label} · ${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+      body: `*${when}${ev.location ? ` · ${ev.location}` : ''}*\n\n`,
+    });
+    toast(`Notes page started in ${book.name}`);
+    leavingRef.current = true;
+    router.push(`/notebooks/?open=${id}`);
+  };
+
+  /**
+   * The New button: an event at the next full hour today when today is on
+   * screen, or at 9 AM on the first day that is.
+   */
+  const newEvent = (x: number, y: number) => {
+    const now = new Date();
+    const todayIdx = dayIndex(now.toISOString(), ws);
+    let day = todayIdx >= 0 && todayIdx < 7 ? todayIdx : 0;
+    if (view === 'day') day = focusDay;
+    if (view === 'countdown') day = todayIdx;
+    if (view === 'month') {
+      const shown = new Date(windowStart);
+      shown.setDate(shown.getDate() + 6);
+      day = now.getMonth() === shown.getMonth() && now.getFullYear() === shown.getFullYear()
+        ? todayIdx
+        : dayIndex(new Date(shown.getFullYear(), shown.getMonth(), 1).toISOString(), ws);
+    }
+    const hour = day === todayIdx ? Math.min(23, now.getHours() + 1) : 9;
+    openSlot(day, hour, x, y, false, hour + 1);
   };
 
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -398,92 +540,110 @@ export default function CalendarPage() {
     }
   };
 
-  const showHeading = !phone || view === 'month' || view === 'agenda';
-  const showPager = !phone || view !== 'day';
+  const buildStudySchedule = () => {
+    const now = new Date();
+    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const tom = new Date(now);
+    tom.setDate(tom.getDate() + 1);
+    const tomYmd = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, '0')}-${String(tom.getDate()).padStart(2, '0')}`;
+
+    const blocks = [
+      { title: 'S1: Wind-down & Hydration', starts_at: `${todayYmd}T14:40:00`, ends_at: `${todayYmd}T15:30:00`, color: '#34D9A0', location: 'Desk' },
+      { title: 'S2: Reset Nap (1h 50m)', starts_at: `${todayYmd}T15:30:00`, ends_at: `${todayYmd}T17:20:00`, color: '#8A86A6', location: 'Bed' },
+      { title: 'S3: Recovery & Dinner', starts_at: `${todayYmd}T17:20:00`, ends_at: `${todayYmd}T18:00:00`, color: '#FFC24B', location: 'Kitchen' },
+      { title: 'S4: Study Session 1 (Difficult Concepts)', starts_at: `${todayYmd}T18:00:00`, ends_at: `${todayYmd}T20:30:00`, color: '#7C8CFF', location: 'Desk' },
+      { title: 'S5: Screen-Free Break', starts_at: `${todayYmd}T20:30:00`, ends_at: `${todayYmd}T21:00:00`, color: '#34D9A0', location: 'Room' },
+      { title: 'S6: Study Session 2 (Active Recall)', starts_at: `${todayYmd}T21:00:00`, ends_at: `${todayYmd}T23:15:00`, color: '#7C8CFF', location: 'Desk' },
+      { title: 'S7: Rest Break', starts_at: `${todayYmd}T23:15:00`, ends_at: `${todayYmd}T23:30:00`, color: '#34D9A0', location: 'Room' },
+      { title: 'S8: Study Session 3 (Summary Review)', starts_at: `${todayYmd}T23:30:00`, ends_at: `${tomYmd}T00:30:00`, color: '#7C8CFF', location: 'Desk' },
+      { title: 'S9: Core Night Sleep (5h 30m)', starts_at: `${tomYmd}T00:30:00`, ends_at: `${tomYmd}T06:00:00`, color: '#8A86A6', location: 'Bed' },
+      { title: 'S10: Breakfast & Travel', starts_at: `${tomYmd}T06:00:00`, ends_at: `${tomYmd}T07:00:00`, color: '#38D6F2', location: 'Transit' },
+      { title: 'Class Hours', starts_at: `${tomYmd}T07:00:00`, ends_at: `${tomYmd}T12:00:00`, color: '#7C8CFF', location: 'Campus' },
+      { title: 'S11: Final Light Review', starts_at: `${tomYmd}T12:00:00`, ends_at: `${tomYmd}T12:45:00`, color: '#FFC24B', location: 'Library' },
+      { title: 'Major Course Exam', starts_at: `${tomYmd}T13:00:00`, ends_at: `${tomYmd}T15:00:00`, color: '#FF6FA8', location: 'Exam Room' },
+    ];
+
+    for (const b of blocks) {
+      A.create.mutate({
+        id: crypto.randomUUID(),
+        title: b.title,
+        starts_at: new Date(b.starts_at).toISOString(),
+        ends_at: new Date(b.ends_at).toISOString(),
+        color: b.color,
+        location: b.location,
+        all_day: false,
+      });
+    }
+    toast('Study & exam schedule built in Basedly calendar');
+  };
+
+  const menuItems: CtxGroup[] = [
+    {
+      label: 'Show',
+      items: [
+        { label: 'Up next and Today ends timers', icon: 'clock', checked: showTimers, run: toggleTimers },
+        { label: 'Free time between events', icon: 'eye', checked: showVacant, run: toggleVacant },
+      ],
+    },
+    {
+      items: [
+        {
+          label: 'Lock events in place', icon: 'lock', checked: prefs.lockEvents,
+          hint: 'Stops a scroll from moving an event by mistake',
+          run: () => { void update({ lockEvents: !prefs.lockEvents }); toast(prefs.lockEvents ? 'Events can be dragged again' : 'Events locked in place'); },
+        },
+        { label: 'Build study & exam schedule', icon: 'spark', run: buildStudySchedule },
+        { label: 'Import a schedule (photo or .ics)', icon: 'spark', run: () => setImporting(true) },
+      ],
+    },
+    { items: [{ label: 'Clear every event', icon: 'trash', danger: true, run: () => void clearEverything() }] },
+  ];
 
   return (
     <div className="calendar-page" style={{
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: phone ? 9 : 14, flexWrap: 'wrap', flex: 'none' }}>
-        {showHeading && (
-          <h1 className="k-stagger" style={{ fontSize: phone ? 24 : 36, fontWeight: 750, letterSpacing: '-.035em', '--i': 0 } as React.CSSProperties}>{heading}</h1>
-        )}
+      <header className="cal-head">
+        <div className="cal-head-title">
+          <h1>{heading}</h1>
+          <p>{subline}{prefs.lockEvents && <span className="cal-head-lock"><Icon name="lock" size={11} />Locked</span>}</p>
+        </div>
 
-        {/* The toolbar owns the right edge on desktop and wraps below the
-            heading on narrow windows — every control is labelled, so the
-            buttons can be read without a tooltip hunt. */}
-        <div style={{ marginLeft: showHeading ? 'auto' : 0, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', width: showHeading ? undefined : '100%' }}>
-          {showPager && (
-            <>
-              <div className="k-stagger" style={{ ['--i' as string]: 1, display: 'inline-flex', alignItems: 'center', gap: 2, height: 34, padding: 3, borderRadius: 999, border: '1px solid var(--line)', background: 'var(--card)' } as React.CSSProperties}>
-                <button
-                  onClick={() => shift(-1)}
-                  className="hov k-squish"
-                  aria-label={`Previous ${view}`}
-                  title={`Previous ${view}`}
-                  style={{ width: 28, height: 28, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                >
-                  <Icon name="chevronLeft" size={14} color="var(--tx2)" />
-                </button>
-                <button
-                  onClick={goToday}
-                  className="hov k-squish"
-                  style={{ height: 28, padding: '0 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: 'var(--tx)', background: 'var(--card2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  Today
-                </button>
-                <button
-                  onClick={() => shift(1)}
-                  className="hov k-squish"
-                  aria-label={`Next ${view}`}
-                  title={`Next ${view}`}
-                  style={{ width: 28, height: 28, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                >
-                  <Icon name="chevronRight" size={14} color="var(--tx2)" />
-                </button>
-              </div>
-
-              {/* Week Number Badge — read off the displayed week's Thursday, so
-                  Sunday-start users see their actual ISO week. */}
-              <div
-                className="num k-stagger"
-                title={`Week ${displayedWeekNumber(ws, prefs.weekStart)} of ${ws.getFullYear()}`}
-                style={{ ['--i' as string]: 2, height: 34, padding: '0 12px', borderRadius: 999, display: 'flex', alignItems: 'center', border: '1px solid color-mix(in srgb, var(--pal-sky) 32%, var(--line))', background: 'color-mix(in srgb, var(--pal-sky) 8%, var(--card))', color: 'var(--pal-sky)', fontSize: 11, fontWeight: 800, userSelect: 'none', whiteSpace: 'nowrap' } as React.CSSProperties}
-              >
-                W{displayedWeekNumber(ws, prefs.weekStart)}
-              </div>
-
-              {!phone && <div aria-hidden style={{ width: 1, height: 22, background: 'var(--line2)', margin: '0 3px' }} />}
-            </>
+        <div className="cal-head-nav">
+          {view !== 'countdown' && (
+            <div className="cal-pager" role="group" aria-label="Move through the calendar">
+              <button type="button" onClick={() => shift(-1)} aria-label={`Previous ${view}`} title={`Previous ${view}`}>
+                <Icon name="chevronLeft" size={16} />
+              </button>
+              <button type="button" className="cal-pager-today" onClick={goToday}>Today</button>
+              <button type="button" onClick={() => shift(1)} aria-label={`Next ${view}`} title={`Next ${view}`}>
+                <Icon name="chevronRight" size={16} />
+              </button>
+            </div>
           )}
+          <ViewSwitcher view={view} onChange={setCalView} phone={phone} />
+        </div>
 
-          {/* Lock pins every event where it is — useful once a timetable is set
-              and you are only reading it, especially on a phone where a scroll
-              can be read as a drag. */}
-          <ToolButton className="k-stagger" styleIndex={3} icon="lock" label={phone ? undefined : (prefs.lockEvents ? 'Locked' : 'Lock')}
-            active={prefs.lockEvents} hue="var(--acc)"
-            title={prefs.lockEvents ? 'Events are locked — tap to allow dragging' : 'Lock events in place'}
-            onClick={() => { void update({ lockEvents: !prefs.lockEvents }); toast(prefs.lockEvents ? 'Events unlocked' : 'Events locked in place'); }} />
-
-          <ToolButton className="k-stagger" styleIndex={4} icon="eye" label={phone ? undefined : 'Free time'}
-            active={showVacant} hue="var(--pal-sky)"
-            title={showVacant ? 'Hide vacant time intervals' : 'Show vacant time intervals'}
-            onClick={toggleVacant} />
-
-          <ToolButton className="k-stagger" styleIndex={5} icon="spark" label={phone ? undefined : 'Import'}
-            title="Read a schedule from a photo" onClick={() => setImporting(true)} />
-
-          <ToolButton className="k-stagger" styleIndex={6} icon="trash" danger
-            title="Clear every event" onClick={() => void clearEverything()} />
-
-          <div aria-hidden style={{ width: 1, height: 22, background: 'var(--line2)', margin: '0 3px' }} />
-
-          <div className="k-stagger" style={{ ['--i' as string]: 7, marginLeft: 'auto' } as React.CSSProperties}>
-            <ViewSwitcher view={view} onChange={setCalView} phone={phone} />
-          </div>
+        <div className="cal-head-actions">
+          <button type="button" className="cal-new" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); newEvent(r.left, r.bottom); }}>
+            <Icon name="plus" size={16} /><span>New</span>
+          </button>
+          <button type="button" className="cal-icon-button cal-more" aria-label="Calendar options" title="Calendar options"
+            aria-haspopup="menu" aria-expanded={!!menu}
+            onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: Math.max(8, r.right - 260), y: r.bottom + 6 }); }}>
+            <Icon name="dots" size={18} />
+          </button>
         </div>
       </header>
+
+      {showTimers && view !== 'countdown' && (
+        <CalendarTimers events={liveEvents} time24={prefs.time24} onOpen={(ev, x, y) => openEvent(ev, x, y)} />
+      )}
+
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} kind="calendar" label="Calendar options"
+          accent={prefs.accent} dark={prefs.theme === 'dark'} items={menuItems} onClose={() => setMenu(null)} />
+      )}
 
       {importing && <ScheduleImport onClose={() => setImporting(false)} />}
 
@@ -532,13 +692,20 @@ export default function CalendarPage() {
               }} />
           )}
           {!isPending && view === 'agenda' && <Agenda ws={ws} events={events} tasks={windowTasks} nextEventId={nextEventId} />}
-          {!isPending && view === 'countdown' && <Countdown events={events} A={A} />}
+          {!isPending && view === 'countdown' && (
+            <NextView events={liveEvents} tasks={tasks} time24={prefs.time24}
+              onOpenEvent={(ev, x, y) => openEvent(ev, x, y)} onOpenTask={openTask}
+              onSnooze={(ev) => { A.snooze.mutate({ id: ev.master_id || ev.id }); toast(`The reminder for ${chipLabel(ev)} comes 10 minutes later`); }} />
+          )}
         </div>
       </div>
 
       {pop?.kind === 'event' && (
-        <EventPopover ev={pop.ev} x={pop.x} y={pop.y} nextEventId={nextEventId}
+        <EventBubble key={pop.ev.id} ev={pop.ev} x={pop.x} y={pop.y}
           runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
+          draft={draftEventRef.current === pop.ev.id}
+          previousEnd={previousEndOf(pop.ev)}
+          time24={prefs.time24}
           onClose={closePop}
           onEdit={() => { commitDraft(); setEdit(pop.ev); setPop(null); }}
           onDuplicate={() => { commitDraft(); A.duplicate(pop.ev); setPop(null); }}
@@ -564,20 +731,32 @@ export default function CalendarPage() {
             A.update.mutate({ id: targetId, patch: { title } });
             setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, title } } : prev);
           }}
+          onPatch={(patch) => {
+            commitDraft();
+            A.update.mutate({ id: pop.ev.master_id || pop.ev.id, patch });
+            setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, ...patch } } : prev);
+          }}
+          onTakeNotes={() => void takeNotes(pop.ev)}
+          onSwitchToTask={switchDraft}
         />
       )}
 
       {pop?.kind === 'task' && (
-        <TaskPopover
-          task={pop.task}
-          x={pop.x}
-          y={pop.y}
+        <TaskBubble key={pop.task.id} task={pop.task} x={pop.x} y={pop.y}
+          draft={draftTaskRef.current?.id === pop.task.id}
+          lists={lists} tags={prefs.tags} time24={prefs.time24}
           onClose={closePop}
-          onCommit={commitDraft}
           onComplete={() => {
             commitDraft();
-            TA.complete.mutate({ id: pop.task.id, done: !pop.task.done });
-            setPop(null);
+            const { id, title } = pop.task;
+            const done = !pop.task.done;
+            TA.complete.mutate({ id, done });
+            if (done) {
+              toast(`Done: ${title}`, () => TA.complete.mutate({ id, done: false }));
+              setPop(null);
+            } else {
+              setPop((prev) => prev && prev.kind === 'task' ? { ...prev, task: { ...prev.task, done } } : prev);
+            }
           }}
           onDelete={() => {
             commitDraft();
@@ -589,6 +768,20 @@ export default function CalendarPage() {
             TA.update.mutate({ id: pop.task.id, patch: { title } });
             setPop((prev) => prev && prev.kind === 'task' ? { ...prev, task: { ...prev.task, title } } : prev);
           }}
+          onPatch={(patch) => {
+            commitDraft();
+            const before = pop.task;
+            TA.update.mutate({ id: before.id, patch });
+            setPop((prev) => prev && prev.kind === 'task' ? { ...prev, task: { ...prev.task, ...patch } } : prev);
+            if ('due_on' in patch) {
+              const undo = () => TA.update.mutate({ id: before.id, patch: { due_on: before.due_on, due_at: before.due_at ?? null } });
+              toast(patch.due_on
+                ? `Moved to ${new Date(`${patch.due_on}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`
+                : 'Date removed', undo);
+            }
+          }}
+          onOpenInTasks={() => { commitDraft(); leavingRef.current = true; router.push(`/tasks/?detail=${pop.task.id}`); }}
+          onSwitchToEvent={switchDraft}
         />
       )}
 
@@ -727,44 +920,6 @@ export default function CalendarPage() {
   );
 }
 
-/* ---------------------------------------------------------------- toolbar */
-
-/**
- * One toolbar control. Pills with a label wherever there is room for one — a
- * row of bare icons made the header a guessing game, and the labels are what
- * let the toolbar take the width it needs on a desktop screen. On a phone the
- * label drops and the control becomes a 34px icon target.
- */
-function ToolButton({ icon, label, active, hue, danger, title, onClick, className, styleIndex }: {
-  icon: IconName;
-  label?: string;
-  active?: boolean;
-  hue?: string;
-  danger?: boolean;
-  title: string;
-  onClick: () => void;
-  className?: string;
-  styleIndex?: number;
-}) {
-  const HUE = hue ?? 'var(--acc)';
-  const on = active === true;
-  const style = {
-    display: 'flex', alignItems: 'center', gap: 6, height: 34, flex: 'none',
-    padding: label ? '0 13px' : 0, width: label ? undefined : 34, justifyContent: 'center',
-    borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-    border: `1px solid ${on ? `color-mix(in srgb, ${HUE} 45%, var(--line2))` : 'var(--line2)'}`,
-    background: on ? `color-mix(in srgb, ${HUE} 13%, var(--card))` : 'var(--card)',
-    boxShadow: on ? 'var(--sh)' : undefined,
-  } as React.CSSProperties;
-  return (
-    <button onClick={onClick} title={title} aria-label={title} aria-pressed={on}
-      className={`${className ?? ''} k-chip`} style={{ ...style, ...(styleIndex !== undefined ? { ['--i' as string]: styleIndex } : {}) } as React.CSSProperties}>
-      <Icon name={icon} size={15} color={on ? HUE : danger ? 'var(--pal-coral)' : 'var(--tx3)'} />
-      {label && <span style={{ fontSize: 11.5, fontWeight: 700, color: on ? HUE : 'var(--tx2)' }}>{label}</span>}
-    </button>
-  );
-}
-
 /**
  * The month/week/day/agenda/next switcher. The active pill is a shared element
  * (one `layoutId`) so changing view slides the pill along the rail instead of
@@ -779,14 +934,14 @@ function ViewSwitcher({ view, onChange, phone }: { view: View; onChange: (v: Vie
         return (
           <button key={v} onClick={() => onChange(v)} className="k-chip" aria-pressed={on}
             aria-label={VIEW_LABEL[v]} title={VIEW_LABEL[v]}
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: phone ? 32 : undefined, height: 28, padding: phone ? 0 : '0 11px', borderRadius: 999, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: on ? 'var(--ink)' : 'var(--tx3)' }}>
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: phone ? 32 : undefined, height: 28, padding: phone ? 0 : '0 11px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 650, color: on ? 'var(--tx)' : 'var(--tx3)' }}>
             {on && (
               <motion.span layoutId="cal-view-pill"
                 transition={{ type: 'spring', stiffness: 560, damping: 42 }}
-                style={{ position: 'absolute', inset: 0, borderRadius: 999, background: 'var(--acc)', boxShadow: 'var(--sh)' }} />
+                style={{ position: 'absolute', inset: 0, borderRadius: 999, background: 'var(--card)', boxShadow: '0 1px 3px #0002, 0 0 0 1px var(--line)' }} />
             )}
             <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name={VIEW_ICON[v]} size={14} color={on ? 'var(--ink)' : 'var(--tx3)'} />
+              <Icon name={VIEW_ICON[v]} size={14} color={on ? 'var(--poster-blue)' : 'var(--tx3)'} />
               {!phone && <span>{VIEW_LABEL[v]}</span>}
             </span>
           </button>
@@ -1179,6 +1334,10 @@ function Grid({
     const startX = e.clientX;
     const startY = e.clientY;
     let moved = false;
+    // Where the drag last was, kept here rather than read back inside a state
+    // updater: opening the bubble from an updater set the page's state while
+    // the grid was rendering, which React reports as an error.
+    let target: { day: number; hour: number | null } | null = null;
 
     const onMove = (m: PointerEvent) => {
       if (Math.hypot(m.clientX - startX, m.clientY - startY) > 5) {
@@ -1191,17 +1350,17 @@ function Grid({
       const hour = inside
         ? Math.round(((GRID_START + ((m.clientY - r.top) / r.height) * SPAN) * 2)) / 2
         : null;
+      target = { day, hour };
       setTaskDrag((p) => (p && p.task === t && p.day === day && p.hour === hour ? p : { task: t, day, hour }));
     };
 
     const onUp = (m: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      setTaskDrag((d) => {
-        if (d && moved) onSchedule(d.task, d.day, d.hour);
-        else if (!moved) openTask(t, m.clientX, m.clientY);
-        return null;
-      });
+      setTaskDrag(null);
+      const dropped = target as { day: number; hour: number | null } | null;
+      if (moved && dropped) onSchedule(t, dropped.day, dropped.hour);
+      else if (!moved) openTask(t, m.clientX, m.clientY);
     };
 
     window.addEventListener('pointermove', onMove);
@@ -1220,15 +1379,17 @@ function Grid({
         <div style={{ width: GUTTER, flex: 'none', borderBottom: '1px solid var(--line)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
         {/* day headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: 30, borderBottom: '1px solid var(--line)' }}>
+        <div className={'cal-dayheads' + (days === 1 ? ' is-single' : '')} style={{ gridTemplateColumns: `repeat(${days}, 1fr)` }}>
           {Array.from({ length: days }, (_, i) => {
             const idx = colOf(i);
             const d = new Date(ws);
             d.setDate(d.getDate() + idx);
             const today = d.toDateString() === new Date().toDateString();
+            const past = !today && d.getTime() < new Date().setHours(0, 0, 0, 0);
             return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: today ? SECHUE.calendar : 'var(--tx3)' }}>
-                {DAYS_SHORT[idx]} <span style={{ opacity: .7 }}>{d.getDate()}</span>
+              <div key={i} className={'cal-dayhead' + (today ? ' is-today' : past ? ' is-past' : '')} aria-current={today ? 'date' : undefined}>
+                <span>{DAYS_SHORT[idx]}</span>
+                <b>{d.getDate()}</b>
               </div>
             );
           })}
@@ -1499,7 +1660,7 @@ function Grid({
                             left: leftStyle,
                             width: widthStyle,
                             top: `${pct(pos.start)}%`,
-                            height: `${(1.25 / SPAN) * 100}%`,
+                            height: `${(1 / SPAN) * 100}%`,
                             opacity: ghost ? 0.4 : 1,
                             zIndex: 2,
                           }}
@@ -1584,98 +1745,38 @@ function EventChip({
   const cd = !isPast && isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
   const urgent = isUrgentEvent(ev.color) && !isPast;
   const cat = resolveCategory(ev.color);
-  // ~9% of the 24h band — a little over two hours — is where a category tag
-  // fits without stealing the title's room.
-  const tall = height >= 9;
-
+  // Under ~45 minutes there is one line of room, so the time sits beside the title.
+  const short = height < 3.2;
+  const className = [
+    'cal-event', short && 'is-short', selected && 'is-selected', urgent && 'is-urgent red-alert-pulse',
+    isPast && 'is-past', lifted && 'is-lifted', locked && 'is-locked',
+  ].filter(Boolean).join(' ');
 
   return (
     <div
       onPointerDown={onPointerDown}
       onClick={onOpen}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext?.(e); }}
-      className={`${selected ? 'pop' : ''} ${urgent ? 'red-alert-pulse' : ''}`.trim() || undefined}
-      style={{
-        position: 'absolute', left, width, top: `${top}%`, height: `${height}%`,
-        borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
-        background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
-        borderLeft: urgent ? '3.5px solid var(--pal-coral)' : `2px solid ${ev.color}`,
-        color: ink,
-        opacity: isPast ? 0.52 : 1,
-        filter: isPast ? 'grayscale(22%)' : undefined,
-        boxShadow: lifted ? 'var(--shl)' : undefined,
-        transform: lifted ? 'scale(1.02)' : undefined,
-        transition: 'box-shadow var(--k-base) var(--k-spring), transform var(--k-base) var(--k-spring), filter var(--k-base) ease',
-        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 5 : urgent ? 2 : 1,
-        outline: selected ? `1px solid ${ev.color}` : undefined,
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-      }}
+      className={className}
+      style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, color: ink } as React.CSSProperties}
       title={`${chipLabel(ev)} · ${cat.label}`}>
-      <div>
-        <span style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          fontSize: 11,
-          fontWeight: 800,
-          lineHeight: 1.25,
-          overflow: 'hidden',
-          color: ink,
-        }}>
-          {locked && <Icon name="lock" size={9} color={ink} />}
-          {chipLabel(ev)}
-        </span>
-        <span style={{
-          display: 'block',
-          fontSize: 9.5,
-          opacity: 0.72,
-          marginTop: 1,
-          fontWeight: 500,
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          {label} {ev.location}
-        </span>
-      </div>
-
-      {/* The category tag, when the chip has the height to spare. */}
-      {tall && !cd && (
-        <span style={{
-          marginTop: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
-          fontSize: 8.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase',
-          padding: '1.5px 7px', borderRadius: 999,
-          background: `color-mix(in srgb, ${ev.color} 34%, var(--card))`,
-          color: ink, whiteSpace: 'nowrap',
-        }}>
-          <span aria-hidden style={{ width: 5, height: 5, borderRadius: 3, background: ev.color, flex: 'none' }} />
-          {cat.label}
-        </span>
-      )}
-
-      {/* Countdown timer right inside the event slot itself */}
-      {cd && cd.status !== 'past' && (
-        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', width: '100%' }}>
-          <CdBadge cd={cd} />
-        </div>
-      )}
-
+      <span className="cal-event-title">
+        {locked && <Icon name="lock" size={9} color={ink} />}
+        <b>{chipLabel(ev)}</b>
+        {short && <small>{label}</small>}
+      </span>
+      {!short && <span className="cal-event-meta">{label}{ev.location ? ` · ${ev.location}` : ''}</span>}
+      {cd && cd.status !== 'past' && !short && <span className="cal-event-count"><CdBadge cd={cd} /></span>}
       {/* bottom edge resizes the end time in 30-min steps */}
-      {!locked && (
-        <div onPointerDown={onResize}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 8, cursor: 'ns-resize', touchAction: 'none' }} />
-      )}
+      {!locked && <div className="cal-event-resize" onPointerDown={onResize} />}
     </div>
   );
 }
 
 
 /**
- * Visual indicator for vacant / free time between events with a vertical bidirectional arrow
- * and a live countdown timer unto the next upcoming event.
+ * Free time between events: a quiet band with how long it lasts. The band
+ * before the next event also counts down to it.
  */
 function VacantTimeIndicator({
   startHour,
@@ -1692,125 +1793,23 @@ function VacantTimeIndicator({
   const heightPct = pct(endHour) - topPct;
   const durationHours = endHour - startHour;
   if (durationHours <= 0.25) return null;
-  const durationText = formatDurationHours(durationHours);
-  const accent = isNext ? 'var(--pal-sky)' : 'var(--tx3)';
-
   return (
-    <div
-      aria-hidden
-      style={{
-        position: 'absolute',
-        left: 4,
-        right: 4,
-        top: `${topPct}%`,
-        height: `${heightPct}%`,
-        pointerEvents: 'none',
-        zIndex: 2,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {/* Background dashed zone */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: 8,
-          border: `1.5px dashed color-mix(in srgb, ${accent} ${isNext ? '34%' : '14%'}, transparent)`,
-          background: `color-mix(in srgb, ${accent} ${isNext ? '6%' : '1.5%'}, transparent)`,
-        }}
-      />
-
-      {/* Vertical center bidirectional arrow line */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 6,
-          bottom: 6,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 1.5,
-          background: `color-mix(in srgb, ${accent} ${isNext ? '50%' : '22%'}, transparent)`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        {/* Top arrow head pointing up */}
-        <svg width="8" height="6" viewBox="0 0 8 6" style={{ marginTop: -3, flex: 'none' }}>
-          <path d="M4 0L8 6H0L4 0Z" fill={accent} opacity={isNext ? 0.95 : 0.45} />
-        </svg>
-
-        {/* Bottom arrow head pointing down */}
-        <svg width="8" height="6" viewBox="0 0 8 6" style={{ marginBottom: -3, flex: 'none' }}>
-          <path d="M4 6L0 0H8L4 6Z" fill={accent} opacity={isNext ? 0.95 : 0.45} />
-        </svg>
-      </div>
-
-      {/* Floating Center Badge */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 3,
-          display: 'inline-flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 1.5,
-          padding: isNext ? '4px 10px' : '2px 8px',
-          borderRadius: 16,
-          background: 'var(--card)',
-          border: `1px solid color-mix(in srgb, ${accent} ${isNext ? '55%' : '25%'}, var(--line))`,
-          boxShadow: isNext ? 'var(--sh)' : '0 1px 4px rgba(0,0,0,0.1)',
-          maxWidth: '92%',
-          textAlign: 'center',
-        }}
-      >
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: isNext ? 10.5 : 9.5,
-            fontWeight: 800,
-            color: accent,
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <span>{durationText} vacant</span>
-        </div>
-
-        {isNext && targetStartsAt && <VacantCountdown targetStartsAt={targetStartsAt} />}
-
-      </div>
+    <div aria-hidden className={'cal-free' + (isNext ? ' is-next' : '')} style={{ top: `${topPct}%`, height: `${heightPct}%` }}>
+      {durationHours >= 0.5 && (
+        <span className="cal-free-label">
+          <b>{formatDurationHours(durationHours)} free</b>
+          {isNext && targetStartsAt && durationHours >= 1 && <VacantCountdown targetStartsAt={targetStartsAt} />}
+        </span>
+      )}
     </div>
   );
 }
 
-/** The countdown on the one vacant block before the next event. Its own timer. */
+/** The countdown on the one free band before the next event. Its own timer. */
 function VacantCountdown({ targetStartsAt }: { targetStartsAt: string }) {
   const text = formatVacantCountdown(targetStartsAt, useSecond());
   if (!text) return null;
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 3,
-        fontSize: 9.5,
-        fontWeight: 800,
-        color: 'var(--tx2)',
-        fontVariantNumeric: 'tabular-nums',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span>⏱️</span>
-      <span>{text}</span>
-    </div>
-  );
+  return <small>{text}</small>;
 }
 
 /** The horizontal bar Google draws for a run of identical days. */
@@ -1885,26 +1884,13 @@ function TaskChip({ task, onPointerDown, style, compact }: {
   task: Task; onPointerDown: (e: React.PointerEvent) => void; style?: React.CSSProperties; compact?: boolean;
 }) {
   const alert = getTaskAlert(task);
-  const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--acc)';
-  const alertClass = alert ? `task-alert-${alert.tier}` : '';
-
+  const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--poster-blue)';
   return (
-    <div onPointerDown={onPointerDown} title={`${task.title} — drag to a time slot`}
-      className={alertClass}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6, cursor: 'grab', touchAction: 'none',
-        borderRadius: 8, padding: compact ? '2px 6px' : '4px 8px', marginBottom: compact ? 2 : 0,
-        border: `1.5px dashed ${alert?.tier === 'red' ? 'var(--pal-coral)' : alert?.tier === 'orange' ? 'color-mix(in srgb, var(--pal-coral) 45%, var(--pal-amber))' : alert?.tier === 'yellow' ? 'var(--pal-amber)' : `color-mix(in srgb, ${hue} 62%, transparent)`}`,
-        background: `color-mix(in srgb, ${hue} 12%, var(--card))`,
-        fontSize: compact ? 10 : 10.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap',
-        ...style,
-      }}>
-      {alert ? (
-        <span className="task-alarm-emoji" style={{ fontSize: 11, flex: 'none', lineHeight: 1 }}>{alert.emoji}</span>
-      ) : (
-        <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', border: `1.5px solid ${hue}` }} />
-      )}
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</span>
+    <div onPointerDown={onPointerDown} title={`${task.title} · drag it to a time`}
+      className={'cal-task' + (compact ? ' is-compact' : '') + (style?.position === 'absolute' ? ' is-timed' : '') + (alert?.tier === 'red' ? ' is-due' : '')}
+      style={{ '--hue': hue, ...style } as React.CSSProperties}>
+      <span className="cal-task-ring" aria-hidden="true" />
+      <span className="cal-task-title">{task.title}</span>
     </div>
   );
 }
@@ -2057,7 +2043,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
 
   return (
     <div className="k-stagger" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 14, boxShadow: 'var(--sh)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-      <div ref={grid} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(6, minmax(64px, 1fr))', gap: 6, flex: 1, minHeight: 0 }}>
+      <div ref={grid} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'auto repeat(6, minmax(96px, 1fr))', gap: 6, flex: 1, minHeight: 0 }}>
         {dayLabels(prefs.weekStart).map((d) => (
           <div key={d} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.11em', color: 'var(--tx3)', textAlign: 'center', paddingBottom: 5 }}>{d}</div>
         ))}
@@ -2225,49 +2211,6 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
         );
       })}
       {events.length + tasks.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--tx3)' }}>Nothing scheduled this week.</p>}
-    </div>
-  );
-}
-
-function Countdown({ events, A }: { events: Ev[]; A: ReturnType<typeof useEventActions> }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), K.countdownTickMs);
-    return () => clearInterval(t);
-  }, []);
-
-  // All-day items have no clock time to count down to; they never belonged here.
-  const next = events
-    .filter((e) => !e.all_day && new Date(e.starts_at).getTime() > Date.now())
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
-
-  if (!next) {
-    return <p style={{ fontSize: 13.5, color: 'var(--tx3)', textAlign: 'center', padding: 40 }}>Nothing else scheduled this week.</p>;
-  }
-
-  const now = Date.now();
-  const ms = new Date(next.starts_at).getTime() - now;
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  const s = Math.floor((ms % 60_000) / 1000);
-  const due = ms < 60_000;
-  const cat = resolveCategory(next.color);
-
-  return (
-    <div className="rise" style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14, padding: 34, textAlign: 'center', boxShadow: 'var(--sh)' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.11em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 12 }}>Up next</div>
-      <div className={due ? 'arrive' : undefined} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 32, fontWeight: 800, letterSpacing: '-.03em', marginBottom: 7 }}>
-        <span aria-hidden style={{ width: 12, height: 12, borderRadius: 4, background: next.color, flex: 'none' }} title={cat.label} />
-        {next.title}
-      </div>
-      <div className="glowring" style={{ display: 'inline-block', padding: '9px 18px', borderRadius: 14, background: 'var(--card2)', fontSize: 26, fontWeight: 800, letterSpacing: '-.025em', color: SECHUE.calendar, fontVariantNumeric: 'tabular-nums' }}>
-        {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
-      </div>
-      <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx2)' }}>{hhmm(hoursOf(next.starts_at))}{next.location && ` · ${next.location}`}</div>
-      <button onClick={() => A.snooze.mutate({ id: next.id })} className="hov k-squish"
-        style={{ marginTop: 18, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--line2)', fontSize: 12.5, fontWeight: 700, color: 'var(--tx2)', minHeight: 44 }}>
-        Snooze 10 min
-      </button>
     </div>
   );
 }
@@ -2856,371 +2799,3 @@ const LABEL: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '.08em',
   textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 4,
 };
-
-/* ------------------------------------------------------------- the bubbles */
-
-function EventPopover({
-  ev, x, y, runDays, onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, nextEventId,
-}: {
-  ev: Ev; x: number; y: number;
-  /** How many days this event's run covers, or 0 when it stands alone. */
-  runDays: number;
-  onClose: () => void; onEdit: () => void; onDuplicate: () => void;
-  onDelete: () => void; onDeleteRun: () => void;
-  onUpdateTitle?: (title: string) => void;
-  nextEventId?: string | null;
-}) {
-  const nowMs = useSecond();
-  const locked = isReadOnly(ev);
-  const start = new Date(ev.starts_at);
-  const end = new Date(ev.ends_at);
-  const cat = resolveCategory(ev.color);
-  const when = ev.all_day
-    ? start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
-    : `${start.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(ev.starts_at))} – ${hhmm(hoursOf(ev.ends_at))}`;
-  const dayName = start.toLocaleDateString(undefined, { weekday: 'long' });
-  const isNoTitle = !ev.title || ev.title.trim() === '' || ev.title === '(No title)';
-  const [editingTitle, setEditingTitle] = useState(isNoTitle);
-  const [titleInput, setTitleInput] = useState(isNoTitle ? '' : ev.title);
-
-  const saveTitle = () => {
-    const trimmed = titleInput.trim();
-    if (trimmed && trimmed !== ev.title) {
-      onUpdateTitle?.(trimmed);
-    } else if (!trimmed) {
-      onUpdateTitle?.('(No title)');
-    }
-  };
-
-  return (
-    <CalPopover x={x} y={y} onClose={onClose} label={ev.title || '(No title)'} width={340}>
-      <PopoverActions onClose={onClose}>
-        {!locked && (
-          <>
-            <button onClick={onEdit} className="hov k-squish" aria-label="Edit event" title="Edit"
-              style={ACT}><Icon name="edit" size={15} color="var(--tx2)" /></button>
-            <button onClick={onDelete} className="hov k-squish"
-              aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'}
-              title={runDays > 1 ? 'Delete this day' : 'Delete'}
-              style={ACT}><Icon name="trash" size={15} color="var(--pal-coral)" /></button>
-            <button onClick={onDuplicate} className="hov k-squish" aria-label="Duplicate event" title="Duplicate"
-              style={ACT}><Icon name="copy" size={15} color="var(--tx2)" /></button>
-            <button onClick={onEdit} className="hov k-squish" aria-label="More options" title="More options"
-              style={ACT}><Icon name="dots" size={15} color="var(--tx2)" /></button>
-          </>
-        )}
-      </PopoverActions>
-
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: ev.color, flex: 'none', marginTop: 4 }} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          {editingTitle && !locked ? (
-            <input
-              autoFocus
-              value={titleInput}
-              onChange={(e) => setTitleInput(e.target.value)}
-              onBlur={() => { saveTitle(); setEditingTitle(false); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveTitle();
-                  setEditingTitle(false);
-                }
-              }}
-              placeholder="Add title"
-              style={{
-                width: '100%',
-                fontSize: 16,
-                fontWeight: 700,
-                color: 'var(--tx)',
-                background: 'var(--card2)',
-                border: '1px solid var(--acc)',
-                borderRadius: 8,
-                padding: '5px 9px',
-                outline: 'none',
-                marginBottom: 2,
-              }}
-            />
-          ) : (
-            <div
-              onClick={() => !locked && setEditingTitle(true)}
-              title={locked ? undefined : 'Click to edit title'}
-              style={{
-                fontSize: 17,
-                fontWeight: 700,
-                letterSpacing: '-.02em',
-                lineHeight: 1.3,
-                color: isNoTitle ? 'var(--tx3)' : 'var(--tx)',
-                overflowWrap: 'anywhere',
-                cursor: locked ? 'default' : 'pointer',
-              }}
-            >
-              {ev.title?.trim() || '(No title)'}
-            </div>
-          )}
-          {/* What the colour means, in words — the chip never says it on its own. */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, padding: '2px 8px 2px 6px', borderRadius: 999, background: `color-mix(in srgb, ${ev.color} 16%, var(--card2))`, border: `1px solid color-mix(in srgb, ${ev.color} 36%, transparent)`, fontSize: 10.5, fontWeight: 800, letterSpacing: '.02em', color: 'var(--tx2)' }}>
-            <span aria-hidden style={{ width: 7, height: 7, borderRadius: 4, background: ev.color, flex: 'none' }} />
-            {cat.label}
-          </div>
-          {ev.short_name && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 7px', borderRadius: 6, background: 'color-mix(in srgb, var(--acc) 14%, var(--card2))', border: '1px solid color-mix(in srgb, var(--acc) 30%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--accTx, var(--tx))' }}>
-              <Icon name="tag" size={10} color="inherit" />
-              <span>Short name: {ev.short_name}</span>
-            </div>
-          )}
-          <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>{when}</div>
-          <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{formatRecurrenceLabel(ev.recurrence, start)}</div>
-
-          {/* Live Countdown Badge — only for the single next upcoming event */}
-          {(() => {
-            if (ev.id !== nextEventId) return null;
-            const cd = formatEventCountdown(ev.starts_at, ev.ends_at, nowMs);
-            if (!cd || cd.status === 'past') return null;
-            return <div style={{ marginTop: 8 }}><CdBadge cd={cd} /></div>;
-          })()}
-
-          {/* Meeting Notes Section */}
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 11, marginTop: 14,
-            padding: '9px 12px', borderRadius: 12,
-            background: 'var(--card2)', border: '1px solid var(--line2)',
-          }}>
-            <Icon name="files" size={15} color="var(--pal-sky)" style={{ marginTop: 2 }} />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--pal-sky)' }}>Take meeting notes</div>
-              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>Start a new document to capture notes</div>
-            </div>
-          </div>
-
-          {/* Notification Row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 12 }}>
-            <Icon name="bell" size={14} color="var(--tx3)" />
-            <span>{ev.remind_minutes ? `${ev.remind_minutes} minutes before` : '10 minutes before'}</span>
-          </div>
-
-          {/* Calendar Account Row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 8 }}>
-            <Icon name="cal" size={14} color="var(--tx3)" />
-            <span>{ev.location || 'Basedly Calendar'}</span>
-          </div>
-
-          {locked && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tx3)', marginTop: 10 }}>
-              <Icon name="lock" size={12} color="var(--tx3)" />Synced — edit it where it came from
-            </div>
-          )}
-
-          {runDays > 1 && !locked && (
-            <button onClick={onDeleteRun} className="hov"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, padding: '7px 10px',
-                width: '100%', borderRadius: 9, border: '1px solid var(--line2)',
-                fontSize: 11.5, fontWeight: 700, color: 'var(--pal-coral)',
-              }}>
-              <Icon name="trash" size={13} color="var(--pal-coral)" />
-              Delete all {runDays} days of this
-            </button>
-          )}
-        </div>
-      </div>
-    </CalPopover>
-  );
-}
-
-/**
- * Google Tasks / Calendar style Task Details Popover
- */
-function TaskPopover({
-  task, x, y, onClose, onComplete, onDelete, onUpdateTitle, onCommit,
-}: {
-  task: Task; x: number; y: number;
-  onClose: () => void;
-  onComplete: () => void;
-  onDelete: () => void;
-  onUpdateTitle?: (title: string) => void;
-  /** Runs on every close path, so a half-typed title is never lost. */
-  onCommit?: () => void;
-}) {
-  const [done, setDone] = useState(task.done);
-  const hue = task.priority === 'high' ? 'var(--pal-coral)' : task.priority === 'med' ? 'var(--pal-amber)' : 'var(--acc)';
-  const isNoTitle = !task.title || task.title.trim() === '' || task.title === '(No title)';
-  const [editingTitle, setEditingTitle] = useState(isNoTitle);
-  const [titleInput, setTitleInput] = useState(isNoTitle ? '' : task.title);
-  const alert = getTaskAlert(task);
-  const countdown = formatTaskCountdown(task);
-
-  // Commit only on the path that leaves with intent. The plain close paths
-  // (Escape, click-away, the close button) go straight to onClose — the page
-  // discards a draft that never got a title, and a titled draft was already
-  // committed by onUpdateTitle. Committing on every close path would keep the
-  // "(No title)" ghosts alive.
-
-  const saveTitle = () => {
-    const trimmed = titleInput.trim();
-    if (trimmed && trimmed !== task.title) {
-      onUpdateTitle?.(trimmed);
-    } else if (!trimmed) {
-      onUpdateTitle?.('(No title)');
-    }
-  };
-
-  let when = 'No date';
-  if (task.due_at) {
-    const d = new Date(task.due_at);
-    when = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${hhmm(hoursOf(task.due_at))}`;
-  } else if (task.due_on) {
-    const d = new Date(`${task.due_on}T12:00:00`);
-    when = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · all day`;
-  }
-
-  const router = useRouter();
-
-  return (
-    <CalPopover x={x} y={y} onClose={onClose} label={task.title || '(No title)'} width={340}>
-      <PopoverActions onClose={onClose}>
-        <button
-          onClick={() => {
-            onCommit?.();
-            onClose();
-            router.push(`/tasks/?detail=${task.id}`);
-          }}
-          className="hov k-squish"
-          aria-label="Edit task details"
-          title="Open in Tasks editor"
-          style={ACT}
-        >
-          <Icon name="edit" size={15} color="var(--tx2)" />
-        </button>
-        <button
-          onClick={() => {
-            setDone(!done);
-            onComplete();
-          }}
-          className="hov k-squish"
-          aria-label={done ? 'Mark incomplete' : 'Mark completed'}
-          title={done ? 'Mark incomplete' : 'Mark completed'}
-          style={ACT}
-        >
-          <Icon name={done ? 'check' : 'task'} size={15} color={done ? 'var(--pal-mint)' : 'var(--tx2)'} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="hov k-squish"
-          aria-label="Delete task"
-          title="Delete"
-          style={ACT}
-        >
-          <Icon name="trash" size={15} color="var(--pal-coral)" />
-        </button>
-      </PopoverActions>
-
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <button
-          type="button"
-          onClick={() => {
-            setDone(!done);
-            onComplete();
-          }}
-          style={{
-            width: 18,
-            height: 18,
-            borderRadius: '50%',
-            border: `2px solid ${done ? 'var(--pal-mint)' : hue}`,
-            background: done ? 'var(--pal-mint)' : 'transparent',
-            display: 'grid',
-            placeItems: 'center',
-            cursor: 'pointer',
-            flex: 'none',
-            marginTop: 3,
-            padding: 0,
-          }}
-        >
-          {done && <Icon name="check" size={11} color="var(--ink)" />}
-        </button>
-
-        <div style={{ minWidth: 0, flex: 1 }}>
-          {editingTitle ? (
-            <input
-              autoFocus
-              value={titleInput}
-              onChange={(e) => setTitleInput(e.target.value)}
-              onBlur={() => { saveTitle(); setEditingTitle(false); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveTitle();
-                  setEditingTitle(false);
-                }
-              }}
-              placeholder="Add title"
-              style={{
-                width: '100%',
-                fontSize: 16,
-                fontWeight: 700,
-                color: 'var(--tx)',
-                background: 'var(--card2)',
-                border: '1px solid var(--acc)',
-                borderRadius: 8,
-                padding: '5px 9px',
-                outline: 'none',
-                marginBottom: 2,
-              }}
-            />
-          ) : (
-            <div
-              onClick={() => setEditingTitle(true)}
-              title="Click to edit title"
-              style={{
-                fontSize: 17,
-                fontWeight: 700,
-                letterSpacing: '-.02em',
-                lineHeight: 1.3,
-                color: done ? 'var(--tx3)' : isNoTitle ? 'var(--tx3)' : 'var(--tx)',
-                textDecoration: done ? 'line-through' : 'none',
-                overflowWrap: 'anywhere',
-                cursor: 'pointer',
-              }}
-            >
-              {task.title?.trim() || '(No title)'}
-            </div>
-          )}
-
-          {/* Countdown timer badge in calendar popover */}
-          {countdown && (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4,
-              fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-              padding: '2px 7px', borderRadius: 6,
-              background: countdown.isOverdue || alert?.tier === 'red'
-                ? 'color-mix(in srgb, var(--pal-coral) 20%, var(--card2))'
-                : alert?.tier === 'orange'
-                ? 'color-mix(in srgb, #FF9A3C 20%, var(--card2))'
-                : 'color-mix(in srgb, var(--pal-amber) 16%, var(--card2))',
-              color: countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--tx)',
-              border: `1px solid ${countdown.isOverdue || alert?.tier === 'red' ? 'var(--pal-coral)' : 'var(--line2)'}`,
-            }}>
-              <span>{alert?.emoji || '⏱️'}</span>
-              <span>{countdown.text}</span>
-            </div>
-          )}
-
-          <div style={{ fontSize: 13, color: 'var(--tx2)', marginTop: 4, lineHeight: 1.45 }}>
-            {when}
-          </div>
-
-          {task.notes && (
-            <div style={{ fontSize: 12.5, color: 'var(--tx2)', marginTop: 10, lineHeight: 1.5, background: 'var(--card2)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line2)' }}>
-              {task.notes}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--tx2)', marginTop: 12 }}>
-            <Icon name="task" size={14} color="var(--tx3)" />
-            <span>My Tasks</span>
-          </div>
-        </div>
-      </div>
-    </CalPopover>
-  );
-}
-
-const ACT: React.CSSProperties = { width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer' };
