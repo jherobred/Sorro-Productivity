@@ -82,6 +82,10 @@ export type Prefs = {
   coverFill: Record<string, boolean>;
   /** How My Tasks sorts, and which way. */
   taskSort: { key: TaskSortKey; desc: boolean };
+  /** A description and an archived flag for each project, by its list id. See lib/projects.ts. */
+  projectMeta?: Record<string, { note?: string; archived?: boolean }>;
+  /** Link categories in the order you arranged them, with their colours. See lib/links.ts. */
+  linkCategories?: { name: string; color: string }[];
 };
 
 export type TaskSortKey = 'smart' | 'due' | 'priority' | 'stars' | 'title' | 'created';

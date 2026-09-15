@@ -49,10 +49,10 @@ export function BulkBar({ count, allSelected, lists, onSelectAll, onClear, onCom
         { icon: 'flag', label: 'Low', swatch: '#345cff', run: () => onPriority('low') },
         { icon: 'minus', label: 'No priority', run: () => onPriority(null) },
       ])}><Icon name="flag" size={15} /><span>Priority</span></button>
-      <button type="button" aria-haspopup="menu" onClick={(e) => open(e, 'Move to list', [
+      <button type="button" aria-haspopup="menu" onClick={(e) => open(e, 'Move to project', [
         { icon: 'list', label: 'Inbox', run: () => onList(null) },
         ...lists.map((l) => ({ icon: 'list' as const, label: l.name, swatch: l.color, run: () => onList(l.id) })),
-      ])}><Icon name="list" size={15} /><span>List</span></button>
+      ])}><Icon name="proj" size={15} /><span>Project</span></button>
       <button type="button" className="is-danger" onClick={onDelete}><Icon name="trash" size={15} /><span>Delete</span></button>
       {menu && <ContextMenu x={menu.x} y={menu.y} kind="tasks" label={menu.label} items={menu.items} onClose={() => setMenu(null)} />}
     </div>

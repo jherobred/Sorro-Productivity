@@ -1,744 +1,462 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import dynamic from 'next/dynamic';
-import { Icon, type IconName } from '@/components/Icon';
-import { RowsSkeleton } from '@/components/Skeleton';
-import { SectionLabel, Meter, StatPill, CountUp } from '@/components/Vitals';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from '@/components/Icon';
+import { AsciiBar } from '@/components/AsciiBar';
 import { ContextMenu, type CtxItem } from '@/components/ContextMenu';
-import { useLayout } from '@/lib/useLayout';
-import { usePrefs } from '@/lib/prefs';
-import { SECHUE } from '@/lib/pal';
+import { HabitDetail, HabitEditor, HabitTimer, TIMES, habitIcon, inkFor, type HabitDraft } from '@/components/habits/HabitSheets';
 import { toast } from '@/lib/toast';
+import { playCelebration } from '@/lib/audio';
 import {
-  useHabits,
-  useTicks,
-  useHabitActions,
-  useStreakFreezes,
-  ymd,
-  calculateHabitGamification,
-  type Habit,
-  type HabitCategory,
-  type TimeOfDay,
-  HABIT_CATEGORIES,
+  calculateHabitGamification, readFrozenDays, useHabitActions, useHabits, useStreakFreezes, useTicks,
+  HABIT_MILESTONES, HABIT_PRESETS, type Habit, type HabitPreset, type Tick,
 } from '@/lib/habits';
+import {
+  addDays, currentStreak, dayKey, dayScore, hitRate, isDueOn, keptThisWeek, parseDay, progress, scheduleLabel, ticksByDay, weekStart,
+} from '@/lib/habitSchedule';
+import './habits.css';
 
-/* Only on screen while you are making or editing a habit. */
-const HabitCreatorModal = dynamic(() => import('@/components/habits/HabitCreatorModal').then((m) => m.HabitCreatorModal), { ssr: false });
-const HabitTimerModal = dynamic(() => import('@/components/habits/HabitTimerModal').then((m) => m.HabitTimerModal), { ssr: false });
-const HabitDetailModal = dynamic(() => import('@/components/habits/HabitDetailModal').then((m) => m.HabitDetailModal), { ssr: false });
-const HabitsAnalytics = dynamic(() => import('@/components/habits/HabitsAnalytics').then((m) => m.HabitsAnalytics), { ssr: false });
-
-import { HabitStats } from '@/components/habits/HabitStats';
-import { HabitMatrix, windowDays, type MatrixSpan } from '@/components/habits/HabitMatrix';
-import { HabitAgenda } from '@/components/habits/HabitAgenda';
-import { HabitInsights } from '@/components/habits/HabitInsights';
-import { YearHeatmap } from '@/components/habits/YearHeatmap';
-
-type ViewMode = 'week' | 'month' | 'year' | 'analytics';
-
-const VIEWS: { id: ViewMode; label: string; icon: IconName; hint: string }[] = [
-  { id: 'week', label: 'This week', icon: 'week', hint: 'Seven days, big squares' },
-  { id: 'month', label: '30 days', icon: 'month', hint: 'A month per row' },
-  { id: 'year', label: 'Full year', icon: 'grid', hint: '365 days as a heatmap' },
-  { id: 'analytics', label: 'Breakdown', icon: 'spark', hint: 'Trophies and distribution' },
-];
-
-const SPAN: Record<Exclude<ViewMode, 'analytics'>, MatrixSpan> = { week: 7, month: 30, year: 365 };
-
-/**
- * One window for every view. The old page swapped the tick query between 30
- * and 365 days when you opened Year Grid, which changed the react-query key —
- * so an optimistic tick landed in whichever cache the previous view had built.
- * A year of one person's ticks is a few hundred rows; fetching it once removes
- * the whole class of mismatch and gives streaks their real history.
- */
+/** A year of ticks in one query, so streaks, the history and the heatmap share one cache. */
 const TICK_WINDOW = 365;
+const INK = '#3a0b0b';
+const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+type Row = {
+  h: Habit;
+  p: ReturnType<typeof progress>;
+  due: boolean;
+  weekly: boolean;
+  weekDone: boolean;
+  done: boolean;
+  streak: number;
+  last7: { key: string; done: boolean; due: boolean }[];
+  yesterdayDone: boolean;
+  atRisk: boolean;
+};
+
+const hueStyle = (color: string) => ({ '--h': color, '--hink': inkFor(color) }) as React.CSSProperties;
 
 export default function HabitsPage() {
-  const { phone } = useLayout();
-  const { prefs } = usePrefs();
-  const hue = SECHUE.habits;
-
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
-  const [selectedCategory, setSelectedCategory] = useState<HabitCategory | 'all'>('all');
-  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<TimeOfDay | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'done'>('all');
-  const [search, setSearch] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  const [creating, setCreating] = useState(false);
-  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
-  const [timingHabit, setTimingHabit] = useState<Habit | null>(null);
-  const [detailHabit, setDetailHabit] = useState<Habit | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; habit: Habit } | null>(null);
+  // The day can turn over while the page is open.
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => redraw((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const todayKey = dayKey(new Date());
+  const today = parseDay(todayKey);
+  const yesterdayKey = dayKey(addDays(today, -1));
 
   const { data: habits = [], isPending } = useHabits();
-  const { data: ticks = [] } = useTicks(TICK_WINDOW);
+  const ticksQuery = useTicks(TICK_WINDOW);
+  const ticks: Tick[] = ticksQuery.data ?? [];
   const A = useHabitActions(TICK_WINDOW);
-  const { freezes } = useStreakFreezes();
+  const { freezes, useFreeze: spendFreeze } = useStreakFreezes();
+  // Spending a freeze is the only thing that adds a frozen day, and it changes the count.
+  const frozen = useMemo(() => new Set(readFrozenDays()), [freezes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = ymd(new Date());
-  const gamification = useMemo(() => calculateHabitGamification(habits, ticks), [habits, ticks]);
+  const [editing, setEditing] = useState<Habit | 'new' | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [timingId, setTimingId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [span, setSpan] = useState<7 | 30>(7);
+  const [showOff, setShowOff] = useState(false);
 
-  const span: MatrixSpan = viewMode === 'analytics' ? 7 : SPAN[viewMode];
-  const days = useMemo(() => windowDays(span), [span]);
-
-  const filteredHabits = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return habits.filter((h) => {
-      if (selectedCategory !== 'all' && (h.category || 'health') !== selectedCategory) return false;
-      if (selectedTimeOfDay !== 'all' && (h.time_of_day || 'anytime') !== selectedTimeOfDay) return false;
-      if (q && !h.name.toLowerCase().includes(q) && !h.cue?.toLowerCase().includes(q)) return false;
-
-      const isDone = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
-      if (statusFilter === 'pending' && isDone) return false;
-      if (statusFilter === 'done' && !isDone) return false;
-      return true;
+  const rows: Row[] = useMemo(() => {
+    const day = parseDay(todayKey);
+    const yesterday = addDays(day, -1);
+    return habits.map((h) => {
+      const days = ticksByDay(ticks, h.id);
+      const p = progress(h, days.get(todayKey));
+      const weekly = h.frequency === 'weekly';
+      const weekDone = weekly && keptThisWeek(h, ticks, day);
+      const streak = currentStreak(h, ticks, day, frozen);
+      const yesterdayDone = progress(h, days.get(yesterdayKey)).done;
+      const atRisk = !weekly && !yesterdayDone && isDueOn(h, yesterday) && !frozen.has(yesterdayKey)
+        && currentStreak(h, ticks, day, new Set([...frozen, yesterdayKey])) > streak;
+      return {
+        h, p, weekly, weekDone, streak, yesterdayDone, atRisk,
+        due: weekly || isDueOn(h, day),
+        done: p.done || weekDone,
+        last7: Array.from({ length: 7 }, (_, i) => {
+          const d = addDays(day, i - 6);
+          return { key: dayKey(d), done: progress(h, days.get(dayKey(d))).done, due: weekly || isDueOn(h, d) };
+        }),
+      };
     });
-  }, [habits, selectedCategory, selectedTimeOfDay, search, statusFilter, ticks, today]);
+  }, [habits, ticks, todayKey, yesterdayKey, frozen]);
 
-  const ownHabits = filteredHabits.filter((h) => !h.challenge_id);
-  const challengeHabits = filteredHabits.filter((h) => h.challenge_id);
-  const filtersActive = search.trim() !== '' || selectedCategory !== 'all'
-    || selectedTimeOfDay !== 'all' || statusFilter !== 'all';
+  const dueRows = rows.filter((r) => r.due);
+  const offRows = rows.filter((r) => !r.due);
+  const doneCount = dueRows.filter((r) => r.done).length;
+  const topStreak = rows.reduce((m, r) => Math.max(m, r.streak), 0);
+  const atRisk = rows.filter((r) => r.atRisk);
+  const groups = TIMES.map((t) => ({ ...t, items: dueRows.filter((r) => (r.h.time_of_day ?? 'anytime') === t.id) })).filter((g) => g.items.length);
+  const g = useMemo(() => calculateHabitGamification(habits, ticks), [habits, ticks]);
 
-  /** Toggle a day on or off. The grid squares and Mark Done both mean this. */
-  const tick = (habitId: string, date: string, value?: number) =>
-    A.tick.mutate({ habitId, date, value });
+  /** This week, Monday first, and the last 26 weeks as a heatmap. */
+  const { week, heat, active } = useMemo(() => {
+    const day = parseDay(todayKey);
+    const byDay = new Map<string, Tick[]>();
+    for (const t of ticks) byDay.set(t.on_date, [...(byDay.get(t.on_date) ?? []), t]);
+    const score = (d: Date) => dayScore(habits, byDay.get(dayKey(d)) ?? [], d);
+    const monday = weekStart(day);
+    const start = addDays(monday, -25 * 7);
+    let activeDays = 0;
+    const cells = Array.from({ length: 26 * 7 }, (_, i) => {
+      const d = addDays(start, i);
+      if (d > day) return null;
+      const s = score(d);
+      if (s.done) activeDays++;
+      return { key: dayKey(d), d, level: !s.due || !s.done ? 0 : s.done === s.due ? 4 : Math.ceil((s.done / s.due) * 3), ...s };
+    });
+    return {
+      week: Array.from({ length: 7 }, (_, i) => { const d = addDays(monday, i); return { d, key: dayKey(d), future: d > day, ...score(d) }; }),
+      heat: cells,
+      active: activeDays,
+    };
+  }, [habits, ticks, todayKey]);
 
-  /** Write an exact value — counters and timers, which must not toggle off. */
-  const setValue = (habitId: string, date: string, value: number) =>
-    A.tick.mutate({ habitId, date, value, mode: 'set' });
+  /* ---- writing ticks */
+  const setValue = (h: Habit, date: string, value: number) => A.tick.mutate({ habitId: h.id, date, value, mode: 'set' });
+  /** Makes a day kept or not, whatever kind of habit it is. */
+  const setDay = (h: Habit, date: string, done: boolean) => {
+    if (h.kind === 'bin') {
+      const has = ticks.some((t) => t.habit_id === h.id && t.on_date === date);
+      if (has !== done) A.tick.mutate({ habitId: h.id, date, value: 1 });
+      return;
+    }
+    setValue(h, date, done ? Math.max(1, h.target ?? 1) : 0);
+  };
 
-  const duplicate = (h: Habit) => {
+  const press = (r: Row) => {
+    if (r.h.kind === 'dur') { setTimingId(r.h.id); return; }
+    if (r.h.kind === 'count') { setValue(r.h, todayKey, r.p.value + 1); return; }
+    if (r.weekly && r.weekDone && !r.p.done) { toast(`${r.h.name} is already done this week`, undefined, { icon: 'check' }); return; }
+    A.tick.mutate({ habitId: r.h.id, date: todayKey, value: 1 });
+  };
+
+  const keepAll = () => {
+    const open = dueRows.filter((r) => !r.done);
+    if (!open.length) { toast('Everything due today is done', undefined, { icon: 'check' }); return; }
+    open.forEach((r) => setDay(r.h, todayKey, true));
+    toast(`${open.length} ${open.length === 1 ? 'habit' : 'habits'} marked done`, () => open.forEach((r) => {
+      if (r.h.kind === 'bin') A.tick.mutate({ habitId: r.h.id, date: todayKey, value: 1 });
+      else setValue(r.h, todayKey, r.p.value);
+    }), { tone: 'success', icon: 'check' });
+  };
+
+  const protect = () => {
+    if (spendFreeze(yesterdayKey)) toast(`Yesterday is forgiven for ${atRisk.length} ${atRisk.length === 1 ? 'streak' : 'streaks'}`, undefined, { icon: 'lock' });
+  };
+
+  const createFrom = (p: HabitPreset) => {
     A.create.mutate({
-      ...h,
-      id: crypto.randomUUID(),
-      name: `${h.name} copy`,
-      challenge_id: null,
+      id: crypto.randomUUID(), name: p.name, short_name: p.name.split(/\s+/)[0], color: p.color, kind: p.kind, target: p.kind === 'bin' ? 1 : p.target,
+      target_unit: p.target_unit, category: p.category, frequency: 'daily', time_of_day: p.time_of_day, icon: p.icon, cue: p.cue, show_in_home: true,
     });
-    toast(`Duplicated “${h.name}”`);
+    toast(`${p.name} added`, undefined, { tone: 'success', icon: 'check' });
   };
 
-  const menuItems = (h: Habit): CtxItem[] => {
-    const doneToday = ticks.some((t) => t.habit_id === h.id && t.on_date === today);
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-    const yesterday = ymd(y);
-    const doneYesterday = ticks.some((t) => t.habit_id === h.id && t.on_date === yesterday);
-
-    return [
-      {
-        label: doneToday ? 'Undo today' : 'Mark done today',
-        icon: doneToday ? 'undo' : 'check',
-        run: () => tick(h.id, today, h.target ?? 1),
-      },
-      {
-        label: doneYesterday ? 'Undo yesterday' : 'Backfill yesterday',
-        icon: 'cal',
-        run: () => tick(h.id, yesterday, h.target ?? 1),
-      },
-      ...(h.kind === 'dur'
-        ? [{ label: 'Start focus timer', icon: 'clock' as IconName, run: () => setTimingHabit(h) }]
-        : []),
-      { label: 'Insights & notes', icon: 'spark', run: () => setDetailHabit(h) },
-      { label: 'Edit habit', icon: 'edit', run: () => setEditingHabit(h) },
-      {
-        label: 'Duplicate',
-        icon: 'copy',
-        run: () => duplicate(h),
-        disabled: !!h.challenge_id,
-        hint: 'Challenge habits are mirrored, not owned',
-      },
-      {
-        label: 'Archive habit',
-        icon: 'archive',
-        danger: true,
-        run: () => A.removeWithUndo(h),
-        disabled: !!h.challenge_id,
-        hint: 'Leave the challenge to remove this',
-      },
-    ];
+  const saveHabit = (d: HabitDraft) => {
+    if (editing === 'new') {
+      A.create.mutate(d);
+      toast(`${d.name} added`, undefined, { tone: 'success', icon: 'check' });
+    } else if (editing) {
+      const { id, ...patch } = d;
+      A.edit.mutate({ id, patch });
+      toast('Habit saved', undefined, { tone: 'success', icon: 'check' });
+    }
+    setEditing(null);
   };
+
+  const menuItems = (r: Row): CtxItem[] => [
+    { label: r.p.done ? 'Undo today' : 'Mark done today', icon: r.p.done ? 'undo' : 'check', run: () => setDay(r.h, todayKey, !r.p.done) },
+    { label: r.yesterdayDone ? 'Undo yesterday' : 'I did it yesterday', icon: 'cal', run: () => setDay(r.h, yesterdayKey, !r.yesterdayDone) },
+    ...(r.h.kind === 'dur' ? [{ label: 'Start the timer', icon: 'play' as const, run: () => setTimingId(r.h.id) }] : []),
+    { label: 'Details and notes', icon: 'eye', run: () => setDetailId(r.h.id) },
+    { label: 'Edit', icon: 'edit', run: () => setEditing(r.h) },
+    {
+      label: 'Duplicate', icon: 'copy', disabled: !!r.h.challenge_id, hint: 'Challenge habits follow the challenge',
+      run: () => { A.create.mutate({ ...r.h, id: crypto.randomUUID(), name: `${r.h.name} copy`, challenge_id: null }); toast(`Copied ${r.h.name}`, undefined, { icon: 'copy' }); },
+    },
+    { label: 'Archive', icon: 'archive', danger: true, disabled: !!r.h.challenge_id, hint: 'Leave the challenge to remove it', run: () => A.removeWithUndo(r.h) },
+  ];
+
+  // A celebration for the moment the last one is done, not for opening a finished day.
+  const lastDone = useRef<number | null>(null);
+  const loaded = !isPending && !ticksQuery.isPending;
+  useEffect(() => {
+    if (!loaded) return;
+    const before = lastDone.current;
+    lastDone.current = doneCount;
+    if (before !== null && before < doneCount && dueRows.length > 0 && doneCount === dueRows.length) {
+      playCelebration();
+      toast('Everything done for today', undefined, { tone: 'success', icon: 'flame' });
+    }
+  }, [loaded, doneCount, dueRows.length]);
+
+  const title = !habits.length ? (isPending ? 'Habits' : 'Build a habit')
+    : !dueRows.length ? 'Nothing due today'
+      : doneCount === dueRows.length ? 'All done today'
+        : `${doneCount} of ${dueRows.length} done`;
+  const sub = !habits.length ? 'Small things, most days. Start with one you already almost do.'
+    : !dueRows.length ? `${offRows.length} ${offRows.length === 1 ? 'habit rests' : 'habits rest'} today.`
+      : doneCount === dueRows.length ? `Longest streak ${topStreak} ${topStreak === 1 ? 'day' : 'days'}. See you tomorrow.`
+        : `${dueRows.length - doneCount} left${topStreak ? ` · longest streak ${topStreak} ${topStreak === 1 ? 'day' : 'days'}` : ''}`;
+
+  const detail = rows.find((r) => r.h.id === detailId) ?? null;
+  const timing = rows.find((r) => r.h.id === timingId) ?? null;
+  const menuRow = rows.find((r) => r.h.id === menu?.id) ?? null;
+  const history = Array.from({ length: span }, (_, i) => addDays(today, i - span + 1));
+  const streakRows = [...rows].sort((a, b) => b.streak - a.streak);
+
+  const habitRow = (r: Row) => (
+    <li key={r.h.id} className={'hab-row' + (r.done ? ' is-done' : '') + (r.due ? '' : ' is-off')} style={hueStyle(r.h.color)}>
+      <button type="button" className={'hab-check is-' + r.h.kind} aria-pressed={r.done} onClick={() => press(r)}
+        aria-label={r.h.kind === 'dur' ? `Start the timer for ${r.h.name}` : r.h.kind === 'count' ? `Add one to ${r.h.name}, ${r.p.value} of ${r.p.target}` : `${r.h.name}, ${r.done ? 'done' : 'not done'}`}>
+        {r.h.kind === 'count' && !r.done ? <span>{r.p.value}</span>
+          : r.h.kind === 'dur' && !r.done ? <Icon name="play" size={18} />
+            : r.done ? <Icon name="check" size={20} /> : habitIcon(r.h) !== 'check' && <Icon name={habitIcon(r.h)} size={19} />}
+      </button>
+      <button type="button" className="hab-main" onClick={() => setDetailId(r.h.id)}>
+        <b>{r.h.name}</b>
+        <span className="hab-meta">
+          {r.streak > 0 && <span className="hab-flame"><Icon name="flame" size={12} />{r.streak}</span>}
+          {r.h.challenge_id && <span className="hab-badge"><Icon name="trophy" size={11} />Challenge</span>}
+          <span>
+            {r.h.kind === 'count' ? `${r.p.value} of ${r.p.target} ${r.h.target_unit ?? 'times'}`
+              : r.h.kind === 'dur' ? `${r.p.value} of ${r.p.target} min`
+                : r.weekly ? (r.weekDone ? 'Done this week' : 'Once this week')
+                  : r.h.cue || scheduleLabel(r.h)}
+          </span>
+        </span>
+        {r.h.kind !== 'bin' && <AsciiBar value={r.p.pct} hue={r.h.color} showValue={false} shape="slim" label={`${r.h.name} progress`} />}
+      </button>
+      {r.h.kind === 'count' && (
+        <span className="hab-stepper">
+          <button type="button" aria-label={`One less for ${r.h.name}`} disabled={!r.p.value} onClick={() => setValue(r.h, todayKey, Math.max(0, r.p.value - 1))}>−</button>
+          <button type="button" aria-label={`One more for ${r.h.name}`} onClick={() => setValue(r.h, todayKey, r.p.value + 1)}>+</button>
+        </span>
+      )}
+      <span className="hab-dots" aria-label={`Last 7 days: ${r.last7.filter((d) => d.done).length} done`}>
+        {r.last7.map((d) => <i key={d.key} className={d.done ? 'is-done' : d.due ? '' : 'is-off'} />)}
+      </span>
+      <button type="button" className="hab-more" aria-label={`More for ${r.h.name}`}
+        onClick={(e) => { const b = e.currentTarget.getBoundingClientRect(); setMenu({ x: b.left - 170, y: b.bottom + 4, id: r.h.id }); }}>
+        <Icon name="dots" size={16} />
+      </button>
+    </li>
+  );
 
   return (
-    <div style={{
-      padding: '0 0 32px',
-      maxWidth: 1720,
-      marginInline: 'auto',
-      width: '100%',
-      boxSizing: 'border-box',
-    }}>
-      <Hero
-        phone={phone}
-        hue={hue}
-        gamification={gamification}
-        freezes={freezes}
-        animate={prefs.motion}
-        onNew={() => setCreating(true)}
-        onCompleteAll={() => A.completeAllToday(habits)}
-        onReset={() => A.resetToday(habits)}
-      />
+    <div className="hab">
+      <header className="hab-hero">
+        <div className="hab-hero-copy">
+          <span className="hab-kicker">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+          <h1>{title}</h1>
+          <p>{sub}</p>
+          {dueRows.length > 0 && <AsciiBar value={(doneCount / dueRows.length) * 100} hue={INK} showValue={false} label="Habits done today" />}
+          {habits.length > 0 && (
+            <ol className="hab-weekstrip" aria-label="This week">
+              {week.map((w) => (
+                <li key={w.key} className={(w.key === todayKey ? 'is-today' : '') + (w.future ? ' is-future' : '') + (w.due && w.done === w.due ? ' is-perfect' : '')}>
+                  <b>{WEEKDAY[w.d.getDay()]}</b>
+                  <AsciiBar value={w.due ? (w.done / w.due) * 100 : 0} hue={INK} showValue={false} shape="slim"
+                    label={`${w.d.toLocaleDateString(undefined, { weekday: 'long' })}: ${w.future ? 'ahead' : `${w.done} of ${w.due} done`}`} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+        <div className="hab-hero-actions">
+          <button type="button" className="hab-primary" onClick={() => setEditing('new')}><Icon name="plus" size={18} />New habit</button>
+          {dueRows.length > 0 && (
+            <button type="button" className="hab-secondary" onClick={keepAll} disabled={doneCount === dueRows.length}>
+              <Icon name="check" size={16} />Mark all done
+            </button>
+          )}
+        </div>
+      </header>
 
-      {/* Today, before anything asks you to filter it */}
-      {habits.length > 0 && viewMode !== 'analytics' && (
-        <section style={{ marginTop: 16 }}>
-          <SectionLabel icon="agenda" hue={hue} title="On deck today"
-            note={`${gamification.todayCompleted} of ${gamification.activeCount} done`} />
-          <HabitAgenda
-            habits={habits}
-            ticks={ticks}
-            today={today}
-            phone={phone}
-            onTick={tick}
-            onOpenTimer={setTimingHabit}
-            onMenu={(h, x, y) => setMenu({ habit: h, x, y })}
-          />
-        </section>
-      )}
-
-      {/* What the numbers noticed */}
-      {habits.length > 0 && viewMode !== 'analytics' && (
-        <section style={{ marginTop: 18 }}>
-          <SectionLabel icon="spark" hue={hue} title="Worth knowing" note="From the last 30 days" />
-          <HabitInsights habits={habits} ticks={ticks} today={today} phone={phone} onTick={tick} />
-        </section>
-      )}
-
-      {/* View switcher + filters */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        marginTop: 22, marginBottom: 12,
-      }}>
-        <div className="navsb" data-tour="habits-view-modes" style={{
-          display: 'flex', gap: 3, background: 'var(--card)', padding: 3, borderRadius: 13,
-          border: '1px solid var(--line)', overflowX: 'auto', maxWidth: '100%',
-        }}>
-          {VIEWS.map((v) => {
-            const on = viewMode === v.id;
-            return (
-              <button
-                key={v.id}
-                onClick={() => setViewMode(v.id)}
-                title={v.hint}
-                className="k-squish"
-                style={{
-                  position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '7px 13px', borderRadius: 10, border: 'none', background: 'transparent',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 'none',
-                  color: on ? 'var(--tx)' : 'var(--tx3)',
-                }}
-              >
-                {on && (
-                  <motion.span
-                    layoutId="habit-view-pill"
-                    transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                    style={{
-                      position: 'absolute', inset: 0, borderRadius: 10, zIndex: 0,
-                      background: 'var(--card2)',
-                      boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${hue} 26%, transparent)`,
-                    }}
-                  />
-                )}
-                <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name={v.icon} size={13} color={on ? hue : 'var(--tx3)'} />
-                  {v.label}
-                </span>
+      {!isPending && habits.length === 0 ? (
+        <section className="hab-card hab-empty" aria-label="Start a habit">
+          <span className="hab-empty-mark"><Icon name="habit" size={26} /></span>
+          <h2>Start with one small habit</h2>
+          <p>Tap one to add it now. Name, schedule and target can all change later.</p>
+          <div className="hab-starters">
+            {HABIT_PRESETS.slice(0, 8).map((p) => (
+              <button key={p.id} type="button" style={hueStyle(p.color)} onClick={() => createFrom(p)}>
+                <i><Icon name={habitIcon({ icon: p.icon, kind: p.kind })} size={17} /></i>
+                <span><b>{p.name}</b><small>{p.kind === 'dur' ? `${p.target} minutes` : p.kind === 'count' ? `${p.target} ${p.target_unit}` : 'Check it off'}</small></span>
               </button>
-            );
-          })}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        <div style={{ position: 'relative', minWidth: phone ? '100%' : 240, flex: phone ? '1 1 100%' : '0 1 320px' }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or cue"
-            style={{
-              width: '100%', padding: '9px 12px 9px 34px', borderRadius: 11,
-              border: '1px solid var(--line2)', background: 'var(--card)',
-              fontSize: 12.5, color: 'var(--tx)', boxSizing: 'border-box',
-            }}
-          />
-          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }}>
-            <Icon name="search" size={14} color="var(--tx3)" />
-          </span>
-        </div>
-
-        <button
-          onClick={() => setFiltersOpen((v) => !v)}
-          className="hov k-squish"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 11,
-            border: `1px solid ${filtersActive ? `color-mix(in srgb, ${hue} 40%, transparent)` : 'var(--line2)'}`,
-            background: filtersActive ? `color-mix(in srgb, ${hue} 12%, transparent)` : 'var(--card)',
-            color: filtersActive ? hue : 'var(--tx2)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          }}
-        >
-          <Icon name="filter" size={13} color={filtersActive ? hue : 'var(--tx3)'} />
-          Filters
-          {filtersActive && <span style={{
-            width: 6, height: 6, borderRadius: '50%', background: hue,
-          }} />}
-        </button>
-      </div>
-
-      <AnimatePresence initial={false}>
-        {filtersOpen && (
-          <motion.div
-            initial={prefs.motion ? { height: 0, opacity: 0 } : false}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-            style={{ overflow: 'hidden', marginBottom: 14 }}
-          >
-            <div style={{
-              background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 16,
-              padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 11,
-            }}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Segmented
-                  label="Status"
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  options={[
-                    { id: 'all', label: 'Everything' },
-                    { id: 'pending', label: 'Still open' },
-                    { id: 'done', label: 'Done today' },
-                  ]}
-                />
-                <Segmented
-                  label="Part of day"
-                  value={selectedTimeOfDay}
-                  onChange={setSelectedTimeOfDay}
-                  options={[
-                    { id: 'all', label: 'Any time' },
-                    { id: 'morning', label: 'Morning' },
-                    { id: 'afternoon', label: 'Afternoon' },
-                    { id: 'evening', label: 'Evening' },
-                  ]}
-                />
-                {filtersActive && (
-                  <button
-                    onClick={() => {
-                      setSearch(''); setSelectedCategory('all');
-                      setSelectedTimeOfDay('all'); setStatusFilter('all');
-                    }}
-                    className="hov k-squish"
-                    style={{
-                      alignSelf: 'flex-end', padding: '6px 11px', borderRadius: 9,
-                      border: '1px solid var(--line2)', background: 'var(--card2)',
-                      fontSize: 11, fontWeight: 700, color: 'var(--tx3)', cursor: 'pointer',
-                    }}
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-
-              <div className="navsb" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-                <CategoryChip
-                  on={selectedCategory === 'all'}
-                  color={hue}
-                  label={`All categories (${habits.length})`}
-                  onClick={() => setSelectedCategory('all')}
-                />
-                {HABIT_CATEGORIES.map((c) => {
-                  const count = habits.filter((h) => (h.category || 'health') === c.id).length;
-                  if (count === 0) return null;
-                  return (
-                    <CategoryChip
-                      key={c.id}
-                      on={selectedCategory === c.id}
-                      color={c.color}
-                      dot
-                      label={`${c.label} (${count})`}
-                      onClick={() => setSelectedCategory(c.id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Body */}
-      {viewMode === 'analytics' ? (
-        <HabitsAnalytics habits={habits} ticks={ticks} />
+            ))}
+          </div>
+          <button type="button" className="hab-link" onClick={() => setEditing('new')}><Icon name="edit" size={14} />Make your own</button>
+        </section>
       ) : (
-        <div style={{
-          display: 'flex',
-          flexDirection: phone ? 'column' : 'row',
-          alignItems: 'flex-start',
-          gap: phone ? 16 : 18,
-        }}>
-          <div style={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {viewMode === 'year' && habits.length > 0 && (
-              <YearHeatmap habits={habits} ticks={ticks} days={days} today={today} phone={phone} />
-            )}
-
-            {isPending && <RowsSkeleton rows={5} label="Loading your habits" lead="square" />}
-
-            {!isPending && filteredHabits.length === 0 && (
-              <EmptyState
-                hue={hue}
-                filtered={filtersActive}
-                onNew={() => setCreating(true)}
-                onClear={() => {
-                  setSearch(''); setSelectedCategory('all');
-                  setSelectedTimeOfDay('all'); setStatusFilter('all');
-                }}
-              />
-            )}
-
-            {ownHabits.length > 0 && (
-              <section>
-                <SectionLabel icon="habit" hue={hue} title="Personal routines"
-                  note={`${ownHabits.length} habit${ownHabits.length === 1 ? '' : 's'}`} />
-                <div data-tour="habits-grid-cells">
-                <HabitMatrix
-                  habits={ownHabits}
-                  ticks={ticks}
-                  days={days}
-                  span={span}
-                  today={today}
-                  phone={phone}
-                  onTick={tick}
-                  onSetValue={setValue}
-                  onOpenDetail={setDetailHabit}
-                  onOpenTimer={setTimingHabit}
-                  onMenu={(h, x, y) => setMenu({ habit: h, x, y })}
-                />
+        <div className="hab-grid">
+          <div className="hab-main-col">
+            <section className="hab-card" aria-label="Today">
+              <header className="hab-card-head">
+                <div>
+                  <h2>Today</h2>
+                  <p>{dueRows.length ? 'Tap the circle when it is done. Tap the name for history and notes.' : 'Nothing is scheduled today.'}</p>
                 </div>
-              </section>
-            )}
+              </header>
+              {groups.map((grp) => (
+                <div key={grp.id} className="hab-group">
+                  <h3><Icon name={grp.icon} size={14} />{grp.label}<small>{grp.items.filter((r) => r.done).length} of {grp.items.length}</small></h3>
+                  <ul className="hab-list">{grp.items.map(habitRow)}</ul>
+                </div>
+              ))}
+              {offRows.length > 0 && (
+                <div className="hab-group is-off">
+                  <button type="button" className="hab-off-toggle" aria-expanded={showOff} onClick={() => setShowOff((v) => !v)}>
+                    <Icon name={showOff ? 'chevronUp' : 'chevronDown'} size={14} />
+                    {offRows.length} not due today
+                  </button>
+                  {showOff && <ul className="hab-list">{offRows.map(habitRow)}</ul>}
+                </div>
+              )}
+            </section>
 
-            {challengeHabits.length > 0 && (
-              <section>
-                <SectionLabel icon="trophy" hue="#FFC24B" title="From active challenges"
-                  note={`${challengeHabits.length} mirrored`} />
-                <HabitMatrix
-                  habits={challengeHabits}
-                  ticks={ticks}
-                  days={days}
-                  span={span}
-                  today={today}
-                  phone={phone}
-                  onTick={tick}
-                  onSetValue={setValue}
-                  onOpenDetail={setDetailHabit}
-                  onOpenTimer={setTimingHabit}
-                  onMenu={(h, x, y) => setMenu({ habit: h, x, y })}
-                />
-              </section>
-            )}
+            <section className="hab-card" aria-label="History">
+              <header className="hab-card-head">
+                <div>
+                  <h2>History</h2>
+                  <p>Forgot to log a day? Tap its square.</p>
+                </div>
+                <div className="hab-seg" role="radiogroup" aria-label="How far back">
+                  <button type="button" role="radio" aria-checked={span === 7} onClick={() => setSpan(7)}>7 days</button>
+                  <button type="button" role="radio" aria-checked={span === 30} onClick={() => setSpan(30)}>30 days</button>
+                </div>
+              </header>
+              <div className="hab-table-wrap">
+                <table className={'hab-table is-' + span}>
+                  <thead>
+                    <tr>
+                      <th scope="col"><span className="sr-only">Habit</span></th>
+                      {history.map((d) => (
+                        <th key={dayKey(d)} scope="col" className={dayKey(d) === todayKey ? 'is-today' : undefined}>
+                          <span>{WEEKDAY[d.getDay()]}</span>{span === 7 && <b>{d.getDate()}</b>}
+                        </th>
+                      ))}
+                      <th scope="col" className="hab-rate">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const days = ticksByDay(ticks, r.h.id);
+                      return (
+                        <tr key={r.h.id} style={hueStyle(r.h.color)}>
+                          <th scope="row"><i />{r.h.name}</th>
+                          {history.map((d) => {
+                            const key = dayKey(d);
+                            const p = progress(r.h, days.get(key));
+                            const due = r.weekly || isDueOn(r.h, d);
+                            const cls = p.done ? 'is-done' : p.value > 0 ? 'is-part' : frozen.has(key) ? 'is-frozen' : !due ? 'is-off' : key === todayKey ? 'is-open' : '';
+                            return (
+                              <td key={key}>
+                                <button type="button" className={'hab-cell ' + cls} aria-pressed={p.done} onClick={() => setDay(r.h, key, !p.done)}
+                                  aria-label={`${r.h.name}, ${d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}: ${p.done ? 'done' : p.value ? `${p.value} of ${p.target}` : due ? 'not done' : 'not due'}`} />
+                              </td>
+                            );
+                          })}
+                          <td className="hab-rate">{hitRate(r.h, ticks, today, span).pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
 
-          {/* The column stays put while the rows scroll past it: the run you are
-              on is context for what you are reading, not a scroll target. */}
-          <aside
-            className={phone ? undefined : 'navsb'}
-            style={{
-              position: phone ? 'static' : 'sticky',
-              top: 0,
-              alignSelf: 'flex-start',
-              width: phone ? '100%' : 300,
-              flex: 'none',
-              maxHeight: phone ? undefined : 'calc(100dvh - 96px)',
-              overflowY: phone ? 'visible' : 'auto',
-              minHeight: 0,
-            }}
-          >
-            <HabitStats habits={habits} ticks={ticks} phone={phone} />
+          <aside className="hab-side">
+            <section className="hab-card" aria-label="Streaks">
+              <header className="hab-card-head">
+                <div>
+                  <h2>Streaks</h2>
+                  <p>Days you are not scheduled never break one.</p>
+                </div>
+                <span className="hab-freeze" title="Streak freezes"><Icon name="lock" size={13} />{freezes}</span>
+              </header>
+              {atRisk.length > 0 && (
+                <div className="hab-risk">
+                  <p><b>Yesterday was missed.</b> {atRisk.map((r) => r.h.name).join(', ')} {atRisk.length === 1 ? 'loses its streak' : 'lose their streaks'} unless you use a freeze.</p>
+                  <button type="button" onClick={protect} disabled={freezes <= 0}>{freezes > 0 ? 'Use a freeze' : 'No freezes left'}</button>
+                </div>
+              )}
+              <ul className="hab-streaks">
+                {streakRows.map((r) => {
+                  const next = HABIT_MILESTONES.find((m) => r.streak < m.days);
+                  const unit = r.weekly ? 'week' : 'day';
+                  return (
+                    <li key={r.h.id} style={hueStyle(r.h.color)}>
+                      <span className="hab-streak-icon" aria-hidden="true"><Icon name={habitIcon(r.h)} size={16} /></span>
+                      <b>{r.h.name}</b>
+                      <em>{r.streak}<small> {unit}{r.streak === 1 ? '' : 's'}</small></em>
+                      <AsciiBar value={next ? (r.streak / next.days) * 100 : 100} hue={r.h.color} showValue={false} shape="slim" label={`${r.h.name} streak`} />
+                      <small>{next ? `${next.days - r.streak} to ${next.title}` : 'Every milestone reached'}</small>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+
+            <section className="hab-card" aria-label="Last six months">
+              <header className="hab-card-head">
+                <div>
+                  <h2>Six months</h2>
+                  <p>{active} {active === 1 ? 'day' : 'days'} with at least one habit done</p>
+                </div>
+              </header>
+              <div className="hab-heat" role="img" aria-label={`Heatmap of the last 26 weeks, ${active} active days`}>
+                {heat.map((c, i) => <i key={c?.key ?? `f${i}`} data-l={c?.level ?? 0} className={c ? undefined : 'is-future'} title={c ? `${c.d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}: ${c.done} of ${c.due}` : undefined} />)}
+              </div>
+              <div className="hab-legend" aria-hidden="true">Less<i data-l="0" /><i data-l="1" /><i data-l="2" /><i data-l="3" /><i data-l="4" />More</div>
+            </section>
+
+            <section className="hab-card" aria-label="Level">
+              <div className="hab-level">
+                <b>Level {g.level}</b>
+                <small>{g.currentLevelXp} of 250 XP to level {g.level + 1}</small>
+              </div>
+              <AsciiBar value={g.levelProgress} hue="#ff6b6b" showValue={false} label="Progress to the next level" />
+              <dl className="hab-facts">
+                <div><dt>Check-ins</dt><dd>{g.totalCompletions}</dd></div>
+                <div><dt>Perfect days</dt><dd>{g.perfectDays}</dd></div>
+                <div><dt>Bonus</dt><dd>{g.multiplier}×</dd></div>
+              </dl>
+            </section>
           </aside>
         </div>
       )}
 
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          kind="habit"
-          label={menu.habit.name}
-          accent={prefs.accent}
-          dark={prefs.theme === 'dark'}
-          items={menuItems(menu.habit)}
-          onClose={() => setMenu(null)}
-        />
+      {menu && menuRow && (
+        <ContextMenu x={menu.x} y={menu.y} kind="habit" label={menuRow.h.name} items={menuItems(menuRow)} onClose={() => setMenu(null)} />
       )}
 
-      {creating && (
-        <HabitCreatorModal
-          onClose={() => setCreating(false)}
-          onSave={(h) => { A.create.mutate(h); setCreating(false); }}
-        />
+      {editing && (
+        <HabitEditor initial={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSave={saveHabit}
+          onArchive={editing !== 'new' && !editing.challenge_id ? () => { A.removeWithUndo(editing); setEditing(null); } : undefined} />
       )}
 
-      {editingHabit && (
-        <HabitCreatorModal
-          initial={editingHabit}
-          onClose={() => setEditingHabit(null)}
-          onSave={(h) => {
-            const { id, ...patch } = h;
-            A.edit.mutate({ id, patch });
-            setEditingHabit(null);
-          }}
-        />
+      {detail && (
+        <HabitDetail habit={detail.h} ticks={ticks} today={today} frozen={frozen} onClose={() => setDetailId(null)}
+          onEdit={() => { setDetailId(null); setEditing(detail.h); }}
+          onArchive={detail.h.challenge_id ? undefined : () => { A.removeWithUndo(detail.h); setDetailId(null); }}
+          onSetDay={(date, done) => setDay(detail.h, date, done)} />
       )}
 
-      {timingHabit && (
-        <HabitTimerModal
-          habit={timingHabit}
-          onClose={() => setTimingHabit(null)}
-          onComplete={(loggedMins) => {
-            // `set`, not a toggle: finishing a timer on an already-ticked habit
-            // used to delete the tick it was trying to add minutes to.
-            setValue(timingHabit.id, today, loggedMins);
-          }}
-        />
+      {timing && (
+        <HabitTimer habit={timing.h} minutesToday={timing.p.value} onClose={() => setTimingId(null)}
+          onLog={(minutes) => {
+            setValue(timing.h, todayKey, timing.p.value + minutes);
+            toast(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'} logged for ${timing.h.name}`, () => setValue(timing.h, todayKey, timing.p.value), { tone: 'success', icon: 'clock' });
+          }} />
       )}
-
-      {detailHabit && (
-        <HabitDetailModal
-          habit={detailHabit}
-          ticks={ticks}
-          onClose={() => setDetailHabit(null)}
-          onEdit={() => { const h = detailHabit; setDetailHabit(null); setEditingHabit(h); }}
-          onDelete={() => { A.removeWithUndo(detailHabit); setDetailHabit(null); }}
-          onToggleToday={(note, mood) => {
-            A.tick.mutate({ habitId: detailHabit.id, date: today, note, mood });
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ Hero */
-
-function Hero({
-  phone, hue, gamification, freezes, animate, onNew, onCompleteAll, onReset,
-}: {
-  phone: boolean;
-  hue: string;
-  gamification: ReturnType<typeof calculateHabitGamification>;
-  freezes: number;
-  animate: boolean;
-  onNew: () => void;
-  onCompleteAll: () => void;
-  onReset: () => void;
-}) {
-  const g = gamification;
-  const pct = g.activeCount > 0 ? g.todayPercent : 0;
-
-  return (
-    <motion.div
-      initial={animate ? { opacity: 0, y: -8 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'var(--card)',
-        border: '1px solid var(--line)',
-        borderRadius: 20,
-        boxShadow: 'var(--sh)',
-        padding: phone ? '15px 15px 17px' : '18px 22px 20px',
-      }}
-    >
-
-      <div style={{
-        position: 'relative', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <h1 style={{
-                fontSize: phone ? 30 : 40, fontWeight: 800, margin: 0,
-                letterSpacing: '-.03em', color: 'var(--tx)',
-              }}>
-                Habits
-              </h1>
-              <span style={{
-                fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 999,
-                background: `color-mix(in srgb, ${hue} 16%, transparent)`,
-                color: hue, letterSpacing: '.02em',
-              }}>
-                Level {g.level} · {g.multiplier}× streak bonus
-              </span>
-            </div>
-            <div className="metaline" style={{ marginTop: 3, fontSize: 12 }}>
-              <CountUp value={g.todayCompleted} animate={animate} /> of {g.activeCount} done today
-              {g.activeCount > 0 && ` · ${g.todayPercent}%`}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <StatPill icon="flame" hue="#FFC24B" value={`${g.topStreak}d`} label="best live run" />
-          <StatPill icon="lock" hue="#38D6F2" value={String(freezes)} label="freezes" />
-
-          <button onClick={onReset} className="hov k-squish" title="Clear every tick from today"
-            style={{
-              padding: '8px 12px', borderRadius: 11, border: '1px solid var(--line2)',
-              background: 'var(--card2)', fontSize: 11.5, fontWeight: 700, color: 'var(--tx3)',
-              cursor: 'pointer',
-            }}>
-            Reset today
-          </button>
-
-          <motion.button
-            onClick={onCompleteAll}
-            whileTap={animate ? { scale: 0.95 } : undefined}
-            whileHover={animate ? { scale: 1.03 } : undefined}
-            title="Tick every habit still open today"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 11,
-              border: '1px solid color-mix(in srgb, #34D9A0 40%, transparent)',
-              background: 'color-mix(in srgb, #34D9A0 13%, transparent)',
-              color: '#34D9A0', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
-            }}
-          >
-            <Icon name="check" size={13} color="#34D9A0" />
-            Finish all
-          </motion.button>
-
-          <motion.button
-            onClick={onNew}
-            whileTap={animate ? { scale: 0.95 } : undefined}
-            whileHover={animate ? { scale: 1.04 } : undefined}
-            className="acc"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 15px', borderRadius: 11,
-              background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800,
-              border: 'none', cursor: 'pointer',
-            }}
-          >
-            <Icon name="plus" size={14} color="var(--ink)" />
-            New habit
-          </motion.button>
-        </div>
-      </div>
-
-      {/* Today first, XP second. The bar you can still act on goes on top. */}
-      <div style={{ position: 'relative', marginTop: 15, display: 'grid', gap: 10 }}>
-        <Meter
-          label="Today"
-          right={`${g.todayCompleted}/${g.activeCount}`}
-          pct={pct}
-          hue={hue}
-          animate={animate}
-          thick
-        />
-        <Meter
-          label={`Level ${g.level}`}
-          right={`${g.currentLevelXp} / 250 XP to level ${g.level + 1}`}
-          pct={g.levelProgress}
-          hue="var(--acc)"
-          animate={animate}
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-function Segmented<T extends string>({
-  label, value, onChange, options,
-}: {
-  label: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { id: T; label: string }[];
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <span className="kicker">{label}</span>
-      <div style={{ display: 'flex', gap: 3, background: 'var(--card2)', padding: 3, borderRadius: 10 }}>
-        {options.map((o) => {
-          const on = value === o.id;
-          return (
-            <button
-              key={o.id}
-              onClick={() => onChange(o.id)}
-              className="k-squish"
-              style={{
-                padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                fontSize: 11, fontWeight: 700,
-                background: on ? 'var(--card)' : 'transparent',
-                color: on ? 'var(--tx)' : 'var(--tx3)',
-                boxShadow: on ? 'var(--sh)' : 'none',
-              }}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CategoryChip({
-  on, color, label, dot, onClick,
-}: { on: boolean; color: string; label: string; dot?: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="k-squish"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6, flex: 'none', cursor: 'pointer',
-        padding: '5px 11px', borderRadius: 9, fontSize: 11, fontWeight: 700,
-        border: `1px solid ${on ? color : 'var(--line2)'}`,
-        background: on ? `color-mix(in srgb, ${color} 15%, transparent)` : 'transparent',
-        color: on ? 'var(--tx)' : 'var(--tx3)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />}
-      {label}
-    </button>
-  );
-}
-
-function EmptyState({
-  hue, filtered, onNew, onClear,
-}: { hue: string; filtered: boolean; onNew: () => void; onClear: () => void }) {
-  return (
-    <div style={{
-      background: 'var(--card)', border: '1px dashed var(--line2)', borderRadius: 18,
-      padding: '38px 22px', textAlign: 'center',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-    }}>
-      <span style={{
-        width: 42, height: 42, borderRadius: 13, display: 'grid', placeItems: 'center',
-        background: `color-mix(in srgb, ${hue} 14%, transparent)`,
-      }}>
-        <Icon name={filtered ? 'filter' : 'habit'} size={19} color={hue} />
-      </span>
-      <div style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--tx)' }}>
-        {filtered ? 'Nothing matches those filters' : 'No habits yet'}
-      </div>
-      <div className="metaline" style={{ maxWidth: 380, lineHeight: 1.45 }}>
-        {filtered
-          ? 'Loosen the filters, or clear them to see everything again.'
-          : 'A habit is a name, a cue, and a square you fill in. Start with one you already almost do.'}
-      </div>
-      <button
-        onClick={filtered ? onClear : onNew}
-        className="acc k-squish"
-        style={{
-          marginTop: 3, padding: '9px 16px', borderRadius: 11, border: 'none', cursor: 'pointer',
-          background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800,
-        }}
-      >
-        {filtered ? 'Clear filters' : 'Create your first habit'}
-      </button>
     </div>
   );
 }

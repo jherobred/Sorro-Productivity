@@ -193,7 +193,7 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
     const list = { id: crypto.randomUUID(), name, color: TAG_COLORS[lists.length % TAG_COLORS.length].value, position: lists.length };
     L.create.mutate(list);
     save({ list_id: list.id });
-    toast(`List “${name}” made and this task moved into it`, undefined, { tone: 'success', icon: 'list' });
+    toast(`Project “${name}” made and this task moved into it`, undefined, { tone: 'success', icon: 'proj' });
     setNewList(null);
   };
 
@@ -261,8 +261,8 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
           </div>
 
           <div className="task-prop">
-            <span className="task-prop-name"><Icon name="list" size={14} />List</span>
-            <div className="task-prop-value task-chips" role="radiogroup" aria-label="List">
+            <span className="task-prop-name"><Icon name="proj" size={14} />Project</span>
+            <div className="task-prop-value task-chips" role="radiogroup" aria-label="Project">
               <button type="button" role="radio" aria-checked={!task.list_id} onClick={() => save({ list_id: null })}>Inbox</button>
               {lists.map((l) => (
                 <button key={l.id} type="button" role="radio" aria-checked={task.list_id === l.id} onClick={() => save({ list_id: l.id })}>
@@ -270,9 +270,9 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
                 </button>
               ))}
               {newList === null ? (
-                <button type="button" className="is-add" onClick={() => setNewList('')}><Icon name="plus" size={12} />New list</button>
+                <button type="button" className="is-add" onClick={() => setNewList('')}><Icon name="plus" size={12} />New project</button>
               ) : (
-                <input className="task-chip-input" autoFocus value={newList} placeholder="List name" aria-label="New list name"
+                <input className="task-chip-input" autoFocus value={newList} placeholder="Project name" aria-label="New project name"
                   onChange={(e) => setNewList(e.target.value)} onBlur={createList}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); createList(); }

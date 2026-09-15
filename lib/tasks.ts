@@ -28,6 +28,8 @@ export type Task = {
   completed_at?: string | null;
   /** Course / Subject code or name (e.g. CS 101, MATH 20) */
   course?: string | null;
+  /** Where a synced task came from, 'canvas_lms' for a Canvas assignment. Null for your own. */
+  source?: string | null;
 };
 
 export type List = { id: string; name: string; color: string; position: number };
@@ -300,7 +302,7 @@ export function useTasks() {
     queryFn: async (): Promise<Task[]> => {
       const { data, error } = await supabase
         .from('bd_tasks')
-        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at')
+        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at,source')
         .is('deleted_at', null)
         .order('position')
         .limit(500);

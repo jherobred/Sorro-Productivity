@@ -106,6 +106,10 @@ export function seedDevFixtures() {
     { ...task('t7', LIST.school, 'Capstone group sync notes', ymdOf(1), 'med', 3), due_at: iso(1, 17, 30) },
     task('t8', LIST.errands, 'Buy notebook + pens', ymdOf(2), 'low', 0),
     task('t9', LIST.personal, 'Call home', ymdOf(3), 'med', 2),
+    // What the Canvas sync writes: no list, the course and link in notes, source canvas_lms.
+    { ...task('c1', '', 'Problem Set 5: Graph Algorithms', ymdOf(1), 'med', 0, 'CS 191 — https://ust.instructure.com/courses/41021/assignments/88710'), list_id: null, due_at: iso(1, 23, 59), source: 'canvas_lms' },
+    { ...task('c2', '', 'Reflection Paper: Technology and Society', ymdOf(3), 'med', 0, 'STS 1 — https://ust.instructure.com/courses/41007/assignments/88452'), list_id: null, due_at: iso(3, 17, 0), source: 'canvas_lms' },
+    { ...task('c3', '', 'Quiz 3: Normal Forms', ymdOf(0), 'med', 0, 'IT 222 — https://ust.instructure.com/courses/41033/quizzes/19220'), list_id: null, due_at: iso(0, 21, 0), source: 'canvas_lms' },
   ]);
 
   const ev = (id: string, title: string, d: number, sh: number, sm: number, eh: number, em: number, loc: string, color: string, source = 'app') =>
@@ -181,6 +185,17 @@ export function seedDevFixtures() {
     { id: 's3', text: 'Library closes early on Fridays', tag: 'Todo', color: '#34D9A0', pinned: false, position: 2, created_at: iso(-2, 14) },
   ]);
 
+  // Saved links, as lib/links.ts reads them out of the scratch table.
+  const link = (id: string, url: string, label: string, category: string, back: number, extra: { note?: string; pinned?: boolean } = {}) =>
+    ({ id, url, label, note: extra.note ?? '', category, pinned: !!extra.pinned, position: back, created_at: iso(-back, 10) });
+  seed(['links'], [
+    link('l1', 'https://ust.instructure.com/courses/41021', 'CS 191 on Canvas', 'School', 1, { pinned: true }),
+    link('l2', 'https://docs.google.com/document/d/1thesis/edit', 'Thesis draft', 'School', 2, { note: 'Chapter 3 comments from Prof. Santos' }),
+    link('l3', 'https://gci.world/2026/portal', 'GCI World 2026 portal', 'GCI World 2026', 3),
+    link('l4', 'https://www.youtube.com/watch?v=graphs101', 'Graph algorithms lecture', 'School', 4),
+    link('l5', 'https://www.figma.com/file/capstone', 'Capstone wireframes', '', 5),
+  ]);
+
   seed(['accounts'], [
     { id: 'a1', name: 'Cash', kind: 'cash', color: '#34D9A0', opening_centavos: 450000 },
     { id: 'a2', name: 'Maribank', kind: 'ewallet', color: '#7C8CFF', opening_centavos: 1250000 },
@@ -217,7 +232,9 @@ export function seedDevFixtures() {
     { id: 'f6', kind: 'social', title: 'Jules replied to your thread', body: '“We scoped to one corridor and wrote the network bit as future work.”', href: '/community/', source: 'app', read_at: mins(600), created_at: mins(610) },
   ]);
 
-  seed(['integrations'], []);
+  seed(['integrations'], [
+    { kind: 'canvas_lms', config: { base_url: 'https://ust.instructure.com' }, enabled: true, last_sync_at: mins(7), last_error: null },
+  ]);
 
   // `icon` and `cover` are the folder's face — an emoji, an `ic:` app icon, a
   // `grad:` cover, or a storage path. See components/projects/Look.tsx.

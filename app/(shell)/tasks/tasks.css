@@ -1,6 +1,6 @@
 /* My Tasks: the rail, header, quick add, rows, groups, bulk bar and the task panel. */
 
-.tasks-page{display:grid;grid-template-columns:212px minmax(0,1fr);gap:30px;max-width:1180px;margin:0 auto;padding-bottom:110px}
+.tasks-page{display:grid;grid-template-columns:272px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding-bottom:110px}
 .tasks-page.is-wide{max-width:none}
 .tasks-page.is-narrow{display:block;padding-bottom:140px}
 .tasks-main{min-width:0;max-width:860px;width:100%}
@@ -8,7 +8,8 @@
 .tasks-page.is-narrow .tasks-main{margin:0 auto}
 
 /* ---- rail */
-.task-rail{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;gap:18px;max-height:calc(100dvh - 110px);overflow-y:auto;padding:6px 2px 20px 0}
+.tasks-side{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;gap:16px;max-height:calc(100dvh - 110px);overflow-y:auto;padding:4px 4px 24px 0;scrollbar-width:thin}
+.task-rail{display:flex;flex-direction:column;gap:18px;padding:0 2px 0 0}
 .task-rail-group{display:flex;flex-direction:column;gap:2px}
 .task-rail-group h2{margin:0 0 4px;padding:0 10px;font-size:10.5px;font-weight:750;letter-spacing:.09em;text-transform:uppercase;color:var(--tx3)}
 .task-rail-item{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:0 10px;border-radius:10px;color:var(--tx2);font-size:13px;font-weight:600;text-align:left;transition:background .15s,color .15s}
@@ -22,7 +23,8 @@
 .task-rail-add{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 10px;border-radius:10px;color:var(--tx3);font-size:12.5px;font-weight:600}
 .task-rail-add:hover{background:var(--hov);color:var(--tx)}
 .task-rail-input{width:100%;min-height:34px;padding:0 10px;border-radius:10px;border:1.5px solid var(--poster-blue);background:var(--card);color:var(--tx);font-size:13px;outline:none}
-.task-rail.is-phone{position:static;flex-direction:row;gap:6px;max-height:none;overflow-x:auto;margin:0 -2px 12px;padding:2px 2px 4px}
+.task-rail.is-phone{flex-direction:row;gap:6px;overflow-x:auto;margin:0 -2px 12px;padding:2px 2px 4px}
+.tasks-main>.lms.is-column{margin-bottom:12px}
 .task-rail.is-phone .task-rail-item{flex:none;width:auto;min-height:34px;gap:7px;padding:0 12px;border-radius:999px;border:1px solid var(--line2);background:var(--card);font-size:12.5px}
 .task-rail.is-phone .task-rail-item.is-on{border-color:var(--tx);background:var(--tx);color:var(--card);box-shadow:none}
 .task-rail.is-phone .task-rail-item.is-on .task-rail-count{background:color-mix(in srgb,var(--card) 22%,transparent);color:var(--card)}
@@ -76,6 +78,7 @@
 .tasks-tool{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line2);background:var(--card);color:var(--tx2);font-size:12.5px;font-weight:650;white-space:nowrap}
 .tasks-tool:hover{color:var(--tx);border-color:var(--tx3)}
 .tasks-tool.is-on{border-color:var(--tx);background:var(--tx);color:var(--card)}
+@media(min-width:1001px) and (max-width:1500px){.tasks-tool{width:40px;padding:0;justify-content:center}.tasks-tool span{display:none}.tasks-search{flex-basis:160px}}
 
 /* ---- groups and board */
 .task-groups{display:flex;flex-direction:column;gap:14px}
@@ -129,6 +132,9 @@
 .task-chip.is-steps,.task-chip.is-plain{background:var(--card2)}
 .task-chip.is-steps.is-complete{background:color-mix(in srgb,#2fb27a 14%,var(--card));color:#1f8a5c}
 .task-chip.is-stars{background:color-mix(in srgb,var(--task-star) 18%,var(--card));color:var(--task-star)}
+.task-chip.is-canvas{background:color-mix(in srgb,#e2462f 12%,var(--card));color:var(--tx);text-decoration:none}
+.task-chip.is-canvas b{display:grid;place-items:center;width:14px;height:14px;border-radius:4px;background:#e2462f;color:#fff;font-size:9.5px;font-weight:800}
+.task-chip.is-canvas:hover{background:color-mix(in srgb,#e2462f 20%,var(--card))}
 .task-actions{display:flex;align-items:center;gap:1px;margin:-4px -4px 0 0;opacity:0;transition:opacity .15s}
 .task-item:hover .task-actions,.task-item:focus-within .task-actions{opacity:1}
 .task-actions button{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;color:var(--tx3)}

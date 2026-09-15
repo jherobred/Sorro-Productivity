@@ -14,8 +14,9 @@ import { supabase } from '@/lib/supabase';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useLiveSync } from '@/lib/realtime';
 import { useAutoSync } from '@/lib/integrations';
+import { useCanvasAlerts } from '@/lib/canvasLms';
 import { watchAccounts } from '@/lib/accounts';
-import { DESTINATIONS, activePath } from '@/lib/destinations';
+import { DESTINATIONS, activePath, currentId } from '@/lib/destinations';
 import { useAccounts } from '@/lib/accounts';
 import { useLayout } from '@/lib/useLayout';
 const Settings = dynamic(() => import('./SettingsModal').then(m => m.SettingsModal), { ssr: false });
@@ -37,7 +38,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState(false);
   const [more, setMore] = useState(false);
   const [online, setOnline] = useState(true);
-  useBackGuard(); useLiveSync(); useAutoSync();
+  useBackGuard(); useLiveSync(); useAutoSync(); useCanvasAlerts();
   useEffect(watchAccounts, []);
   useOverlayBack(more, () => setMore(false));
   useEffect(() => {
@@ -63,7 +64,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); window.removeEventListener('keydown', key); };
   }, [prefs.sidebar, update]);
   const current = DESTINATIONS.find(d => pathname.split('/')[1] === d.id);
-  const mobilePicks = prefs.navPicks.map(id => DESTINATIONS.find(d => d.id === id)).filter((d): d is typeof DESTINATIONS[number] => !!d).slice(0, 4);
+  const mobilePicks = prefs.navPicks.map(id => DESTINATIONS.find(d => d.id === currentId(id))).filter((d): d is typeof DESTINATIONS[number] => !!d).slice(0, 4);
   const mobileNav = mobilePicks.length ? mobilePicks : DESTINATIONS.slice(0, 4);
   const nav = (items: readonly typeof DESTINATIONS[number][]) => items.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined} className="studio-nav-link"><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>);
   const storedMe = accounts.find(a => a.user_id === me.id);
@@ -73,7 +74,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <aside className="studio-sidebar">
       <div className="studio-brand-row"><Link href="/home/" className="basedly-wordmark">basedly</Link><button title="Collapse navigation" aria-label="Toggle compact navigation" onClick={() => update({ sidebar: prefs.sidebar === 'compact' ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button></div>
       <button className="studio-search" onClick={() => setSearch(true)}><Icon name="search" size={18} /><span>Find anything</span><kbd>Ctrl K</kbd></button>
-      <nav aria-label="Main navigation"><div className="studio-nav-group"><span>Plan</span>{nav(DESTINATIONS.filter(d => ['home', 'calendar', 'tasks'].includes(d.id)))}</div><div className="studio-nav-group"><span>Think</span>{nav(DESTINATIONS.filter(d => ['notebooks', 'focus'].includes(d.id)))}</div><div className="studio-nav-group"><span>Self</span>{nav(DESTINATIONS.filter(d => ['habits', 'gym', 'fuel', 'money'].includes(d.id)))}</div></nav>
+      <nav aria-label="Main navigation"><div className="studio-nav-group"><span>Plan</span>{nav(DESTINATIONS.filter(d => ['home', 'calendar', 'tasks', 'projects'].includes(d.id)))}</div><div className="studio-nav-group"><span>Think</span>{nav(DESTINATIONS.filter(d => ['notebooks', 'focus', 'links'].includes(d.id)))}</div><div className="studio-nav-group"><span>Self</span>{nav(DESTINATIONS.filter(d => ['habits', 'fitness', 'fuel', 'money'].includes(d.id)))}</div></nav>
       <div className="studio-sidebar-bottom"><button className="studio-account" onClick={() => setAccount(true)}><span className="studio-avatar">{(storedMe?.name || me.name).charAt(0)}</span><span><strong>{storedMe?.name || me.name}</strong><small>Personal workspace</small></span><Icon name="chevR" size={15} /></button></div>
     </aside>
     <div className="studio-workspace">

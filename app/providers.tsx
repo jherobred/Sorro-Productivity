@@ -1,7 +1,7 @@
 'use client';
 
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { onlineManager } from '@tanstack/react-query';
+import { defaultShouldDehydrateQuery, onlineManager } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient, persister } from '@/lib/offline';
@@ -36,7 +36,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister, maxAge: Infinity, buster: 'v1' }}
+      // Integration rows carry the Canvas token in `config`. Everything else is
+      // kept on the device for offline use; that must not be.
+      persistOptions={{ persister, maxAge: Infinity, buster: 'v1', dehydrateOptions: { shouldDehydrateQuery: (query) => query.queryKey[0] !== 'integrations' && defaultShouldDehydrateQuery(query) } }}
       onSuccess={() => {
         // Cache restored — replay anything that was queued while offline.
         void queryClient.resumePausedMutations();

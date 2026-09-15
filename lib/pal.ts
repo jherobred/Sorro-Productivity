@@ -23,6 +23,7 @@ export const SECHUE: Record<string, string> = {
   projects: '#FFC24B',
   habits: '#FF6B6B',
   gym: '#FF6FA8',
+  fitness: '#FF6FA8',
   fuel: '#A3E635',
   money: '#34D9A0',
   profile: '#FF6FA8',

@@ -163,6 +163,11 @@ export const ICONS = {
 
 export type IconName = keyof typeof ICONS;
 
+/** The CSS mask image for an icon, for places that build HTML strings, like map pins. */
+export function iconMaskUrl(name: IconName): string {
+  return maskUrl(name);
+}
+
 function maskUrl(name: IconName): string {
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" ' +

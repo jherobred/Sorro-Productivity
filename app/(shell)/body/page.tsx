@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 /**
- * Body is two tabs now: `/gym` and `/fuel`.
+ * Body is two tabs now: `/fitness` and `/fuel`.
  *
  * The route stays as a redirect rather than being deleted, because it is in
  * people's history, in the `g o` keyboard shortcut, and in whatever the phone's
@@ -16,6 +16,6 @@ import { useRouter } from 'next/navigation';
  */
 export default function BodyPage() {
   const router = useRouter();
-  useEffect(() => { router.replace('/gym/'); }, [router]);
+  useEffect(() => { router.replace('/fitness/'); }, [router]);
   return <div style={{ height: 200 }} aria-hidden />;
 }

@@ -17,7 +17,7 @@ export const SMART_SCOPES: { id: TaskScope; label: string; icon: IconName }[] = 
 ];
 
 /**
- * Where My Tasks looks: the smart views, then every list, then every course.
+ * Where My Tasks looks: the smart views, then every project, then every course.
  * A column on a wide screen and a row of chips on a phone. Counts are open
  * tasks, and the overdue count turns red while there is any.
  */
@@ -70,15 +70,15 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
         {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={15} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
       </div>
       <div className="task-rail-group">
-        <h2>Lists</h2>
+        <h2>Projects</h2>
         {item(`list:${INBOX}`, 'Inbox', <i className="task-rail-dot" style={{ background: '#7c8cff' }} />)}
         {lists.map((l) => item(`list:${l.id}`, l.name, <i className="task-rail-dot" style={{ background: l.color }} />, {
           onContextMenu: (e) => { e.preventDefault(); onListMenu(l, e.clientX, e.clientY); },
         }))}
         {adding === null ? (
-          <button type="button" className="task-rail-add" onClick={() => setAdding('')}><Icon name="plus" size={14} />New list</button>
+          <button type="button" className="task-rail-add" onClick={() => setAdding('')}><Icon name="plus" size={14} />New project</button>
         ) : (
-          <input className="task-rail-input" autoFocus value={adding} placeholder="List name" aria-label="New list name"
+          <input className="task-rail-input" autoFocus value={adding} placeholder="Project name" aria-label="New project name"
             onChange={(e) => setAdding(e.target.value)} onBlur={finishAdding}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); finishAdding(); }

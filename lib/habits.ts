@@ -192,7 +192,7 @@ const freezeServerSnapshot = () => FREEZE_START;
 /** Dates a freeze has been spent on, so a gap can be forgiven deliberately. */
 const FROZEN_DAYS_KEY = 'basedly-habit-frozen-days-v1';
 
-function readFrozenDays(): string[] {
+export function readFrozenDays(): string[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(FROZEN_DAYS_KEY);
@@ -513,6 +513,7 @@ const CREATE = defineMutation('habit.create', async (v: {
   target_unit?: string | null;
   category?: HabitCategory;
   frequency?: HabitFrequency;
+  custom_days?: number[];
   time_of_day?: TimeOfDay;
   icon?: string;
   cue?: string;
@@ -534,6 +535,7 @@ const CREATE = defineMutation('habit.create', async (v: {
     show_in_home: v.show_in_home ?? true,
     category: v.category ?? 'health',
     frequency: v.frequency ?? 'daily',
+    custom_days: v.custom_days,
     time_of_day: v.time_of_day ?? 'anytime',
     icon: v.icon,
     cue: v.cue,
@@ -680,6 +682,7 @@ export function useHabitActions(days = 30) {
         challenge_id: null,
         category: v.category ?? 'health',
         frequency: v.frequency ?? 'daily',
+        custom_days: v.custom_days,
         time_of_day: v.time_of_day ?? 'anytime',
         icon: v.icon ?? 'check',
         cue: v.cue ?? '',

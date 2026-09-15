@@ -41,7 +41,7 @@ export type MetricDef = {
 export const METRICS: MetricDef[] = [
   { id: 'task', label: 'Tasks finished', hint: 'Anything you tick off in Tasks', icon: 'task', unit: 'tasks', auto: true },
   { id: 'habit', label: 'A habit kept', hint: 'Days you tick one of your habits', icon: 'habit', unit: 'days', auto: true },
-  { id: 'body', label: 'Gym days', hint: 'Days with a session in Gym', icon: 'gym', unit: 'days', auto: true },
+  { id: 'body', label: 'Fitness days', hint: 'Days with a session in Fitness', icon: 'gym', unit: 'days', auto: true },
   { id: 'steps', label: 'Steps', hint: 'A point per thousand steps', icon: 'steps', unit: 'k steps', auto: true },
   { id: 'study', label: 'Study hours', hint: 'Calendar blocks with study, review, reading or deep work in the title', icon: 'clock', unit: 'hours', auto: true },
   { id: 'nospend', label: 'No-spend days', hint: 'Finished days with nothing spent', icon: 'money', unit: 'days', auto: true },

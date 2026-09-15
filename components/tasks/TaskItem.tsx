@@ -7,6 +7,7 @@ import { ObjectCoverImage } from '@/components/notes/NotebookCover';
 import { parseTaskLinks, type List, type Task } from '@/lib/tasks';
 import type { Tag } from '@/lib/tagList';
 import { deadlineClock, deadlineOf } from '@/lib/todayCycle';
+import { readCanvasNotes } from '@/lib/canvasFeed';
 
 export type DueTone = 'late' | 'today' | 'soon' | 'later';
 
@@ -101,8 +102,10 @@ export function TaskItem(props: TaskItemProps) {
   };
 
   const parsed = parseTaskLinks(task.notes || '');
-  const course = task.course || parsed.course;
-  const note = parsed.cleanNotes.split('\n').find((line) => line.trim())?.trim();
+  // A Canvas assignment keeps "Course — link" in its notes. It reads as a course and a link, not a note.
+  const canvas = task.source === 'canvas_lms' ? readCanvasNotes(task.notes) : null;
+  const course = task.course || parsed.course || canvas?.course;
+  const note = canvas ? undefined : parsed.cleanNotes.split('\n').find((line) => line.trim())?.trim();
   const links = (parsed.submissionLink ? 1 : 0) + (parsed.googleDocsLink ? 1 : 0) + parsed.customLinks.length;
   const due = dueChip(task, now, time24);
   const deadline = deadlineOf(task);
@@ -145,7 +148,7 @@ export function TaskItem(props: TaskItemProps) {
               <span className="task-title" onDoubleClick={(e) => { if (phone) return; e.stopPropagation(); setEditing(true); }}>{task.title}</span>
             )}
             {note && !renaming && <span className="task-note">{note}</span>}
-            {(due || (showList && list) || course || (steps && steps.total > 0) || links > 0 || task.stars > 0) && (
+            {(due || canvas || (showList && list) || course || (steps && steps.total > 0) || links > 0 || task.stars > 0) && (
               <div className="task-meta">
                 {due && (
                   <button type="button" className="task-due" data-tone={task.done ? 'later' : due.tone} title="Change the date"
@@ -153,6 +156,11 @@ export function TaskItem(props: TaskItemProps) {
                     <Icon name="clock" size={12} />{due.text}
                     {soon && deadline !== null && <Countdown deadline={deadline} />}
                   </button>
+                )}
+                {canvas && (
+                  <a className="task-chip is-canvas" href={canvas.url ?? 'https://ust.instructure.com'} target="_blank" rel="noopener noreferrer" title="Open in Canvas" onClick={(e) => e.stopPropagation()}>
+                    <b aria-hidden="true">C</b>Canvas
+                  </a>
                 )}
                 {showList && list && <span className="task-chip" style={{ '--tag': list.color } as React.CSSProperties}><i aria-hidden="true" />{list.name}</span>}
                 {course && <span className="task-chip is-course" style={{ '--tag': tag?.color ?? 'var(--tx3)' } as React.CSSProperties}><Icon name="tag" size={11} />{course}</span>}

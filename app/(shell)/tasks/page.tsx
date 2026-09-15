@@ -14,6 +14,7 @@ import { QuickAdd } from '@/components/tasks/QuickAdd';
 import { TaskPanel } from '@/components/tasks/TaskPanel';
 import { TaskRail, SMART_SCOPES } from '@/components/tasks/TaskRail';
 import { BulkBar, type BulkDay } from '@/components/tasks/BulkBar';
+import { CanvasLmsColumn } from '@/components/lms/CanvasLms';
 import { K, PAL } from '@/lib/pal';
 import { usePrefs, type TaskSortKey } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
@@ -21,6 +22,7 @@ import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { triggerFireworks } from '@/lib/fireworks';
 import { courseIs, TAG_COLORS } from '@/lib/tagList';
+import { activeProjects } from '@/lib/projects';
 import {
   useLists, useListActions, useSubtaskActions, useSubtasks, useTaskActions, useTasks,
   type List, type NewTask, type Task,
@@ -68,7 +70,7 @@ export default function TasksPage() {
   const { phone, width } = useLayout();
   const narrow = phone || width < 1000;
   const { prefs, update } = usePrefs();
-  const { data: lists = [], isSuccess: listsLoaded } = useLists();
+  const { data: allLists = [], isSuccess: listsLoaded } = useLists();
   const { data: tasks = [], isPending } = useTasks();
   const { data: subtasks = [] } = useSubtasks();
   const A = useTaskActions();
@@ -108,7 +110,9 @@ export default function TasksPage() {
   const tags = prefs.tags ?? [];
   const today = localYmd(new Date(now));
   const weekEnd = dayAfter(now, 7);
-  const byList = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
+  // Archived projects leave the rail and the pickers, but their tasks still show which project they are in.
+  const lists = useMemo(() => activeProjects(allLists, prefs.projectMeta), [allLists, prefs.projectMeta]);
+  const byList = useMemo(() => new Map(allLists.map((l) => [l.id, l])), [allLists]);
   const open = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
   const courses = useMemo(() => courseNames(open, tags), [open, tags]);
 
@@ -288,18 +292,18 @@ export default function TasksPage() {
   const newList = (name: string) => {
     const clean = name.trim().replace(/\s+/g, ' ');
     const existing = lists.find((l) => l.name.toLowerCase() === clean.toLowerCase());
-    if (existing) { setScope(`list:${existing.id}`); toast(`“${existing.name}” is already a list`); return; }
+    if (existing) { setScope(`list:${existing.id}`); toast(`“${existing.name}” is already a project`); return; }
     const list: List = { id: crypto.randomUUID(), name: clean, color: TAG_COLORS[lists.length % TAG_COLORS.length].value, position: lists.length };
     L.create.mutate(list);
     setScope(`list:${list.id}`);
-    toast(`List “${clean}” made`, undefined, { tone: 'success', icon: 'list' });
+    toast(`Project “${clean}” made`, undefined, { tone: 'success', icon: 'proj' });
   };
 
   const listMenu = (list: List, x: number, y: number) => setMenu({
     x, y, label: list.name, items: [
       { items: [{
         icon: 'pen', label: 'Rename', run: async () => {
-          const name = (await ask('Rename list', { placeholder: list.name, confirmLabel: 'Rename' }))?.trim();
+          const name = (await ask('Rename project', { placeholder: list.name, confirmLabel: 'Rename' }))?.trim();
           if (name && name !== list.name) { L.update.mutate({ id: list.id, patch: { name } }); toast(`Renamed to “${name}”`, () => L.update.mutate({ id: list.id, patch: { name: list.name } })); }
         },
       }] },
@@ -326,7 +330,7 @@ export default function TasksPage() {
           icon: 'flag' as const, label: PRIORITY_NAMES[p ?? NONE], checked: (task.priority ?? null) === p,
           run: () => patchMany([task], () => ({ priority: p }), `Priority set to ${PRIORITY_NAMES[p ?? NONE].toLowerCase()}`, 'flag'),
         })) },
-        { icon: 'list', label: 'Move to list', items: [
+        { icon: 'proj', label: 'Move to project', items: [
           { icon: 'list', label: 'Inbox', checked: !task.list_id, run: () => patchMany([task], () => ({ list_id: null }), `Moved to Inbox`, 'list') },
           ...lists.map((l) => ({ icon: 'list' as const, label: l.name, swatch: l.color, checked: task.list_id === l.id, run: () => patchMany([task], () => ({ list_id: l.id }), `Moved to ${l.name}`, 'list') })),
         ] },
@@ -349,7 +353,7 @@ export default function TasksPage() {
   const openSort = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Sort tasks', [
     { items: (Object.keys(SORT_LABELS) as TaskSortKey[]).map((key) => ({ icon: SORT_ICONS[key], label: SORT_LABELS[key], hint: SORT_HINTS[key], checked: sort.key === key, run: () => setSort({ key, desc: false }) })) },
     { items: [{ icon: 'sort', label: sort.desc ? 'Back to normal order' : 'Reverse the order', run: () => setSort({ ...sort, desc: !sort.desc }) }] },
-    ...(view === 'board' ? [{ label: 'Board columns', items: (['list', 'course', 'priority'] as const).map((by) => ({ icon: (by === 'list' ? 'list' : by === 'course' ? 'tag' : 'flag') as IconName, label: `By ${by}`, checked: boardBy === by, run: () => void update({ taskBoardBy: by }) })) }] : []),
+    ...(view === 'board' ? [{ label: 'Board columns', items: (['list', 'course', 'priority'] as const).map((by) => ({ icon: (by === 'list' ? 'list' : by === 'course' ? 'tag' : 'flag') as IconName, label: `By ${by === 'list' ? 'project' : by}`, checked: boardBy === by, run: () => void update({ taskBoardBy: by }) })) }] : []),
   ]);
   const openPriority = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Show priority', [
     { icon: 'flag', label: 'Any priority', checked: priority === null, run: () => setPriority(null) },
@@ -433,7 +437,10 @@ export default function TasksPage() {
   return (
     <div className={'tasks-page' + (narrow ? ' is-narrow' : '') + (wide ? ' is-wide' : '')}>
       {!narrow && (
-        <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone={false} onNewList={newList} onListMenu={listMenu} />
+        <aside className="tasks-side">
+          <CanvasLmsColumn />
+          <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone={false} onNewList={newList} onListMenu={listMenu} />
+        </aside>
       )}
 
       <div className="tasks-main">
@@ -454,7 +461,10 @@ export default function TasksPage() {
         </header>
 
         {narrow && (
-          <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone onNewList={newList} onListMenu={listMenu} />
+          <>
+            <CanvasLmsColumn collapsible />
+            <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone onNewList={newList} onListMenu={listMenu} />
+          </>
         )}
 
         {scope !== 'done' && <QuickAdd lists={lists} tags={tags} defaults={defaults} onCreate={create} inputRef={addRef} />}
@@ -555,7 +565,7 @@ export default function TasksPage() {
           onComplete={() => completeMany(selectedTasks)}
           onDay={(day) => moveTo(selectedTasks, day)}
           onPriority={(p) => patchMany(selectedTasks, () => ({ priority: p }), `Priority set to ${PRIORITY_NAMES[p ?? NONE].toLowerCase()} on ${plural(selectedTasks.length, 'task')}`, 'flag')}
-          onList={(id) => patchMany(selectedTasks, () => ({ list_id: id }), `${plural(selectedTasks.length, 'task')} moved to ${id ? byList.get(id)?.name ?? 'a list' : 'Inbox'}`, 'list')}
+          onList={(id) => patchMany(selectedTasks, () => ({ list_id: id }), `${plural(selectedTasks.length, 'task')} moved to ${id ? byList.get(id)?.name ?? 'a project' : 'Inbox'}`, 'list')}
           onDelete={() => deleteMany(selectedTasks)} />
       )}
 

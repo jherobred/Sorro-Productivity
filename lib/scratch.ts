@@ -6,6 +6,7 @@ import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { PAL } from './pal';
 import { settler } from './settle';
+import { LINK_PREFIX } from './linkText';
 
 export type Scratch = {
   id: string;
@@ -40,6 +41,8 @@ export function useScratch() {
         .from('bd_scratch')
         .select('id,text,tag,color,pinned,position,created_at')
         .is('deleted_at', null)
+        // Saved links live in this table too; they have their own page.
+        .not('text', 'like', `${LINK_PREFIX}%`)
         .order('pinned', { ascending: false })
         .order('position')
         .limit(500);
