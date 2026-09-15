@@ -94,7 +94,18 @@ export function BasedlyLogo({
         ...style,
       }}
     >
-      <OtterMascot size={size} variant={variant} />
+      <img
+        src="/icon.svg"
+        width={size}
+        height={size}
+        alt="Basedly"
+        style={{
+          borderRadius: Math.max(4, Math.round(size * 0.22)),
+          flex: 'none',
+          display: 'inline-block',
+          objectFit: 'cover',
+        }}
+      />
       {showWordmark && (
         <span
           style={{
