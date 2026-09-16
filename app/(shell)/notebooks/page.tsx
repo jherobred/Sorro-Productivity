@@ -28,6 +28,7 @@ const Loading=()=> <div className="page-loading" role="status">Opening your page
 const DocEditor=dynamic(()=>import('@/components/notes/docs/DocEditor').then(m=>m.DocEditor),{ssr:false,loading:Loading});
 const FreeBoard=dynamic(()=>import('@/components/notes/FreeBoard').then(m=>m.FreeBoard),{ssr:false,loading:Loading});
 const StudyPage=dynamic(()=>import('@/components/notes/StudyPage').then(m=>m.StudyPage),{ssr:false,loading:Loading});
+const FreePage=dynamic(()=>import('@/components/notes/FreePage').then(m=>m.FreePage),{ssr:false,loading:Loading});
 const JournalPage=dynamic(()=>import('@/components/notes/JournalPage').then(m=>m.JournalPage),{ssr:false,loading:Loading});
 const CodePage=dynamic(()=>import('@/components/notes/CodePage').then(m=>m.CodePage),{ssr:false,loading:Loading});
 const CoverCapture=dynamic(()=>import('@/components/notes/CoverCapture').then(m=>m.CoverCapture),{ssr:false});
@@ -96,6 +97,7 @@ export default function NotebooksPage(){
   if(kind==='whiteboard'||kind==='moodboard'||kind==='pdf')return <FreeBoard key={n.id} note={n} onSave={save}/>;
   if(kind==='journal')return <JournalPage key={n.id} note={n} notes={notes} onSave={save} onOpen={id=>{const x=notes.find(m=>m.id===id);if(x)openNote(x);}} onBin={other=>A.deleteWithUndo(other)}/>;
   if(kind==='code')return <CodePage key={n.id} note={n} onSave={save}/>;
+  if(kind==='freepage')return <FreePage key={n.id} note={n} onSave={save}/>;
   if(kind==='checklist'||kind==='flashcards'||kind==='cornell')return <StudyPage key={n.id} note={n} onSave={save}/>;
   return <DocumentWorkspace key={n.id} note={n}>{taskButton=><DocEditor key={n.id} note={n} notes={notes} tags={tags[n.id]||[]} phone={phone} taskButton={taskButton} onSave={save} onDelete={()=>deletePage(n)} onPickNote={id=>{const x=notes.find(n=>n.id===id);if(x)openNote(x);}} onNewNote={title=>createPage('document',title)} onCopy={(title,body)=>{const id=crypto.randomUUID();A.newNote.mutate({id,notebook_id:n.notebook_id,title,body});openNote({...n,id,title,body});}} onSetTags={t=>A.setTags.mutate({note_id:n.id,tags:t})}/>}</DocumentWorkspace>;
  };

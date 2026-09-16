@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialBody,pageKind,PAGE_TYPES,readBoard,readStudy,writeBoard,writeStudy} from './pageKinds.ts';
+import {initialBody,pageKind,PAGE_TYPES,readBoard,readFreePage,readStudy,richText,writeBoard,writeFreePage,writeStudy} from './pageKinds.ts';
 import {canvasPoint,zoomAt,strokeBounds,pressurePath,fitItems} from './boardGeometry.ts';
 
 test('mixed notebook formats round-trip without reinterpreting ordinary markdown',()=>{
@@ -35,4 +35,20 @@ test('pen geometry preserves pressure and negative-world coordinates',()=>{
  const view=fitItems([stroke],900,600);
  const topLeft={x:stroke.x*view.scale+view.x,y:stroke.y*view.scale+view.y};
  assert.ok(topLeft.x>=0&&topLeft.y>=0);
+});
+test('a free page keeps its notes where they were put, and refuses nonsense',()=>{
+ const page={version:1 as const,kind:'freepage' as const,boxes:[
+  {id:'a',x:120,y:88,w:340,h:96,doc:{type:'doc',content:[{type:'heading',attrs:{level:1},content:[{type:'text',text:'Normal forms'}]}]}},
+  {id:'b',x:-40,y:240,w:280,tint:'#fff3b8',doc:{type:'doc',content:[{type:'bulletList',content:[{type:'listItem',content:[{type:'paragraph',content:[{type:'text',text:'Ask about BCNF'}]}]}]}]}},
+ ]};
+ assert.deepEqual(readFreePage(writeFreePage(page)),page);
+ assert.equal(richText(page.boxes[0].doc),'Normal forms');
+ assert.equal(richText(page.boxes[1].doc),'Ask about BCNF');
+ const prefix='<!-- basedly-page:v1 -->\n';
+ assert.equal(readFreePage(prefix+'{broken'),null);
+ assert.equal(readFreePage(writeFreePage({...page,boxes:[page.boxes[0],page.boxes[0]]})),null);
+ assert.equal(readFreePage(writeFreePage({...page,boxes:[{...page.boxes[0],w:0}]})),null);
+ assert.equal(readFreePage(prefix+JSON.stringify({version:1,kind:'freepage',boxes:[{id:'c',x:0,y:0,w:10,doc:{content:'not a list'}}]})),null);
+ // Another page format with the same marker is not a free page.
+ assert.equal(readFreePage(initialBody('checklist')),null);
 });

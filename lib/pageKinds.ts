@@ -1,8 +1,9 @@
 import {readDoc,docText} from './docFormat.ts';
 import {readJournalBook,bookDays} from './journalPage.ts';
-export type PageKind = 'document' | 'whiteboard' | 'moodboard' | 'pdf' | 'journal' | 'code' | 'checklist' | 'flashcards' | 'cornell';
+export type PageKind = 'document' | 'whiteboard' | 'moodboard' | 'pdf' | 'journal' | 'code' | 'checklist' | 'flashcards' | 'cornell' | 'freepage';
 export const PAGE_TYPES = [
   {kind:'document',name:'Document',icon:'text',description:'Notes, lists and equations'},
+  {kind:'freepage',name:'Free page',icon:'cursor',description:'Write anywhere on the sheet, in any order'},
   {kind:'whiteboard',name:'Board',icon:'pen',description:'Draw, collect photos and connect ideas'},
   {kind:'checklist',name:'Checklist',icon:'check',description:'Break a big idea into small steps'},
   {kind:'flashcards',name:'Flashcards',icon:'files',description:'Practice a question at a time'},
@@ -21,6 +22,17 @@ export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;tex
 export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[]};
 export type CornellDocument = {version:1;kind:'cornell';cues:string;notes:string;summary:string};
 export type CodeDocument = {version:1;kind:'code';language:string;code:string};
+/**
+ * A free page is a sheet of note boxes, each holding rich text where it was put.
+ *
+ * The box content is the editor's own document, kept as data rather than markup
+ * so nothing has to trust stored HTML to draw a page. `h` is the last measured
+ * height, used for thumbnails and for how far the sheet reaches; it is written
+ * back after an edit and may be missing on boxes written before it existed.
+ */
+export type RichNode = {type?:string;text?:string;attrs?:Record<string,unknown>;marks?:{type:string;attrs?:Record<string,unknown>}[];content?:RichNode[]};
+export type FreeBox = {id:string;x:number;y:number;w:number;h?:number;doc:RichNode;tint?:string};
+export type FreePageDocument = {version:1;kind:'freepage';boxes:FreeBox[]};
 export type StudyDocument = ChecklistDocument | FlashcardDocument | CornellDocument;
 const BOARD_MARKER = '<!-- basedly-board:v1 -->\n';
 const PAGE_MARKER = '<!-- basedly-page:v1 -->\n';
@@ -65,9 +77,44 @@ export function readStudy(body:string):StudyDocument|CodeDocument|null {
   return null;
 }
 export const writeStudy=(page:StudyDocument|CodeDocument)=>PAGE_MARKER+JSON.stringify(page);
+const BLOCKS=new Set(['doc','bulletList','orderedList','taskList','listItem','taskItem','blockquote']);
+/** What a rich node says, with nothing of how it looks. Used for copying, previews and thumbnails. */
+export function richText(node?:RichNode):string {
+  if(!node)return '';
+  if(str(node.text))return node.text;
+  const parts=(node.content||[]).map(richText);
+  return BLOCKS.has(String(node.type))?parts.filter(Boolean).join('\n'):parts.join('');
+}
+function validNode(v:unknown,depth=0):boolean {
+  if(!record(v)||depth>14)return false;
+  if(v.type!==undefined&&!str(v.type))return false;
+  if(v.text!==undefined&&!str(v.text))return false;
+  if(v.attrs!==undefined&&!record(v.attrs))return false;
+  if(v.marks!==undefined&&(!Array.isArray(v.marks)||!v.marks.every(m=>record(m)&&str(m.type))))return false;
+  if(v.content!==undefined&&(!Array.isArray(v.content)||!v.content.every(c=>validNode(c,depth+1))))return false;
+  return true;
+}
+export function readFreePage(body:string):FreePageDocument|null {
+  if(!body.startsWith(PAGE_MARKER))return null;
+  try {
+    const d: unknown=JSON.parse(body.slice(PAGE_MARKER.length));
+    if(!record(d)||d.version!==1||d.kind!=='freepage'||!Array.isArray(d.boxes))return null;
+    const ids=new Set<string>();
+    for(const box of d.boxes){
+      if(!record(box)||!str(box.id)||ids.has(box.id)||!['x','y','w'].every(k=>finite(box[k]))||Number(box.w)<=0)return null;
+      if(box.h!==undefined&&(!finite(box.h)||Number(box.h)<0))return null;
+      if(box.tint!==undefined&&!str(box.tint))return null;
+      if(!validNode(box.doc))return null;
+      ids.add(box.id);
+    }
+    return d as FreePageDocument;
+  } catch {return null;}
+}
+export const writeFreePage=(page:FreePageDocument)=>PAGE_MARKER+JSON.stringify(page);
 export function pageKind(body:string):PageKind {
   // Only an explicit format opts into a structured editor. Ordinary markdown
   // beginning with a code fence must keep everything after that first fence.
+  if(readFreePage(body))return 'freepage';
   return readBoard(body)?.kind || readStudy(body)?.kind || (body.startsWith('# Journal · ')?'journal':'document');
 }
 export function initialBody(kind:PageKind):string {
@@ -79,11 +126,14 @@ export function initialBody(kind:PageKind):string {
   // kept in the same page. See readJournalBook in journalPage.ts.
   if(kind==='journal'){const d=new Date(),today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;return '# Journal · '+today+'\n\nWhat happened today?\n\n\nWhat am I thinking about?\n\n\nOne thing for tomorrow\n\n';}
   if(kind==='code')return writeStudy({version:1,kind,language:'java',code:''});
+  if(kind==='freepage')return writeFreePage({version:1,kind,boxes:[]});
   return '';
 }
 export function pagePreview(body:string) {
   const doc=readDoc(body);if(doc)return docText(doc).replace(/\[\[|\]\]/g,'').replace(/\s+/g,' ').trim().slice(0,150);
   const board=readBoard(body);if(board)return board.kind==='pdf'?`${board.pdf?.pages.length||0} PDF pages · ${board.items.length} annotations`:board.items.length+' objects · board';
+  const free=readFreePage(body);
+  if(free)return free.boxes.map(b=>richText(b.doc)).join(' · ').replace(/\s+/g,' ').trim().slice(0,150)||`${free.boxes.length} ${free.boxes.length===1?'note':'notes'} on the sheet`;
   const study=readStudy(body);
   if(study?.kind==='checklist')return `${study.items.filter(i=>i.done).length} of ${study.items.length} done`;
   if(study?.kind==='flashcards')return `${study.cards.length} cards to practice`;

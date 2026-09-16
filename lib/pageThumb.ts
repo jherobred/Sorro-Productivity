@@ -1,5 +1,5 @@
 import { readDoc, htmlText } from './docFormat.ts';
-import { readBoard, readStudy, type BoardItem } from './pageKinds.ts';
+import { readBoard, readFreePage, readStudy, richText, type BoardItem } from './pageKinds.ts';
 import { readJournalBook, bookDays } from './journalPage.ts';
 import { parse } from './md.ts';
 import { pdfMargin } from './pdfLayout.ts';
@@ -119,6 +119,19 @@ export function pageThumb(body: string): Thumb {
     return { kind: 'pdf', box, shapes: boardShapes(onPage), pages: board.pdf.pages.length };
   }
   if (board) return { kind: 'board', box: bounds(board.items), shapes: boardShapes(board.items) };
+
+  // A free page is note boxes where they were put, which the board drawing
+  // already knows how to paint.
+  const free = readFreePage(body);
+  if (free) {
+    const boxes = free.boxes.slice(0, 12).map((b) => ({ type: 'note' as const, x: b.x, y: b.y, w: b.w, h: b.h ?? 120, fill: b.tint || '#ffffff', text: clean(richText(b.doc)).slice(0, 80) }));
+    const box = boxes.length ? {
+      x: Math.min(...boxes.map((b) => b.x)), y: Math.min(...boxes.map((b) => b.y)),
+      w: Math.max(...boxes.map((b) => b.x + b.w)) - Math.min(...boxes.map((b) => b.x)),
+      h: Math.max(...boxes.map((b) => b.y + b.h)) - Math.min(...boxes.map((b) => b.y)),
+    } : null;
+    return { kind: 'board', box, shapes: boxes };
+  }
 
   const study = readStudy(body);
   if (study?.kind === 'checklist') return { kind: 'checklist', items: study.items.slice(0, 9).map((i) => ({ text: clean(i.text), done: i.done })) };
