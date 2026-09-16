@@ -10,14 +10,18 @@ import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { TAG_COLORS } from '@/lib/tagList';
 import { findUrl, safeUrl, siteOf, useLinkActions, useLinks, type LinkItem } from '@/lib/links';
+import { ago } from '@/lib/scratch';
 import './links.css';
 
 type Category = { name: string; color: string };
 type Sort = 'recent' | 'az' | 'site' | 'mine';
+/** Compact is a row per link; expanded opens the card out to show the whole thing. */
+type View = 'compact' | 'expanded';
 
 const NONE_COLOR = '#7a7a74';
 const INTERNAL = 'application/x-basedly-link';
 const SORT_KEY = 'bd_links_sort';
+const VIEW_KEY = 'bd_links_view';
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'recent', label: 'Newest first' },
   { id: 'az', label: 'A to Z' },
@@ -56,6 +60,9 @@ export default function LinksPage() {
   const [sort, setSortState] = useState<Sort>(() => {
     try { return (localStorage.getItem(SORT_KEY) as Sort | null) ?? 'recent'; } catch { return 'recent'; }
   });
+  const [view, setViewState] = useState<View>(() => {
+    try { return (localStorage.getItem(VIEW_KEY) as View | null) ?? 'compact'; } catch { return 'compact'; }
+  });
   const [editing, setEditing] = useState<LinkItem | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxContent } | null>(null);
   const [dropping, setDropping] = useState(false);
@@ -65,6 +72,7 @@ export default function LinksPage() {
   const labelRef = useRef<HTMLInputElement>(null);
 
   const setSort = (next: Sort) => { setSortState(next); try { localStorage.setItem(SORT_KEY, next); } catch { /* this visit only */ } };
+  const setView = (next: View) => { setViewState(next); try { localStorage.setItem(VIEW_KEY, next); } catch { /* this visit only */ } };
 
   /* ---- categories: the kept order and colours, plus any a link names that this device has not heard of yet */
   const stored = prefs.linkCategories;
@@ -343,6 +351,10 @@ export default function LinksPage() {
             {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        <div className="lnk-view" role="group" aria-label="How much of each link to show">
+          <button type="button" aria-pressed={view === 'compact'} onClick={() => setView('compact')}><Icon name="list" size={15} />Compact</button>
+          <button type="button" aria-pressed={view === 'expanded'} onClick={() => setView('expanded')}><Icon name="expand" size={15} />Expanded</button>
+        </div>
       </div>
 
       {isPending ? <p className="lnk-muted">Loading your links…</p> : links.length === 0 ? (
@@ -368,14 +380,49 @@ export default function LinksPage() {
                 </>
               )}
             </header>
-            <ul className="lnk-grid">
+            <ul className={'lnk-grid' + (view === 'expanded' ? ' is-expanded' : '')}>
               {s.items.map((l) => {
                 const site = siteOf(l.url);
                 const color = l.category ? colorOf(l.category) : NONE_COLOR;
+                const drag = {
+                  draggable: true,
+                  onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData(INTERNAL, l.id); e.dataTransfer.effectAllowed = 'move'; },
+                  onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); linkMenu(l, s.items, e.clientX, e.clientY); },
+                };
+                const more = (e: React.MouseEvent<HTMLButtonElement>) => { const r = e.currentTarget.getBoundingClientRect(); linkMenu(l, s.items, r.left - 170, r.bottom + 4); };
+                const copyButton = (
+                  <button type="button" className={'lnk-copybtn' + (copied === l.id ? ' is-done' : '')} onClick={() => void copy(l)} aria-label={`Copy ${labelOf(l)}`}>
+                    <Icon name={copied === l.id ? 'check' : 'copy'} size={15} /><span>{copied === l.id ? 'Copied' : 'Copy'}</span>
+                  </button>
+                );
+                // Expanded says the whole thing: the address in full, the note as
+                // written, where it lives and when it was saved. Compact keeps a
+                // link to a line.
+                if (view === 'expanded') return (
+                  <li key={l.id} className={'lnk-card is-wide' + (l.pinned ? ' is-pinned' : '')} style={{ '--c': color } as React.CSSProperties} {...drag}>
+                    <div className="lnk-wide-head">
+                      <span className="lnk-avatar" aria-hidden="true">{site.host.charAt(0).toUpperCase()}</span>
+                      <span className="lnk-wide-copy">
+                        <b>{l.pinned && <Icon name="pin" size={13} />}{labelOf(l)}</b>
+                        <a className="lnk-url" href={l.url} target="_blank" rel="noopener noreferrer" draggable={false}>{l.url}</a>
+                      </span>
+                      <button type="button" className="lnk-icon" aria-label={`More for ${labelOf(l)}`} onClick={more}><Icon name="dots" size={16} /></button>
+                    </div>
+                    {l.note && <p className="lnk-note">{l.note}</p>}
+                    <div className="lnk-wide-meta">
+                      <span className="lnk-chip"><i aria-hidden="true" />{l.category || 'No category'}</span>
+                      <span>{site.host}</span>
+                      <span>Saved {ago(l.created_at)}</span>
+                    </div>
+                    <div className="lnk-wide-actions">
+                      <a className="lnk-open" href={l.url} target="_blank" rel="noopener noreferrer" draggable={false}><Icon name="arrowR" size={15} />Open</a>
+                      {copyButton}
+                      <button type="button" className="lnk-ghost" onClick={() => setEditing(l)}><Icon name="edit" size={14} />Edit</button>
+                    </div>
+                  </li>
+                );
                 return (
-                  <li key={l.id} className={'lnk-card' + (l.pinned ? ' is-pinned' : '')} style={{ '--c': color } as React.CSSProperties}
-                    draggable onDragStart={(e) => { e.dataTransfer.setData(INTERNAL, l.id); e.dataTransfer.effectAllowed = 'move'; }}
-                    onContextMenu={(e) => { e.preventDefault(); linkMenu(l, s.items, e.clientX, e.clientY); }}>
+                  <li key={l.id} className={'lnk-card' + (l.pinned ? ' is-pinned' : '')} style={{ '--c': color } as React.CSSProperties} {...drag}>
                     <a className="lnk-main" href={l.url} target="_blank" rel="noopener noreferrer" draggable={false} title={l.url}>
                       <span className="lnk-avatar" aria-hidden="true">{site.host.charAt(0).toUpperCase()}</span>
                       <span className="lnk-copy">
@@ -384,13 +431,8 @@ export default function LinksPage() {
                         {l.note && <em>{l.note}</em>}
                       </span>
                     </a>
-                    <button type="button" className={'lnk-copybtn' + (copied === l.id ? ' is-done' : '')} onClick={() => void copy(l)} aria-label={`Copy ${labelOf(l)}`}>
-                      <Icon name={copied === l.id ? 'check' : 'copy'} size={15} /><span>{copied === l.id ? 'Copied' : 'Copy'}</span>
-                    </button>
-                    <button type="button" className="lnk-icon" aria-label={`More for ${labelOf(l)}`}
-                      onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); linkMenu(l, s.items, r.left - 170, r.bottom + 4); }}>
-                      <Icon name="dots" size={16} />
-                    </button>
+                    {copyButton}
+                    <button type="button" className="lnk-icon" aria-label={`More for ${labelOf(l)}`} onClick={more}><Icon name="dots" size={16} /></button>
                   </li>
                 );
               })}
