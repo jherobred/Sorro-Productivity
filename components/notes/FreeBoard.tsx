@@ -40,7 +40,23 @@ export function FreeBoard({note,onSave}:{note:Note;onSave:(v:{title:string;body:
  useOverlayBack(selected.length>0,()=>{setSelected([]);setEditing(null);});useOverlayBack(!!editing,()=>setEditing(null));
  const commit=(next:BoardDocument,record=true)=>{boardRef.current=next;setBoard(next);change({body:writeBoard(next)});if(record){const list=history.current.slice(0,historyAt.current+1);list.push(next);if(list.length>60)list.shift();history.current=list;historyAt.current=list.length-1;setHistoryIndex(historyAt.current);}};
  const undo=(direction:number)=>{const index=historyAt.current+direction;if(index<0||index>=history.current.length)return;historyAt.current=index;setHistoryIndex(index);commit(history.current[index],false);setSelected([]);setEditing(null);};
- const screen=(x:number,y:number)=>{const el=surface.current!,r=el.getBoundingClientRect();return {x:(x-r.left)*el.clientWidth/r.width,y:(y-r.top)*el.clientHeight/r.height};};
+ /**
+  * The surface is measured once and remembered, not once per sample.
+  *
+  * Every point asked the board where it was on screen, and that read comes
+  * straight after the stroke's own write, so the browser had to lay the whole
+  * page out again before it could answer — twice per event, several times a
+  * frame. That is the lag between the pen and the ink on a phone or tablet.
+  * The box only changes when the window or the panel does, so it is cached
+  * until one of those says otherwise.
+  */
+ const box=useRef<{rect:DOMRect;width:number;height:number}|null>(null);
+ const metrics=()=>{const el=surface.current!;if(!box.current)box.current={rect:el.getBoundingClientRect(),width:el.clientWidth,height:el.clientHeight};return box.current;};
+ const screen=(x:number,y:number)=>{const {rect,width,height}=metrics();return {x:(x-rect.left)*width/rect.width,y:(y-rect.top)*height/rect.height};};
+ useEffect(()=>{const forget=()=>{box.current=null;};
+  const watch=new ResizeObserver(forget);if(surface.current)watch.observe(surface.current);
+  window.addEventListener('resize',forget);window.addEventListener('scroll',forget,true);
+  return()=>{watch.disconnect();window.removeEventListener('resize',forget);window.removeEventListener('scroll',forget,true);};},[]);
  const point=(x:number,y:number)=>{const p=screen(x,y);return canvasPoint(p.x,p.y,viewRef.current);};
  const center=()=>canvasPoint((surface.current?.clientWidth||800)/2,(surface.current?.clientHeight||600)/2,viewRef.current);
  const updateView=(next:Viewport)=>{viewRef.current=next;setView(next);};
@@ -61,7 +77,7 @@ export function FreeBoard({note,onSave}:{note:Note;onSave:(v:{title:string;body:
  const importPdf=async(file:File)=>{setBusy('Preparing your PDF…');setError('');try{if(file.size>40*1024*1024)throw Error('Choose a PDF smaller than 40 MB.');const {describePdf}=await import('./PdfBackground');const pages=await describePdf(await file.arrayBuffer());if(!pages.length)throw Error('This PDF has no pages.');const asset=await savePageAsset(file);if(mounted.current){const pdf={asset,pages,margin:IMPORT_MARGIN};commit({...boardRef.current,pdf});updateView(pdfOpenView(pdf,surface.current?.clientWidth||800));}}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'Could not open PDF.');}finally{if(mounted.current)setBusy('');}};
  const syncAssets=async()=>{setBusy('Syncing attachments…');try{const original=boardRef.current;let pdf=original.pdf;if(pdf&&!pdf.asset.path)pdf={...pdf,asset:await syncPageAsset(pdf.asset)};const replacements=new Map<string,BoardItem>();for(const item of original.items)if(item.asset&&!item.asset.path)replacements.set(item.id,{...item,asset:await syncPageAsset(item.asset)});if(mounted.current)commit({...boardRef.current,pdf,items:boardRef.current.items.map(i=>replacements.get(i.id)||i)});}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'Sync failed. Your files remain on this device.');}finally{if(mounted.current)setBusy('');}};
  const eraseAt=(p:Point,g:Gesture)=>{const r=eraserSize/2;for(const i of boardRef.current.items){if(intersects(i,{x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r})){if(i.type==='stroke'&&!strokeHit(i,p,r))continue;g.erased!.add(i.id);}}const next=afterRemoval(g.before,g.erased!);boardRef.current=next;setBoard(next);};
- const down=(e:PE)=>{if(e.button>2||busy||collapsed||editing||(e.target as HTMLElement).closest('input,textarea,button'))return;
+ const down=(e:PE)=>{if(e.button>2||busy||collapsed||editing||(e.target as HTMLElement).closest('input,textarea,button'))return;box.current=null;
   if(e.pointerType==='pen')penUntil.current=performance.now()+650;if(e.pointerType==='touch'&&performance.now()<penUntil.current)return;e.preventDefault();surface.current?.focus({preventScroll:true});const local=screen(e.clientX,e.clientY),p=point(e.clientX,e.clientY);pointers.current.set(e.pointerId,local);surface.current?.setPointerCapture(e.pointerId);
   if(pointers.current.size===2){const [a,b]=[...pointers.current.values()];pinch.current={distance:Math.hypot(a.x-b.x,a.y-b.y),center:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},view:viewRef.current};gesture.current=null;livePath.current?.setAttribute('d','');return;}
   const hit=boardRef.current.items.find(i=>i.id===(e.target as HTMLElement).closest<HTMLElement>('[data-board-item]')?.dataset.boardItem),base={pointer:e.pointerId,start:p,view:viewRef.current,before:boardRef.current};
