@@ -15,6 +15,7 @@ import { Icon } from '@/components/Icon';
 import { K, SECHUE } from '@/lib/pal';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
+import { useTapGuard } from '@/lib/tapGuard';
 import { toast } from '@/lib/toast';
 import { ask } from '@/lib/ask';
 import { useTaskActions, type Task } from '@/lib/tasks';
@@ -90,6 +91,9 @@ export function CalendarGrid({
     parked.current = true;
     el.scrollTop = Math.max(0, ((parkHour - GRID_START) / SPAN) * GRID_H);
   }, [parkHour]);
+
+  /** A drag that scrolls the day past a slot is not a tap on that slot. */
+  const slot = useTapGuard();
 
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
@@ -337,7 +341,7 @@ export function CalendarGrid({
                   <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} compact />
                 ))}
 
-                <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true)} className="hov"
+                <button onPointerDown={slot.press} onClick={(p) => { if (slot.tapped(p)) openSlot(idx, GRID_START, p.clientX, p.clientY, true); }} className="hov"
                   title="Add an all-day item" aria-label="Add an all-day item"
                   style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
@@ -393,7 +397,8 @@ export function CalendarGrid({
                     // you to find and rename it. It now opens a bubble that
                     // asks what the thing is, which is the only question worth
                     // asking at that moment.
-                    onClick={(p) => openSlot(idx, h, p.clientX, p.clientY)}
+                    onPointerDown={slot.press}
+                    onClick={(p) => { if (slot.tapped(p)) openSlot(idx, h, p.clientX, p.clientY); }}
                     className="hov"
                     aria-label={`Add event at ${hhmm(h)}`}
                     style={{

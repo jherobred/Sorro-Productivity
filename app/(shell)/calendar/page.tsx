@@ -21,6 +21,7 @@ import { K, SECHUE } from '@/lib/pal';
 import { EVENT_CATEGORIES, resolveCategory, isUrgentEvent, chipLabel } from '@/lib/eventCategories';
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
+import { useTapGuard } from '@/lib/tapGuard';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
@@ -1107,6 +1108,14 @@ function Grid({
     el.scrollTop = ((SCROLL_TO_HOUR - GRID_START) / SPAN) * GRID_H;
   }, []);
 
+  /**
+   * A drag that scrolls the day past a slot is not a tap on that slot. On a
+   * phone the slots are the only thing under the finger when the day is
+   * dragged, so every scroll to reach the evening used to leave a new event
+   * behind.
+   */
+  const slot = useTapGuard();
+
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
 
@@ -1430,7 +1439,7 @@ function Grid({
                   <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} compact />
                 ))}
 
-                <button onClick={(p) => openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task')} className="hov"
+                <button onPointerDown={slot.press} onClick={(p) => { if (slot.tapped(p)) openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task'); }} className="hov"
                   title="Add a task or all-day item" aria-label="Add a task or all-day item"
                   style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                   {allDay.length + untimed.length === 0 ? '+ task or all-day item' : ''}
@@ -1514,8 +1523,8 @@ function Grid({
                 {hours.slice(0, -1).map((h, hi) => (
                   <div
                     key={h}
-                    onPointerDown={phone ? undefined : (p) => onSlotPointerDown(p, idx, h)}
-                    onClick={phone ? (p) => openSlot(idx, h, p.clientX, p.clientY, false, h + 1) : undefined}
+                    onPointerDown={phone ? slot.press : (p) => onSlotPointerDown(p, idx, h)}
+                    onClick={phone ? (p) => { if (slot.tapped(p)) openSlot(idx, h, p.clientX, p.clientY, false, h + 1); } : undefined}
                     onContextMenu={phone ? undefined : (p) => { p.preventDefault(); openSlot(idx, h, p.clientX, p.clientY, false, h + 1); }}
                     className={phone ? '' : 'hov'}
                     aria-label={`Add event at ${hhmm(h)}`}
