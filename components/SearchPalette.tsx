@@ -8,7 +8,7 @@ import {supabase} from '@/lib/supabase';
 import {queryClient} from '@/lib/offline';
 type Hit={id:string;title:string;group:string;icon:IconName;path:string};
 export function SearchPalette({onClose}:{onClose:()=>void}){
- const router=useRouter(),input=useRef<HTMLInputElement>(null),close=useRef(onClose);close.current=onClose;
+ const router=useRouter(),input=useRef<HTMLInputElement>(null);
  const [q,setQ]=useState(''),[hits,setHits]=useState<Hit[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(false),[selected,setSelected]=useState(0);
  useOverlayBack(true,onClose);
  useEffect(()=>{input.current?.focus();},[]);
@@ -33,7 +33,11 @@ export function SearchPalette({onClose}:{onClose:()=>void}){
   },180);return()=>{abort.abort();clearTimeout(timer);};
  },[q]);
  const destinations=useMemo(()=>DESTINATIONS.filter(d=>!q||d.name.toLowerCase().includes(q.toLowerCase())).map(d=>({id:d.id,title:d.name,group:'Go to',icon:d.icon,path:'/'+d.id+'/'})),[q]);
- const rows=[...hits,...destinations];const go=(row:Hit)=>{close.current();router.push(row.path);};
+ const rows=[...hits,...destinations];
+ // Closing first dropped this dialog's history entry while the router was still
+ // fetching the result's route, and the Back that removed it cancelled the
+ // navigation, so results opened nothing. The push itself closes the dialog.
+ const go=(row:Hit)=>{router.push(row.path);};
  return <div className="search-backdrop" onClick={onClose}><section className="search-dialog" role="dialog" aria-modal="true" aria-label="Search your workspace" onClick={e=>e.stopPropagation()} onKeyDown={e=>{
   if(e.key==='ArrowDown'){e.preventDefault();setSelected(i=>(i+1)%Math.max(1,rows.length));}
   if(e.key==='ArrowUp'){e.preventDefault();setSelected(i=>(i-1+rows.length)%Math.max(1,rows.length));}

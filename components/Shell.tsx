@@ -56,6 +56,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => { live = false; clearTimeout(timeout); data.subscription.unsubscribe(); };
   }, [router]);
   useEffect(() => { if (!activePath(pathname)) router.replace('/home/'); }, [pathname, router]);
+  /**
+   * The sheet closes on arrival, never before the tap.
+   *
+   * Closing it in the tap handler dropped the overlay's history entry while the
+   * router was still fetching the next route, and the Back that removed that
+   * entry cancelled the navigation — four of six tools went nowhere. The
+   * overlay history closes it the moment the route push lands; this covers the
+   * rest.
+   */
+  useEffect(() => { setMore(false); }, [pathname]);
   useEffect(() => {
     const network = () => setOnline(navigator.onLine);
     network();
@@ -82,7 +92,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <main id="workspace" className="studio-main" data-page={current?.id} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
     </div>
     <nav className="studio-bottom-nav" aria-label="Mobile navigation">{nav(mobileNav)}<button className="studio-nav-link" aria-expanded={more} onClick={() => setMore(true)}><Icon name="more" size={20} /><span>More</span></button></nav>
-    {more && <div className="studio-sheet-backdrop" onClick={() => setMore(false)}><section className="studio-more" role="dialog" aria-modal="true" aria-label="More tools" onClick={e => e.stopPropagation()}><div className="section-heading"><h2>Your other tools</h2><button aria-label="Close more tools" onClick={() => setMore(false)}><Icon name="close" /></button></div>{DESTINATIONS.filter(d => !mobileNav.includes(d)).map(d => <button key={d.id} className="more-tool" onClick={() => { setMore(false); router.push('/' + d.id + '/'); }}><Icon name={d.icon} size={24} />{d.name}</button>)}<button className="more-tool" onClick={() => { setMore(false); setAccount(true); }}><Icon name="people" />Account</button></section></div>}
+    {more && <div className="studio-sheet-backdrop" onClick={() => setMore(false)}><section className="studio-more" role="dialog" aria-modal="true" aria-label="More tools" onClick={e => e.stopPropagation()}><div className="section-heading"><h2>Your other tools</h2><button aria-label="Close more tools" onClick={() => setMore(false)}><Icon name="close" /></button></div>{DESTINATIONS.filter(d => !mobileNav.includes(d)).map(d => <Link key={d.id} href={'/' + d.id + '/'} className="more-tool" onClick={() => { if (current?.id === d.id) setMore(false); }}><Icon name={d.icon} size={24} />{d.name}</Link>)}<button className="more-tool" onClick={() => { setMore(false); setAccount(true); }}><Icon name="people" />Account</button></section></div>}
     {search && <Search onClose={() => setSearch(false)} />}{settings && <Settings onClose={() => setSettings(false)} />}{account && <Accounts me={{ ...me, name: storedMe?.name || me.name, photo: storedMe?.photo || me.photo }} onClose={() => setAccount(false)} onSettings={() => { setAccount(false); setSettings(true); }} />}
     <ToastHost /><AskHost /><FireworksHost />
   </div>;
