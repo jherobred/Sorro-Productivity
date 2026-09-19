@@ -86,11 +86,13 @@ export function MemoriesPanel({ kinds, title = 'Memories', onCapture, captureLab
   );
 }
 
-export function MemoryGallery({ memories, onOpen, onCapture, emptyText }: {
+export function MemoryGallery({ memories, onOpen, onCapture, emptyText, polaroid = false }: {
   memories: Memory[];
   onOpen: (m: Memory) => void;
   onCapture: () => void;
   emptyText: string;
+  /** Each photo framed as a polaroid with its caption written under it, as on the Memories tab. */
+  polaroid?: boolean;
 }) {
   const photos = useMemoryPhotos(memories);
   const months = useMemo(() => {
@@ -115,7 +117,7 @@ export function MemoryGallery({ memories, onOpen, onCapture, emptyText }: {
   }
 
   return (
-    <div className="mem-gallery">
+    <div className={'mem-gallery' + (polaroid ? ' is-polaroid' : '')}>
       {months.map((month) => (
         <div key={month.label} className="mem-month">
           <h3>{month.label}<span>{month.items.length}</span></h3>

@@ -189,3 +189,28 @@
   .mem-viewer-info{max-height:42dvh}
   .mem-step{display:none}
 }
+
+/* ---- the Memories tab: a map, then a wall of polaroids --------------------------- */
+.mem-page{display:flex;flex-direction:column;gap:18px;max-width:1180px;margin:0 auto;padding-bottom:110px}
+.mem-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.mem-page-head p{margin:6px 0 0;max-width:620px;font-size:14px;line-height:1.5;color:var(--tx3)}
+.mem-page-map h2,.mem-page-wall h2{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:13px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+.mem-page-map h2 small{margin-left:auto;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none}
+.mem-page-map .mem-map{height:min(52dvh,460px)}
+.mem-page-wait{margin:0;font-size:13.5px;color:var(--tx3)}
+.mem-gallery.is-polaroid .mem-grid{grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:22px 18px;padding:6px 4px}
+.mem-gallery.is-polaroid .mem-tile{aspect-ratio:auto;display:flex;flex-direction:column;padding:10px 10px 0;border-radius:3px;background:#fdfcf7;color:#2b2823;box-shadow:0 10px 24px #0000002b,0 1px 3px #0000001f;overflow:visible;transition:transform .25s cubic-bezier(.2,1.2,.3,1),box-shadow .25s}
+.mem-gallery.is-polaroid .mem-tile:hover{transform:translateY(-4px);box-shadow:0 16px 32px #00000033,0 2px 5px #00000024}
+.mem-gallery.is-polaroid .mem-tile>img{aspect-ratio:1;height:auto;border-radius:1px}
+.mem-gallery.is-polaroid .mem-tile:hover>img{transform:none}
+.mem-gallery.is-polaroid .mem-tile.is-bare{background:#fdfcf7}
+.mem-gallery.is-polaroid .mem-tile-bare{position:relative;inset:auto;aspect-ratio:1;border-radius:1px;background:linear-gradient(145deg,color-mix(in srgb,var(--tint,#345cff) 85%,#000),var(--tint,#345cff));color:#fff}
+.mem-gallery.is-polaroid .mem-tile.is-run .mem-tile-bare{--tint:#ff9a3c}
+.mem-gallery.is-polaroid .mem-tile.is-workout .mem-tile-bare{--tint:#ff6fa8}
+.mem-gallery.is-polaroid .mem-tile.is-meal .mem-tile-bare{--tint:#65a30d}
+.mem-gallery.is-polaroid .mem-tile-kind{left:16px;top:16px}
+.mem-gallery.is-polaroid .mem-tile-foot{position:static;padding:10px 4px 12px;background:none;color:#2b2823;text-align:center}
+.mem-gallery.is-polaroid .mem-tile-foot b{font:15px/1.25 'Segoe Print','Bradley Hand','Comic Sans MS',cursive;white-space:nowrap}
+.mem-gallery.is-polaroid .mem-tile-foot small{font-size:11px;color:#6d675c;opacity:1}
+@media(max-width:760px){.mem-gallery.is-polaroid .mem-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}.mem-page-map .mem-map{height:44dvh}}
+@media(prefers-reduced-motion:reduce){.mem-gallery.is-polaroid .mem-tile{transition:none}}
