@@ -14,8 +14,8 @@ import { assertSafeFile, safeFileName, IMAGE_EXT } from './uploadGuard';
 
 export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files' | 'bd-avatars';
 
-export async function uploadTo(bucket: Bucket, file: File): Promise<string> {
-  const type = assertSafeFile(file);
+export async function uploadTo(bucket: Bucket, file: File, rules: { types?: Set<string>; maxBytes?: number } = {}): Promise<string> {
+  const type = assertSafeFile(file, rules.types, rules.maxBytes);
   const user_id = await currentUserId();
   const safeName = safeFileName(file.name);
   const path = `${user_id}/${crypto.randomUUID()}-${safeName}`;

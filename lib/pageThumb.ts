@@ -122,15 +122,17 @@ export function pageThumb(body: string): Thumb {
 
   // A free page is note boxes where they were put, which the board drawing
   // already knows how to paint.
+  // A free page is containers, pictures and ink where they were put, which the
+  // board drawing already knows how to paint once they are read as board items.
   const free = readFreePage(body);
   if (free) {
-    const boxes = free.boxes.slice(0, 12).map((b) => ({ type: 'note' as const, x: b.x, y: b.y, w: b.w, h: b.h ?? 120, fill: b.tint || '#ffffff', text: clean(richText(b.doc)).slice(0, 80) }));
-    const box = boxes.length ? {
-      x: Math.min(...boxes.map((b) => b.x)), y: Math.min(...boxes.map((b) => b.y)),
-      w: Math.max(...boxes.map((b) => b.x + b.w)) - Math.min(...boxes.map((b) => b.x)),
-      h: Math.max(...boxes.map((b) => b.y + b.h)) - Math.min(...boxes.map((b) => b.y)),
-    } : null;
-    return { kind: 'board', box, shapes: boxes };
+    const items: BoardItem[] = [
+      ...free.boxes.slice(0, 40).map((b): BoardItem => b.image
+        ? { id: b.id, type: 'image', x: b.x, y: b.y, w: b.w, h: b.h ?? b.w * 0.7, color: '' }
+        : { id: b.id, type: 'text', x: b.x, y: b.y, w: b.w, h: b.h ?? 120, color: '', background: b.tint || '#ffffff', text: richText(b.doc) }),
+      ...(free.ink ?? []).slice(0, 200).map((s): BoardItem => ({ id: s.id, type: 'stroke', x: s.x, y: s.y, w: s.w, h: s.h, color: s.color, width: s.width, points: s.points, opacity: s.highlighter ? 0.35 : 1 })),
+    ];
+    return { kind: 'board', box: bounds(items), shapes: boardShapes(items) };
   }
 
   const study = readStudy(body);

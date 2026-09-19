@@ -152,14 +152,12 @@ const EDIT_NB = defineMutation('nb2.editNotebook', async (v: { id: string; patch
 });
 
 /**
- * Deleting a notebook trashes its notes rather than dropping them: the FK
- * cascades, so the rows would be gone for good, and "I deleted the wrong
- * notebook" is not a recoverable mistake if the notes went with it.
+ * Deleting a notebook deletes its pages for good, the ones in the bin too:
+ * bd_notes.notebook_id cascades on delete (0002). Trashing them first did not
+ * change that, because the cascade removes trashed rows as well. The library
+ * asks before calling this and says how many pages go with it.
  */
 const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
-  const now = new Date().toISOString();
-  const { error: trashError } = await supabase.from('bd_notes').update({ deleted_at: now }).eq('notebook_id', v.id).is('deleted_at', null);
-  if (trashError) throw trashError;   // must not hard-delete via cascade below if trashing failed
   const { error } = await supabase.from('bd_notebooks').delete().eq('id', v.id);
   if (error) throw error;
 });

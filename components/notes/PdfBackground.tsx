@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import type {PDFDocumentProxy} from 'pdfjs-dist';
-import {loadPageAsset} from '@/lib/pageAssets';
+import {cachePageAsset,loadPageAsset} from '@/lib/pageAssets';
 import type {PdfSource} from '@/lib/pageKinds';
 import {PDF_PAGE_WIDTH,PDF_PAGE_GAP,pdfMargin} from '@/lib/pdfLayout';
 export async function openPdf(data:ArrayBuffer):Promise<PDFDocumentProxy>{
@@ -24,8 +24,11 @@ function PdfPage({pdf,index,w,h,y,left}:{pdf:PDFDocumentProxy;index:number;w:num
 export function PdfBackground({source}:{source:PdfSource}){
  const [pdf,setPdf]=useState<PDFDocumentProxy|null>(null);const [error,setError]=useState('');
  useEffect(()=>{let live=true;let doc:PDFDocumentProxy|undefined;setError('');
-  void loadPageAsset(source.asset).then(blob=>blob.arrayBuffer()).then(openPdf).then(loaded=>{doc=loaded;if(live)setPdf(loaded);else void loaded.loadingTask.destroy();}).catch(e=>{if(live)setError(e.message);});
+  // A PDF opened from Google Drive can always be fetched from Drive again, so a
+  // device that has no copy and cannot reach the upload still opens it.
+  const fromDrive=async():Promise<Blob>=>{const {fetchDrivePdf}=await import('@/lib/drivePdf');const file=await fetchDrivePdf(source.drive!);void cachePageAsset(source.asset,file).catch(()=>{});return file;};
+  void loadPageAsset(source.asset).catch(e=>{if(!source.drive)throw e;if(live)setError('Fetching the PDF from Google Drive…');return fromDrive();}).then(blob=>blob.arrayBuffer()).then(openPdf).then(loaded=>{doc=loaded;if(live){setError('');setPdf(loaded);}else void loaded.loadingTask.destroy();}).catch(e=>{if(live)setError(e.message);});
   return()=>{live=false;if(doc)void doc.loadingTask.destroy();};
- },[source.asset.localId,source.asset.path]);
+ },[source.asset.localId,source.asset.path,source.drive]);
  return <>{!pdf&&<div className="pdf-loading">{error||'Opening PDF…'}</div>}{pdf&&source.pages.map((p,i)=><PdfPage key={i} pdf={pdf} index={i} left={pdfMargin(source)} {...p}/>)}</>;
 }

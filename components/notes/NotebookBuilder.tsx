@@ -4,7 +4,8 @@ import {Icon} from '@/components/Icon';
 import {NotebookCover} from './NotebookCover';
 import {prepareCover} from '@/lib/coverProcessing';
 import {useOverlayBack} from '@/lib/nav';
-const COLORS=['#ffcd38','#3985ed','#fa614e','#73b88b','#d4b6e6','#f0cbb5'];
+export const NOTEBOOK_COLORS=[{name:'Sunflower',value:'#ffcd38'},{name:'Blue',value:'#3985ed'},{name:'Coral',value:'#fa614e'},{name:'Sage',value:'#73b88b'},{name:'Lilac',value:'#d4b6e6'},{name:'Peach',value:'#f0cbb5'}];
+const COLORS=NOTEBOOK_COLORS.map(c=>c.value);
 export function NotebookBuilder({onClose,onCreate}:{onClose:()=>void;onCreate:(name:string,color:string,photo?:Blob)=>Promise<void>}){
  const [name,setName]=useState('');const [color,setColor]=useState(COLORS[0]);const [photo,setPhoto]=useState<Blob>();const [url,setUrl]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const file=useRef<HTMLInputElement>(null);const panel=useRef<HTMLElement>(null);
  useOverlayBack(true,onClose);

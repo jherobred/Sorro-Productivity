@@ -29,6 +29,16 @@ export const IMAGE_EXT: Record<string, string> = {
 export const MAX_BYTES = 25 * 1024 * 1024;
 
 /**
+ * Files a notebook page keeps: its photos, and the PDF under a PDF annotation.
+ * Without PDF here every PDF upload was refused, the refusal was swallowed, and
+ * the file stayed on the device that imported it; every other device showed
+ * "saved on another device". They go to `bd-files`, which is private to its
+ * owner, and are only ever read back as bytes for pdf.js, never served as a page.
+ */
+export const PAGE_ASSET_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
+export const PAGE_ASSET_MAX_BYTES = 40 * 1024 * 1024;
+
+/**
  * Android camera intents and some pickers hand back a File with a blank
  * `type`, and only two of the eleven call sites check the MIME themselves — so
  * a strict `type` test would reject a real photo taken from the meal or receipt
@@ -39,6 +49,7 @@ const EXT_TYPES: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
   mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp',
+  pdf: 'application/pdf',
 };
 
 export function effectiveType(file: { type: string; name: string }): string {
@@ -50,10 +61,11 @@ export function effectiveType(file: { type: string; name: string }): string {
 export function assertSafeFile(
   file: { type: string; name: string; size: number },
   types: Set<string> = SAFE_TYPES,
+  maxBytes: number = MAX_BYTES,
 ): string {
   const type = effectiveType(file);
   if (!types.has(type)) throw new Error('That file type is not supported');
-  if (file.size > MAX_BYTES) throw new Error('That file is too large');
+  if (file.size > maxBytes) throw new Error('That file is too large');
   return type;
 }
 

@@ -13,10 +13,15 @@ export const PAGE_TYPES = [
   {kind:'code',name:'Code',icon:'code',description:'Java, HTML, CSS and JavaScript'},
 ] as const;
 export type PageAsset = {localId:string;path?:string;name:string};
-/** frame 'polaroid' draws a photo as a polaroid with its caption under it, leaning by tilt degrees. All three are optional, so older boards read unchanged. */
-export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number;frame?:'polaroid';caption?:string;tilt?:number};
+/**
+ * frame 'polaroid' draws a photo as a polaroid with its caption under it, turned by tilt degrees.
+ * A schema card keeps its text in body and may carry a photo; cards written before either
+ * existed have fields instead. All of these are optional, so older boards read unchanged.
+ */
+export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];body?:string;photo?:PageAsset;background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number;frame?:'polaroid';caption?:string;tilt?:number};
 export type BoardConnection = {id:string;from:string;to:string};
-export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number};
+/** `drive` is the Google Drive file a PDF was opened from, so a device without a copy can fetch it again. */
+export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number;drive?:string};
 export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource};
 export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;text:string;done:boolean}[]};
 export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[]};
@@ -31,8 +36,12 @@ export type CodeDocument = {version:1;kind:'code';language:string;code:string};
  * back after an edit and may be missing on boxes written before it existed.
  */
 export type RichNode = {type?:string;text?:string;attrs?:Record<string,unknown>;marks?:{type:string;attrs?:Record<string,unknown>}[];content?:RichNode[]};
-export type FreeBox = {id:string;x:number;y:number;w:number;h?:number;doc:RichNode;tint?:string};
-export type FreePageDocument = {version:1;kind:'freepage';boxes:FreeBox[]};
+/** A container on a free page. It holds writing, or with `image` set, a picture. */
+export type FreeBox = {id:string;x:number;y:number;w:number;h?:number;doc:RichNode;tint?:string;image?:PageAsset};
+/** Ink written straight on the page: points relative to x/y, each [x, y, pressure]. */
+export type FreeInk = {id:string;x:number;y:number;w:number;h:number;color:string;width:number;points:number[][];highlighter?:boolean};
+/** `ink` and `paper` came after the first free pages, so both are optional. */
+export type FreePageDocument = {version:1;kind:'freepage';boxes:FreeBox[];ink?:FreeInk[];paper?:'plain'|'lines'|'grid'};
 export type StudyDocument = ChecklistDocument | FlashcardDocument | CornellDocument;
 const BOARD_MARKER = '<!-- basedly-board:v1 -->\n';
 const PAGE_MARKER = '<!-- basedly-page:v1 -->\n';
@@ -44,12 +53,13 @@ export function readBoard(body:string):BoardDocument|null {
   try {
     const data: unknown=JSON.parse(body.slice(BOARD_MARKER.length));
     if(!record(data)||data.version!==1||!['whiteboard','moodboard','pdf'].includes(String(data.kind))||!Array.isArray(data.items))return null;
-    if(data.pdf!==undefined&&(!record(data.pdf)||!validAsset(data.pdf.asset)||!Array.isArray(data.pdf.pages)||!data.pdf.pages.every(p=>record(p)&&finite(p.w)&&p.w>0&&finite(p.h)&&p.h>0&&finite(p.y))||(data.pdf.margin!==undefined&&(!finite(data.pdf.margin)||Number(data.pdf.margin)<0))))return null;
+    if(data.pdf!==undefined&&(!record(data.pdf)||!validAsset(data.pdf.asset)||!Array.isArray(data.pdf.pages)||!data.pdf.pages.every(p=>record(p)&&finite(p.w)&&p.w>0&&finite(p.h)&&p.h>0&&finite(p.y))||(data.pdf.margin!==undefined&&(!finite(data.pdf.margin)||Number(data.pdf.margin)<0))||(data.pdf.drive!==undefined&&!str(data.pdf.drive))))return null;
     const ids = new Set<string>();
     for(const item of data.items){
       if(!record(item)||!str(item.id)||ids.has(item.id)||!['text','image','stroke','schema'].includes(String(item.type))||!['x','y','w','h'].every(k=>finite(item[k]))||Number(item.w)<0||Number(item.h)<0||!str(item.color))return null;
       if(item.type==='schema'&&(!str(item.title)||!Array.isArray(item.fields)||!item.fields.every(str)))return null;
       if(item.background!==undefined&&!str(item.background))return null;
+      if((item.body!==undefined&&!str(item.body))||(item.photo!==undefined&&!validAsset(item.photo)))return null;
       if(item.opacity!==undefined&&(!finite(item.opacity)||item.opacity<0||item.opacity>1))return null;
       if(item.type==='text'&&!str(item.text))return null;
       if(item.type==='image'&&!validAsset(item.asset)&&(!str(item.src)||!/^data:image\/(png|jpeg|webp);base64,/.test(item.src)))return null;
@@ -104,13 +114,37 @@ export function readFreePage(body:string):FreePageDocument|null {
       if(!record(box)||!str(box.id)||ids.has(box.id)||!['x','y','w'].every(k=>finite(box[k]))||Number(box.w)<=0)return null;
       if(box.h!==undefined&&(!finite(box.h)||Number(box.h)<0))return null;
       if(box.tint!==undefined&&!str(box.tint))return null;
+      if(box.image!==undefined&&!validAsset(box.image))return null;
       if(!validNode(box.doc))return null;
       ids.add(box.id);
+    }
+    if(d.paper!==undefined&&!['plain','lines','grid'].includes(String(d.paper)))return null;
+    if(d.ink!==undefined){
+      if(!Array.isArray(d.ink))return null;
+      for(const s of d.ink){
+        if(!record(s)||!str(s.id)||ids.has(s.id)||!['x','y','w','h','width'].every(k=>finite(s[k]))||!str(s.color))return null;
+        if(!Array.isArray(s.points)||!s.points.every(p=>Array.isArray(p)&&p.length>=2&&p.every(finite)))return null;
+        if(s.highlighter!==undefined&&typeof s.highlighter!=='boolean')return null;
+        ids.add(s.id);
+      }
     }
     return d as FreePageDocument;
   } catch {return null;}
 }
 export const writeFreePage=(page:FreePageDocument)=>PAGE_MARKER+JSON.stringify(page);
+/** Plain text as rich text: a paragraph per block, a line break kept as a break. */
+export function plainDoc(text:string):RichNode {
+  const blocks=text.split(/\n{2,}/).filter(b=>b.trim());
+  return {type:'doc',content:(blocks.length?blocks:['']).map(block=>{const lines=block.split('\n');
+    return {type:'paragraph',content:block.trim()?lines.flatMap((line,i)=>i?[{type:'hardBreak'},{type:'text',text:line}]:[{type:'text',text:line}]).filter(n=>n.type!=='text'||n.text):undefined};})};
+}
+/** A free page made from a scan: the text read off it on the left, the scan beside it. */
+export function scanPage(text:string,image?:{asset:PageAsset;ratio:number}):FreePageDocument {
+  const boxes:FreeBox[]=[];
+  if(text.trim())boxes.push({id:crypto.randomUUID(),x:0,y:0,w:340,doc:plainDoc(text)});
+  if(image)boxes.push({id:crypto.randomUUID(),x:text.trim()?372:0,y:0,w:320,h:Math.round(320*image.ratio),doc:{type:'doc',content:[{type:'paragraph'}]},image:image.asset});
+  return {version:1,kind:'freepage',boxes};
+}
 export function pageKind(body:string):PageKind {
   // Only an explicit format opts into a structured editor. Ordinary markdown
   // beginning with a code fence must keep everything after that first fence.
