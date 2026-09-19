@@ -15,13 +15,14 @@ import './links.css';
 
 type Category = { name: string; color: string };
 type Sort = 'recent' | 'az' | 'site' | 'mine';
-/** Compact is a row per link; expanded opens the card out to show the whole thing. */
+/** Expanded, the default, shows the whole link; compact keeps it to a row. */
 type View = 'compact' | 'expanded';
 
 const NONE_COLOR = '#7a7a74';
 const INTERNAL = 'application/x-basedly-link';
 const SORT_KEY = 'bd_links_sort';
-const VIEW_KEY = 'bd_links_view';
+// v2: expanded became the default, so a compact picked before that is not kept.
+const VIEW_KEY = 'bd_links_view_v2';
 const SORTS: { id: Sort; label: string }[] = [
   { id: 'recent', label: 'Newest first' },
   { id: 'az', label: 'A to Z' },
@@ -61,7 +62,7 @@ export default function LinksPage() {
     try { return (localStorage.getItem(SORT_KEY) as Sort | null) ?? 'recent'; } catch { return 'recent'; }
   });
   const [view, setViewState] = useState<View>(() => {
-    try { return (localStorage.getItem(VIEW_KEY) as View | null) ?? 'compact'; } catch { return 'compact'; }
+    try { return (localStorage.getItem(VIEW_KEY) as View | null) ?? 'expanded'; } catch { return 'expanded'; }
   });
   const [editing, setEditing] = useState<LinkItem | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxContent } | null>(null);
