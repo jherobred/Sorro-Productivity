@@ -9,6 +9,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { CalendarSkeleton } from '@/components/Skeleton';
 /* Behind the Import button — nothing draws it until you press that. */
 const ScheduleImport = dynamic(() => import('@/components/ScheduleImport').then((m) => m.ScheduleImport), { ssr: false });
+const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCalendar').then((m) => m.GoogleCalendarSheet), { ssr: false });
 import { EventBubble } from '@/components/calendar/EventBubble';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
 import { CalendarTimers } from '@/components/calendar/CalendarTimers';
@@ -22,6 +23,7 @@ import { EVENT_CATEGORIES, resolveCategory, isUrgentEvent, chipLabel } from '@/l
 import { usePrefs } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { useTapGuard } from '@/lib/tapGuard';
+import { GoogleCalendarButton } from '@/components/calendar/GoogleCalendar';
 import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
@@ -125,6 +127,7 @@ export default function CalendarPage() {
   // Week is the desktop default, Day the phone-portrait default.
   const [view, setView] = useState<View>(prefs.calView);
   const [importing, setImporting] = useState(false);
+  const [google, setGoogle] = useState(false);
   useEffect(() => { if (phone && prefs.calView === 'week') setView('day'); }, [phone, prefs.calView]);
 
   // Month needs six weeks of events, not one — the window follows the view.
@@ -595,6 +598,7 @@ export default function CalendarPage() {
         },
         { label: 'Build study & exam schedule', icon: 'spark', run: buildStudySchedule },
         { label: 'Import a schedule (photo or .ics)', icon: 'spark', run: () => setImporting(true) },
+        { label: 'Google Calendar', icon: 'cal', run: () => setGoogle(true) },
       ],
     },
     { items: [{ label: 'Clear every event', icon: 'trash', danger: true, run: () => void clearEverything() }] },
@@ -626,6 +630,7 @@ export default function CalendarPage() {
         </div>
 
         <div className="cal-head-actions">
+          <GoogleCalendarButton onOpen={() => setGoogle(true)} />
           <button type="button" className="cal-new" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); newEvent(r.left, r.bottom); }}>
             <Icon name="plus" size={16} /><span>New</span>
           </button>
@@ -647,6 +652,7 @@ export default function CalendarPage() {
       )}
 
       {importing && <ScheduleImport onClose={() => setImporting(false)} />}
+      {google && <GoogleCalendarSheet onClose={() => setGoogle(false)} />}
 
       <div
         data-tour="calendar-grid"

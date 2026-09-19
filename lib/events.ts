@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
@@ -7,6 +8,7 @@ import { toast } from './toast';
 import { K } from './pal';
 import { fixture } from './devFixtures';
 import { settler } from './settle';
+import { getPrefs, prefsLoaded, setPrefs, usePrefs } from './prefs';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom';
@@ -58,24 +60,42 @@ export type EventLocalMeta = {
   recurrence?: RecurrenceRule | null;
 };
 
-export function getEventMetaMap(): Record<string, EventLocalMeta> {
+/** The copy each device kept before these synced. Still read, so nothing set that way is lost. */
+function deviceMeta(): Record<string, EventLocalMeta> {
   if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(localStorage.getItem(EVENT_META_KEY) || '{}');
-  } catch {
-    return {};
+  try { return JSON.parse(localStorage.getItem(EVENT_META_KEY) || '{}'); } catch { return {}; }
+}
+
+/**
+ * An event's short name and how it repeats.
+ *
+ * These used to live only in the storage of the device that set them, so a
+ * weekly class repeated on the laptop and showed once on the phone. They ride
+ * the synced prefs now. Anything only this device knew is carried over once
+ * the account's own prefs have loaded, so an older copy on the server cannot
+ * be written over by this one before it has been read.
+ */
+export function getEventMetaMap(): Record<string, EventLocalMeta> {
+  const local = deviceMeta();
+  const synced = (getPrefs().eventMeta ?? {}) as Record<string, EventLocalMeta>;
+  const onlyHere = Object.keys(local).filter((id) => !(id in synced));
+  if (onlyHere.length && prefsLoaded()) {
+    setPrefs({ eventMeta: { ...Object.fromEntries(onlyHere.map((id) => [id, local[id]])), ...synced } });
   }
+  return { ...local, ...synced };
 }
 
 export function setEventMeta(id: string, meta: Partial<EventLocalMeta>) {
   if (typeof window === 'undefined') return;
+  const next: EventLocalMeta = { ...getEventMetaMap()[id], ...meta };
+  if (meta.short_name === null) delete next.short_name;
+  if (meta.recurrence === null) delete next.recurrence;
   try {
-    const cur = getEventMetaMap();
-    cur[id] = { ...cur[id], ...meta };
-    if (meta.short_name === null) delete cur[id].short_name;
-    if (meta.recurrence === null) delete cur[id].recurrence;
-    localStorage.setItem(EVENT_META_KEY, JSON.stringify(cur));
-  } catch {}
+    const local = deviceMeta();
+    local[id] = next;
+    localStorage.setItem(EVENT_META_KEY, JSON.stringify(local));
+  } catch { /* the synced copy below is the one that matters */ }
+  setPrefs({ eventMeta: { ...(getPrefs().eventMeta ?? {}), [id]: next } });
 }
 
 export function getEventShortName(e: { title: string; short_name?: string | null }): string {
@@ -437,6 +457,16 @@ export function useEvents(ws: Date, days = 7) {
   const from = new Date(ws);
   const to = new Date(ws);
   to.setDate(to.getDate() + days);
+
+  // A repeat set on another device arrives with the prefs, after the events
+  // were read, so the calendar reads them again when it does.
+  const meta = usePrefs().prefs.eventMeta;
+  const seen = useRef(meta);
+  useEffect(() => {
+    if (seen.current === meta) return;
+    seen.current = meta;
+    void queryClient.invalidateQueries({ queryKey: EVENTS_KEY });
+  }, [meta]);
 
   return useQuery({
     queryKey: [...EVENTS_KEY, ws.toISOString(), days],
