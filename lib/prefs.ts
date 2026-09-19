@@ -6,6 +6,8 @@ import { DEFAULT_ACCENT, RETIRED_ACCENT } from './pal';
 import { DEFAULT_SHELL, isShellLayout, type ShellLayout } from './shellLayouts';
 import { EMPTY_PLAN } from './lift';
 import type { Tag } from './tagList';
+import type { TaskRepeat } from './taskRepeat';
+import type { RecurrenceRule } from './events';
 
 export type Prefs = {
   theme: 'dark' | 'light';
@@ -82,10 +84,18 @@ export type Prefs = {
   coverFill: Record<string, boolean>;
   /** How My Tasks sorts, and which way. */
   taskSort: { key: TaskSortKey; desc: boolean };
-  /** A description and an archived flag for each project, by its list id. See lib/projects.ts. */
-  projectMeta?: Record<string, { note?: string; archived?: boolean }>;
+  /** A description, an archived flag, and whether its tasks stay out of My Tasks' main views, for each project by its list id. See lib/projects.ts. */
+  projectMeta?: Record<string, { note?: string; archived?: boolean; hidden?: boolean }>;
   /** Link categories in the order you arranged them, with their colours. See lib/links.ts. */
   linkCategories?: { name: string; color: string }[];
+  /** How each repeating task comes back, by task id. See lib/taskRepeat.ts. */
+  taskRepeat?: Record<string, TaskRepeat>;
+  /**
+   * An event's short name and how it repeats, by event id. These were kept on
+   * the device that set them, so a repeating class showed once on every other
+   * device; here they follow the account. See getEventMetaMap in lib/events.ts.
+   */
+  eventMeta?: Record<string, { short_name?: string; recurrence?: RecurrenceRule | null }>;
 };
 
 export type TaskSortKey = 'smart' | 'due' | 'priority' | 'stars' | 'title' | 'created';
@@ -218,6 +228,9 @@ function read(): Prefs {
  */
 let state: Prefs = typeof window === 'undefined' ? DEFAULT_PREFS : read();
 let hydrated = false;
+/** Whether the account's own copy has been read yet. Until then a write could replace newer prefs with this device's older ones. */
+let loadedFromServer = false;
+export const prefsLoaded = () => loadedFromServer;
 const listeners = new Set<() => void>();
 
 const emit = () => { for (const l of listeners) l(); };
@@ -238,7 +251,8 @@ function subscribe(l: () => void) {
 async function hydrateFromServer() {
   const uid = await currentUserId().catch(() => null);
   if (!uid) return;
-  const { data } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+  const { data, error } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+  if (!error) loadedFromServer = true;
   const remote = data?.prefs as Partial<Prefs> | undefined;
   if (!remote || Object.keys(remote).length === 0) return;
   state = { ...DEFAULT_PREFS, ...remote };
@@ -259,6 +273,9 @@ export function setPrefs(patch: Partial<Prefs>) {
     .then((uid) => supabase.from('bd_profiles').update({ prefs: snapshot }).eq('user_id', uid))
     .catch(() => { /* signed out */ });
 }
+
+/** The current prefs, for code outside React: a mutation, a query function. */
+export const getPrefs = () => state;
 
 export function usePrefs() {
   const prefs = useSyncExternalStore(subscribe, () => state, () => DEFAULT_PREFS);

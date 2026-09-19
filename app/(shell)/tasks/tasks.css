@@ -8,7 +8,8 @@
 .tasks-page.is-narrow .tasks-main{margin:0 auto}
 
 /* ---- rail */
-.tasks-side{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;gap:16px;max-height:calc(100dvh - 110px);overflow-y:auto;padding:4px 4px 24px 0;scrollbar-width:thin}
+/* The side column is as tall as what is in it. Held to the window and scrolled on its own, it showed the Canvas panel through a small pane. */
+.tasks-side{align-self:start;display:flex;flex-direction:column;gap:16px;padding:4px 4px 24px 0}
 .task-rail{display:flex;flex-direction:column;gap:18px;padding:0 2px 0 0}
 .task-rail-group{display:flex;flex-direction:column;gap:2px}
 .task-rail-group h2{margin:0 0 4px;padding:0 10px;font-size:10.5px;font-weight:750;letter-spacing:.09em;text-transform:uppercase;color:var(--tx3)}
@@ -24,7 +25,7 @@
 .task-rail-add:hover{background:var(--hov);color:var(--tx)}
 .task-rail-input{width:100%;min-height:34px;padding:0 10px;border-radius:10px;border:1.5px solid var(--poster-blue);background:var(--card);color:var(--tx);font-size:13px;outline:none}
 .task-rail.is-phone{flex-direction:row;gap:6px;overflow-x:auto;margin:0 -2px 12px;padding:2px 2px 4px}
-.task-projects-link{display:flex;align-items:center;gap:10px;margin-top:6px;padding:8px 10px 8px 12px;border-radius:14px;border:1px dashed var(--line2);background:var(--card);color:var(--tx2);text-decoration:none;transition:background .15s,border-color .15s,color .15s}
+.task-projects-link{width:100%;text-align:left;display:flex;align-items:center;gap:10px;margin-top:0;padding:8px 10px 8px 12px;border-radius:14px;border:1px dashed var(--line2);background:var(--card);color:var(--tx2);text-decoration:none;transition:background .15s,border-color .15s,color .15s}
 .task-projects-link:hover{border-style:solid;border-color:var(--tx3);background:var(--card2);color:var(--tx)}
 .task-projects-covers{display:flex;align-items:flex-end;flex:none;height:24px;padding:0 2px}
 .task-projects-covers i{--i:0;display:block;width:14px;height:20px;margin-left:-5px;border-radius:2px 5px 5px 2px;box-shadow:inset 3px 0 0 #00000033,0 1px 2px #0000002e;transform:rotate(calc(var(--i) * 5deg));transition:transform .2s cubic-bezier(.2,.8,.2,1)}
@@ -34,7 +35,7 @@
 .task-projects-copy{display:flex;flex-direction:column;flex:1;min-width:0}
 .task-projects-copy b{font-size:13px;font-weight:700;color:var(--tx)}
 .task-projects-copy small{font-size:11.5px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.task-projects-link.is-chip{flex:none;gap:7px;margin:0;min-height:34px;padding:0 10px 0 12px;border-radius:999px}
+.task-projects-link.is-chip{width:auto;flex:none;gap:7px;margin:0;min-height:34px;padding:0 10px 0 12px;border-radius:999px}
 .task-projects-link.is-chip .task-projects-covers{height:20px}
 .task-projects-link.is-chip .task-projects-covers i{width:11px;height:16px;margin-left:-4px}
 .task-projects-link.is-chip .task-projects-covers i:first-child{margin-left:0}
@@ -130,6 +131,16 @@
 .task-check:hover{background:color-mix(in srgb,var(--ring) 14%,transparent);color:var(--ring)}
 .task-check:active{transform:scale(.88)}
 .task-item.is-done .task-check,.task-item-wrap.leaving .task-check{border-color:#2fb27a;background:#2fb27a;color:#fff}
+/* The grace period: the tick shows, and a ring runs out round the circle for three seconds. */
+.task-check{position:relative}
+.task-item.is-pending .task-check{border-color:#2fb27a;background:color-mix(in srgb,#2fb27a 18%,transparent);color:#2fb27a}
+.task-item.is-pending .task-title{color:var(--tx2);text-decoration:line-through;text-decoration-color:color-mix(in srgb,#2fb27a 70%,transparent)}
+.task-grace{position:absolute;inset:-5px;width:calc(100% + 10px);height:calc(100% + 10px);transform:rotate(-90deg);pointer-events:none}
+.task-grace circle{fill:none;stroke:#2fb27a;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:63;stroke-dashoffset:0;animation:task-grace 3s linear forwards}
+@keyframes task-grace{to{stroke-dashoffset:63}}
+.task-table-check.is-pending{background:#2fb27a;border-color:#2fb27a!important;animation:task-grace-pulse 1s ease-in-out infinite}
+@keyframes task-grace-pulse{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){.task-grace circle{animation:none;stroke-dashoffset:31}.task-table-check.is-pending{animation:none}}
 .task-cover{width:40px!important;height:40px!important;border-radius:9px;object-fit:cover!important}
 .task-body{flex:1;min-width:0;padding-top:1px}
 .task-title{display:block;font-size:14.5px;font-weight:550;line-height:1.4;color:var(--tx);overflow-wrap:anywhere}
@@ -289,3 +300,110 @@
   .task-panel-title{font-size:23px}
   .task-panel-link>span{width:92px}
 }
+
+/* ---- Projects, slid into the side column --------------------------------------
+   The views and the projects sit side by side in one clipped strip. Opening
+   Projects moves the strip left by a pane, overshooting a touch and settling,
+   so it pours across rather than snapping; the task list is never covered. */
+.task-rail-slide{--pour:cubic-bezier(.2,1.25,.32,1);display:grid;grid-template-columns:100% 100%;overflow:hidden;margin:0 -4px;padding:0 4px}
+.task-rail-pane{min-width:0;transition:transform .62s var(--pour),opacity .4s ease,filter .5s ease}
+.task-rail-slide.is-projects .task-rail-pane{transform:translateX(-100%)}
+.task-rail-slide.is-projects .task-rail-pane:first-child{opacity:0;filter:blur(2px)}
+.task-rail-slide:not(.is-projects) .task-rail-pane:last-child{opacity:0}
+.task-rail-slide.is-projects .task-rail-pane:last-child{transform:translateX(-100%);opacity:1}
+.task-rail-slide.is-projects{align-items:start}
+.task-rail-slide.is-phone{margin:0 -2px 12px}
+.task-rail-slide.is-phone .task-rail.is-phone{margin:0}
+.prj-panel{display:flex;flex-direction:column;gap:10px}
+.prj-panel-head{display:flex;align-items:center;gap:8px}
+.prj-panel-head h2{flex:1;margin:0;font-size:15px;font-weight:750;letter-spacing:-.01em}
+.prj-back{display:inline-flex;align-items:center;gap:3px;height:32px;padding:0 10px 0 6px;border-radius:10px;color:var(--tx2);font-size:12.5px;font-weight:650}
+.prj-back:hover{background:var(--card2);color:var(--tx)}
+.prj-new{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 11px;border-radius:10px;border:1px dashed var(--line2);color:var(--tx2);font-size:12.5px;font-weight:650}
+.prj-new:hover{border-style:solid;border-color:var(--tx3);color:var(--tx)}
+.prj-cards{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.prj-card{--p:#7c8cff;--i:0;position:relative;display:flex;flex-direction:column;gap:7px;padding:10px 10px 11px;border-radius:14px;border:1px solid var(--line);background:var(--card);box-shadow:var(--sh);animation:prj-pour .6s var(--pour,cubic-bezier(.2,1.25,.32,1)) both;animation-delay:calc(var(--i) * 45ms)}
+.task-rail-slide:not(.is-projects) .prj-card{animation:none}
+.prj-card.is-on{border-color:color-mix(in srgb,var(--p) 60%,var(--line));background:color-mix(in srgb,var(--p) 9%,var(--card))}
+.prj-card.is-hidden .prj-card-words b{color:var(--tx2)}
+.prj-card-main{display:flex;align-items:stretch;gap:10px;min-width:0;padding:0 64px 0 0;text-align:left;color:var(--tx)}
+.prj-card-spine{flex:none;width:9px;border-radius:3px 5px 5px 3px;background:var(--p);box-shadow:inset 3px 0 0 #00000029}
+.prj-card-words{display:flex;flex-direction:column;gap:2px;min-width:0}
+.prj-card-words b{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prj-card-words small{font-size:11.5px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prj-card-stats{font-size:11.5px;color:var(--tx2);font-variant-numeric:tabular-nums}
+.prj-card-stats em{font-style:normal}
+.prj-card-stats em.is-late{color:var(--task-overdue)}
+.prj-card-tools{position:absolute;right:6px;top:6px;display:flex;gap:2px}
+.prj-card-tools button{display:grid;place-items:center;width:28px;height:28px;min-height:28px;padding:0;border-radius:8px;color:var(--tx3)}
+.prj-card-tools button:hover{background:var(--card2);color:var(--tx)}
+.prj-card-eye[aria-pressed=true]{color:var(--p)}
+.prj-card-eye.is-off{color:var(--tx3);opacity:.6;position:relative}
+.prj-card-eye.is-off::after{content:'';position:absolute;width:16px;height:1.6px;background:currentColor;transform:rotate(-40deg)}
+.prj-empty{margin:4px 2px;font-size:12.5px;line-height:1.5;color:var(--tx3)}
+.prj-archived>button{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:9px;color:var(--tx3);font-size:12px;font-weight:650}
+.prj-archived>button:hover{background:var(--card2);color:var(--tx)}
+.prj-archived ul{display:flex;flex-direction:column;gap:2px;margin:4px 0 0;padding:0;list-style:none}
+.prj-archived li{--p:#7c8cff;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:9px;font-size:12.5px;color:var(--tx2)}
+.prj-archived li i{width:8px;height:11px;border-radius:2px 3px 3px 2px;background:var(--p);opacity:.6}
+.prj-archived li span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prj-archived li button{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:7px;font-size:11.5px;font-weight:650;color:var(--tx2)}
+.prj-archived li button:hover{background:var(--card2);color:var(--tx)}
+@keyframes prj-pour{from{opacity:0;transform:translateX(42px) scaleX(1.06);transform-origin:right}to{opacity:1;transform:none}}
+/* On a phone the projects are a row of cards where the chips were. */
+.prj-panel.is-phone{flex-direction:row;align-items:center;gap:6px;overflow-x:auto;padding:2px 2px 4px}
+.prj-panel.is-phone .prj-panel-head{flex:none;gap:4px}
+.prj-panel.is-phone .prj-panel-head h2{display:none}
+.prj-panel.is-phone .prj-cards{flex-direction:row;gap:6px}
+.prj-panel.is-phone .prj-card{flex:none;flex-direction:row;align-items:center;gap:4px;min-height:40px;padding:4px 4px 4px 8px;border-radius:999px;box-shadow:none}
+.prj-panel.is-phone .prj-card-main{padding:0;align-items:center;gap:7px}
+.prj-panel.is-phone .prj-card-spine{width:8px;height:18px}
+.prj-panel.is-phone .prj-card-words{flex-direction:row;align-items:baseline;gap:6px}
+.prj-panel.is-phone .prj-card-words b{font-size:12.5px}
+.prj-panel.is-phone .prj-card-tools{position:static}
+.prj-panel.is-phone .prj-card-tools button{width:26px;height:26px;min-height:26px}
+.prj-panel.is-phone .prj-archived{display:none}
+/* Over a project's own list. */
+.task-project-head{--p:#345cff;display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:8px}
+.task-project-note{max-width:460px;padding:0;text-align:left;font-size:13px;line-height:1.45;color:var(--tx2)}
+.task-project-note em{font-style:normal;color:var(--tx3);text-decoration:underline dotted;text-underline-offset:3px}
+.task-project-note:hover{color:var(--tx)}
+.task-project-shown{position:relative;display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;color:var(--tx2);cursor:pointer}
+.task-project-shown input{position:absolute;opacity:0;width:1px;height:1px}
+.task-project-shown span{position:relative;width:32px;height:19px;border-radius:99px;background:var(--line2);transition:background .2s}
+.task-project-shown span::after{content:'';position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .25s cubic-bezier(.2,1.3,.3,1)}
+.task-project-shown input:checked+span{background:var(--p)}
+.task-project-shown input:checked+span::after{transform:translateX(13px)}
+.task-project-shown input:focus-visible+span{outline:2px solid var(--tx);outline-offset:2px}
+.task-project-head .task-open-project{margin-top:0;border:0}
+@media(prefers-reduced-motion:reduce){.task-rail-pane{transition:none}.prj-card{animation:none}.task-project-shown span::after{transition:none}}
+[data-motion='off'] .task-rail-pane{transition:none}
+[data-motion='off'] .prj-card{animation:none}
+
+/* ---- photos inside a task ---------------------------------------------------- */
+.task-cover-button{flex:none;display:grid;padding:0;border-radius:9px;cursor:zoom-in}
+.task-cover-button:focus-visible{outline:2px solid var(--tx);outline-offset:2px}
+.task-photos>header h3 b{margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--card2);color:var(--tx2);font-size:10.5px;letter-spacing:0}
+.task-photo-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px}
+.task-photo{position:relative;aspect-ratio:1;padding:0;border-radius:12px;overflow:hidden;background:var(--card2);border:1px solid var(--line);cursor:zoom-in}
+.task-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.task-photo.is-cover img{object-fit:contain;padding:6px}
+.task-photo em{position:absolute;left:6px;bottom:6px;padding:1px 7px;border-radius:99px;background:#000a;color:#fff;font-size:10px;font-style:normal;font-weight:700}
+.task-photo.is-busy{display:grid;place-items:center;padding:8px;font-size:10.5px;text-align:center;color:var(--tx3);cursor:default}
+.task-photo-wait{display:block;width:100%;height:100%;background:linear-gradient(90deg,var(--card2),color-mix(in srgb,var(--tx) 7%,var(--card2)),var(--card2));background-size:200% 100%;animation:task-photo-wait 1.2s linear infinite}
+.task-photo.is-busy .task-photo-wait{position:absolute;inset:0;z-index:-1}
+@keyframes task-photo-wait{to{background-position:-200% 0}}
+.task-photo-empty{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px dashed var(--line2);color:var(--tx3);font-size:12.5px;text-align:left}
+.task-photo-empty:hover{border-color:var(--tx3);color:var(--tx2)}
+@media(prefers-reduced-motion:reduce){.task-photo-wait{animation:none}}
+
+/* ---- how a task repeats ------------------------------------------------------ */
+.task-repeat-more{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:11px;background:var(--card2)}
+.task-repeat-every,.task-repeat-until{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;color:var(--tx2)}
+.task-repeat-every input{width:56px;height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--line2);background:var(--card);color:var(--tx);font-size:13px}
+.task-repeat-until input{height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--line2);background:var(--card);color:var(--tx);font-size:12.5px}
+.task-repeat-days{display:flex;gap:4px}
+.task-repeat-days button{width:30px;height:30px;min-height:30px;padding:0;border-radius:50%;border:1px solid var(--line2);background:var(--card);color:var(--tx2);font-size:12px;font-weight:700}
+.task-repeat-days button[aria-pressed=true]{border-color:var(--poster-blue);background:var(--poster-blue);color:#fff}
+.task-repeat-note{margin:0;font-size:12px;line-height:1.5;color:var(--tx3)}
+.task-repeat-note b{color:var(--tx)}

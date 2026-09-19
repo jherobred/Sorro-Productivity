@@ -13,7 +13,7 @@ import { TaskItem } from '@/components/tasks/TaskItem';
 import { QuickAdd } from '@/components/tasks/QuickAdd';
 import { TaskPanel } from '@/components/tasks/TaskPanel';
 import { TaskRail, SMART_SCOPES } from '@/components/tasks/TaskRail';
-import { OpenInProjects } from '@/components/tasks/ProjectsLink';
+import { ProjectHead, ProjectsPanel } from '@/components/tasks/ProjectsLink';
 import { BulkBar, type BulkDay } from '@/components/tasks/BulkBar';
 import { CanvasLmsColumn } from '@/components/lms/CanvasLms';
 import { K, PAL } from '@/lib/pal';
@@ -23,7 +23,7 @@ import { ask } from '@/lib/ask';
 import { toast } from '@/lib/toast';
 import { triggerFireworks } from '@/lib/fireworks';
 import { courseIs, TAG_COLORS } from '@/lib/tagList';
-import { activeProjects } from '@/lib/projects';
+import { activeProjects, archivedProjects, withMeta } from '@/lib/projects';
 import {
   useLists, useListActions, useSubtaskActions, useSubtasks, useTaskActions, useTasks,
   type List, type NewTask, type Task,
@@ -80,12 +80,16 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
 
   const [detail, setDetail] = useState<string | null>(() => searchParams?.get('detail') ?? null);
+  /** Projects slid into the side column. Old links to /projects/ arrive here asking for it. */
+  const [projectsOpen, setProjectsOpen] = useState(() => !!(searchParams?.get('projects') || searchParams?.get('project')));
   useEffect(() => {
     const id = searchParams?.get('detail');
     if (id) setDetail(id);
   }, [searchParams]);
 
   const [scope, setScopeState] = useState<TaskScope>(() => {
+    const asked = searchParams?.get('project');
+    if (asked) return `list:${asked}` as TaskScope;
     try { return (localStorage.getItem(SCOPE_KEY) as TaskScope | null) || 'all'; } catch { return 'all'; }
   });
   const [query, setQuery] = useState('');
@@ -95,6 +99,10 @@ export default function TasksPage() {
   const anchor = useRef<string | null>(null);
   const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
   const exitTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  /** Ticked but not yet done: the grace period that makes a stray tap harmless. */
+  const [pending, setPending] = useState<Set<string>>(() => new Set());
+  const graceTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => () => { for (const t of graceTimers.current.values()) clearTimeout(t); }, []);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxContent } | null>(null);
   const [picker, setPicker] = useState<{ task: Task; anchor: { top: number; left: number; bottom: number; right: number } | null } | null>(null);
@@ -114,6 +122,15 @@ export default function TasksPage() {
   // Archived projects leave the rail and the pickers, but their tasks still show which project they are in.
   const lists = useMemo(() => activeProjects(allLists, prefs.projectMeta), [allLists, prefs.projectMeta]);
   const byList = useMemo(() => new Map(allLists.map((l) => [l.id, l])), [allLists]);
+  const archived = useMemo(() => archivedProjects(allLists, prefs.projectMeta), [allLists, prefs.projectMeta]);
+  /**
+   * A project switched out of My Tasks keeps its tasks to itself: they leave
+   * All open, Today and every other view here, counts included, and show only
+   * when the project itself is open.
+   */
+  const kept = useMemo(() => new Set(Object.entries(prefs.projectMeta ?? {}).filter(([, m]) => m.hidden).map(([id]) => id)), [prefs.projectMeta]);
+  const shownIn = useMemo(() => (kept.size ? tasks.filter((t) => !t.list_id || !kept.has(t.list_id)) : tasks), [tasks, kept]);
+  const pool = (s: TaskScope) => (s.startsWith('list:') ? tasks : shownIn);
   const open = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
   const courses = useMemo(() => courseNames(open, tags), [open, tags]);
 
@@ -134,8 +151,8 @@ export default function TasksPage() {
       ...SMART_SCOPES.map((s) => s.id), `list:${INBOX}`,
       ...lists.map((l) => `list:${l.id}` as TaskScope), ...courses.map((c) => `course:${c}` as TaskScope),
     ];
-    return Object.fromEntries(ids.map((id) => [id, tasks.filter((t) => inScope(t, id, today, weekEnd)).length]));
-  }, [tasks, lists, courses, today, weekEnd]);
+    return Object.fromEntries(ids.map((id) => [id, pool(id).filter((t) => inScope(t, id, today, weekEnd)).length]));
+  }, [tasks, shownIn, lists, courses, today, weekEnd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stepCounts = useMemo(() => {
     const map = new Map<string, { done: number; total: number }>();
@@ -150,23 +167,23 @@ export default function TasksPage() {
 
   const completedOrder = (a: Task, b: Task) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '');
   const shown = useMemo(() => {
-    const scoped = searchTasks(tasks.filter((t) => inScope(t, scope, today, weekEnd)), query);
+    const scoped = searchTasks(pool(scope).filter((t) => inScope(t, scope, today, weekEnd)), query);
     const filtered = filterTasks(scoped, { ...NO_FILTER, priority });
     return scope === 'done' ? filtered.sort(completedOrder) : sortTasks(filtered, sort, now);
-  }, [tasks, scope, today, weekEnd, query, priority, sort, now]);
+  }, [tasks, shownIn, scope, today, weekEnd, query, priority, sort, now]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* What is finished in this scope, under the open work. */
   const doneShelf = useMemo(() => {
     if (scope === 'done') return [];
-    const done = tasks.filter((t) => t.done && !t.deleted_at);
+    const done = pool(scope).filter((t) => t.done && !t.deleted_at);
     const inThis = scope === 'all' ? done
       : scope === 'today' ? done.filter((t) => t.completed_at && localYmd(new Date(t.completed_at)) === today)
         : scope.startsWith('list:') || scope.startsWith('course:') ? done.filter((t) => inScope({ ...t, done: false }, scope, today, weekEnd))
           : [];
     return searchTasks(inThis, query).sort(completedOrder);
-  }, [tasks, scope, today, weekEnd, query]);
+  }, [tasks, shownIn, scope, today, weekEnd, query]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const doneToday = tasks.filter((t) => t.done && t.completed_at && localYmd(new Date(t.completed_at)) === today).length;
+  const doneToday = shownIn.filter((t) => t.done && t.completed_at && localYmd(new Date(t.completed_at)) === today).length;
   const leftToday = counts.today ?? 0;
 
   const buckets: Bucket[] = useMemo(() => {
@@ -208,12 +225,30 @@ export default function TasksPage() {
   };
   const clearSelection = () => { setSelected(new Set()); setSelectMode(false); };
 
+  /**
+   * A tick waits three seconds before it counts. The circle fills while it
+   * waits, and a second tap in that time takes it back, so a thumb that lands
+   * on the wrong row finishes nothing.
+   */
   const complete = (task: Task, at: { x: number; y: number } | null) => {
     if (task.done) {
       A.complete.mutate({ id: task.id, done: false });
       toast(`Back on the list: ${task.title}`, () => A.complete.mutate({ id: task.id, done: true }), { icon: 'undo' });
       return;
     }
+    if (leaving.has(task.id)) return;
+    const waiting = graceTimers.current.get(task.id);
+    const drop = () => setPending((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    if (waiting) { clearTimeout(waiting); graceTimers.current.delete(task.id); drop(); return; }
+    setPending((p) => new Set(p).add(task.id));
+    graceTimers.current.set(task.id, setTimeout(() => {
+      graceTimers.current.delete(task.id);
+      drop();
+      finishTask(task, at);
+    }, K.taskGraceMs));
+  };
+
+  const finishTask = (task: Task, at: { x: number; y: number } | null) => {
     if (leaving.has(task.id)) return;
     triggerFireworks(at?.x, at?.y);
     setLeaving((s) => new Set(s).add(task.id));
@@ -300,6 +335,25 @@ export default function TasksPage() {
     toast(`Project “${clean}” made`, undefined, { tone: 'success', icon: 'proj' });
   };
 
+  const newProject = async () => {
+    const name = (await ask('New project', { message: 'Tasks for one purpose, like School or GCI World 2026.', placeholder: 'Project name', confirmLabel: 'Create' }))?.trim();
+    if (name) newList(name);
+  };
+  const setShown = (list: List, shown: boolean) => {
+    void update({ projectMeta: withMeta(prefs.projectMeta, list.id, { hidden: !shown }) });
+    toast(shown ? `${list.name} shows in My Tasks again` : `${list.name} keeps its tasks to itself now`,
+      () => void update({ projectMeta: withMeta(prefs.projectMeta, list.id, { hidden: shown }) }), { icon: 'eye' });
+  };
+  const describe = async (list: List) => {
+    const note = await ask('Describe the project', { initial: prefs.projectMeta?.[list.id]?.note ?? '', placeholder: 'What it is for, in a line', confirmLabel: 'Save' });
+    if (note !== null) void update({ projectMeta: withMeta(prefs.projectMeta, list.id, { note: note.trim() }) });
+  };
+  const setArchived = (list: List, archivedNow: boolean) => {
+    void update({ projectMeta: withMeta(prefs.projectMeta, list.id, { archived: archivedNow }) });
+    if (archivedNow && scope === `list:${list.id}`) setScope('all');
+    toast(archivedNow ? `${list.name} archived. Its tasks stay in My Tasks.` : `${list.name} is back`,
+      () => void update({ projectMeta: withMeta(prefs.projectMeta, list.id, { archived: !archivedNow }) }), { icon: 'archive' });
+  };
   const listMenu = (list: List, x: number, y: number) => setMenu({
     x, y, label: list.name, items: [
       { items: [{
@@ -307,8 +361,10 @@ export default function TasksPage() {
           const name = (await ask('Rename project', { placeholder: list.name, confirmLabel: 'Rename' }))?.trim();
           if (name && name !== list.name) { L.update.mutate({ id: list.id, patch: { name } }); toast(`Renamed to “${name}”`, () => L.update.mutate({ id: list.id, patch: { name: list.name } })); }
         },
-      }] },
+      }, { icon: 'text', label: prefs.projectMeta?.[list.id]?.note ? 'Edit description' : 'Add a description', run: () => void describe(list) },
+      { icon: 'eye', label: 'Show in My Tasks', checked: !prefs.projectMeta?.[list.id]?.hidden, run: () => setShown(list, !!prefs.projectMeta?.[list.id]?.hidden) }] },
       { label: 'Colour', items: TAG_COLORS.map((c) => ({ icon: 'palette' as const, label: c.name, swatch: c.value, checked: list.color.toLowerCase() === c.value, run: () => L.update.mutate({ id: list.id, patch: { color: c.value } }) })) },
+      { items: [{ icon: 'archive', label: 'Archive', run: () => setArchived(list, true) }] },
     ],
   });
 
@@ -419,7 +475,7 @@ export default function TasksPage() {
         steps={stepCounts.get(t.id)}
         showList={showList}
         selected={selected.has(t.id)} selecting={selecting}
-        leaving={leaving.has(t.id)} phone={phone} time24={prefs.time24} now={now}
+        leaving={leaving.has(t.id)} pending={pending.has(t.id)} phone={phone} time24={prefs.time24} now={now}
         renaming={renaming === t.id} onRenameEnd={() => setRenaming(null)}
         onToggleSelect={(range) => toggleSelect(t.id, range)}
         onCheck={(at) => complete(t, at)}
@@ -440,7 +496,9 @@ export default function TasksPage() {
       {!narrow && (
         <aside className="tasks-side">
           <CanvasLmsColumn />
-          <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone={false} onNewList={newList} onListMenu={listMenu} />
+          <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone={false}
+            projectsOpen={projectsOpen} onProjects={setProjectsOpen} projects={<ProjectsPanel lists={lists} archived={archived} tasks={tasks} meta={prefs.projectMeta} scope={scope} today={today} weekEnd={weekEnd} phone={false}
+            onScope={setScope} onBack={() => setProjectsOpen(false)} onNew={() => void newProject()} onMenu={listMenu} onShown={setShown} onRestore={(l) => setArchived(l, false)} />} />
         </aside>
       )}
 
@@ -449,7 +507,8 @@ export default function TasksPage() {
           <div className="tasks-head-title">
             <h1 className="section-title">{title}</h1>
             <p>{subline}</p>
-            {scopeList && <OpenInProjects list={scopeList} />}
+            {scopeList && <ProjectHead list={scopeList} note={prefs.projectMeta?.[scopeList.id]?.note} hidden={!!prefs.projectMeta?.[scopeList.id]?.hidden}
+              onShown={(shown) => setShown(scopeList, shown)} onDescribe={() => void describe(scopeList)} onProjects={() => setProjectsOpen(true)} />}
           </div>
           {scope !== 'done' && (
             <div className="tasks-today" aria-label="Today's progress">
@@ -465,7 +524,9 @@ export default function TasksPage() {
         {narrow && (
           <>
             <CanvasLmsColumn collapsible />
-            <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone onNewList={newList} onListMenu={listMenu} />
+            <TaskRail scope={scope} onScope={setScope} counts={counts} lists={lists} courses={courses} tags={tags} phone
+              projectsOpen={projectsOpen} onProjects={setProjectsOpen} projects={<ProjectsPanel lists={lists} archived={archived} tasks={tasks} meta={prefs.projectMeta} scope={scope} today={today} weekEnd={weekEnd} phone={true}
+            onScope={setScope} onBack={() => setProjectsOpen(false)} onNew={() => void newProject()} onMenu={listMenu} onShown={setShown} onRestore={(l) => setArchived(l, false)} />} />
           </>
         )}
 
@@ -532,7 +593,7 @@ export default function TasksPage() {
         ) : view === 'table' ? (
           <TaskTable rows={shown.map(rowOf)} phone={phone} sort={sort}
             onSort={(key) => setSort(sort.key === key ? { key, desc: !sort.desc } : { key, desc: false })}
-            onOpen={(t) => setDetail(t.id)} onCheck={(t) => complete(t, null)} />
+            onOpen={(t) => setDetail(t.id)} onCheck={(t) => complete(t, null)} pending={pending} />
         ) : (
           <div className={view === 'board' ? 'task-board hbar' : 'task-groups'} data-tour="tasks-columns">
             {buckets.map((b) => (

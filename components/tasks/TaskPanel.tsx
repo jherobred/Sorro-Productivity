@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { ObjectCoverImage } from '@/components/notes/NotebookCover';
+import { TaskPhotos } from './TaskPhotos';
+import { TaskRepeatProp } from './TaskRepeat';
 import { useOverlayBack } from '@/lib/nav';
 import { usePrefs } from '@/lib/prefs';
 import { useRegisterSidePanel } from '@/lib/sidePanel';
@@ -251,6 +253,8 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             </div>
           </div>
 
+          <TaskRepeatProp taskId={task.id} due={task.due_on} />
+
           <div className="task-prop">
             <span className="task-prop-name"><Icon name="flag" size={14} />Priority</span>
             <div className="task-prop-value task-chips" role="radiogroup" aria-label="Priority">
@@ -375,6 +379,8 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             </div>
           ))}
         </section>
+
+        <TaskPhotos taskId={task.id} />
 
         <button type="button" className="task-panel-cover" onClick={() => setCaptureCover(true)}>
           <ObjectCoverImage targetKind="task" targetId={task.id} style={{ width: 52, height: 52 }} />

@@ -11,7 +11,8 @@ import type { List, Task } from './tasks';
  * the list's id, the way notebook colours and tags already do.
  */
 
-export type ProjectMeta = { note?: string; archived?: boolean };
+/** `hidden` keeps a project's tasks to the project: they leave All open, Today and the other views of My Tasks. */
+export type ProjectMeta = { note?: string; archived?: boolean; hidden?: boolean };
 export type ProjectMetaMap = Record<string, ProjectMeta>;
 
 export const activeProjects = (lists: List[], meta: ProjectMetaMap | undefined) =>

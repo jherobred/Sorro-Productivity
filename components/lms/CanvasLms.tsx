@@ -41,11 +41,12 @@ function dueLabel(due: number | null, now: number, time24: boolean): string {
   const days = Math.round((day(due) - day(now)) / 86_400_000);
   const date = new Date(due);
   const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !time24 });
-  if (days === 0) return `Due today ${time}`;
-  if (days === 1) return `Due tomorrow ${time}`;
-  if (days === -1) return `Was due yesterday ${time}`;
-  if (days > 1 && days < 7) return `Due ${date.toLocaleDateString(undefined, { weekday: 'long' })} ${time}`;
-  return `${days < 0 ? 'Was due' : 'Due'} ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
+  // The weekday always travels with its date, so "Tuesday" is never a guess at which Tuesday.
+  const on = date.toLocaleDateString(undefined, { weekday: days > 1 && days < 7 ? 'long' : 'short', month: 'short', day: 'numeric', ...(date.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
+  if (days === 0) return `Due today, ${on} · ${time}`;
+  if (days === 1) return `Due tomorrow, ${on} · ${time}`;
+  if (days === -1) return `Was due yesterday, ${on} · ${time}`;
+  return `${days < 0 ? 'Was due' : 'Due'} ${on} · ${time}`;
 }
 
 /** Seconds only for work due within three days. */

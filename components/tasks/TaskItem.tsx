@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SwipeableRow } from '@/components/SwipeableRow';
-import { ObjectCoverImage } from '@/components/notes/NotebookCover';
+import { TaskCoverThumb } from './TaskPhotos';
 import { parseTaskLinks, type List, type Task } from '@/lib/tasks';
 import type { Tag } from '@/lib/tagList';
 import { deadlineClock, deadlineOf } from '@/lib/todayCycle';
 import { readCanvasNotes } from '@/lib/canvasFeed';
+import { usePrefs } from '@/lib/prefs';
+import { isRepeat, repeatLabel } from '@/lib/taskRepeat';
 
 export type DueTone = 'late' | 'today' | 'soon' | 'later';
 
@@ -63,6 +65,8 @@ export type TaskItemProps = {
   /** Something is selected, so every row shows its selection box. */
   selecting: boolean;
   leaving: boolean;
+  /** Ticked, and counting down the few seconds before it is done. */
+  pending?: boolean;
   phone: boolean;
   time24: boolean;
   now: number;
@@ -86,10 +90,12 @@ export type TaskItemProps = {
  * the task. On a phone, swipe right to finish and left to delete.
  */
 export function TaskItem(props: TaskItemProps) {
-  const { task, list, tag, steps, showList, selected, selecting, leaving, phone, time24, now } = props;
+  const { task, list, tag, steps, showList, selected, selecting, leaving, pending = false, phone, time24, now } = props;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const renaming = editing || !!props.renaming;
+  const repeat = usePrefs().prefs.taskRepeat?.[task.id];
+  const repeats = isRepeat(repeat) ? repeat : null;
 
   useEffect(() => { if (!renaming) setTitle(task.title); }, [task.title, renaming]);
 
@@ -112,7 +118,7 @@ export function TaskItem(props: TaskItemProps) {
   const soon = !task.done && deadline !== null && Math.abs(deadline - now) < 86_400_000 && (!!task.due_at || deadline > now);
   const priority = task.priority ?? 'none';
 
-  const className = ['task-item', selected && 'is-selected', selecting && 'is-selecting', task.done && 'is-done'].filter(Boolean).join(' ');
+  const className = ['task-item', selected && 'is-selected', selecting && 'is-selecting', task.done && 'is-done', pending && 'is-pending'].filter(Boolean).join(' ');
 
   return (
     <div className={'task-item-wrap' + (leaving ? ' leaving' : '')} role="listitem">
@@ -126,12 +132,15 @@ export function TaskItem(props: TaskItemProps) {
             {selected && <Icon name="check" size={11} />}
           </button>
 
-          <button type="button" className="task-check" aria-label={task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`} aria-pressed={task.done}
+          <button type="button" className="task-check" aria-pressed={task.done || pending}
+            aria-label={pending ? `Keep ${task.title} open` : task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
+            title={pending ? 'Tap again to keep it open' : undefined}
             onClick={(e) => { e.stopPropagation(); props.onCheck({ x: e.clientX, y: e.clientY }); }}>
+            {pending && <svg className="task-grace" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /></svg>}
             <Icon name="check" size={12} />
           </button>
 
-          <ObjectCoverImage targetKind="task" targetId={task.id} className="task-cover" />
+          <TaskCoverThumb taskId={task.id} title={task.title} />
 
           <div className="task-body">
             {renaming ? (
@@ -148,7 +157,7 @@ export function TaskItem(props: TaskItemProps) {
               <span className="task-title" onDoubleClick={(e) => { if (phone) return; e.stopPropagation(); setEditing(true); }}>{task.title}</span>
             )}
             {note && !renaming && <span className="task-note">{note}</span>}
-            {(due || canvas || (showList && list) || course || (steps && steps.total > 0) || links > 0 || task.stars > 0) && (
+            {(due || canvas || repeats || (showList && list) || course || (steps && steps.total > 0) || links > 0 || task.stars > 0) && (
               <div className="task-meta">
                 {due && (
                   <button type="button" className="task-due" data-tone={task.done ? 'later' : due.tone} title="Change the date"
@@ -162,6 +171,7 @@ export function TaskItem(props: TaskItemProps) {
                     <b aria-hidden="true">C</b>Canvas
                   </a>
                 )}
+                {repeats && <span className="task-chip is-plain" title={repeatLabel(repeats, task.due_on)}><Icon name="repeat" size={12} />{repeatLabel({ ...repeats, until: null }, task.due_on).replace(/ on .*/, '')}</span>}
                 {showList && list && <span className="task-chip" style={{ '--tag': list.color } as React.CSSProperties}><i aria-hidden="true" />{list.name}</span>}
                 {course && <span className="task-chip is-course" style={{ '--tag': tag?.color ?? 'var(--tx3)' } as React.CSSProperties}><Icon name="tag" size={11} />{course}</span>}
                 {steps && steps.total > 0 && (

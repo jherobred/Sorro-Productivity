@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Icon, type IconName } from '@/components/Icon';
-import { INBOX, type TaskScope } from '@/lib/taskViews';
+import type { TaskScope } from '@/lib/taskViews';
 import type { List } from '@/lib/tasks';
 import type { Tag } from '@/lib/tagList';
-import { ProjectsLink } from './ProjectsLink';
+import { ProjectsTab } from './ProjectsLink';
 
 export const SMART_SCOPES: { id: TaskScope; label: string; icon: IconName }[] = [
   { id: 'all', label: 'All open', icon: 'task' },
@@ -18,11 +18,14 @@ export const SMART_SCOPES: { id: TaskScope; label: string; icon: IconName }[] = 
 ];
 
 /**
- * Where My Tasks looks: the smart views, then every project, then every course.
- * A column on a wide screen and a row of chips on a phone. Counts are open
- * tasks, and the overdue count turns red while there is any.
+ * Where My Tasks looks: the smart views, the way into Projects, then every
+ * course. A column on a wide screen and a row of chips on a phone. Counts are
+ * open tasks, and the overdue count turns red while there is any.
+ *
+ * Projects open in the same place the views were. The views slide off to the
+ * left and the projects follow them in, so neither ever covers the task list.
  */
-export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, onNewList, onListMenu }: {
+export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, projectsOpen, onProjects, projects }: {
   scope: TaskScope;
   onScope: (scope: TaskScope) => void;
   counts: Record<string, number>;
@@ -30,23 +33,18 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
   courses: string[];
   tags: Tag[];
   phone: boolean;
-  onNewList: (name: string) => void;
-  onListMenu: (list: List, x: number, y: number) => void;
+  projectsOpen: boolean;
+  onProjects: (open: boolean) => void;
+  /** The panel that slides in when Projects is pressed. */
+  projects: ReactNode;
 }) {
-  const [adding, setAdding] = useState<string | null>(null);
-  const finishAdding = () => {
-    const name = (adding ?? '').trim();
-    if (name) onNewList(name);
-    setAdding(null);
-  };
-
-  const item = (id: TaskScope, label: string, lead: React.ReactNode, extra?: { onContextMenu?: (e: React.MouseEvent) => void; tone?: string }) => {
+  const item = (id: TaskScope, label: string, lead: ReactNode, extra?: { tone?: string }) => {
     const count = counts[id] ?? 0;
     const hide = !phone ? false : count === 0 && id !== 'all' && id !== scope && id !== 'today';
     if (hide) return null;
     return (
       <button key={id} type="button" className={'task-rail-item' + (scope === id ? ' is-on' : '')} aria-current={scope === id ? 'page' : undefined}
-        data-tone={extra?.tone} onClick={() => onScope(id)} onContextMenu={extra?.onContextMenu}>
+        data-tone={extra?.tone} onClick={() => onScope(id)}>
         {lead}
         <span className="task-rail-label">{label}</span>
         {count > 0 && <span className="task-rail-count">{count}</span>}
@@ -55,41 +53,18 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
   };
 
   const openInProjects = lists.reduce((n, l) => n + (counts[`list:${l.id}`] ?? 0), 0);
-
-  if (phone) {
-    return (
-      <nav className="task-rail is-phone hbar" aria-label="Task views">
-        {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={14} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
-        {item(`list:${INBOX}`, 'Inbox', <i className="task-rail-dot" style={{ background: '#7c8cff' }} />)}
-        {lists.map((l) => item(`list:${l.id}`, l.name, <i className="task-rail-dot" style={{ background: l.color }} />))}
-        <ProjectsLink lists={lists} open={openInProjects} variant="chip" />
-        {courses.map((c) => item(`course:${c}`, c, <Icon name="tag" size={13} color={tags.find((t) => t.name === c)?.color} />))}
-      </nav>
-    );
-  }
-
-  return (
+  const tab = <ProjectsTab lists={lists} open={openInProjects} phone={phone} onOpen={() => onProjects(true)} />;
+  const views = phone ? (
+    <nav className="task-rail is-phone hbar" aria-label="Task views">
+      {tab}
+      {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={14} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
+      {courses.map((c) => item(`course:${c}`, c, <Icon name="tag" size={13} color={tags.find((t) => t.name === c)?.color} />))}
+    </nav>
+  ) : (
     <nav className="task-rail" aria-label="Task views">
+      {tab}
       <div className="task-rail-group">
         {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={15} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
-      </div>
-      <div className="task-rail-group">
-        <h2>Projects</h2>
-        {item(`list:${INBOX}`, 'Inbox', <i className="task-rail-dot" style={{ background: '#7c8cff' }} />)}
-        {lists.map((l) => item(`list:${l.id}`, l.name, <i className="task-rail-dot" style={{ background: l.color }} />, {
-          onContextMenu: (e) => { e.preventDefault(); onListMenu(l, e.clientX, e.clientY); },
-        }))}
-        {adding === null ? (
-          <button type="button" className="task-rail-add" onClick={() => setAdding('')}><Icon name="plus" size={14} />New project</button>
-        ) : (
-          <input className="task-rail-input" autoFocus value={adding} placeholder="Project name" aria-label="New project name"
-            onChange={(e) => setAdding(e.target.value)} onBlur={finishAdding}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); finishAdding(); }
-              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAdding(null); }
-            }} />
-        )}
-        <ProjectsLink lists={lists} open={openInProjects} variant="rail" />
       </div>
       {courses.length > 0 && (
         <div className="task-rail-group">
@@ -98,5 +73,12 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
         </div>
       )}
     </nav>
+  );
+
+  return (
+    <div className={'task-rail-slide' + (phone ? ' is-phone' : '') + (projectsOpen ? ' is-projects' : '')}>
+      <div className="task-rail-pane" inert={projectsOpen}>{views}</div>
+      <div className="task-rail-pane" inert={!projectsOpen}>{projects}</div>
+    </div>
   );
 }

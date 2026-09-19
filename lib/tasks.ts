@@ -6,6 +6,8 @@ import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
 import { triggerFireworks } from './fireworks';
+import { getPrefs, setPrefs } from './prefs';
+import { nextDue, isRepeat } from './taskRepeat';
 
 export type Task = {
   id: string;
@@ -454,6 +456,11 @@ const rollback = (_e: unknown, _v: unknown, ctx: Task[] | undefined) => {
   if (ctx) queryClient.setQueryData(TASKS_KEY, ctx);
 };
 
+/** The repeating tasks finished in this visit and the task each made, so undoing the tick takes the new one back. */
+const cameBack = new Map<string, string>();
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const todayYmd = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+
 export function useTaskActions() {
   const qc = useQueryClient();
   const settle = settler(qc, TASKS_KEY);
@@ -514,11 +521,57 @@ export function useTaskActions() {
     onSettled: settle,
   });
 
+  const subCreate = useMutation<unknown, Error, Subtask>({ mutationKey: SUB_CREATE, onSettled: settler(qc, SUBTASKS_KEY) });
+
+  /**
+   * Finishing a repeating task makes the next one, whichever screen it was
+   * ticked on: same title, notes, project, priority and steps (unticked), due
+   * on the rule's next date, at the same time of day. The rule moves to it.
+   */
+  const comeBack = (id: string) => {
+    const rules = getPrefs().taskRepeat ?? {};
+    const rule = rules[id];
+    const task = queryClient.getQueryData<Task[]>(TASKS_KEY)?.find((t) => t.id === id);
+    if (!task || !isRepeat(rule)) return;
+    const due = nextDue(rule, task.due_on, todayYmd());
+    if (!due) return;                                            // the rule has run its course
+    const next = crypto.randomUUID();
+    let due_at: string | null = null;
+    if (task.due_at) {
+      const at = new Date(task.due_at), [y, m, d] = due.split('-').map(Number);
+      due_at = new Date(y, m - 1, d, at.getHours(), at.getMinutes()).toISOString();
+    }
+    create.mutate({ id: next, title: task.title, listId: task.list_id, notes: task.notes, due_on: due, due_at, priority: task.priority, stars: task.stars, course: task.course ?? null });
+    const steps = (queryClient.getQueryData<Subtask[]>(SUBTASKS_KEY) ?? []).filter((st) => st.task_id === id).sort((a, b) => a.position - b.position);
+    if (steps.length) {
+      const copies = steps.map((st) => ({ id: crypto.randomUUID(), task_id: next, title: st.title, done: false, position: st.position }));
+      queryClient.setQueryData<Subtask[]>(SUBTASKS_KEY, (prev) => [...(prev ?? []), ...copies]);
+      for (const c of copies) subCreate.mutate(c);
+    }
+    const { [id]: _moved, ...rest } = rules;
+    setPrefs({ taskRepeat: { ...rest, [next]: rule } });
+    cameBack.set(id, next);
+    toast(`Comes back ${new Date(`${due}T12:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`, undefined, { icon: 'repeat' });
+  };
+  /** Undoing the tick takes back the task it made, and the rule with it. */
+  const stayBack = (id: string) => {
+    const next = cameBack.get(id);
+    if (!next) return;
+    cameBack.delete(id);
+    const rules = getPrefs().taskRepeat ?? {};
+    const rule = rules[next];
+    remove.mutate({ id: next });
+    if (rule) { const { [next]: _gone, ...rest } = rules; setPrefs({ taskRepeat: { ...rest, [id]: rule } }); }
+  };
+
   const complete = useMutation({
     mutationKey: COMPLETE,
     onMutate: (v: { id: string; done: boolean }) => {
       if (v.done) {
         triggerFireworks();
+        comeBack(v.id);
+      } else {
+        stayBack(v.id);
       }
       // completed_at moves with done, as it does on the server, so "done today" counts at once.
       return optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done, completed_at: v.done ? new Date().toISOString() : null } : t)));

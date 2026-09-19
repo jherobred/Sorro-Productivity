@@ -42,6 +42,8 @@ export const K = {
   longPressCancelPx: 7,
   hapticMs: 12,
   taskExitMs: 380,
+  /** How long a ticked task waits before it counts as done; a second tap in that time takes it back. */
+  taskGraceMs: 3000,
   toastMs: 4200,
   toastSweepMs: 900,
   calDayPx: 46,

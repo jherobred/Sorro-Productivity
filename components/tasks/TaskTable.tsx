@@ -41,7 +41,7 @@ const HEAD: React.CSSProperties = {
 const CELL: React.CSSProperties = { padding: '9px 10px', fontSize: 12.5, color: 'var(--tx2)', verticalAlign: 'middle' };
 
 export function TaskTable({
-  rows, phone, sort, onSort, onOpen, onCheck,
+  rows, phone, sort, onSort, onOpen, onCheck, pending,
 }: {
   rows: TableRow[];
   phone: boolean;
@@ -49,6 +49,8 @@ export function TaskTable({
   onSort: (key: TaskSortKey) => void;
   onOpen: (t: Task) => void;
   onCheck: (t: Task) => void;
+  /** Rows ticked and waiting out the grace period before they are done. */
+  pending?: Set<string>;
 }) {
   const tags = usePrefs().prefs.tags ?? [];
 
@@ -114,7 +116,9 @@ export function TaskTable({
                 <td style={{ ...CELL, paddingRight: 0 }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); onCheck(r.task); }}
-                    aria-label={`Complete ${r.task.title}`}
+                    aria-label={pending?.has(r.task.id) ? `Keep ${r.task.title} open` : `Complete ${r.task.title}`}
+                    aria-pressed={pending?.has(r.task.id) ?? false}
+                    className={pending?.has(r.task.id) ? 'task-table-check is-pending' : 'task-table-check'}
                     style={{
                       width: 17, height: 17, borderRadius: '50%', display: 'grid', placeItems: 'center',
                       border: `1.8px solid ${PRI_COL[r.pri]}`,
