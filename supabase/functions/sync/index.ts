@@ -17,6 +17,7 @@
  */
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { readCalendar } from './ics.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -165,11 +166,35 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
     return res.json() as Promise<T>;
   };
 
+  /**
+   * Every page of a list, up to `pages` of them. Canvas pages with a Link
+   * header; a list read with one request stops at the first page, which for
+   * announcements was the oldest ones. The next link is only followed on the
+   * same Canvas API, so the header cannot send the token anywhere else.
+   */
+  const getAll = async <T>(path: string, pages = 5): Promise<T[]> => {
+    const out: T[] = [];
+    let url: string | null = `${base}/api/v1${path}`;
+    for (let i = 0; i < pages && url; i++) {
+      const res = await safeFetch(url, { signal: AbortSignal.timeout(20_000) }, { Authorization: `Bearer ${token}` });
+      if (res.status === 401) throw new Error('Canvas rejected the token — generate a new one');
+      if (!res.ok) throw new Error(`Canvas returned ${res.status} for ${path.split('?')[0]}`);
+      out.push(...await res.json() as T[]);
+      const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '')?.[1] ?? null;
+      url = next && next.startsWith(`${base}/api/v1/`) ? next : null;
+    }
+    return out;
+  };
+
   const courses = await get<Course[]>('/courses?enrollment_state=active&per_page=50');
   if (!courses.length) return { imported: 0, message: 'No active courses found' };
 
   const codes = courses.map((c) => `context_codes[]=course_${c.id}`).join('&');
   const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  // Canvas ends the window 28 days after start_date unless told otherwise, so a
+  // 30-day look back silently left out the newest two days of announcements —
+  // exactly the ones worth seeing. It ends tomorrow now.
+  const until = new Date(Date.now() + 864e5).toISOString();
   const nameOf = new Map(courses.map((c) => [`course_${c.id}`, c.name]));
 
   // Announcements → the bell and the Home pane.
@@ -180,7 +205,7 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
   // Canvas round trip — on a campus network, in a function the phone is
   // blocked on. Everything below still runs to the same list.
   const [anns, perCourse] = await Promise.all([
-    get<Announcement[]>(`/announcements?${codes}&start_date=${since}&per_page=50`),
+    getAll<Announcement>(`/announcements?${codes}&start_date=${since}&end_date=${until}&per_page=50`),
     Promise.all(
       courses.map((c) =>
         get<Assignment[]>(`/courses/${c.id}/assignments?bucket=upcoming&per_page=50`)
@@ -261,120 +286,50 @@ async function syncIcs(db: SupabaseClient, user_id: string, config: Record<strin
   const from = Date.now() - 30 * 864e5;
   const to = Date.now() + 180 * 864e5;
 
-  const rows = parseIcs(text)
-    .filter((e) => {
-      const t = new Date(e.start).getTime();
-      return Number.isFinite(t) && t > from && t < to;
-    })
+  const all = readCalendar(text, from, to)
+    .sort((a, b) => a.start.localeCompare(b.start))
     .map((e) => ({
       user_id,
       title: e.summary || 'Untitled',
       starts_at: e.start,
-      ends_at: e.end ?? e.start,
+      ends_at: e.end,
       all_day: e.allDay,
       location: e.location ?? '',
       color: '#38BDF8',
       source: 'gcal_ics',
-      external_id: e.uid,
-    }))
-    // One upsert, one statement: a calendar with tens of thousands of events
-    // inside the window would make a single request Postgres refuses whole, and
-    // nothing would import at all. Six months of a full calendar is far under this.
-    .slice(0, 2000);
+      external_id: e.externalId,
+      // A meeting deleted in Google and then restored there comes back here too.
+      deleted_at: null,
+    }));
+  // One upsert, one statement: a calendar with tens of thousands of events
+  // inside the window would make a single request Postgres refuses whole, and
+  // nothing would import at all. Six months of a full calendar is far under this,
+  // and past it the soonest are the ones kept.
+  const rows = all.slice(0, 2000);
 
-  if (!rows.length) return { imported: 0, message: 'No events in the next six months' };
+  if (rows.length) {
+    const { error } = await db.from('bd_events').upsert(rows, { onConflict: 'user_id,source,external_id' });
+    if (error) throw new Error(error.message);
+  }
 
-  const { error } = await db.from('bd_events').upsert(rows, { onConflict: 'user_id,source,external_id' });
-  if (error) throw new Error(error.message);
+  // What Google no longer has in the window goes from here as well, as a soft
+  // delete like any other. Before repeating events were read, a weekly class
+  // was one row keyed by its UID; those rows are among what this clears.
+  const keep = new Set(all.map((r) => r.external_id));
+  const { data: mine, error: readError } = await db.from('bd_events')
+    .select('id,external_id')
+    .eq('source', 'gcal_ics')
+    .is('deleted_at', null)
+    .gte('starts_at', new Date(from).toISOString())
+    .lt('starts_at', new Date(to).toISOString());
+  if (readError) throw new Error(readError.message);
+  const gone = (mine ?? []).filter((r) => !keep.has(r.external_id)).map((r) => r.id);
+  for (let i = 0; i < gone.length; i += 100) {
+    const { error } = await db.from('bd_events').update({ deleted_at: new Date().toISOString() }).in('id', gone.slice(i, i + 100));
+    if (error) throw new Error(error.message);
+  }
 
+  if (!rows.length) return { imported: 0, message: gone.length ? `Cleared ${gone.length} events Google no longer has` : 'No events in the next six months' };
   return { imported: rows.length, message: `${rows.length} events` };
 }
 
-type IcsEvent = { uid: string; summary: string; start: string; end: string | null; location: string | null; allDay: boolean };
-
-/**
- * Small iCalendar reader — enough of RFC 5545 for what Google publishes: line
- * unfolding, escaped text, and the three DTSTART shapes (UTC, floating with a
- * TZID, and a date-only all-day value).
- */
-function parseIcs(text: string): IcsEvent[] {
-  // Unfold: a leading space or tab continues the previous line.
-  const lines = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '').split('\n');
-
-  const out: IcsEvent[] = [];
-  let cur: Partial<IcsEvent> | null = null;
-
-  for (const line of lines) {
-    if (line === 'BEGIN:VEVENT') { cur = {}; continue; }
-    if (line === 'END:VEVENT') {
-      if (cur?.uid && cur.start) {
-        out.push({
-          uid: cur.uid, summary: cur.summary ?? '', start: cur.start,
-          end: cur.end ?? null, location: cur.location ?? null, allDay: !!cur.allDay,
-        });
-      }
-      cur = null;
-      continue;
-    }
-    if (!cur) continue;
-
-    const colon = line.indexOf(':');
-    if (colon < 0) continue;
-    const rawName = line.slice(0, colon);
-    const value = line.slice(colon + 1);
-    const [name, ...params] = rawName.split(';');
-
-    switch (name) {
-      case 'UID': cur.uid = value; break;
-      case 'SUMMARY': cur.summary = unescapeIcs(value); break;
-      case 'LOCATION': cur.location = unescapeIcs(value); break;
-      case 'DTSTART': {
-        const p = parseIcsDate(value, params);
-        cur.start = p.iso;
-        cur.allDay = p.allDay;
-        break;
-      }
-      case 'DTEND': cur.end = parseIcsDate(value, params).iso; break;
-    }
-  }
-  return out;
-}
-
-const unescapeIcs = (s: string) =>
-  s.replace(/\\n/gi, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
-
-function parseIcsDate(value: string, params: string[]): { iso: string; allDay: boolean } {
-  // 20260815 — a date-only all-day value.
-  if (/^\d{8}$/.test(value)) {
-    return { iso: `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T00:00:00.000Z`, allDay: true };
-  }
-
-  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/.exec(value);
-  if (!m) return { iso: new Date(value).toISOString(), allDay: false };
-  const [, y, mo, d, h, mi, s, z] = m;
-
-  if (z === 'Z') return { iso: `${y}-${mo}-${d}T${h}:${mi}:${s}.000Z`, allDay: false };
-
-  // Floating time in a named zone. Take the wall-clock reading as if it were
-  // UTC, ask Intl what that instant looks like in the zone, and subtract the
-  // difference — which is the zone's offset at that date, DST included.
-  const tzid = params.find((p) => p.startsWith('TZID='))?.slice(5);
-  const naive = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
-  if (!tzid) return { iso: new Date(naive).toISOString(), allDay: false };
-
-  try {
-    const fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: tzid, hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(naive)).map((p) => [p.type, p.value]));
-    const asZone = Date.UTC(
-      +parts.year, +parts.month - 1, +parts.day,
-      +parts.hour % 24, +parts.minute, +parts.second,
-    );
-    return { iso: new Date(naive + (naive - asZone)).toISOString(), allDay: false };
-  } catch {
-    return { iso: new Date(naive).toISOString(), allDay: false };
-  }
-}
