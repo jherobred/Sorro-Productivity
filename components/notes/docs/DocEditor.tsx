@@ -1,4 +1,5 @@
 'use client';
+import {PageSaveStatus} from '../PageSaveStatus';
 
 import 'katex/dist/katex.min.css';
 import './docs.css';
@@ -720,7 +721,7 @@ function Workspace({
               <button type="button" className="doc-header-icon" aria-label={tags.length ? `Tags: ${tags.join(', ')}` : 'Add tags'} data-doc-tip={tags.length ? `Tags: ${tags.map((t) => '#' + t).join(' ')}` : 'Add tags'} onClick={() => setDialog('tags')}>
                 <Icon name="tag" size={15} />{tags.length > 0 && <span className="doc-count">{tags.length}</span>}
               </button>
-              <span className="doc-save-state" role="status">{saving ? 'Saving changes…' : 'Autosave on'}</span>
+              <PageSaveStatus id={note.id} waiting={saving}/>
             </div>
             {!phone && <MenuBar getMenus={getMenus} />}
           </div>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Familjen_Grotesk } from 'next/font/google';
 import './globals.css';
 import './studio.css';
+import './recovery-planning.css';
 import { Providers } from './providers';
 
 /* next/font downloads these at build time and emits them as static assets, so

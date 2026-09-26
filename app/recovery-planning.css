@@ -1,0 +1,50 @@
+/* Extensions of Basedly's existing studio: document-like groups and explicit actions. */
+.sync-health{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--tx2);white-space:nowrap}
+.sync-health.needs-attention{color:var(--pal-coral)}
+.sync-diagnostics{padding:0 14px 14px;font-size:13px;color:var(--tx2)}
+.sync-diagnostics details{margin-top:8px}.sync-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;font-size:13px}
+.save-health-details,.study-backup{padding-top:16px;border-top:1px solid var(--line);font-size:13px;line-height:1.6}
+.save-health-details h3,.study-backup h3{font-size:21px;color:var(--tx);margin-bottom:8px}
+.save-health-details p,.study-backup p{color:var(--tx2);max-width:70ch;margin:8px 0 14px}
+.backup-actions{display:flex;gap:8px;flex-wrap:wrap}.backup-review{padding:16px 0;border-top:1px solid var(--line);margin-top:20px}
+.page-save-status{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}.page-save-status button{font-size:inherit;text-decoration:underline}
+.page-recovery-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 24px;color:var(--tx2);font-size:13px}
+.page-history{min-width:0;flex:1}.page-history-panel{padding:16px 0;max-width:760px}.page-history-panel h3{font-size:21px;color:var(--tx)}
+.page-history-panel p{margin:8px 0 16px;line-height:1.5}.page-history-list{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}
+.page-history-list button{padding:10px 12px;border:1px solid var(--line);border-radius:10px;min-width:180px;text-align:left}
+.page-history-list strong,.page-history-list span{display:block}.page-history-list .is-selected{border-color:var(--acc);background:var(--card2)}
+.page-history-panel blockquote{margin:12px 0;padding:12px;background:var(--card2);overflow-wrap:anywhere;white-space:pre-wrap}
+.capture-destination{font-size:13px;color:var(--tx2);line-height:1.5;margin:10px 0}
+.capture-notebook{display:flex;align-items:center;gap:12px;font-size:13px;margin:12px 0}
+.capture-notebook select,.focus-context select{flex:1;min-width:0;max-width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:9px;color:var(--tx)}
+.capture-result{display:flex;gap:8px;font-size:13px;margin-top:14px}.capture-result a{text-decoration:underline}.capture-history h3{font-size:13px;color:var(--tx2);padding:8px 0}
+.today-greeting{flex-wrap:wrap}.today-greeting>div{flex:1;min-width:240px}
+.day-overview:has(.next-event-panel.is-empty){grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+.next-event-panel.is-empty{min-height:0}.next-event-panel.is-empty .next-event-copy h3{font-size:28px;max-width:12ch}.next-event-panel.is-empty .poster-ribbons{opacity:.22}
+.task-cycle-controls>button{min-width:40px;min-height:40px}.task-cycle-controls>span{font-size:13px;white-space:nowrap}
+.task-cycle-dots{gap:0!important}.task-cycle-dots>button{min-width:28px;min-height:36px;border-radius:0!important;background:transparent!important;position:relative}
+.task-cycle-dots>button:after{content:'';position:absolute;inset:14px 10px;background:var(--tx3);border-radius:50%}
+.task-cycle-dots>button[aria-current=true]:after{background:var(--acc)}
+.is-summary{margin-top:24px}.canvas-summary-line{padding:8px 16px 12px;color:var(--tx2);font-size:13px;line-height:1.6}.canvas-summary-line a{text-decoration:underline;margin-left:10px}.is-summary>details{padding:0 16px 14px;font-size:13px}
+.is-summary>details>ul{margin-top:12px}.is-summary summary{cursor:pointer}
+.weekly-planner{max-width:1300px;margin:auto;padding:8px 0 40px}.weekly-planner h1{font-size:28px;line-height:1.2;margin-top:12px;letter-spacing:-.03em}.weekly-planner header p{color:var(--tx2);font-size:14px;margin-top:8px}
+.week-plan-pager{display:flex;gap:6px;flex-wrap:wrap}.week-plan-range{padding:16px 0;border-bottom:1px solid var(--line);color:var(--tx2);font-size:13px}
+.week-plan-layout{display:grid;grid-template-columns:minmax(250px,.85fr) minmax(360px,1.15fr);gap:40px;padding-top:24px;align-items:flex-start}
+.week-plan-work details{padding:16px 0;border-bottom:1px solid var(--line)}.week-plan-work summary{cursor:pointer;font-size:21px;font-weight:650}.week-plan-work summary span{font-size:13px;color:var(--tx2);margin-left:8px}
+.week-plan-work ul{list-style:none;padding:0;margin:12px 0}.week-plan-work li{display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+.week-plan-work li>button{padding:12px 8px;flex:1;min-width:0;text-align:left;border-radius:10px}.week-plan-work li>button.is-selected{background:var(--card2);outline:1px solid var(--acc)}
+.week-plan-work li>a{padding:10px}.week-plan-work strong{display:block;font-size:14px;line-height:1.5}.week-plan-work small{display:block;color:var(--tx2);font-size:13px;margin-top:4px}.week-plan-work p{font-size:13px;color:var(--tx2);margin:12px 0}
+.plan-reservation h2,.available-hours h2{font-size:21px;margin:0 0 14px}.plan-reservation label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--tx2);min-width:0}
+.plan-reservation input,.plan-reservation select,.available-hours select,.study-flow input{color:var(--tx);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:42px;min-width:0;max-width:100%}
+.plan-time-fields{display:grid;grid-template-columns:1.3fr 1fr .8fr;gap:10px;margin:14px 0}.plan-reservation>p{margin-top:12px;font-size:13px;line-height:1.6}
+.available-hours{margin-top:32px;padding-top:24px;border-top:1px solid var(--line)}.available-hours>p{font-size:13px;color:var(--tx2);line-height:1.6;margin-bottom:16px}.available-hours>label{display:inline-flex;align-items:center;gap:8px;margin-right:12px;font-size:13px}
+.plan-day{padding:14px 0;border-bottom:1px solid var(--line)}.plan-day h3{font-size:14px;margin-bottom:8px}.plan-gap{display:inline-block;padding:8px 10px;font-size:13px;background:var(--card2);border:1px solid var(--line);border-radius:10px;margin:0 6px 6px 0;font-variant-numeric:tabular-nums}.plan-day>span{font-size:13px;color:var(--tx2)}
+.focus-context{margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}.focus-context>label{display:flex;flex-direction:column;gap:8px}.focus-context p{font-size:13px;line-height:1.6;margin:10px 0}.focus-context h3{font-size:14px;margin-top:18px}.focus-context a{text-decoration:underline}
+.focus-context-link{display:flex;gap:8px;align-items:center;padding:8px 0;font-size:13px}.focus-context-link small{display:block;color:var(--tx2);font-size:13px}
+.student-templates{margin:22px 0}.student-templates h2{font-size:21px;margin-bottom:14px}.student-templates>div{display:flex;flex-wrap:wrap;gap:10px}.student-templates button{text-align:left;justify-content:flex-start}.student-templates strong,.student-templates small{display:block}.student-templates small{font-size:13px;font-weight:400;color:var(--tx2);margin-top:3px}.student-templates p{font-size:13px;color:var(--tx2);margin:14px 0}
+.study-flow{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-start;padding:16px 0 24px;margin-bottom:16px;border-bottom:1px solid var(--line)}.study-flow>div{flex:1;min-width:220px}.study-flow p{font-size:13px;line-height:1.6;color:var(--tx2);max-width:55ch;margin-top:8px}.study-flow form{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}.study-flow label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.sync-health:focus-visible,.plan-gap:focus-visible,.week-plan-work button:focus-visible,.task-cycle-dots button:focus-visible,.page-history button:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+@media(max-width:760px){.sync-health span{display:none}.studio-top-actions .sync-health{min-width:32px}.week-plan-layout{grid-template-columns:1fr;gap:24px}.weekly-planner .section-heading{align-items:flex-start;flex-direction:column;gap:16px}.week-plan-calendar{order:-1}.plan-time-fields{grid-template-columns:1fr 1fr}.plan-time-fields label:last-child{grid-column:1/-1}.day-overview:has(.next-event-panel.is-empty){display:flex;flex-direction:column}.next-event-panel.is-empty{padding:18px;min-height:0}.next-event-panel.is-empty .next-event-copy{padding:12px 0}.next-event-panel.is-empty .next-event-copy h3{font-size:21px;max-width:none}.task-cycle-controls>button{min-width:44px;min-height:44px}.task-cycle-dots>button{min-width:28px}.page-recovery-bar{padding:0 12px}.cal-head-actions>a span{display:none}.cal-head-actions>a{padding:8px;min-height:40px}.capture-notebook{align-items:flex-start;flex-direction:column}.capture-notebook select{width:100%}.study-flow{padding-inline:12px}.student-templates>div{flex-direction:column}}
+
+.studio-top-actions>.sync-health{width:auto;padding:0 8px}.day-overview:has(.next-event-panel.is-empty){align-items:flex-start}.task-cycle-dots>button:after{background:#1b241e66}.task-cycle-dots>button[aria-current=true]:after{background:#1b241e}
+@media(max-width:760px){.studio-top-actions>.sync-health{width:30px;min-width:30px;padding:0}.upcoming-task-actions{flex-wrap:wrap}.task-cycle-dots{order:3;flex-basis:100%;justify-content:center}.task-cycle-dots>button{min-width:36px;min-height:40px}.task-cycle-dots>button:after{inset:16px 14px}}

@@ -1,4 +1,5 @@
 'use client';
+import {syncMessage} from '@/lib/syncMessage';
 
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,7 +95,7 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
     setBusy(true);
     const r = await runSync(spec.kind);
     setBusy(false);
-    toast(r.ok ? `${spec.name}: ${r.message}` : `${spec.name} — ${r.message}`);
+    toast(r.ok ? `${spec.name}: ${r.message}` : `${spec.name} — ${syncMessage(r.message)}`);
     // A sync writes tasks, events and notifications, so refresh all three.
     for (const k of ['tasks', 'events', 'notifications', 'integrations']) {
       void qc.invalidateQueries({ queryKey: [k] });
@@ -116,7 +117,7 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
               background: connected ? 'color-mix(in srgb, var(--pal-mint) 20%, transparent)' : 'var(--hov)',
               color: connected ? 'var(--pal-mint)' : 'var(--tx3)',
             }}>
-              {connected ? 'Connected' : 'Not set up'}
+              {connected ? row?.last_error ? 'Needs attention' : !row?.enabled ? 'Paused' : row?.last_sync_at ? 'Synced' : 'Not synced yet' : 'Not set up'}
             </span>
           </div>
           <p style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55, marginTop: 4 }}>{spec.blurb}</p>
@@ -124,13 +125,14 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
           {connected && (
             <p style={{ fontSize: 10.5, color: row?.last_error ? 'var(--pal-coral)' : 'var(--tx3)', marginTop: 5 }}>
               {row?.last_error
-                ? `Last sync failed — ${row.last_error}`
+                ? syncMessage(row.last_error)
                 : row?.last_sync_at ? `Synced ${ago(row.last_sync_at)}` : 'Never synced'}
             </p>
           )}
         </div>
       </div>
 
+      {row?.last_error&&<div className="sync-diagnostics"><p>Last successful sync: {row.last_sync_at?new Date(row.last_sync_at).toLocaleString():'Never'}</p><details><summary>Technical details</summary><pre>{row.last_error}</pre></details></div>}
       <div style={{ display: 'flex', gap: 7, padding: '0 14px 13px', flexWrap: 'wrap' }}>
         <button onClick={() => { setDraft({ ...(row?.config ?? {}) }); setOpen((v) => !v); }} className="hov k-squish"
           style={BTN}>

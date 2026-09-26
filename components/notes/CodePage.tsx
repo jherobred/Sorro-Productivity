@@ -6,6 +6,7 @@ import { codeTokens, CODE_LANGUAGES, isRunnable, previewDocument } from '@/lib/c
 import { typeCharacter, deleteBackward, newline, type Edit } from '@/lib/codeEdit';
 import type { Note } from '@/lib/notes';
 import { usePageDraft } from './usePageDraft';
+import {PageSaveStatus} from './PageSaveStatus';
 
 const EXTENSION: Record<string, string> = { java: 'java', html: 'html', css: 'css', javascript: 'js' };
 
@@ -57,7 +58,7 @@ export function CodePage({ note, onSave }: { note: Note; onSave: (v: { title: st
       <div className="page-edit-header">
         <input className="page-title-input note-editor-clean-input" aria-label="Page title"
           value={draft.title} onChange={(e) => change({ title: e.target.value })} />
-        <span className="page-save-status">{waiting ? 'Saving changes…' : 'Autosave on'}</span>
+        <PageSaveStatus id={note.id} waiting={waiting}/>
       </div>
 
       <div className="java-workspace">

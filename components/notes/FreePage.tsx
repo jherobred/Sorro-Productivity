@@ -28,6 +28,7 @@ import { webpOf } from '@/lib/webpPhoto';
 import { plainDoc, readFreePage, richText, writeFreePage, type BoardItem, type FreeBox, type FreeInk, type FreePageDocument, type PageAsset, type RichNode } from '@/lib/pageKinds';
 import type { Note } from '@/lib/notes';
 import { usePageDraft } from './usePageDraft';
+import { PageSaveStatus } from './PageSaveStatus';
 import { BoxBody, BoxEditor, FormatBar } from './FreePageText';
 import type { ScanResult } from './ScanSheet';
 
@@ -582,7 +583,7 @@ export function FreePage({ note, onSave }: { note: Note; onSave: (v: { title: st
         <button type="button" className="fp-tool" aria-label="Undo" title="Undo (Ctrl Z)" disabled={step === 0} onClick={() => undo(-1)}><Icon name="undo" size={17} /></button>
         <button type="button" className="fp-tool" aria-label="Redo" title="Redo (Ctrl Y)" disabled={step === history.current.length - 1} onClick={() => undo(1)}><Icon name="redo" size={17} /></button>
         <button type="button" className="fp-tool" aria-label="Delete selection" title="Delete (Del)" disabled={!selected.length} onClick={() => removeIds(selected)}><Icon name="trash" size={17} /></button>
-        <span className="fp-status">{busy || (waiting ? 'Saving…' : 'Saved')}</span>
+        {busy ? <span className="fp-status">{busy}</span> : <PageSaveStatus id={note.id} waiting={waiting}/>}
       </div>
 
       <div ref={sheet} className="fp-sheet" tabIndex={0} aria-label="Page"

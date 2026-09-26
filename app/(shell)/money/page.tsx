@@ -273,7 +273,7 @@ function Money() {
             <div><dt>Out today</dt><dd>{peso(todaysOut)}</dd></div>
             <div><dt>This week</dt><dd>{peso(wow.current)}{wow.pct !== null && <small className={wow.pct > 0 ? 'is-up' : 'is-down'}>{wow.pct > 0 ? '+' : ''}{wow.pct}%</small>}</dd></div>
             <div><dt>In this month</dt><dd>{peso(monthIn)}</dd></div>
-            <div><dt>No-spend streak</dt><dd>{streak} {streak === 1 ? 'day' : 'days'}</dd></div>
+            <div><dt>Days with no spending logged</dt><dd>{streak} {streak === 1 ? 'day' : 'days'}<small>Based on your entries; unlogged spending is not included.</small></dd></div>
           </dl>
         </div>
         <MoneyPad

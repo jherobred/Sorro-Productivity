@@ -24,7 +24,7 @@ export type BoardConnection = {id:string;from:string;to:string};
 export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number;drive?:string};
 export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource};
 export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;text:string;done:boolean}[]};
-export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[]};
+export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[];sourceNoteId?:string};
 export type CornellDocument = {version:1;kind:'cornell';cues:string;notes:string;summary:string};
 export type CodeDocument = {version:1;kind:'code';language:string;code:string};
 /**

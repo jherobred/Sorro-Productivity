@@ -1,4 +1,5 @@
 'use client';
+import {syncMessage} from '@/lib/syncMessage';
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -110,7 +111,7 @@ function useSection() {
   const sync = async () => {
     const result = await canvas.sync();
     if (result.message === 'Already syncing') return;
-    toast(result.ok ? `UST Canvas synced: ${result.message}` : `Canvas sync failed: ${result.message}`, undefined, { tone: result.ok ? 'success' : 'danger', icon: 'refresh' });
+    toast(result.ok ? `UST Canvas synced: ${result.message}` : syncMessage(result.message), undefined, { tone: result.ok ? 'success' : 'danger', icon: 'refresh' });
   };
 
   const toggleAlerts = async () => {
@@ -125,13 +126,22 @@ function useSection() {
   };
 
   const statusLine = canvas.busy ? 'Syncing now…'
-    : canvas.status?.error ? `Last sync failed: ${canvas.status.error}`
+    : canvas.status?.error ? syncMessage(canvas.status.error)
       : canvas.status?.lastSync ? `Synced ${ago(canvas.status.lastSync)}` : 'Not synced yet';
 
   return { canvas, alertsOn, time24: prefs.time24, connecting, setConnecting, now, open, unread, weekAhead, sync, toggleAlerts, statusLine };
 }
 
 type Section = ReturnType<typeof useSection>;
+
+/** Today shows news once. Assignment work remains in My Tasks. */
+export function CanvasLmsSummary() {
+  const s = useSection();
+  return <section className="lms is-summary" aria-label="Canvas updates"><Head s={s}/>{s.canvas.on
+    ? <><p className="canvas-summary-line">{s.weekAhead} assignments due within a week · {s.unread} unread announcements <Link href="/tasks/">Open My Tasks</Link></p>
+      {!!s.canvas.news.length && <details><summary>Latest announcements</summary><ul>{s.canvas.news.slice(0,3).map(item=><NewsRow key={item.note.id} item={item} onRead={s.canvas.markRead} withText={false}/>)}</ul></details>}</>
+    : !s.canvas.loading && <ConnectCall s={s}/>}{s.connecting && <CanvasConnectSheet initialUrl={s.canvas.status?.baseUrl} onClose={()=>s.setConnecting(false)}/>}</section>;
+}
 
 function Head({ s, children }: { s: Section; children?: React.ReactNode }) {
   const connected = s.canvas.on;

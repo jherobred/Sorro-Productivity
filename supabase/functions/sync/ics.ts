@@ -19,6 +19,7 @@ type Raw = {
   uid?: string; summary?: string; location?: string; status?: string;
   start?: Stamp; end?: Stamp; duration?: number; rrule?: string;
   exdates: Stamp[]; recurrenceId?: Stamp;
+  sequence?: number; revised?: number;
 };
 
 const DAY = 86_400_000;
@@ -93,6 +94,8 @@ function readVevents(text: string): Raw[] {
       case 'SUMMARY': cur.summary = unescapeIcs(value); break;
       case 'LOCATION': cur.location = unescapeIcs(value); break;
       case 'STATUS': cur.status = value.toUpperCase(); break;
+      case 'SEQUENCE': cur.sequence = Number(value) || 0; break;
+      case 'LAST-MODIFIED': case 'DTSTAMP': cur.revised = Math.max(cur.revised ?? 0, parseStamp(value, params)?.utc ?? 0); break;
       case 'DTSTART': cur.start = parseStamp(value, params) ?? undefined; break;
       case 'DTEND': cur.end = parseStamp(value, params) ?? undefined; break;
       case 'DURATION': cur.duration = parseDuration(value); break;
@@ -218,35 +221,43 @@ const stampKey = (t: number) => isoOf(t).replace(/[-:]/g, '').replace(/\.\d{3}/,
 
 /** Every event in [from, to) in the feed, repeating ones walked into their occurrences. */
 export function readCalendar(text: string, from: number, to: number): IcsEvent[] {
-  const all = readVevents(text).filter((e) => e.uid && e.start);
-  // Occurrences moved or cancelled on their own, by series and original instant.
+  // Feeds can repeat a VEVENT or contain multiple revisions of the same event.
+  // Resolve those before expanding: Postgres cannot upsert the same key twice.
+  const latest = new Map<string, Raw>();
+  for (const e of readVevents(text)) {
+    if (!e.uid || (!e.start && e.status !== 'CANCELLED')) continue;
+    const key = JSON.stringify([e.uid, e.recurrenceId?.utc ?? null]);
+    const old = latest.get(key);
+    if (!old || (e.sequence ?? 0) > (old.sequence ?? 0)
+      || ((e.sequence ?? 0) === (old.sequence ?? 0) && (e.revised ?? 0) >= (old.revised ?? 0))) latest.set(key, e);
+  }
+  const all = [...latest.values()];
   const overrides = new Map<string, Raw>();
-  for (const e of all) if (e.recurrenceId) overrides.set(`${e.uid}|${e.recurrenceId.utc}`, e);
+  for (const e of all) if (e.recurrenceId) overrides.set(JSON.stringify([e.uid, e.recurrenceId.utc]), e);
 
-  const out: IcsEvent[] = [];
+  const out = new Map<string, IcsEvent>();
   const emit = (e: Raw, startUtc: number, externalId: string) => {
-    if (e.status === 'CANCELLED') return;
+    if (e.status === 'CANCELLED' || !e.start) return;
     const lengthMs = e.end ? e.end.utc - e.start!.utc : e.duration ?? (e.start!.allDay ? DAY : 0);
     const endUtc = startUtc + Math.max(0, lengthMs);
     if (endUtc < from || startUtc >= to) return;
-    out.push({ externalId, summary: e.summary ?? '', start: isoOf(startUtc), end: isoOf(endUtc || startUtc), location: e.location ?? null, allDay: e.start!.allDay });
+    out.set(externalId, { externalId, summary: e.summary ?? '', start: isoOf(startUtc), end: isoOf(endUtc || startUtc), location: e.location ?? null, allDay: e.start!.allDay });
   };
 
   for (const e of all) {
-    if (e.recurrenceId) continue;                       // placed where its series says, below
+    if (e.recurrenceId || e.status === 'CANCELLED' || !e.start) continue;
     if (!e.rrule) { emit(e, e.start!.utc, e.uid!); continue; }
     const skip = new Set(e.exdates.map((x) => x.utc));
     for (const wall of occurrences(e.rrule, e.start!, to)) {
       const utc = e.start!.allDay ? wall : zonedToUtc(wall, e.start!.zone);
-      if (skip.has(utc)) continue;
+      if (skip.has(utc) || overrides.has(JSON.stringify([e.uid, utc]))) continue;
       const id = `${e.uid}@${stampKey(utc)}`;
-      const moved = overrides.get(`${e.uid}|${utc}`);
-      if (moved) emit(moved, moved.start!.utc, id);
-      else emit(e, utc, id);
+      emit(e, utc, id);
     }
   }
-  // A moved occurrence whose series is not in the feed still happens.
-  const series = new Set(all.filter((e) => e.rrule && !e.recurrenceId).map((e) => e.uid));
-  for (const e of all) if (e.recurrenceId && !series.has(e.uid)) emit(e, e.start!.utc, `${e.uid}@${stampKey(e.recurrenceId.utc)}`);
-  return out;
+  // Emit overrides independently: a meeting moved INTO the window can have an
+  // original date outside it, or also be named by EXDATE on the master.
+  const cancelled = new Set(all.filter(e => !e.recurrenceId && e.status === 'CANCELLED').map(e => e.uid));
+  for (const e of overrides.values()) if (e.start && !cancelled.has(e.uid)) emit(e, e.start.utc, `${e.uid}@${stampKey(e.recurrenceId!.utc)}`);
+  return [...out.values()].sort((a, b) => a.start.localeCompare(b.start));
 }

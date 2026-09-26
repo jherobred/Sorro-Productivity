@@ -24,6 +24,7 @@ export type FocusSession = {
   mode: FocusMode;
   goal: number;
   subject: string;
+  taskId?: string | null;
   minutes: Record<string, number>;
   /** Set when a run reaches zero, and cleared by whatever the person chooses next. */
   finished: FocusMode | null;
@@ -157,6 +158,7 @@ export const focusActions = {
   /** Ends the session without counting the unfinished part. */
   done() { stopAmbient(); update({ ...session, mode: 'study', finished: null, clock: idle(25) }); },
   setSubject(subject: string) { update({ ...session, subject }); },
+  setTask(task: { id: string; title: string } | null) { update({ ...session, taskId: task?.id ?? null, subject: task?.title ?? session.subject }); },
   setGoal(goal: number) { update({ ...session, goal }); },
   setSound(next: AmbientSound) {
     sound = next;

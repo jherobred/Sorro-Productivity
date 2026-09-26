@@ -56,6 +56,7 @@ const TABLES = [
 
 /** Screens that cache a table under a name other than its own. */
 const ALSO: Record<string, string[]> = {
+  bd_notebooks: ['notebooks_trash', 'notes'],
   bd_notes: ['notes_trash', 'home_recent_notes'],
   bd_projects: ['home_projects'],
   bd_profiles: ['me_handle'],

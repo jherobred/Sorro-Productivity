@@ -221,7 +221,7 @@ export default function FuelPage() {
           <span className="fuel-kicker">{now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
           <h1>{totals.kcal.toLocaleString()}<small> kcal</small></h1>
           <p>
-            {totals.kcal === 0 ? `Nothing eaten yet. Your goal is ${GOALS.kcal.toLocaleString()} kcal.`
+            {totals.kcal === 0 ? `No meals logged yet. Your goal is ${GOALS.kcal.toLocaleString()} kcal.`
               : left >= 0 ? `${left.toLocaleString()} kcal left of ${GOALS.kcal.toLocaleString()}`
                 : `${(-left).toLocaleString()} kcal over your ${GOALS.kcal.toLocaleString()} goal`}
           </p>

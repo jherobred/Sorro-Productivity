@@ -13,6 +13,8 @@ import { DESTINATIONS } from '@/lib/destinations';
 import { Face } from './AccountSheet';
 import { useAccounts, switchTo, addAccount, signOutAll } from '@/lib/accounts';
 import { Integrations } from './Integrations';
+import { SaveHealthDetails } from './SyncHealth';
+import { StudyBackup } from './StudyBackup';
 import { APP_VERSION } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
 import { BasedlyLogo } from './BasedlyLogo';
@@ -777,8 +779,10 @@ export function SettingsModal({
       case 'integrations':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={SECTION_TITLE}>Integrations & Sync</div>
+            <div style={SECTION_TITLE}>Saves, Sync & Recovery</div>
+            <SaveHealthDetails />
             <Integrations />
+            <StudyBackup />
           </div>
         );
 

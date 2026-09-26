@@ -6,6 +6,25 @@ const feed = (...events: string[]) => ['BEGIN:VCALENDAR', 'VERSION:2.0', ...even
 const vevent = (...lines: string[]) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
 const from = Date.UTC(2026, 8, 1), to = Date.UTC(2026, 9, 1);     // September 2026
 
+test('duplicate masters and revisions produce unique upsert keys, newest revision wins', () => {
+  const newer = vevent('UID:dup', 'SEQUENCE:2', 'SUMMARY:New room', 'DTSTART:20260901T010000Z', 'RRULE:FREQ=WEEKLY;COUNT=2');
+  const older = vevent('UID:dup', 'SEQUENCE:1', 'SUMMARY:Old room', 'DTSTART:20260901T010000Z', 'RRULE:FREQ=WEEKLY;COUNT=2');
+  const got = readCalendar(feed(newer, older, newer), from, to);
+  assert.equal(got.length, 2);
+  assert.equal(new Set(got.map(e => e.externalId)).size, 2);
+  assert.ok(got.every(e => e.summary === 'New room'));
+});
+
+test('cancelled exceptions need no DTSTART and moved exceptions survive EXDATE and window edges', () => {
+  const got = readCalendar(feed(
+    vevent('UID:r', 'DTSTART:20260901T010000Z', 'RRULE:FREQ=WEEKLY;COUNT=8', 'EXDATE:20260915T010000Z'),
+    vevent('UID:r', 'RECURRENCE-ID:20260908T010000Z', 'STATUS:CANCELLED'),
+    vevent('UID:r', 'RECURRENCE-ID:20260915T010000Z', 'DTSTART:20260916T010000Z'),
+    vevent('UID:r', 'RECURRENCE-ID:20261006T010000Z', 'DTSTART:20260930T010000Z'),
+  ), from, to);
+  assert.deepEqual(got.map(e => e.start.slice(0, 10)), ['2026-09-01', '2026-09-16', '2026-09-22', '2026-09-29', '2026-09-30']);
+});
+
 test('a weekly class becomes every one of its meetings in the window, at Manila time', () => {
   const ics = feed(vevent('UID:cs191', 'SUMMARY:CS 191 lecture', 'DTSTART;TZID=Asia/Manila:20260803T090000', 'DTEND;TZID=Asia/Manila:20260803T103000', 'RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR'));
   const got = readCalendar(ics, from, to);

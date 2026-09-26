@@ -14,6 +14,7 @@ import {
   type JournalEntry, type Polaroid,
 } from '@/lib/journalPage';
 import { usePageDraft } from './usePageDraft';
+import {PageSaveStatus} from './PageSaveStatus';
 import { JournalWindow } from './JournalWindow';
 
 const PhotoCapture = dynamic(() => import('./PhotoCapture').then((m) => m.PhotoCapture), { ssr: false });
@@ -246,7 +247,7 @@ export function JournalPage({
           <div className="journal-page-heading">
             <input aria-label="Page title" className="page-title-input note-editor-clean-input"
               value={draft.title} onChange={(e) => change({ title: e.target.value })} />
-            <span className="page-save-status">{waiting ? 'Saving changes…' : 'Autosave on'}</span>
+            <PageSaveStatus id={note.id} waiting={waiting}/>
           </div>
           <div className="journal-day-bar" aria-live="polite">
             <h2>{longDay(day)}</h2>

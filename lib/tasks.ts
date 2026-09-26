@@ -458,6 +458,7 @@ const rollback = (_e: unknown, _v: unknown, ctx: Task[] | undefined) => {
 
 /** The repeating tasks finished in this visit and the task each made, so undoing the tick takes the new one back. */
 const cameBack = new Map<string, string>();
+const completionRevisions = new Map<string, number>();
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const todayYmd = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
 
@@ -566,7 +567,11 @@ export function useTaskActions() {
 
   const complete = useMutation({
     mutationKey: COMPLETE,
+    scope: { id: 'task-completion' },
     onMutate: (v: { id: string; done: boolean }) => {
+      const previous = queryClient.getQueryData<Task[]>(TASKS_KEY)?.find(t => t.id === v.id);
+      const revision = (completionRevisions.get(v.id) ?? 0) + 1;
+      completionRevisions.set(v.id, revision);
       if (v.done) {
         triggerFireworks();
         comeBack(v.id);
@@ -574,9 +579,17 @@ export function useTaskActions() {
         stayBack(v.id);
       }
       // completed_at moves with done, as it does on the server, so "done today" counts at once.
-      return optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done, completed_at: v.done ? new Date().toISOString() : null } : t)));
+      optimistic((prev) => prev.map((t) => (t.id === v.id ? { ...t, done: v.done, completed_at: v.done ? new Date().toISOString() : null } : t)));
+      return { previous, revision };
     },
-    onError: rollback,
+    onError: (_error, v, context) => {
+      // A late failure must not undo another task or a newer tick/Undo.
+      if (context?.previous && completionRevisions.get(v.id) === context.revision) {
+        const previous = context.previous;
+        optimistic(rows => rows.map(t => t.id === v.id ? { ...t, done: previous.done, completed_at: previous.completed_at } : t));
+      }
+      toast('Task completion could not sync. Please retry.');
+    },
     onSettled: settle,
   });
 

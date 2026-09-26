@@ -1,4 +1,5 @@
 'use client';
+import {syncMessage} from '@/lib/syncMessage';
 
 /**
  * Google Calendar, from the Calendar tab itself.
@@ -30,8 +31,8 @@ export function GoogleCalendarButton({ onOpen }: { onOpen: () => void }) {
   const row = useGoogleCalendar();
   const state = !row ? 'off' : row.last_error ? 'error' : 'on';
   return (
-    <button type="button" className={'cal-google is-' + state} onClick={onOpen}
-      title={!row ? 'Connect Google Calendar' : row.last_error ? `Google Calendar: ${row.last_error}` : `Google Calendar, synced ${row.last_sync_at ? ago(row.last_sync_at) : 'soon'}`}>
+    <button type="button" className={'cal-google is-' + state} onClick={onOpen} aria-label="Google Calendar connection"
+      title={!row ? 'Connect Google Calendar' : row.last_error ? 'Google Calendar needs attention' : `Google Calendar, synced ${row.last_sync_at ? ago(row.last_sync_at) : 'soon'}`}>
       <span className="cal-google-mark" aria-hidden="true">G</span>
       <span className="cal-google-label">{!row ? 'Connect Google' : 'Google'}</span>
       <i aria-hidden="true" />
@@ -53,7 +54,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
     setBusy(true);
     const r = await runSync('gcal_ics');
     setBusy(false);
-    toast(r.ok ? `Google Calendar: ${r.message}` : `Google Calendar could not sync: ${r.message}`, undefined, { icon: 'cal' });
+    toast(r.ok ? `Google Calendar: ${r.message}` : syncMessage(r.message), undefined, { icon: 'cal' });
     for (const k of ['events', 'integrations']) void qc.invalidateQueries({ queryKey: [k] });
   };
   const connect = () => {
@@ -71,11 +72,12 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
           <span className="cal-google-mark is-big" aria-hidden="true">G</span>
           <div>
             <h2 id="gcal-title">Google Calendar</h2>
-            <p>{!row ? 'Not connected' : row.last_error ? `Last sync failed: ${row.last_error}` : row.last_sync_at ? `Synced ${ago(row.last_sync_at)}` : 'Connected, not synced yet'}</p>
+            <p>{!row ? 'Not connected' : row.last_error ? syncMessage(row.last_error) : row.last_sync_at ? `Synced ${ago(row.last_sync_at)}` : 'Connected, not synced yet'}</p>
           </div>
           <button type="button" className="gcal-icon" aria-label="Close" onClick={onClose}><Icon name="close" size={18} /></button>
         </header>
 
+        {row?.last_error&&<div className="sync-diagnostics"><p>Last successful sync: {row.last_sync_at?new Date(row.last_sync_at).toLocaleString():'Never'}</p><details><summary>Technical details</summary><pre>{row.last_error}</pre></details></div>}
         {editing ? (
           <>
             <ol className="gcal-steps">

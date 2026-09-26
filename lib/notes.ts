@@ -6,6 +6,7 @@ import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
 import { wikiTargets } from './md';
+import { keepPageDraft, acknowledgePage, discardPageDraft, pageRecovery, setPageState } from './noteRecovery';
 
 /**
  * Notebooks and notes, Evernote's shape: a notebook holds notes, a note is one
@@ -30,6 +31,7 @@ import { wikiTargets } from './md';
 
 export type Notebook = {
   id: string; name: string; color: string; position: number; created_at: string;
+  deleted_at?: string | null;
 };
 
 export type Note = {
@@ -38,6 +40,7 @@ export type Note = {
 };
 
 export const NB_KEY = ['notebooks'] as const;
+const NB_TRASH_KEY = ['notebooks_trash'] as const;
 export const NOTE_KEY = ['notes'] as const;
 const TRASH_KEY = ['notes_trash'] as const;
 const TAG_KEY = ['note_tags'] as const;
@@ -46,8 +49,13 @@ const NOTE_COLS = 'id,notebook_id,title,body,position,created_at,updated_at,dele
 
 /** Typed-but-unwritten text, keyed by note id. See rule 2 above. */
 const pending = new Map<string, { title: string; body: string }>();
-export const markPending = (id: string, v: { title: string; body: string }) => { pending.set(id, v); };
-export const clearPending = (id: string) => { pending.delete(id); };
+export const pendingPageText = (id: string) => pending.get(id);
+export const markPending = (id: string, v: { title: string; body: string; notebook_id?: string }) => {
+  pending.set(id, v);
+  const notebook_id = v.notebook_id ?? queryClient.getQueryData<Note[]>(NOTE_KEY)?.find(n => n.id === id)?.notebook_id;
+  if (notebook_id) keepPageDraft({ id, notebook_id, title: v.title, body: v.body });
+};
+export const clearPending = (id: string) => { pending.delete(id); discardPageDraft(id); };
 
 const overlay = (rows: Note[]): Note[] => {
   const known = new Set(rows.map(n => n.id));
@@ -63,11 +71,20 @@ export function useNotebooks() {
     queryKey: NB_KEY,
     queryFn: async (): Promise<Notebook[]> => {
       const { data, error } = await supabase.from('bd_notebooks')
-        .select('id,name,color,position,created_at').order('position').order('created_at');
+        .select('id,name,color,position,created_at,deleted_at').is('deleted_at', null).order('position').order('created_at');
       if (error) throw error;
       return data ?? [];
     },
   });
+}
+
+export function useNotebookTrash() {
+  return useQuery({ queryKey: NB_TRASH_KEY, queryFn: async (): Promise<Notebook[]> => {
+    const { data, error } = await supabase.from('bd_notebooks').select('id,name,color,position,created_at,deleted_at')
+      .not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  } });
 }
 
 /**
@@ -83,9 +100,31 @@ export function useNotes() {
     queryKey: NOTE_KEY,
     queryFn: async (): Promise<Note[]> => {
       const { data, error } = await supabase.from('bd_notes')
-        .select(NOTE_COLS).is('deleted_at', null).order('updated_at', { ascending: false }).limit(500);
+        .select(NOTE_COLS + ',bd_notebooks!inner(deleted_at)').is('deleted_at', null).is('bd_notebooks.deleted_at', null).order('updated_at', { ascending: false }).limit(500);
       if (error) throw error;
-      return overlay((data ?? []) as Note[]);
+      const rows = (data ?? []) as unknown as Note[];
+      const recovered = await pageRecovery().catch(() => []);
+      for (const { draft } of recovered) {
+        if (!draft || pending.has(draft.id)) continue;
+        const server = rows.find(n => n.id === draft.id);
+        if (server && Date.parse(server.updated_at) <= Date.parse(draft.at)) {
+          pending.set(draft.id, draft); setPageState(draft.id, 'error');
+        }
+      }
+      const missing = recovered.flatMap(r => r.draft && !rows.some(n => n.id === r.draft!.id) ? [r.draft] : []);
+      if (missing.length) {
+        // A failed first insert has no server row. Recover that draft only if
+        // its notebook is live; never resurrect a page or notebook in the bin.
+        const [{ data: existing }, { data: books }] = await Promise.all([
+          supabase.from('bd_notes').select('id').in('id', missing.map(d => d.id)),
+          supabase.from('bd_notebooks').select('id').is('deleted_at', null).in('id', [...new Set(missing.map(d => d.notebook_id))]),
+        ]);
+        if (existing && books) for (const d of missing) if (!existing.some(n => n.id === d.id) && books.some(b => b.id === d.notebook_id)) {
+          pending.set(d.id, d); setPageState(d.id, 'error');
+          rows.unshift({ id:d.id, notebook_id:d.notebook_id, title:d.title, body:d.body, position:0, created_at:d.at, updated_at:d.at, deleted_at:null });
+        }
+      }
+      return overlay(rows);
     },
   });
 }
@@ -151,13 +190,17 @@ const EDIT_NB = defineMutation('nb2.editNotebook', async (v: { id: string; patch
   if (error) throw error;
 });
 
-/**
- * Deleting a notebook deletes its pages for good, the ones in the bin too:
- * bd_notes.notebook_id cascades on delete (0002). Trashing them first did not
- * change that, because the cascade removes trashed rows as well. The library
- * asks before calling this and says how many pages go with it.
- */
 const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_notebooks').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  if (error) throw error;
+});
+
+const RESTORE_NB = defineMutation('nb2.restoreNotebook', async (v: { id: string }) => {
+  const { error } = await supabase.from('bd_notebooks').update({ deleted_at: null }).eq('id', v.id);
+  if (error) throw error;
+});
+
+const PURGE_NB = defineMutation('nb2.purgeNotebook', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_notebooks').delete().eq('id', v.id);
   if (error) throw error;
 });
@@ -166,8 +209,9 @@ const NEW_NOTE = defineMutation('nb2.newNote', async (v: { id: string; notebook_
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_notes').upsert({ ...v, user_id, position: 0 }, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw error;
+  acknowledgePage(v);
   const draft = pending.get(v.id);
-  if (draft?.title === v.title && draft.body === v.body) pending.delete(v.id);
+  if (draft?.title === v.title && draft.body === v.body) { pending.delete(v.id); setPageState(v.id, 'saved'); }
 });
 
 /** Rule 1: upsert, so a save can never lose a race with its own insert. */
@@ -175,9 +219,10 @@ const SAVE_NOTE = defineMutation('nb2.saveNote', async (v: { id: string; noteboo
   const user_id = await currentUserId();
   const { error } = await supabase.from('bd_notes').upsert({ ...v, user_id }, { onConflict: 'id' });
   if (error) throw error;
+  acknowledgePage(v);
   // Drop the overlay only if nothing newer replaced it while this was in flight.
   const p = pending.get(v.id);
-  if (p && p.body === v.body && p.title === v.title) pending.delete(v.id);
+  if (p && p.body === v.body && p.title === v.title) { pending.delete(v.id); setPageState(v.id, 'saved'); }
 });
 
 const MOVE_NOTE = defineMutation('nb2.moveNote', async (v: { id: string; notebook_id: string }) => {
@@ -214,7 +259,7 @@ const SET_TAGS = defineMutation('nb2.setTags', async (v: { note_id: string; tags
 
 export function useNoteActions() {
   const qc = useQueryClient();
-  const settle = settler(qc, NB_KEY, NOTE_KEY, TRASH_KEY);
+  const settle = settler(qc, NB_KEY, NB_TRASH_KEY, NOTE_KEY, TRASH_KEY);
 
   const patchNotes = (fn: (p: Note[]) => Note[]) => {
     const prev = queryClient.getQueryData<Note[]>(NOTE_KEY) ?? [];
@@ -247,27 +292,31 @@ export function useNoteActions() {
     onSettled: settle,
   });
 
-  const delNotebook = useMutation<unknown, Error, { id: string }, Notebook[]>({
+  const delNotebook = useMutation<unknown, Error, { id: string }, { books: Notebook[]; notes: Note[] }>({
     mutationKey: DEL_NB,
     onMutate: (v) => {
       const prev = queryClient.getQueryData<Notebook[]>(NB_KEY) ?? [];
       queryClient.setQueryData<Notebook[]>(NB_KEY, prev.filter((b) => b.id !== v.id));
-      patchNotes((p) => p.filter((n) => n.notebook_id !== v.id));
-      return prev;
+      const notes = patchNotes((p) => p.filter((n) => n.notebook_id !== v.id));
+      return { books: prev, notes };
     },
-    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(NB_KEY, ctx); },
+    onError: (_e, _v, ctx) => { if (ctx) { queryClient.setQueryData(NB_KEY, ctx.books); queryClient.setQueryData(NOTE_KEY, ctx.notes); } },
     onSettled: settle,
   });
 
+  const restoreNotebook = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_NB, onSettled: settle });
+  const purgeNotebook = useMutation<unknown, Error, { id: string }>({ mutationKey: PURGE_NB, onSettled: settle });
+
   const newNote = useMutation<unknown, Error, { id: string; notebook_id: string; title: string; body: string }, Note[]>({
     mutationKey: NEW_NOTE,
+    scope: { id: 'page-writes' },
     onMutate: (v) => { markPending(v.id, v); return patchNotes((p) => [{
       ...v, position: 0, created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(), deleted_at: null,
     }, ...p]); },
     // Keep a newly opened page if creation fails while its editor is already
     // saving. A rollback here would remove newer work from the library.
-    onError: (e) => toast(`Page kept on this device — ${e.message}`),
+    onError: (e, v) => { setPageState(v.id, 'error'); toast(`Page kept on this device — ${e.message}`); },
     onSuccess: settle,
   });
 
@@ -286,9 +335,10 @@ export function useNoteActions() {
    */
   const saveNote = useMutation<unknown, Error, { id: string; notebook_id: string; title: string; body: string }, Note[]>({
     mutationKey: SAVE_NOTE,
-    onMutate: (v) => patchNotes((p) => p.map((n) => (n.id === v.id
-      ? { ...n, title: v.title, body: v.body, updated_at: new Date().toISOString() } : n))),
-    onError: (e) => toast(`Not saved yet — ${e.message}`),
+    scope: { id: 'page-writes' },
+    onMutate: (v) => { markPending(v.id, v); return patchNotes((p) => p.map((n) => (n.id === v.id
+      ? { ...n, title: v.title, body: v.body, updated_at: new Date().toISOString() } : n))); },
+    onError: (e, v) => { setPageState(v.id, 'error'); toast(`Not saved yet — ${e.message}`); },
   });
 
   const moveNote = useMutation<unknown, Error, { id: string; notebook_id: string }, Note[]>({
@@ -327,7 +377,7 @@ export function useNoteActions() {
   };
 
   return {
-    newNotebook, editNotebook, delNotebook,
+    newNotebook, editNotebook, delNotebook, restoreNotebook, purgeNotebook,
     newNote, saveNote, moveNote, delNote, restoreNote, purge, deleteWithUndo,
     setTags,
   };

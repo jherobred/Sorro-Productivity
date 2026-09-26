@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseBackup,prepareRestore,BACKUP_TABLES,transformBackupBody} from './backupFormat.ts';
+const sample=()=>({format:'basedly-study',version:1,createdAt:'2026-09-26',metadata:{},assets:[],tables:{...Object.fromEntries(BACKUP_TABLES.map(t=>[t,[]])),bd_notebooks:[{id:'book',name:'Class',user_id:'someone-else'}],bd_notes:[{id:'note',notebook_id:'book',title:'Hello',body:'Text',user_id:'someone-else'}]}});
+test('restore uses new identities and strips ownership from imported records',()=>{const backup=parseBackup(sample());let n=0;const result=prepareRestore(backup,()=>`new-${++n}`);assert.equal(result.tables.bd_notebooks[0].user_id,undefined);assert.equal(result.tables.bd_notebooks[0].name,'Restored · Class');assert.equal(result.tables.bd_notes[0].notebook_id,result.tables.bd_notebooks[0].id);assert.notEqual(result.tables.bd_notes[0].id,'note');});
+test('invalid versions, duplicate IDs and orphaned pages are refused before writes',()=>{const bad=sample();assert.throws(()=>parseBackup({...bad,version:2}));bad.tables.bd_notebooks=[];assert.throws(()=>parseBackup(bad),/missing parent/);const dup=sample();dup.tables.bd_notes.push(dup.tables.bd_notes[0]);assert.throws(()=>parseBackup(dup),/Duplicate/);});
+test('attachments in both journal formats are remapped while prose and damaged JSON survive',()=>{
+  for(const version of [1,2]){const photos=[{asset:{localId:'image',name:'photo.png',path:'old/path'}}];const data=version===1?photos:{'2026-09-26':photos};const prefix=`# Journal · 2026-09-26\nMy writing.\n<!-- basedly-journal-photos:v${version} -->`;const body=prefix+JSON.stringify(data);const result=transformBackupBody(body,v=>{if(v.localId==='image')v.path='restored/path';});assert.ok(result.startsWith(prefix));assert.ok(result.includes('restored/path'));assert.ok(!result.includes('old/path'));}
+  const damaged='<!-- basedly-page:v1 -->\n{bad';assert.equal(transformBackupBody(damaged,()=>assert.fail('No partial rewrite')),damaged);
+});

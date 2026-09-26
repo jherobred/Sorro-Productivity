@@ -630,8 +630,8 @@ export default function CalendarPage() {
         </div>
 
         <div className="cal-head-actions">
-          <GoogleCalendarButton onOpen={() => setGoogle(true)} />
-          <button type="button" className="cal-new" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); newEvent(r.left, r.bottom); }}>
+          <a className="studio-button" href="/tasks/?plan=week" aria-label="Plan this week"><Icon name="week" size={16}/><span>Plan week</span></a><GoogleCalendarButton onOpen={() => setGoogle(true)} />
+          <button type="button" className="cal-new" aria-label="New event" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); newEvent(r.left, r.bottom); }}>
             <Icon name="plus" size={16} /><span>New</span>
           </button>
           <button type="button" className="cal-icon-button cal-more" aria-label="Calendar options" title="Calendar options"

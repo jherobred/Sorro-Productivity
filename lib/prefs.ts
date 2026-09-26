@@ -10,6 +10,7 @@ import type { TaskRepeat } from './taskRepeat';
 import type { RecurrenceRule } from './events';
 
 export type Prefs = {
+  taskEventLinks?: Record<string, string[]>;
   theme: 'dark' | 'light';
   accent: string;
   motion: boolean;

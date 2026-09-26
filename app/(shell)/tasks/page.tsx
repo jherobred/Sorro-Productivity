@@ -16,7 +16,7 @@ import { TaskRail, SMART_SCOPES } from '@/components/tasks/TaskRail';
 import { ProjectHead, ProjectsPanel } from '@/components/tasks/ProjectsLink';
 import { BulkBar, type BulkDay } from '@/components/tasks/BulkBar';
 import { CanvasLmsColumn } from '@/components/lms/CanvasLms';
-import { K, PAL } from '@/lib/pal';
+import { PAL } from '@/lib/pal';
 import { usePrefs, type TaskSortKey } from '@/lib/prefs';
 import { useLayout } from '@/lib/useLayout';
 import { ask } from '@/lib/ask';
@@ -33,6 +33,7 @@ import {
   INBOX, NONE, NO_FILTER, SORT_LABELS, type BoardBy, type TaskScope, type TaskSort,
 } from '@/lib/taskViews';
 import './tasks.css';
+import {WeeklyPlanner} from '@/components/tasks/WeeklyPlanner';
 
 /* Only drawn once a date is being picked. */
 const TaskDatePicker = dynamic(() => import('@/components/TaskDatePicker').then((m) => m.TaskDatePicker), { ssr: false });
@@ -68,6 +69,8 @@ const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? o
 type Bucket = { id: string; title: string; hint?: string; tint: string; tasks: Task[] };
 
 export default function TasksPage() {
+  const [planning,setPlanning]=useState(false);
+  useEffect(()=>{if(new URLSearchParams(location.search).get('plan')==='week')setPlanning(true);},[]);
   const { phone, width } = useLayout();
   const narrow = phone || width < 1000;
   const { prefs, update } = usePrefs();
@@ -97,12 +100,9 @@ export default function TasksPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const anchor = useRef<string | null>(null);
-  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
-  const exitTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const leaving = new Set<string>();
   /** Ticked but not yet done: the grace period that makes a stray tap harmless. */
-  const [pending, setPending] = useState<Set<string>>(() => new Set());
-  const graceTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  useEffect(() => () => { for (const t of graceTimers.current.values()) clearTimeout(t); }, []);
+  const pending = new Set<string>();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; label: string; items: CtxContent } | null>(null);
   const [picker, setPicker] = useState<{ task: Task; anchor: { top: number; left: number; bottom: number; right: number } | null } | null>(null);
@@ -225,49 +225,12 @@ export default function TasksPage() {
   };
   const clearSelection = () => { setSelected(new Set()); setSelectMode(false); };
 
-  /**
-   * A tick waits three seconds before it counts. The circle fills while it
-   * waits, and a second tap in that time takes it back, so a thumb that lands
-   * on the wrong row finishes nothing.
-   */
-  const complete = (task: Task, at: { x: number; y: number } | null) => {
-    if (task.done) {
-      A.complete.mutate({ id: task.id, done: false });
-      toast(`Back on the list: ${task.title}`, () => A.complete.mutate({ id: task.id, done: true }), { icon: 'undo' });
-      return;
-    }
-    if (leaving.has(task.id)) return;
-    const waiting = graceTimers.current.get(task.id);
-    const drop = () => setPending((p) => { const n = new Set(p); n.delete(task.id); return n; });
-    if (waiting) { clearTimeout(waiting); graceTimers.current.delete(task.id); drop(); return; }
-    setPending((p) => new Set(p).add(task.id));
-    graceTimers.current.set(task.id, setTimeout(() => {
-      graceTimers.current.delete(task.id);
-      drop();
-      finishTask(task, at);
-    }, K.taskGraceMs));
-  };
-
-  const finishTask = (task: Task, at: { x: number; y: number } | null) => {
-    if (leaving.has(task.id)) return;
-    triggerFireworks(at?.x, at?.y);
-    setLeaving((s) => new Set(s).add(task.id));
-    const finish = () => {
-      exitTimers.current.delete(task.id);
-      A.complete.mutate({ id: task.id, done: true });
-      setLeaving((s) => { const n = new Set(s); n.delete(task.id); return n; });
-    };
-    exitTimers.current.set(task.id, setTimeout(finish, K.taskExitMs));
+  /** Persist on the tap. Undo is another durable write, never a cancelled UI timer. */
+  const complete = (task: Task, _at: { x: number; y: number } | null) => {
+    A.complete.mutate({ id: task.id, done: !task.done });
     const steps = stepCounts.get(task.id);
-    toast(`Done: ${task.title}${steps && steps.done < steps.total ? ` (${steps.total - steps.done} steps left open)` : ''}`, () => {
-      const timer = exitTimers.current.get(task.id);
-      if (timer) {
-        clearTimeout(timer);
-        exitTimers.current.delete(task.id);
-        setLeaving((s) => { const n = new Set(s); n.delete(task.id); return n; });
-      } else {
-        A.complete.mutate({ id: task.id, done: false });
-      }
+    toast(task.done ? `Back on the list: ${task.title}` : `Done: ${task.title}${steps && steps.done < steps.total ? ` (${steps.total - steps.done} steps left open)` : ''}`, () => {
+      A.complete.mutate({ id: task.id, done: task.done });
     }, { tone: 'success', icon: 'check' });
   };
 
@@ -438,7 +401,7 @@ export default function TasksPage() {
   const scopeList = scope.startsWith('list:') ? (scope === `list:${INBOX}` ? null : byList.get(scope.slice(5))) : undefined;
   const scopeCourse = scope.startsWith('course:') ? scope.slice(7) : null;
   const title = scopeCourse ?? (scope === `list:${INBOX}` ? 'Inbox' : scopeList?.name) ?? SMART_SCOPES.find((s) => s.id === scope)?.label ?? 'My Tasks';
-  const lateCount = counts.overdue ?? 0;
+  const lateCount = shown.filter(t => !t.done && t.due_on && t.due_on < today).length;
   const subline = scope === 'done'
     ? plural(shown.length, 'finished task')
     : [plural(shown.length, 'open task'), scope !== 'overdue' && lateCount > 0 && scope !== 'upcoming' && scope !== 'nodate' ? `${lateCount} overdue` : null, query ? `matching “${query}”` : null].filter(Boolean).join(' · ');
@@ -491,6 +454,7 @@ export default function TasksPage() {
   const detailTask = tasks.find((t) => t.id === detail) ?? null;
   const wide = !narrow && (view === 'board' || view === 'table') && scope !== 'done';
 
+  if(planning)return <WeeklyPlanner onClose={()=>setPlanning(false)}/>;
   return (
     <div className={'tasks-page' + (narrow ? ' is-narrow' : '') + (wide ? ' is-wide' : '')}>
       {!narrow && (
@@ -552,7 +516,7 @@ export default function TasksPage() {
               ] as const}
               value={view} onChange={(v) => void update({ taskView: v })} />
           )}
-          <div className="tasks-tools">
+          <div className="tasks-tools"><button className="tasks-tool" onClick={()=>setPlanning(true)}><Icon name="cal" size={16}/>Plan week</button>
             {scope !== 'done' && (
               <button type="button" className="tasks-tool" aria-haspopup="menu" aria-label={`Sort: ${SORT_LABELS[sort.key]}${sort.desc ? ', reversed' : ''}`} title={SORT_HINTS[sort.key]} onClick={openSort}>
                 <Icon name="sort" size={15} />{!phone && <span>{SORT_LABELS[sort.key]}</span>}
@@ -561,7 +525,7 @@ export default function TasksPage() {
             <button type="button" className={'tasks-tool' + (priority ? ' is-on' : '')} aria-haspopup="menu" aria-label={priority ? `Priority: ${PRIORITY_NAMES[priority]}` : 'Show priority'} onClick={openPriority}>
               <Icon name="flag" size={15} />{!phone && <span>{priority ? PRIORITY_NAMES[priority] : 'Priority'}</span>}
             </button>
-            <button type="button" className={'tasks-tool' + (selecting ? ' is-on' : '')} aria-pressed={selecting} onClick={() => (selecting ? clearSelection() : setSelectMode(true))}>
+            <button type="button" className={'tasks-tool' + (selecting ? ' is-on' : '')} aria-label={selecting ? 'Done selecting tasks' : 'Select tasks'} aria-pressed={selecting} onClick={() => (selecting ? clearSelection() : setSelectMode(true))}>
               <Icon name="listCheck" size={15} />{!phone && <span>{selecting ? 'Done selecting' : 'Select'}</span>}
             </button>
           </div>
