@@ -19,6 +19,8 @@
  * a row can only ever count as one of the two.
  */
 
+import { logDay, logDayStart } from './logday.ts';
+
 export type Spend = { amount_centavos: number; category: string; occurred_at: string };
 
 const DAY = 86_400_000;
@@ -109,9 +111,9 @@ export function jarLevel(spent: number, budget: number): { left: number; fill: n
   return { left, fill: Math.max(0, Math.min(1, left / budget)), over: left < 0 };
 }
 
-/** The start of the current month, as an instant. */
+/** The start of the current logical month, at the shared 04:00 boundary. */
 export function monthStart(now = new Date()): number {
-  return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  return logDayStart(logDay(now).slice(0, 7) + '-01').getTime();
 }
 
 /* ------------------------------------------------------- the day-by-day set */
@@ -125,7 +127,7 @@ export function localDay(d: Date): string {
 }
 
 /**
- * Spend per calendar day across a run of days, oldest first, days with nothing
+ * Spend per logical day across a run of days, oldest first, days with nothing
  * spent included as zeroes.
  *
  * The zeroes are the point. A sparkline drawn only from the days you bought
@@ -137,24 +139,25 @@ export function dailySpend(txns: Spend[], days = 30, now = new Date()): DaySpend
   for (const t of txns) {
     const spent = outgo(t);
     if (spent === 0) continue;
-    const key = localDay(new Date(t.occurred_at));
+    const key = logDay(t.occurred_at);
     totals.set(key, (totals.get(key) ?? 0) + spent);
   }
 
   const out: DaySpend[] = [];
+  const current = logDayStart(logDay(now));
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const d = new Date(current.getFullYear(), current.getMonth(), current.getDate() - i);
     const day = localDay(d);
     out.push({ day, total: totals.get(day) ?? 0 });
   }
   return out;
 }
 
-/** Every day of `now`'s calendar month, for the heatmap grid. */
+/** Every day of `now`'s logical month, for the heatmap grid. */
 export function monthSpend(txns: Spend[], now = new Date()): DaySpend[] {
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  return dailySpend(txns, end, new Date(first.getFullYear(), first.getMonth(), end));
+  const current = logDayStart(logDay(now));
+  const end = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
+  return dailySpend(txns, end, new Date(current.getFullYear(), current.getMonth(), end, 12));
 }
 
 /**

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { SelfViews } from '@/components/SelfViews';
+import '@/app/self-workspace.css';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { ExerciseShot } from '@/components/body/ExerciseShot';
@@ -38,6 +40,7 @@ function weekOf(today: string): Date[] {
 }
 
 export default function FitnessPage() {
+  const [detailed, setDetailed] = useState(false);
   const { prefs, update } = usePrefs();
   const today = ymd(new Date());
   const { data: workouts = [] } = useWorkouts(28);
@@ -197,12 +200,11 @@ export default function FitnessPage() {
   const recent = [...workouts].sort((a, b) => b.on_date.localeCompare(a.on_date)).slice(0, 6);
 
   return (
-    <div className="fit">
+    <div className="fit self-workspace" data-self-view={detailed?'details':'daily'}>
       <header className="fit-hero">
         <div className="fit-hero-copy">
-          <span className="fit-kicker">{headline.kicker}</span>
-          <h1>{headline.title}</h1>
-          <p>{headline.sub}</p>
+          <h1>Fitness</h1>
+          <SelfViews detailed={detailed} onChange={setDetailed} daily="Train" details="Progress"/><p className="self-lead">{headline.title}</p><p>{headline.kicker} · {headline.sub}</p>
           {active && totalSets > 0 && <AsciiBar value={(doneSets / totalSets) * 100} hue="#ff6fa8" showValue={false} label={`${doneSets} of ${totalSets} sets done`} />}
         </div>
         <div className="fit-hero-actions">
@@ -216,7 +218,8 @@ export default function FitnessPage() {
         </div>
       </header>
 
-      <section className="fit-stats" aria-label="This week">
+
+      <section className="fit-stats self-details" aria-label="This week">
         <div className="fit-stat"><Icon name="flame" size={16} /><b>{streak}</b><span>day streak</span></div>
         <div className="fit-stat"><Icon name="cal" size={16} /><b>{sessionsThisWeek}<small>/{plannedThisWeek || '–'}</small></b><span>sessions this week</span></div>
         <div className="fit-stat"><Icon name="target" size={16} /><b>{weekVolume.toLocaleString()}<small> kg</small></b><span>lifted this week</span></div>
@@ -226,7 +229,7 @@ export default function FitnessPage() {
 
       <div className="fit-grid">
         <div className="fit-main">
-          <section className="fit-card" aria-label="This week's plan">
+          <section className="fit-card self-daily fit-week-plan" aria-label="This week's plan">
             <header className="fit-card-head">
               <h2>This week</h2>
               <button type="button" className="fit-link" onClick={() => T.setSheet('plan')}><Icon name="edit" size={14} />Edit plan</button>
@@ -250,7 +253,7 @@ export default function FitnessPage() {
             </div>
           </section>
 
-          <section className="fit-card" aria-label="Today's workout">
+          <section className="fit-card self-daily fit-today-workout" aria-label="Today's workout">
             <header className="fit-card-head">
               <div>
                 <h2>{lifting && session ? session.name : planned ? `Today: ${planned.name}` : 'Today'}</h2>
@@ -305,18 +308,18 @@ export default function FitnessPage() {
             )}
 
             <div className="fit-card-foot">
-              <button type="button" className="fit-text" onClick={() => T.setSheet('exercises')}><Icon name="plus" size={15} />Add exercise</button>
+              {!!blocks.length && <button type="button" className="fit-text" onClick={() => T.setSheet('exercises')}><Icon name="plus" size={15} />Add exercise</button>}
               {active && <button type="button" className="fit-finish" onClick={() => void finishWorkout()}><Icon name="check" size={16} />Finish workout</button>}
               {!active && planned && <button type="button" className="fit-finish" onClick={() => startWorkout(false)}><Icon name="play" size={15} />{session ? 'Train again' : 'Start here'}</button>}
             </div>
           </section>
 
-          <MemoriesPanel kinds={['workout', 'run', 'moment']} title="Fitness memories" onCapture={() => setCapture('photo')}
-            describe={describe} empty="No workout memories yet. Snap your next session or run." />
+          <div className="self-details"><MemoriesPanel kinds={['workout', 'run', 'moment']} title="Fitness memories" onCapture={() => setCapture('photo')}
+            describe={describe} empty="No workout memories yet. Snap your next session or run." /></div>
         </div>
 
         <aside className="fit-side">
-          <section className="fit-card" aria-label="Muscles worked">
+          <section className="fit-card self-details" aria-label="Muscles worked">
             <header className="fit-card-head"><h2>Muscles, last 7 days</h2></header>
             <ul className="fit-heat">
               {GROUPS.map((g) => (
@@ -329,7 +332,7 @@ export default function FitnessPage() {
             </ul>
           </section>
 
-          <section className="fit-card" aria-label="Best lifts">
+          <section className="fit-card self-details" aria-label="Best lifts">
             <header className="fit-card-head"><h2>Best lifts</h2></header>
             {topLifts.length ? (
               <ol className="fit-bests">
@@ -340,7 +343,7 @@ export default function FitnessPage() {
             ) : <p className="fit-muted">Your estimated one-rep maxes appear after a few logged sets.</p>}
           </section>
 
-          <section className="fit-card" aria-label="Recent sessions">
+          <section className="fit-card self-details" aria-label="Recent sessions">
             <header className="fit-card-head"><h2>Recent sessions</h2></header>
             {recent.length ? (
               <ul className="fit-recent">
@@ -363,7 +366,7 @@ export default function FitnessPage() {
             ) : <p className="fit-muted">Your sessions will line up here.</p>}
           </section>
 
-          <section className="fit-card is-routines" aria-label="Routines">
+          <section className="fit-card is-routines self-daily" aria-label="Routines">
             <header className="fit-card-head"><h2>Routines</h2></header>
             <div className="fit-routines">
               {ROUTINES.map((r) => (

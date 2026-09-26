@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { EventColors } from './EventColors';
 import { AsciiBar } from '@/components/AsciiBar';
 import { CalPopover } from '@/components/CalPopover';
 import { EVENT_CATEGORIES, resolveCategory } from '@/lib/eventCategories';
@@ -158,6 +159,7 @@ export function EventBubble({
                 })}
               </div>
             </div>
+            <details className="cal-all-colors"><summary>All colors</summary><EventColors value={ev.color} onChange={color=>onPatch({color})}/></details>
           </>
         )}
 

@@ -195,6 +195,12 @@ const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
   if (error) throw error;
 });
 
+const REORDER_NB = defineMutation('nb2.reorderNotebooks', async (v: { ids: string[] }) => {
+  const { error } = await supabase.rpc('reorder_notebooks', { notebook_ids: v.ids });
+  if (error) throw error;
+});
+let notebookOrderVersion = 0;
+
 const RESTORE_NB = defineMutation('nb2.restoreNotebook', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_notebooks').update({ deleted_at: null }).eq('id', v.id);
   if (error) throw error;
@@ -304,6 +310,23 @@ export function useNoteActions() {
     onSettled: settle,
   });
 
+  const reorderNotebooks = useMutation<unknown, Error, { ids: string[] }, { previous: Notebook[]; version: number }>({
+    mutationKey: REORDER_NB,
+    scope: { id: 'notebook-order' },
+    onMutate: async ({ ids }) => {
+      await qc.cancelQueries({ queryKey: NB_KEY });
+      const previous = queryClient.getQueryData<Notebook[]>(NB_KEY) ?? [];
+      const positions = new Map(ids.map((id, index) => [id, index]));
+      queryClient.setQueryData<Notebook[]>(NB_KEY, previous.map(b => ({ ...b, position: positions.get(b.id) ?? b.position })).sort((a,b) => a.position - b.position));
+      return { previous, version: ++notebookOrderVersion };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.version === notebookOrderVersion) queryClient.setQueryData(NB_KEY, context.previous);
+      toast('Notebook order could not be saved. Try again when connected.');
+    },
+    onSettled: () => { if (qc.isMutating({ mutationKey: REORDER_NB }) === 1) return qc.invalidateQueries({ queryKey: NB_KEY }); },
+  });
+
   const restoreNotebook = useMutation<unknown, Error, { id: string }>({ mutationKey: RESTORE_NB, onSettled: settle });
   const purgeNotebook = useMutation<unknown, Error, { id: string }>({ mutationKey: PURGE_NB, onSettled: settle });
 
@@ -377,7 +400,7 @@ export function useNoteActions() {
   };
 
   return {
-    newNotebook, editNotebook, delNotebook, restoreNotebook, purgeNotebook,
+    newNotebook, editNotebook, reorderNotebooks, delNotebook, restoreNotebook, purgeNotebook,
     newNote, saveNote, moveNote, delNote, restoreNote, purge, deleteWithUndo,
     setTags,
   };

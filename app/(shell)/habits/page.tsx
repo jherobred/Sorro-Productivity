@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SelfViews } from '@/components/SelfViews';
+import '@/app/self-workspace.css';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { ContextMenu, type CtxItem } from '@/components/ContextMenu';
@@ -37,6 +39,7 @@ type Row = {
 const hueStyle = (color: string) => ({ '--h': color, '--hink': inkFor(color) }) as React.CSSProperties;
 
 export default function HabitsPage() {
+  const [detailed, setDetailed] = useState(false);
   // The day can turn over while the page is open.
   const [, redraw] = useState(0);
   useEffect(() => {
@@ -250,12 +253,12 @@ export default function HabitsPage() {
   );
 
   return (
-    <div className="hab">
+    <div className="hab self-workspace" data-self-view={detailed?'details':'daily'}>
       <header className="hab-hero">
         <div className="hab-hero-copy">
-          <span className="hab-kicker">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <h1>{title}</h1>
-          <p>{sub}</p>
+          <h1>Habits</h1>
+          <SelfViews detailed={detailed} onChange={setDetailed} details="History & streaks"/><p className="self-date">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+          <p><strong>{title}</strong> {sub}</p>
           {dueRows.length > 0 && <AsciiBar value={(doneCount / dueRows.length) * 100} hue={INK} showValue={false} label="Habits done today" />}
           {habits.length > 0 && (
             <ol className="hab-weekstrip" aria-label="This week">
@@ -279,6 +282,7 @@ export default function HabitsPage() {
         </div>
       </header>
 
+
       {!isPending && habits.length === 0 ? (
         <section className="hab-card hab-empty" aria-label="Start a habit">
           <span className="hab-empty-mark"><Icon name="habit" size={26} /></span>
@@ -297,7 +301,7 @@ export default function HabitsPage() {
       ) : (
         <div className="hab-grid">
           <div className="hab-main-col">
-            <section className="hab-card" aria-label="Today">
+            <section className="hab-card self-daily" aria-label="Today">
               <header className="hab-card-head">
                 <div>
                   <h2>Today</h2>
@@ -321,7 +325,7 @@ export default function HabitsPage() {
               )}
             </section>
 
-            <section className="hab-card" aria-label="History">
+            <section className="hab-card self-details" aria-label="History">
               <header className="hab-card-head">
                 <div>
                   <h2>History</h2>
@@ -373,7 +377,7 @@ export default function HabitsPage() {
             </section>
           </div>
 
-          <aside className="hab-side">
+          <aside className="hab-side self-details">
             <section className="hab-card" aria-label="Streaks">
               <header className="hab-card-head">
                 <div>

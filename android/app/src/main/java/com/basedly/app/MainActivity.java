@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         // discovered, so it has to be named. Before super.onCreate, which is
         // where the bridge is built.
         registerPlugin(WidgetBridge.class);
+        registerPlugin(DisplayAwake.class);
         super.onCreate(savedInstanceState);
     }
 }

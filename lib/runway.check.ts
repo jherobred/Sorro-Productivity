@@ -103,7 +103,7 @@ assert.equal(runwayFill(0, 30), 0);
   const start = new Date(monthStart(new Date(2026, 7, 20)));
   assert.equal(start.getDate(), 1);
   assert.equal(start.getMonth(), 7);
-  assert.equal(start.getHours(), 0);
+  assert.equal(start.getHours(), 4);
 }
 
 /* day by day ---------------------------------------------------------------- */
@@ -128,6 +128,16 @@ assert.equal(runwayFill(0, 30), 0);
 
   const feb = monthSpend([], new Date(2026, 1, 10));
   assert.equal(feb.length, 28, 'February 2026 is short and the grid knows it');
+
+  const overnight = [
+    { amount_centavos: 9500, category: 'Food', occurred_at: '2026-08-31T22:00:00' },
+    { amount_centavos: 2400, category: 'Transport', occurred_at: '2026-09-01T02:00:00' },
+    { amount_centavos: -50000, category: 'Income', occurred_at: '2026-09-01T02:10:00' },
+  ];
+  assert.deepEqual(dailySpend(overnight, 1, new Date('2026-09-01T03:00:00')), [{ day: '2026-08-31', total: 11900 }], 'Out today and Activity share the logical day before 04:00');
+  assert.deepEqual(dailySpend(overnight, 1, new Date('2026-09-01T04:00:00')), [{ day: '2026-09-01', total: 0 }], 'the same boundary starts a fresh day at 04:00');
+  assert.equal(monthSpend(overnight, new Date('2026-09-01T03:00:00')).at(-1)?.total, 11900, 'the month chart keeps the late-night transactions with their logical month');
+  assert.equal(new Date(monthStart(new Date('2026-09-01T03:00:00'))).getMonth(), 7, 'month totals and the chart agree before the first 04:00');
 }
 
 /* streak -------------------------------------------------------------------- */

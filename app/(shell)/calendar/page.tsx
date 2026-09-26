@@ -11,6 +11,7 @@ import { CalendarSkeleton } from '@/components/Skeleton';
 const ScheduleImport = dynamic(() => import('@/components/ScheduleImport').then((m) => m.ScheduleImport), { ssr: false });
 const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCalendar').then((m) => m.GoogleCalendarSheet), { ssr: false });
 import { EventBubble } from '@/components/calendar/EventBubble';
+import { EventColors } from '@/components/calendar/EventColors';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
 import { CalendarTimers } from '@/components/calendar/CalendarTimers';
 import { NextView } from '@/components/calendar/NextView';
@@ -1555,8 +1556,7 @@ function Grid({
                       .map((e) => ({
                         id: e.id,
                         title: e.title,
-                        start: hoursOf(e.starts_at),
-                        end: hoursOf(e.ends_at),
+                        ...gridRange(e.starts_at, e.ends_at),
                         starts_at: e.starts_at,
                         ends_at: e.ends_at,
                       })),
@@ -1570,7 +1570,8 @@ function Grid({
                     })),
                   ];
 
-                  const vacantList = computeVacantIntervals(dayItems, isColToday, nowHour, nextEventId, GRID_START, GRID_END);
+                  const todayStart = new Date(nowMs); todayStart.setHours(0, 0, 0, 0);
+                  const vacantList = computeVacantIntervals(dayItems, isColToday, nowHour, nextEventId, GRID_START, GRID_END, colDate < todayStart);
 
                   return vacantList.map((v) => (
                     <VacantTimeIndicator
@@ -1633,8 +1634,8 @@ function Grid({
                     const item = pos.ev;
                     const leftPct = (pos.colIndex / pos.totalCols) * 100;
                     const widthPct = (1 / pos.totalCols) * 100;
-                    const leftStyle = pos.totalCols > 1 ? `calc(${leftPct}% + 2px)` : '3px';
-                    const widthStyle = pos.totalCols > 1 ? `calc(${widthPct}% - 4px)` : 'calc(100% - 6px)';
+                    const leftStyle = pos.totalCols > 1 ? `calc(${leftPct}% - ${18 * pos.colIndex / pos.totalCols}px + 2px)` : '3px';
+                    const widthStyle = pos.totalCols > 1 ? `calc(${widthPct}% - ${18 / pos.totalCols + 4}px)` : 'calc(100% - 21px)';
 
                     if (item.kind === 'event') {
                       const e = item.ev;
@@ -1650,7 +1651,7 @@ function Grid({
                           height={Math.max((0.5 / SPAN) * 100, pct(pos.end) - pct(pos.start))}
                           left={leftStyle}
                           width={widthStyle}
-                          label={hhmm(pos.start)}
+                          label={`${hhmm(pos.start)} – ${hhmm(pos.end)}`}
                           lifted={isDrag || isResize}
                           selected={sel === e.id}
                           isNext={e.id === nextEventId}
@@ -1745,7 +1746,7 @@ function CdBadge({ cd, subtle }: { cd: { status: string; badge: string }; subtle
 }
 
 function EventChip({
-  ev, top, height, left = '3px', width = 'calc(100% - 6px)', label, lifted, selected, dark, isNext, nowMs = Date.now(), onPointerDown, onResize, onOpen, onContext,
+  ev, top, height, left = '3px', width = 'calc(100% - 21px)', label, lifted, selected, dark, isNext, nowMs = Date.now(), onPointerDown, onResize, onOpen, onContext,
 }: {
   ev: Ev; top: number; height: number; left?: string | number; width?: string | number; label: string; lifted: boolean; selected: boolean;
   dark: boolean; isNext?: boolean; nowMs?: number;
@@ -1774,7 +1775,7 @@ function EventChip({
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext?.(e); }}
       className={className}
       style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, color: ink } as React.CSSProperties}
-      title={`${chipLabel(ev)} · ${cat.label}`}>
+      title={`${chipLabel(ev)} · ${label} · ${cat.label}`}>
       <span className="cal-event-title">
         {locked && <Icon name="lock" size={9} color={ink} />}
         <b>{chipLabel(ev)}</b>
@@ -1856,7 +1857,7 @@ function SpanChip({ span: s, days, offset, dark, nowMs = Date.now(), onPointerDo
       style={{
         position: 'absolute',
         left: `calc(${(firstDay / days) * 100}% + 3px)`,
-        width: `calc(${(width / days) * 100}% - 6px)`,
+        width: `calc(${(width / days) * 100}% - 21px)`,
         top: `${pct(start)}%`, height: `${Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}%`,
         borderRadius: 8, padding: '4px 9px', overflow: 'hidden', pointerEvents: 'auto',
         background: `color-mix(in srgb, ${s.ev.color} 26%, var(--card))`,
@@ -2209,8 +2210,8 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
                       background: a.color, opacity: a.task ? 0.6 : 1,
                     }}
                   />
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 62, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
-                    {a.time >= 23.5 && a.task ? '—' : hhmm(a.time)}
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', width: 116, fontVariantNumeric: 'tabular-nums', flex: 'none' }}>
+                    {a.time >= 23.5 && a.task ? '—' : `${hhmm(a.time)}${a.ends_at ? ` – ${hhmm(hoursOf(a.ends_at))}` : ''}`}
                   </span>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 13, fontWeight: urgent ? 700 : 600, color: urgent ? 'var(--pal-coral)' : 'var(--tx)' }}>
@@ -2748,16 +2749,10 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
               </button>
             );
           })}
-          <label title="Any colour" aria-label="Custom background colour"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, minHeight: 34, border: `1px dashed ${selectedCat.id === 'custom' ? 'var(--acc)' : 'var(--line2)'}`, background: selectedCat.id === 'custom' ? 'var(--card)' : 'var(--card2)', color: selectedCat.id === 'custom' ? 'var(--tx)' : 'var(--tx2)', cursor: 'pointer', position: 'relative' }}>
-            <Icon name="pen" size={12} color="var(--tx3)" />
-            Custom
-            <input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#7C8CFF'}
-              onChange={(e) => setColor(e.target.value)}
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} />
-          </label>
         </div>
 
+        <span style={LABEL}>All colors</span>
+        <EventColors value={color} onChange={setColor}/>
         <span style={LABEL}>Text</span>
         <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           {inks.map((k) => (

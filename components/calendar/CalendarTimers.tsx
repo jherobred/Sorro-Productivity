@@ -6,6 +6,7 @@ import { AsciiBar } from '@/components/AsciiBar';
 import { dayCountdown, deadlineClock, eventCountdown, nextTimedEvent } from '@/lib/todayCycle';
 import { chipLabel } from '@/lib/eventCategories';
 import type { Ev } from '@/lib/events';
+import { CountdownFocus } from './CountdownFocus';
 
 const clockTime = (iso: string, time24: boolean) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !time24 });
 
@@ -23,6 +24,7 @@ export function CalendarTimers({ events, time24, large = false, onOpen }: {
   onOpen?: (ev: Ev, x: number, y: number) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
+  const [focused, setFocused] = useState(false);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -41,6 +43,7 @@ export function CalendarTimers({ events, time24, large = false, onOpen }: {
         <div className="cal-timer-label">
           <span className="cal-timer-dot" aria-hidden="true" />
           {next && wait?.ongoing ? 'Happening now' : 'Up next'}
+          <button type="button" className="cal-timer-focus-button" aria-label="Focus on calendar countdown" title="Focus on countdown" onClick={() => setFocused(true)}><Icon name="fullscreen" size={15}/><span>Focus</span></button>
         </div>
         {next && wait ? (
           <>
@@ -51,7 +54,7 @@ export function CalendarTimers({ events, time24, large = false, onOpen }: {
             <button type="button" className="cal-timer-title" disabled={!onOpen}
               onClick={(e) => onOpen?.(next, e.clientX, e.clientY)}>
               <b>{chipLabel(next)}</b>
-              <small>{wait.ongoing ? `until ${clockTime(next.ends_at, time24)}` : `at ${clockTime(next.starts_at, time24)}`}{next.location ? ` · ${next.location}` : ''}</small>
+              <small>{clockTime(next.starts_at, time24)} – {clockTime(next.ends_at, time24)}{next.location ? ` · ${next.location}` : ''}</small>
             </button>
             <AsciiBar value={wait.share * 100} hue={next.color} showValue={false}
               label={wait.ongoing ? 'Time through this event' : 'Time until the next event'} />
@@ -77,6 +80,7 @@ export function CalendarTimers({ events, time24, large = false, onOpen }: {
         </p>
         <AsciiBar value={day.share * 100} hue="var(--poster-yellow)" showValue={false} label="How much of today has passed" />
       </section>
+      {focused && <CountdownFocus event={next ?? undefined} clock={nextClock} ongoing={!!wait?.ongoing} time24={time24} dayPercent={day.share * 100} onClose={() => setFocused(false)}/>}
     </div>
   );
 }

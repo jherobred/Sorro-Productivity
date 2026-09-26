@@ -129,6 +129,8 @@ export function seedDevFixtures() {
    * which is what the spanning-chip grouping pass collapses into one bar.
    */
   seed(['events'], [
+    // A rolling future item lets countdown and wake-lock previews work on weekends too.
+    { ...ev('preview-up-next', 'Preview · study session', 0, 9, 0, 10, 0, 'Library', '#2563eb'), starts_at: new Date(Date.now() + 3600000).toISOString(), ends_at: new Date(Date.now() + 7200000).toISOString() },
     ev('e1', 'CS 150 Lecture', D(0), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),
     ev('e2', 'Math 114', D(0), 13, 0, 14, 30, 'Math 201', '#7C8CFF'),
     ev('e3', 'Capstone standup', D(2), 7, 30, 8, 30, 'Meet', '#B07CFF'),
@@ -160,6 +162,11 @@ export function seedDevFixtures() {
     ev('study_exam', 'Major Course Test', D(2), 13, 0, 15, 0, 'Exam Hall', '#FF6FA8'),
     { id: 'e16', title: 'STS paper due', starts_at: iso(D(1), 0), ends_at: iso(D(1), 23, 59), all_day: true, location: '', color: '#FF6B6B', source: 'app', remind_minutes: null, snoozed_until: null, deleted_at: null },
     { id: 'e17', title: 'Math 114 midterm', starts_at: iso(D(4), 0), ends_at: iso(D(4), 23, 59), all_day: true, location: '', color: '#FFC24B', source: 'app', remind_minutes: null, snoozed_until: null, deleted_at: null },
+  ]);
+
+  seed(['memories'], [
+    { id: 'preview-memory-1', kind: 'moment', at: Date.now(), caption: 'Preview · afternoon at the library', place: 'Library', lat: null, lng: null, ref: null, photo: false, km: null, minutes: null, route: null, updatedAt: Date.now() },
+    { id: 'preview-memory-2', kind: 'run', at: Date.now() - 86400000 * 35, caption: 'Preview · morning loop', place: 'Campus', lat: null, lng: null, ref: null, photo: false, km: 3, minutes: 24, route: null, updatedAt: Date.now() },
   ]);
 
   // `challenge_id` is what splits this page in two: null is one of yours, an id

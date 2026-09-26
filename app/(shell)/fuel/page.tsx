@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
+import { FuelTrends } from '@/components/fuel/FuelTrends';
+import { SelfViews } from '@/components/SelfViews';
+import '@/app/self-workspace.css';
 import { Icon, type IconName } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { SleepArc } from '@/components/body/Instruments';
@@ -71,6 +74,7 @@ function useMealPhotos(meals: Meal[], memories: Memory[]): Record<string, string
 }
 
 export default function FuelPage() {
+  const [detailed, setDetailed] = useState(false);
   const { prefs } = usePrefs();
   // Hydration is judged against the clock, so the page redraws every minute and
   // reads the time fresh on every render. A drink logged a second ago must count.
@@ -215,18 +219,18 @@ export default function FuelPage() {
   };
 
   return (
-    <div className="fuel">
+    <div className="fuel self-workspace" data-self-view={detailed?'details':'daily'}>
       <header className="fuel-hero">
         <div className="fuel-hero-copy">
-          <span className="fuel-kicker">{now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <h1>{totals.kcal.toLocaleString()}<small> kcal</small></h1>
+          <h1>Fuel</h1>
+          <SelfViews detailed={detailed} onChange={setDetailed} details="Food & rest history"/><p className="self-date">{now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p><p className="self-lead">{totals.kcal.toLocaleString()} kcal logged today</p>
           <p>
             {totals.kcal === 0 ? `No meals logged yet. Your goal is ${GOALS.kcal.toLocaleString()} kcal.`
               : left >= 0 ? `${left.toLocaleString()} kcal left of ${GOALS.kcal.toLocaleString()}`
                 : `${(-left).toLocaleString()} kcal over your ${GOALS.kcal.toLocaleString()} goal`}
           </p>
           <AsciiBar value={(totals.kcal / GOALS.kcal) * 100} hue="#1a2e05" showValue={false} label="Calories eaten against goal" />
-          <div className="fuel-macros">
+          <div className="fuel-macros self-daily">
             {MACROS.map((x) => (
               <div key={x.key} className="fuel-macro">
                 <span>{x.label}</span>
@@ -245,7 +249,9 @@ export default function FuelPage() {
         </div>
       </header>
 
-      <div className="fuel-grid">
+
+      {detailed&&<FuelTrends days={days}/>}
+      <div className="fuel-grid self-daily">
         <div className="fuel-main">
           <section className="fuel-card fuel-plates" aria-label="Today's plates">
             <header className="fuel-card-head">
@@ -295,10 +301,10 @@ export default function FuelPage() {
             </div>
           </section>
 
-          <div className="fuel-mem">
+          <details className="fuel-mem self-memories-fold"><summary>Food memories</summary>
             <MemoriesPanel kinds={['meal']} title="Food memories" onCapture={() => snap()} captureLabel="Snap a meal"
               describe={describe} empty="No food memories yet. Snap your next plate." />
-          </div>
+          </details>
         </div>
 
         <aside className="fuel-side">

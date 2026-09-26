@@ -101,6 +101,23 @@ export function useMeals(on: string) {
   });
 }
 
+export function useMealHistory(back = 30) {
+  const today = new Date();
+  const start = new Date(today); start.setDate(start.getDate() - back + 1);
+  const from = ymd(start), to = ymd(today);
+  return useQuery({
+    queryKey: [...MEALS, 'history', from, to],
+    queryFn: async (): Promise<Meal[]> => {
+      const fx = fixture<Meal[]>('meals');
+      if (fx) return fx.filter(m => m.on_date >= from && m.on_date <= to);
+      const { data, error } = await supabase.from('bd_meals').select('id,on_date,name,slot,kcal,protein,carbs,fat,photo_path,place')
+        .gte('on_date', from).lte('on_date', to).order('on_date', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Meal[];
+    },
+  });
+}
+
 export function useWorkouts(back = 28) {
   const from = ymd(new Date(Date.now() - back * 864e5));
   return useQuery({
@@ -165,7 +182,7 @@ export function useBodyActions(back = 30, on = ymd(new Date())) {
   const dayKey = [...DAYS, back] as const;
   const mealKey = [...MEALS, on] as const;
   const workKey = [...WORKOUTS, 28] as const;
-  const settle = settler(qc, dayKey, mealKey, workKey);
+  const settle = settler(qc, dayKey, MEALS, workKey);
 
   const setDay = useMutation<unknown, Error, { on_date: string; patch: Partial<Day> }, Day[]>({
     mutationKey: SET_DAY,

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { SelfViews } from '@/components/SelfViews';
+import '@/app/self-workspace.css';
 import { Icon } from '@/components/Icon';
 import { AsciiBar } from '@/components/AsciiBar';
 import { MoneySkeleton } from '@/components/Skeleton';
@@ -13,7 +15,7 @@ import {
 import { usePrefs } from '@/lib/prefs';
 import { useLongPress } from '@/lib/useLongPress';
 import { toast } from '@/lib/toast';
-import { logDay } from '@/lib/logday';
+import { logDay, logDayLabel as dayLabel } from '@/lib/logday';
 import {
   useTransactions, useAccounts, useBudgets, useToBuy, useMoneyActions,
   useGoals, useSubs, useBudgetActions, useGoalActions, useSubActions, useBuyActions,
@@ -64,15 +66,8 @@ type Sheet =
   | { kind: 'sub'; id: string | null }
   | { kind: 'buy'; id: string | null };
 
-function dayLabel(day: string): string {
-  const today = localDay(new Date());
-  const yesterday = localDay(new Date(Date.now() - 864e5));
-  if (day === today) return 'Today';
-  if (day === yesterday) return 'Yesterday';
-  return new Date(`${day}T12:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
 function Money() {
+  const [detailed, setDetailed] = useState(false);
   const { prefs } = usePrefs();
   const { data: txns = [], isPending } = useTransactions();
   const { data: accounts = [] } = useAccounts();
@@ -96,8 +91,8 @@ function Money() {
   const [view, setView] = useState<'categories' | 'trend' | 'calendar'>('categories');
   const [shown, setShown] = useState(PAGE);
 
-  const month = new Date().toISOString().slice(0, 7);
-  const monthTx = txns.filter((t) => t.occurred_at.startsWith(month));
+  const month = logDay(new Date()).slice(0, 7);
+  const monthTx = txns.filter((t) => logDay(t.occurred_at).startsWith(month));
   const balance = accounts.reduce((sum, a) => sum + balanceOf(a.opening_centavos ?? 0, txns.filter((t) => t.account_id === a.id)), 0);
   const burn = burnPerDay(txns, 30);
   const days = runwayDays(balance, burn);
@@ -107,8 +102,7 @@ function Money() {
   const streak = noSpendStreak(trend);
   const wow = useMemo(() => weekDelta(txns), [txns]);
   const upcoming = useMemo(() => toUpcoming(subs, goals), [subs, goals]);
-  const today = logDay(new Date());
-  const todaysOut = txns.filter((t) => logDay(t.occurred_at) === today).reduce((s, t) => s + outgo(t), 0);
+  const todaysOut = dailySpend(txns, 1)[0]?.total ?? 0;
   const monthIn = monthTx.reduce((s, t) => s + incoming(t), 0);
 
   const jars: JarRow[] = budgets.map((b) => ({
@@ -119,12 +113,12 @@ function Money() {
   const categories = [...new Set([...jars.map((j) => j.category), ...txns.filter((t) => t.amount_centavos > 0).map((t) => t.category)])].filter((c) => c !== 'Archived');
   const daysLeft = daysLeftInMonth();
 
-  const ledger = txns.filter((t) => (!pickedCat || t.category === pickedCat) && (!pickedDay || localDay(new Date(t.occurred_at)) === pickedDay));
+  const ledger = txns.filter((t) => (!pickedCat || t.category === pickedCat) && (!pickedDay || logDay(t.occurred_at) === pickedDay));
   const filtered = !!(pickedCat || pickedDay);
   const byDay = useMemo(() => {
     const out: { day: string; rows: Txn[]; out: number; in: number }[] = [];
     for (const t of ledger.slice(0, shown)) {
-      const day = localDay(new Date(t.occurred_at));
+      const day = logDay(t.occurred_at);
       const last = out[out.length - 1];
       const group = last?.day === day ? last : (out.push({ day, rows: [], out: 0, in: 0 }), out[out.length - 1]);
       group.rows.push(t);
@@ -185,7 +179,7 @@ function Money() {
         ] },
         { label: 'Show only', items: [
           { label: t.category, icon: 'filter', run: () => { setPickedCat(t.category); setPickedDay(null); } },
-          { label: 'This day', icon: 'day', run: () => { setPickedDay(localDay(new Date(t.occurred_at))); setPickedCat(null); } },
+          { label: 'This day', icon: 'day', run: () => { setPickedDay(logDay(t.occurred_at)); setPickedCat(null); } },
         ] },
         { items: [{ label: 'Delete', icon: 'trash', danger: true, run: () => A.removeWithUndo(t) }] },
       ] };
@@ -262,14 +256,14 @@ function Money() {
   const subsTotal = subs.reduce((s, x) => s + x.amount_centavos, 0);
 
   return (
-    <div className="mon">
+    <div className="mon self-workspace" data-self-view={detailed?'details':'daily'}>
       <header className="mon-hero">
         <div className="mon-hero-copy">
-          <span className="mon-kicker">Balance across {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}</span>
-          <h1>{peso(balance)}</h1>
-          <p>{days === null ? 'Log something and the runway starts counting.' : `${days.toLocaleString()} ${days === 1 ? 'day' : 'days'} of runway at ${peso(burn)} a day`}</p>
-          <AsciiBar value={runwayFill(days) * 100} hue={INK} showValue={false} label="Runway" />
-          <dl className="mon-facts">
+          <h1>Money</h1>
+          <SelfViews detailed={detailed} onChange={setDetailed} daily="Daily log" details="Budget & insights"/><p className="self-lead">{peso(balance)}</p><p>Recorded balance across {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}</p>
+          <p className="self-details">{days === null ? 'Log something and the runway starts counting.' : `${days.toLocaleString()} ${days === 1 ? 'day' : 'days'} of runway at ${peso(burn)} a day`}</p>
+          <div className="self-details"><AsciiBar value={runwayFill(days) * 100} hue={INK} showValue={false} label="Runway" /></div>
+          <dl className="mon-facts self-details">
             <div><dt>Out today</dt><dd>{peso(todaysOut)}</dd></div>
             <div><dt>This week</dt><dd>{peso(wow.current)}{wow.pct !== null && <small className={wow.pct > 0 ? 'is-up' : 'is-down'}>{wow.pct > 0 ? '+' : ''}{wow.pct}%</small>}</dd></div>
             <div><dt>In this month</dt><dd>{peso(monthIn)}</dd></div>
@@ -283,6 +277,7 @@ function Money() {
           onSubmit={() => setSheet({ kind: 'log' })} onNewJar={() => setSheet({ kind: 'newJar' })}
         />
       </header>
+
 
       <div className="mon-grid">
         <div className="mon-main">
@@ -321,7 +316,7 @@ function Money() {
             )}
           </section>
 
-          <section className="mon-card" aria-label="Activity">
+          <section className="mon-card mon-activity self-daily" aria-label="Activity">
             <header className="mon-card-head">
               <div>
                 <h2>Activity</h2>
@@ -361,7 +356,7 @@ function Money() {
             {ledger.length > shown && <button type="button" className="mon-more" onClick={() => setShown((n) => n + PAGE)}>Show {Math.min(PAGE, ledger.length - shown)} more</button>}
           </section>
 
-          <section className="mon-card" aria-label="Patterns">
+          <section className="mon-card self-details" aria-label="Patterns">
             <header className="mon-card-head">
               <div>
                 <h2>{view === 'categories' ? 'Where it went' : view === 'trend' ? 'Last 30 days' : 'Spending calendar'}</h2>
@@ -374,10 +369,10 @@ function Money() {
               </div>
             </header>
             {view === 'categories' && (spend.length
-              ? <Stacks spend={spend} active={pickedCat} onPick={(c) => { setPickedCat(c === pickedCat ? null : c); setPickedDay(null); }} />
+              ? <Stacks spend={spend} active={pickedCat} onPick={(c) => { setPickedCat(c === pickedCat ? null : c); setPickedDay(null); setDetailed(false); }} />
               : <p className="mon-muted">Nothing spent this month yet.</p>)}
             {view === 'trend' && <SpendTrend series={trend} hue="#2fdca6" />}
-            {view === 'calendar' && <MonthHeatmap days={grid} hue="#2fdca6" selected={pickedDay} weekStart={prefs.weekStart} onPick={(d) => { setPickedDay(d); setPickedCat(null); }} />}
+            {view === 'calendar' && <MonthHeatmap days={grid} hue="#2fdca6" selected={pickedDay} weekStart={prefs.weekStart} onPick={(d) => { setPickedDay(d); setPickedCat(null); setDetailed(false); }} />}
           </section>
         </div>
 
@@ -387,7 +382,7 @@ function Money() {
             <ComingUp items={upcoming} onOpen={(u) => setSheet(u.kind === 'goal' ? { kind: 'goal', id: u.id } : { kind: 'sub', id: u.id })} />
           </section>
 
-          <section className="mon-card" aria-label="Goals">
+          <section className="mon-card self-details" aria-label="Goals">
             <header className="mon-card-head">
               <div><h2>Goals</h2><p>{goals.length ? `${peso(goals.reduce((s, g) => s + g.saved_centavos, 0))} saved so far` : 'Something you are saving toward.'}</p></div>
               <button type="button" className="mon-link" onClick={() => setSheet({ kind: 'goal', id: null })}><Icon name="plus" size={14} />Add</button>
@@ -412,7 +407,7 @@ function Money() {
             </ul>
           </section>
 
-          <section className="mon-card" aria-label="Subscriptions">
+          <section className="mon-card self-details" aria-label="Subscriptions">
             <header className="mon-card-head">
               <div><h2>Subscriptions</h2><p>{subs.length ? `${peso(subsTotal)} a month` : 'Charges that happen whether you look or not.'}</p></div>
               <button type="button" className="mon-link" onClick={() => setSheet({ kind: 'sub', id: null })}><Icon name="plus" size={14} />Add</button>
@@ -459,7 +454,7 @@ function Money() {
       )}
       {jarOpen && (
         <JarSheet jar={jarOpen} txns={txns} onClose={() => setSheet(null)}
-          onAim={() => { setKind('expense'); setJarId(jarOpen.id); document.querySelector('.mon-pad input')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }}
+          onAim={() => { setKind('expense'); setJarId(jarOpen.id); setDetailed(false); requestAnimationFrame(() => document.querySelector('.mon-pad input')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); }}
           onOpenTxn={(t) => setSheet({ kind: 'txn', id: t.id })}
           onSave={(patch) => { BA.edit.mutate({ id: jarOpen.id, patch }); toast('Jar saved', undefined, { tone: 'success', icon: 'check' }); }}
           onDelete={() => { const b = budgets.find((x) => x.id === jarOpen.id); if (b) BA.removeWithUndo(b, b.category); if (jarId === jarOpen.id) setJarId(null); }} />

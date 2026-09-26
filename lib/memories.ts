@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { storeImage, deleteImage, getImage, useImageUrls } from './imageStore';
 import { useSignedUrl, useSignedUrls } from './uploads';
 import { decodeMemoryName, encodeMemoryName, type MemoryInfo, type MemoryKind } from './memoryName';
+import { fixture } from './devFixtures';
 
 /**
  * Memories: a photo, where and when it was taken, and what it was.
@@ -54,6 +55,8 @@ function persist(uid: string, list: Memory[]) {
 const put = (uid: string, memory: Memory) => persist(uid, [...state.list.filter((m) => m.id !== memory.id), memory]);
 
 async function loadOwner() {
+  const preview = fixture<Memory[]>('memories');
+  if (preview) { state = { owner: 'me', list: preview, ready: true }; emit(); return; }
   const uid = await currentUserId().catch(() => null);
   if (uid && uid === state.owner) return;
   let list: Memory[] = [];

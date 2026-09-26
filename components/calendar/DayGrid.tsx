@@ -419,7 +419,7 @@ export function CalendarGrid({
                     const end = isResize ? resize.end : isDrag ? drag.hour + (hoursOf(e.ends_at) - hoursOf(e.starts_at)) : hoursOf(e.ends_at);
                     return (
                       <EventChip key={e.id} ev={e} top={pct(start)} height={Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}
-                        label={hhmm(start)} lifted={isDrag || isResize} selected={sel === e.id}
+                        label={`${hhmm(start)} – ${hhmm(end)}`} lifted={isDrag || isResize} selected={sel === e.id}
                         onPointerDown={(p) => press(p, e, 'move')}
                         onResize={(p) => press(p, e, 'resize')}
                         dark={dark}
@@ -491,7 +491,7 @@ function EventChip({
       onContextMenu={(e) => { e.preventDefault(); onOpen(e); }}
       className={selected ? 'pop' : undefined}
       style={{
-        position: 'absolute', left: 3, right: 3, top: `${top}%`, height: `${height}%`,
+        position: 'absolute', left: 3, right: 'max(16px, 5%)', top: `${top}%`, height: `${height}%`,
         borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
         background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
         borderLeft: `2px solid ${ev.color}`,
@@ -549,7 +549,7 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
       style={{
         position: 'absolute',
         left: `calc(${(firstDay / days) * 100}% + 3px)`,
-        width: `calc(${(width / days) * 100}% - 6px)`,
+        width: `calc(${(width / days) * 100}% - 20px)`,
         top: `${pct(start)}%`, height: `${Math.max((0.5 / SPAN) * 100, pct(end) - pct(start))}%`,
         borderRadius: 8, padding: '4px 9px', overflow: 'hidden', pointerEvents: 'auto',
         background: `color-mix(in srgb, ${s.ev.color} 26%, var(--card))`,

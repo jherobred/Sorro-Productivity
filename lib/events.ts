@@ -8,6 +8,7 @@ import { toast } from './toast';
 import { K } from './pal';
 import { fixture } from './devFixtures';
 import { settler } from './settle';
+import { gridRange as localGridRange } from './calendarRange';
 import { getPrefs, prefsLoaded, setPrefs, usePrefs } from './prefs';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
@@ -439,11 +440,7 @@ export function hhmm(hour: number, force24?: boolean): string {
  * starts on.
  */
 export function gridRange(startsAt: string, endsAt: string): { start: number; end: number } {
-  const a = hoursOf(startsAt);
-  const b = hoursOf(endsAt);
-  const start = Math.min(a, b);
-  const end = Math.max(a, b);
-  return { start, end: end > start ? end : Math.min(24, start + 1) };
+  return localGridRange(startsAt, endsAt);
 }
 
 /**

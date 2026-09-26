@@ -1,0 +1,64 @@
+/* Stable mobile proportions; the existing Basedly palette and shell stay intact. */
+.today-workspace .today-greeting{align-items:center;gap:20px;margin-bottom:24px}
+.today-workspace .today-greeting-copy{flex:1 1 380px;min-width:0}
+.today-workspace .today-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:0 1 auto}
+.today-actions .studio-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;white-space:nowrap}
+.today-workspace .day-overview{align-items:stretch}
+.today-workspace .day-overview>section{min-width:0}
+.today-workspace>.lms.is-wide{margin:24px 0 0}
+.today-workspace .next-event-panel.is-empty .next-event-copy{margin-top:20px}
+.today-workspace .next-event-panel.is-empty .next-event-copy h3{max-width:none}
+.today-workspace .next-event-panel.is-empty .next-event-link{margin-top:24px}
+.cal-timer-label .cal-timer-focus-button{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 8px;border-radius:10px;color:var(--tx);font-size:13px;text-transform:none;letter-spacing:0;white-space:nowrap;background:var(--card2)}
+.cal-countdown-focus{position:fixed;inset:0;z-index:1500;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));overflow:auto}
+.cal-countdown-focus header{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.cal-countdown-focus header h2{font-size:21px;margin:0}
+.cal-countdown-focus button{min-height:44px}
+.countdown-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;width:min(100%,900px);margin:auto;padding:40px 0}
+.countdown-stage>p{font-size:21px;color:var(--tx2);margin:0}
+.countdown-stage>strong{font-size:clamp(40px,11vw,120px);line-height:1.05;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.countdown-stage h3{font-size:clamp(23px,4vw,40px);text-wrap:balance;line-height:1.2;margin:0}
+.countdown-stage>.studio-progress{width:min(100%,600px)}
+.countdown-stage .progress-track{width:100%}
+.countdown-stage>small{font-size:15px;color:var(--tx2)}
+.countdown-options{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;text-align:center}
+.countdown-options label{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px}
+.countdown-options input{accent-color:var(--poster-blue);width:20px;height:20px}
+.countdown-options p{font-size:13px;color:var(--tx2);margin:0}
+.calendar-color-picker{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:8px}
+.calendar-color-picker button{width:32px;height:32px;border-radius:10px;border:1px solid var(--line2);display:grid;place-items:center}
+.calendar-color-picker button[aria-pressed=true]{outline:2px solid var(--tx);outline-offset:2px}
+.calendar-color-picker label{display:flex;align-items:center;gap:8px;font-size:13px;min-height:36px}
+.calendar-color-picker input{width:32px;height:32px;padding:0;border:0;background:transparent;cursor:pointer}
+.notebook-cover[data-dragging=true]{opacity:.45}
+.notebook-cover[data-drop-target=true]{outline:2px dashed var(--poster-blue);outline-offset:5px}
+.cover-footer .notebook-drag-handle{touch-action:none;cursor:grab;min-width:36px;min-height:40px}
+.cover-footer .notebook-drag-handle:active{cursor:grabbing}
+.notebook-reorder-help{color:var(--tx2);font-size:13px;margin:0 0 16px}
+.notebook-scan-capture{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0 20px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.notebook-scan-capture h2{font-size:17px;margin:0 0 4px}.notebook-scan-capture p{margin:0;color:var(--tx2);font-size:13px;line-height:1.5}
+.notebook-scan-capture button{min-height:44px;flex-shrink:0}
+@media(max-width:760px){
+ .today-workspace .today-greeting{display:block;margin-bottom:20px}
+ .today-workspace .today-greeting h1{font-size:clamp(28px,7.5vw,38px);line-height:1.15;margin-bottom:10px;text-wrap:balance}
+ .today-workspace .today-greeting p{font-size:13px;line-height:1.5}
+ .today-workspace .greeting-message{display:block;margin-top:4px}
+ .today-workspace .today-actions{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .today-actions .studio-button{padding:10px;font-size:13px}
+ .today-workspace .day-overview,.today-workspace .day-overview:has(.next-event-panel.is-empty){display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch}
+ .today-workspace .day-overview>section{width:100%;padding:20px;min-height:0}
+ .today-workspace .next-event-panel.is-empty .next-event-copy{margin:16px 0 0;padding:0;max-width:100%}
+ .today-workspace .next-event-panel.is-empty .next-event-copy h3{font-size:25px;line-height:1.2}
+ .today-workspace .next-event-panel.is-empty .next-event-link{margin-top:20px}
+ .today-workspace .upcoming-task-copy{margin:16px 0}
+ .today-workspace .upcoming-task-copy h3{font-size:25px;line-height:1.18;overflow-wrap:anywhere}
+ .today-workspace .task-cycle-dots{margin-top:12px}
+ .cal-timer-label .cal-timer-focus-button{width:32px;min-height:32px;padding:6px}
+ .cal-timer-focus-button span{display:none}
+ .cal-countdown-focus{padding:20px 18px max(24px,env(safe-area-inset-bottom))}
+ .countdown-stage{gap:18px;padding:32px 0}.countdown-stage>strong{font-size:clamp(38px,12vw,64px)}
+ .notebook-scan-capture{align-items:flex-start;gap:12px}.notebook-scan-capture button{padding:10px;font-size:13px}
+}
+.cal-countdown-focus{width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0}.cal-countdown-focus::backdrop{background:var(--bg)}
+.cal-all-colors{margin:12px 0}.cal-all-colors summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:13px;color:var(--tx)}.calendar-color-picker button{min-width:36px;min-height:36px}
+.cal-all-colors summary::after{content:'+';margin-left:auto;font-size:20px}.cal-all-colors[open] summary::after{content:'−'}
