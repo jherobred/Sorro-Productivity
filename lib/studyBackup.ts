@@ -19,10 +19,10 @@ export async function createStudyBackup(progress:(text:string)=>void):Promise<St
   for(const r of recover){if(!r.draft)continue;const draft=r.draft;const row=tables.bd_notes.find(n=>n.id===draft.id);if(row&&Date.parse(String(row.updated_at))<=Date.parse(draft.at))Object.assign(row,{title:draft.title,body:draft.body,updated_at:draft.at});else if(!row&&tables.bd_notebooks.some(b=>b.id===draft.notebook_id&&!b.deleted_at))tables.bd_notes.push({id:draft.id,notebook_id:draft.notebook_id,title:draft.title,body:draft.body,created_at:draft.at,updated_at:draft.at,position:0,deleted_at:null});}
   const assets=new Map<string,PageAsset>();
   for(const note of tables.bd_notes)transformBody(String(note.body),v=>{if(typeof v.localId==='string'&&typeof v.name==='string')assets.set(v.localId,v as PageAsset);});
-  const packed:StudyBackup['assets']=[];let bytes=0;
-  for(const asset of assets.values()){progress(`Backing up page attachments (${packed.length+1}/${assets.size})…`);const blob=await loadPageAsset(asset);bytes+=blob.size;if(bytes>100_000_000)throw new Error('Page attachments exceed the 100 MB backup limit. Export large PDFs separately first.');packed.push({localId:asset.localId,name:asset.name,type:blob.type||(/\.pdf$/i.test(asset.name)?'application/pdf':'image/png'),data:await base64(blob)});}
+  const packed:StudyBackup['assets']=[];const unavailableAssets:string[]=[];let bytes=0;
+  for(const asset of assets.values()){progress(`Backing up page attachments (${packed.length+unavailableAssets.length+1}/${assets.size})…`);try{const blob=await loadPageAsset(asset);if(bytes+blob.size>100_000_000){unavailableAssets.push(asset.name+' (100 MB limit)');continue;}bytes+=blob.size;packed.push({localId:asset.localId,name:asset.name,type:blob.type||(/\.pdf$/i.test(asset.name)?'application/pdf':'image/png'),data:await base64(blob)});}catch{unavailableAssets.push(asset.name);}}
   const p=getPrefs();
-  return {format:'basedly-study',version:1,createdAt:new Date().toISOString(),tables,assets:packed,metadata:{eventMeta:p.eventMeta||{},tags:p.tags||[],notebookTags:p.notebookTags||{},noteColors:p.noteColors||{},taskEventLinks:p.taskEventLinks||{}}};
+  return {format:'basedly-study',version:1,createdAt:new Date().toISOString(),tables,assets:packed,metadata:{unavailableAssets,eventMeta:p.eventMeta||{},tags:p.tags||[],notebookTags:p.notebookTags||{},noteColors:p.noteColors||{},taskEventLinks:p.taskEventLinks||{}}};
 }
 
 export type RestorePlan = ReturnType<typeof prepareRestore> & { assets:Map<string,PageAsset> };
@@ -53,5 +53,5 @@ export async function restoreStudyBackup(backup:StudyBackup,plan:RestorePlan,pro
 }
 
 export function downloadBackup(backup:StudyBackup) {
-  const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='basedly-study-'+backup.createdAt.slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),30_000);
+  const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='basedly-study-'+backup.createdAt.slice(0,10)+(Array.isArray(backup.metadata.unavailableAssets)&&backup.metadata.unavailableAssets.length?'-missing-attachments':'')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),30_000);
 }

@@ -43,7 +43,7 @@ export function SettingsModal({
   const accentInk = luminance(prefs.accent) > 0.2 ? '#141414' : '#FFFFFF';
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [search, setSearch] = useState('');
-  const [phoneSubPage, setPhoneSubPage] = useState<SettingsTab | null>(null);
+  const [phoneSubPage, setPhoneSubPage] = useState<SettingsTab | null>(initialTab === 'general' ? null : initialTab);
 
   // Profile data states
   const [userId, setUserId] = useState<string>('');
