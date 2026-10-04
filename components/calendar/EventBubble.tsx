@@ -81,7 +81,7 @@ export function EventBubble({
               <button type="button" role="tab" aria-selected="false" onClick={onSwitchToTask}>Task</button>
             </div>
           ) : (
-            <span className="cal-bubble-kind"><i aria-hidden="true" />{category.label}</span>
+            <span className="cal-bubble-kind"><i aria-hidden="true" />Event</span>
           )}
           <span className="cal-bubble-spacer" />
           {!locked && <>
@@ -137,15 +137,8 @@ export function EventBubble({
         {!locked && (
           <>
             <div className="cal-bubble-field">
-              <span>Category</span>
-              <div className="cal-swatches" role="radiogroup" aria-label="Category">
-                {EVENT_CATEGORIES.map((c) => (
-                  <button key={c.id} type="button" role="radio" aria-checked={category.id === c.id} aria-label={c.label} title={c.label}
-                    style={{ background: c.color }} onClick={() => onPatch({ color: c.color })}>
-                    {category.id === c.id && <Icon name="check" size={12} color="#fff" />}
-                  </button>
-                ))}
-              </div>
+              <span>Color</span>
+              <EventColors value={ev.color} onChange={(color) => onPatch({ color })} />
             </div>
             <div className="cal-bubble-field">
               <span>Reminder</span>
@@ -159,7 +152,6 @@ export function EventBubble({
                 })}
               </div>
             </div>
-            <details className="cal-all-colors"><summary>All colors</summary><EventColors value={ev.color} onChange={color=>onPatch({color})}/></details>
           </>
         )}
 
@@ -173,7 +165,7 @@ export function EventBubble({
             <Icon name="trash" size={14} />Delete all {runDays} days of this
           </button>
         )}
-        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from another calendar. Edit it there.</p>}
+        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. You can delete it here anytime.</p>}
       </div>
     </CalPopover>
   );

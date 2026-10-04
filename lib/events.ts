@@ -55,6 +55,39 @@ export type Ev = {
 };
 
 const EVENT_META_KEY = 'bd_events_local_meta';
+const GCAL_DELETED_KEY = 'basedly_deleted_gcal_events';
+
+export function getDeletedGcalKeys(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = JSON.parse(localStorage.getItem(GCAL_DELETED_KEY) || '[]');
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function markGcalDeleted(ev: Ev) {
+  if (typeof window === 'undefined') return;
+  const set = getDeletedGcalKeys();
+  if (ev.id) set.add(ev.id);
+  const ext = (ev as { external_id?: string }).external_id;
+  if (ext) set.add(ext);
+  try {
+    localStorage.setItem(GCAL_DELETED_KEY, JSON.stringify([...set]));
+  } catch {}
+}
+
+export function unmarkGcalDeleted(ev: Ev) {
+  if (typeof window === 'undefined') return;
+  const set = getDeletedGcalKeys();
+  if (ev.id) set.delete(ev.id);
+  const ext = (ev as { external_id?: string }).external_id;
+  if (ext) set.delete(ext);
+  try {
+    localStorage.setItem(GCAL_DELETED_KEY, JSON.stringify([...set]));
+  } catch {}
+}
 
 export type EventLocalMeta = {
   short_name?: string;

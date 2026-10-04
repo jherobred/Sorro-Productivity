@@ -58,21 +58,19 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 .cal-dayheads.is-single .cal-dayhead{flex-direction:row;gap:8px;padding:5px 0}
 .cal-dayheads.is-single .cal-dayhead b{min-width:26px;height:26px;font-size:14px}
 
-.cal-event{position:absolute;z-index:1;display:flex;flex-direction:column;gap:1px;padding:4px 7px 4px 10px;border-radius:7px;overflow:hidden;background:color-mix(in srgb,var(--hue) 18%,var(--card));cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:background .15s,box-shadow var(--k-base) var(--k-spring),transform var(--k-base) var(--k-spring)}
-:root[data-theme='dark'] .cal-event{background:color-mix(in srgb,var(--hue) 26%,var(--card))}
-.cal-event::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hue)}
-.cal-event:hover{background:color-mix(in srgb,var(--hue) 27%,var(--card))}
-.cal-event.is-selected{outline:1.5px solid var(--hue);outline-offset:-1px}
-.cal-event.is-lifted{z-index:5;transform:scale(1.02);box-shadow:var(--shl)}
-.cal-event.is-urgent{z-index:2}
-.cal-event.is-urgent::before{width:4px;background:var(--pal-coral)}
-.cal-event.is-past{opacity:.55;filter:grayscale(.2)}
+.cal-event{position:absolute;z-index:1;display:flex;flex-direction:column;gap:1px;padding:3px 6px;border-radius:4px;overflow:hidden;background:var(--hue);color:#fff;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 2px rgba(0,0,0,0.12);cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:filter .12s,box-shadow var(--k-base) var(--k-spring),transform var(--k-base) var(--k-spring)}
+:root[data-theme='dark'] .cal-event{border:1px solid rgba(255,255,255,0.08);box-shadow:0 1px 3px rgba(0,0,0,0.35)}
+.cal-event:hover{filter:brightness(0.92)}
+:root[data-theme='dark'] .cal-event:hover{filter:brightness(1.08)}
+.cal-event.is-selected{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--hue);z-index:4}
+.cal-event.is-lifted{z-index:10;transform:scale(1.03);box-shadow:0 8px 24px rgba(0,0,0,0.4);filter:brightness(1.12)}
+.cal-event.is-past{opacity:.62;filter:grayscale(.15)}
 .cal-event.is-locked{cursor:default}
-.cal-event-title{display:flex;align-items:center;gap:4px;min-width:0;font-size:11.5px;line-height:1.25}
-.cal-event-title b{min-width:0;font-weight:700;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.cal-event-title small{flex:none;margin-left:auto;font-size:10px;font-weight:500;opacity:.75;font-variant-numeric:tabular-nums}
-.cal-event-meta{font-size:10px;font-weight:500;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.cal-event.is-short{flex-direction:row;align-items:center;padding-top:0;padding-bottom:0}
+.cal-event-title{display:flex;align-items:center;gap:4px;min-width:0;font-size:11.5px;font-weight:600;line-height:1.25}
+.cal-event-title b{min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cal-event-title small{flex:none;margin-left:auto;font-size:10px;font-weight:500;opacity:.88;font-variant-numeric:tabular-nums}
+.cal-event-meta{font-size:10px;font-weight:500;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.cal-event.is-short{flex-direction:row;align-items:center;gap:4px;padding-top:1px;padding-bottom:1px}
 .cal-event.is-short .cal-event-title{flex:1}
 .cal-event.is-short .cal-event-title b{display:block;white-space:nowrap}
 .cal-event-count{display:flex;margin-top:auto;min-width:0}
@@ -225,3 +223,20 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 .gcal-ghost:hover{background:var(--card2);color:var(--tx)}
 .gcal-ghost.is-danger{margin-right:auto;color:var(--task-overdue)}
 @media(max-width:760px){.cal-google-label{display:none}.cal-google{padding:0 8px 0 6px}.gcal-scrim{padding:0;align-items:flex-end}.gcal-sheet{border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom))}}
+
+/* ---- Google Calendar event colors & color wheel ---- */
+.event-colors{display:flex;flex-direction:column;gap:10px;width:100%}
+.calendar-color-picker{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.calendar-color-picker button{width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;transition:transform .12s,box-shadow .12s;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15)}
+.calendar-color-picker button:hover{transform:scale(1.14)}
+.calendar-color-picker button[aria-pressed=true]{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--tx)}
+.calendar-color-picker button.is-wheel{background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red);position:relative}
+.color-wheel{display:flex;gap:16px;align-items:center;padding:12px;border-radius:12px;background:var(--card2);border:1px solid var(--line2);margin-top:4px}
+.color-wheel-disc{position:relative;width:110px;height:110px;border-radius:50%;flex:none;cursor:crosshair;background:radial-gradient(circle closest-side,#fff 0%,transparent 100%),conic-gradient(red,yellow,lime,aqua,blue,magenta,red);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.2),0 2px 8px rgba(0,0,0,0.15);touch-action:none}
+.color-wheel-disc::after{content:"";position:absolute;inset:0;border-radius:50%;background:#000;opacity:var(--v,0);pointer-events:none}
+.color-wheel-mark{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.8);transform:translate(-50%,-50%);pointer-events:none;z-index:2}
+.color-wheel-side{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.color-wheel-swatch{width:100%;height:28px;border-radius:6px;border:1px solid var(--line2);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.1)}
+.color-wheel-side code{font-family:monospace;font-size:12px;font-weight:700;color:var(--tx);letter-spacing:.05em}
+.color-wheel-bright{width:100%;height:10px;border-radius:5px;appearance:none;outline:none;cursor:pointer;border:1px solid var(--line2)}
+.color-wheel-bright::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid var(--line2);box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:pointer}

@@ -115,8 +115,8 @@ export function CalendarGrid({
   };
 
   /** Multi-day runs draw as one bar; their members are skipped per column. */
-  const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
-  const spanned = useMemo(() => new Set(spans.filter((s) => s.days > 1).flatMap((s) => s.ids)), [spans]);
+  const spans: Span[] = [];
+  const spanned = new Set<string>();
 
   const press = (e: React.PointerEvent, ev: Ev, mode: 'move' | 'resize') => {
     e.preventDefault();
@@ -393,12 +393,15 @@ export function CalendarGrid({
                 {hours.slice(0, -1).map((h, hi) => (
                   <button
                     key={h}
-                    // Clicking used to create "New event" on the spot and leave
-                    // you to find and rename it. It now opens a bubble that
-                    // asks what the thing is, which is the only question worth
-                    // asking at that moment.
                     onPointerDown={slot.press}
-                    onClick={(p) => { if (slot.tapped(p)) openSlot(idx, h, p.clientX, p.clientY); }}
+                    onClick={(p) => {
+                      if (slot.tapped(p)) {
+                        const targetRect = p.currentTarget.getBoundingClientRect();
+                        const relY = Math.max(0, Math.min(0.99, (p.clientY - targetRect.top) / targetRect.height));
+                        const startH = h + (relY >= 0.5 ? 0.5 : 0);
+                        openSlot(idx, startH, p.clientX, p.clientY);
+                      }
+                    }}
                     className="hov"
                     aria-label={`Add event at ${hhmm(h)}`}
                     style={{
@@ -456,16 +459,7 @@ export function CalendarGrid({
             );
           })}
 
-          {/* Multi-day runs, drawn over the columns. The layer ignores the
-              pointer so clicking an empty slot underneath still creates. */}
-          <div aria-hidden={false} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-            {spans.filter((s) => s.days > 1).map((s) => (
-              <SpanChip key={s.key} span={s} days={days} dark={dark}
-                offset={spanDrag?.key === s.key ? spanDrag : null}
-                onPointerDown={(p) => pressSpan(p, s)}
-                onOpen={(x, y) => openEvent(spanHit(s, x).ev, x, y, s)} />
-            ))}
-          </div>
+
         </div>
         </div>
       </div>
@@ -492,23 +486,21 @@ function EventChip({
       className={selected ? 'pop' : undefined}
       style={{
         position: 'absolute', left: 3, right: 'max(16px, 5%)', top: `${top}%`, height: `${height}%`,
-        borderRadius: 8, padding: '4px 7px', overflow: 'hidden',
-        background: `color-mix(in srgb, ${ev.color} 26%, var(--card))`,
-        borderLeft: `2px solid ${ev.color}`,
+        borderRadius: 4, padding: '3px 6px', overflow: 'hidden',
+        background: ev.color,
         color: ink,
-        boxShadow: lifted ? 'var(--shl)' : undefined,
-        transform: lifted ? 'scale(1.02)' : undefined,
-        cursor: locked ? 'default' : 'grab', touchAction: 'none', zIndex: lifted ? 5 : 1,
-        outline: selected ? `1px solid ${ev.color}` : undefined,
+        boxShadow: lifted ? '0 8px 24px rgba(0,0,0,0.4)' : '0 1px 2px rgba(0,0,0,0.12)',
+        transform: lifted ? 'scale(1.03)' : undefined,
+        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 10 : 1,
+        outline: selected ? `2px solid var(--tx)` : undefined,
       }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, lineHeight: 1.25, overflow: 'hidden' }}>
         {locked && <Icon name="lock" size={9} color={ink} />}
         {ev.title}
       </span>
-      <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ display: 'block', fontSize: 9.5, opacity: 0.88, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
         {label} {ev.location}
       </span>
-      {/* bottom edge resizes the end time in 30-min steps */}
       {!locked && (
         <div onPointerDown={onResize}
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 8, cursor: 'ns-resize', touchAction: 'none' }} />

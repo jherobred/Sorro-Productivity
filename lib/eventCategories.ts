@@ -68,7 +68,7 @@ export function resolveCategory(color: string | null | undefined): EventCategory
 
 /** True when the event should get the alarm treatment (pulse, coral border). */
 export function isUrgentEvent(color: string | null | undefined): boolean {
-  return resolveCategory(color).id === 'urgent';
+  return false; // Colors are not associated with urgency unless explicitly specified
 }
 
 /** The one-line label a grid chip shows: the short name when there is one. */

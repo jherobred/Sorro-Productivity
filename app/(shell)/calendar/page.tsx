@@ -11,7 +11,7 @@ import { CalendarSkeleton } from '@/components/Skeleton';
 const ScheduleImport = dynamic(() => import('@/components/ScheduleImport').then((m) => m.ScheduleImport), { ssr: false });
 const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCalendar').then((m) => m.GoogleCalendarSheet), { ssr: false });
 import { EventBubble } from '@/components/calendar/EventBubble';
-import { EventColors } from '@/components/calendar/EventColors';
+import { EventColors, EVENT_COLORS } from '@/components/calendar/EventColors';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
 import { CalendarTimers } from '@/components/calendar/CalendarTimers';
 import { NextView } from '@/components/calendar/NextView';
@@ -710,7 +710,7 @@ export default function CalendarPage() {
 
       {pop?.kind === 'event' && (
         <EventBubble key={pop.ev.id} ev={pop.ev} x={pop.x} y={pop.y}
-          runDays={pop.span && pop.span.days > 1 ? pop.span.days : 0}
+          runDays={0}
           draft={draftEventRef.current === pop.ev.id}
           previousEnd={previousEndOf(pop.ev)}
           time24={prefs.time24}
@@ -989,12 +989,13 @@ function contextItems(
       ],
     },
     {
-      label: 'Category',
-      items: EVENT_CATEGORIES.map((c) => ({
-        label: c.label,
-        icon: c.icon,
-        checked: current.id === c.id,
-        run: () => A.update.mutate({ id: ev.master_id || ev.id, patch: { color: c.color } }),
+      label: 'Color',
+      items: EVENT_COLORS.slice(0, 12).map(([name, c]) => ({
+        label: name,
+        icon: 'spark' as IconName,
+        swatch: c,
+        checked: ev.color.toLowerCase() === c.toLowerCase(),
+        run: () => A.update.mutate({ id: ev.master_id || ev.id, patch: { color: c } }),
       })),
     },
     {
@@ -1060,7 +1061,10 @@ function Grid({
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const snapHour = Math.floor(rawStartHour * 2) / 2;
+    const slotTarget = e.currentTarget.getBoundingClientRect();
+    const relY = Math.max(0, Math.min(0.99, (e.clientY - slotTarget.top) / slotTarget.height));
+    const slotOffset = relY >= 0.5 ? 0.5 : 0;
+    const snapHour = rawStartHour + slotOffset;
 
     const initDrag = {
       day,
@@ -1136,8 +1140,9 @@ function Grid({
    * grouping, and `spanned` is the set of IDs it took so the single-day pass
    * skips them.
    */
-  const spans = useMemo(() => (days > 1 ? spanRuns(events, ws, days) : []), [events, ws, days]);
-  const spanned = useMemo(() => new Set(spans.filter((s) => s.days > 1).flatMap((s) => s.ids)), [spans]);
+  // Multi-day extending time events removed per Google Calendar standard
+  const spans: Span[] = [];
+  const spanned = new Set<string>();
 
   const spanHit = (s: Span, clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect();
@@ -1154,34 +1159,39 @@ function Grid({
     }
     e.stopPropagation();
     setSel(ev.id);
-    // Measured once, on press, the way onSlotPointerDown already does it.
-    // Reading it inside onMove forced a synchronous layout on every pointer
-    // frame, right after the previous frame had written the chip's `top` — the
-    // textbook read-after-write thrash. Only .left/.width are used, and the
-    // grid does not move sideways mid-drag.
+
     const rect = bodyRef.current?.getBoundingClientRect();
     const startX = e.clientX;
     const startY = e.clientY;
     const origDay = dayIndex(ev.starts_at, ws);
     const origHour = hoursOf(ev.starts_at);
     const origEnd = hoursOf(ev.ends_at);
-    // An event that crosses midnight reports its end before its start in
-    // local hours; clamped here so a drag can never ask the grid for a length
-    // that overflows the 24-hour band.
     const len = Math.max(0.5, Math.min(origEnd - origHour, GRID_END - origHour));
-    const locked = isReadOnly(ev) || prefs.lockEvents;
+    const locked = prefs.lockEvents;
 
     let holdTriggered = !isTouch || action === 'resize';
     let moved = false;
 
+    // Mobile error prevention: Require holding still for 500ms before dragging.
+    // If the user swipes down to scroll, any finger slide > 6px or container scroll
+    // cancels the hold immediately, allowing vertical scrolling without moving the event.
     const holdTimer = isTouch && action === 'move'
       ? window.setTimeout(() => {
           if (moved || locked) return;
           holdTriggered = true;
           if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
           setDrag({ id: ev.id, day: origDay, hour: origHour });
-        }, 380)
+        }, 500)
       : null;
+
+    const onScroll = () => {
+      if (isTouch && !holdTriggered) {
+        if (holdTimer) clearTimeout(holdTimer);
+        moved = true;
+      }
+    };
+    const scrollerEl = scroller.current;
+    scrollerEl?.addEventListener('scroll', onScroll, { passive: true });
 
     const onMove = (m: PointerEvent) => {
       const dx = m.clientX - startX;
@@ -1189,7 +1199,7 @@ function Grid({
       const dist = Math.hypot(dx, dy);
 
       if (isTouch && action === 'move' && !holdTriggered) {
-        if (dist > 8) {
+        if (dist > 6) {
           if (holdTimer) clearTimeout(holdTimer);
           moved = true;
         }
@@ -1208,8 +1218,6 @@ function Grid({
         const d = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor(((m.clientX - rect.left) / rect.width) * days)));
         const rawH = origHour + steps * 0.5;
         const h = Math.max(GRID_START, Math.min(GRID_END - len, Math.round(rawH * 2) / 2));
-        // Both values are snapped, so most pointer frames land on the square
-        // the last one did. Bail out rather than hand React a new object.
         setDrag((p) => (p && p.id === ev.id && p.day === d && p.hour === h ? p : { id: ev.id, day: d, hour: h }));
       } else {
         const rawE = origEnd + steps * 0.5;
@@ -1218,13 +1226,25 @@ function Grid({
       }
     };
 
-    const onUp = (m: PointerEvent) => {
+    const cleanup = () => {
       if (holdTimer) clearTimeout(holdTimer);
+      scrollerEl?.removeEventListener('scroll', onScroll);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+
+    const onCancel = () => {
+      cleanup();
+      setDrag(null);
+      setResize(null);
+    };
+
+    const onUp = (m: PointerEvent) => {
+      cleanup();
 
       if (locked) {
-        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        if (moved) toast('Events are locked — unlock to move them');
         return;
       }
 
@@ -1251,6 +1271,7 @@ function Grid({
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   };
 
   /**
@@ -1531,8 +1552,21 @@ function Grid({
                   <div
                     key={h}
                     onPointerDown={phone ? slot.press : (p) => onSlotPointerDown(p, idx, h)}
-                    onClick={phone ? (p) => { if (slot.tapped(p)) openSlot(idx, h, p.clientX, p.clientY, false, h + 1); } : undefined}
-                    onContextMenu={phone ? undefined : (p) => { p.preventDefault(); openSlot(idx, h, p.clientX, p.clientY, false, h + 1); }}
+                    onClick={(p) => {
+                      if (!phone || slot.tapped(p)) {
+                        const targetRect = p.currentTarget.getBoundingClientRect();
+                        const relY = Math.max(0, Math.min(0.99, (p.clientY - targetRect.top) / targetRect.height));
+                        const startH = h + (relY >= 0.5 ? 0.5 : 0);
+                        openSlot(idx, startH, p.clientX, p.clientY, false, startH + 1);
+                      }
+                    }}
+                    onContextMenu={phone ? undefined : (p) => {
+                      p.preventDefault();
+                      const targetRect = p.currentTarget.getBoundingClientRect();
+                      const relY = Math.max(0, Math.min(0.99, (p.clientY - targetRect.top) / targetRect.height));
+                      const startH = h + (relY >= 0.5 ? 0.5 : 0);
+                      openSlot(idx, startH, p.clientX, p.clientY, false, startH + 1);
+                    }}
                     className={phone ? '' : 'hov'}
                     aria-label={`Add event at ${hhmm(h)}`}
                     style={{
@@ -1700,16 +1734,7 @@ function Grid({
             );
           })}
 
-          {/* Multi-day runs, drawn as one continuous bar across their columns
-              instead of N separate chips. position:absolute against bodyRef,
-              which spans every column, so left/width are day fractions. */}
-          {days > 1 && spans.filter((s) => s.days > 1).map((s) => (
-            <SpanChip key={s.key} span={s} days={days} dark={dark} nowMs={nowMs}
-              offset={spanDrag?.key === s.key ? { day: spanDrag.day, fromDay: spanDrag.fromDay, hour: spanDrag.hour } : null}
-              onPointerDown={(p) => pressSpan(p, s)}
-              onOpen={(x, y) => openEvent(s.ev, x, y, s)}
-              onContext={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(s.ev, p.clientX, p.clientY, s); }} />
-          ))}
+
         </div>
         </div>
       </div>
@@ -1759,12 +1784,10 @@ function EventChip({
   const ink = chipInk(ev, dark);
   const isPast = new Date(ev.ends_at).getTime() < nowMs;
   const cd = !isPast && isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
-  const urgent = isUrgentEvent(ev.color) && !isPast;
-  const cat = resolveCategory(ev.color);
   // Under ~45 minutes there is one line of room, so the time sits beside the title.
   const short = height < 3.2;
   const className = [
-    'cal-event', short && 'is-short', selected && 'is-selected', urgent && 'is-urgent red-alert-pulse',
+    'cal-event', short && 'is-short', selected && 'is-selected',
     isPast && 'is-past', lifted && 'is-lifted', locked && 'is-locked',
   ].filter(Boolean).join(' ');
 
@@ -1774,8 +1797,8 @@ function EventChip({
       onClick={onOpen}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext?.(e); }}
       className={className}
-      style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, color: ink } as React.CSSProperties}
-      title={`${chipLabel(ev)} · ${label} · ${cat.label}`}>
+      style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, background: ev.color, color: ink } as React.CSSProperties}
+      title={`${chipLabel(ev)} · ${label}`}>
       <span className="cal-event-title">
         {locked && <Icon name="lock" size={9} color={ink} />}
         <b>{chipLabel(ev)}</b>
@@ -2725,34 +2748,10 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
           )}
         </div>
 
-        <span style={LABEL}>Category</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 12 }}>
-          {EVENT_CATEGORIES.map((c) => {
-            const on = selectedCat.id === c.id;
-            return (
-              <button key={c.id} onClick={() => setColor(c.color)} aria-pressed={on}
-                className="k-chip"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 10,
-                  fontSize: 11.5, fontWeight: 700, minHeight: 34, cursor: 'pointer',
-                  border: `1px solid ${on ? `color-mix(in srgb, ${c.color} 55%, transparent)` : 'var(--line2)'}`,
-                  background: on ? `color-mix(in srgb, ${c.color} 14%, var(--card))` : 'var(--card2)',
-                  color: on ? 'var(--tx)' : 'var(--tx2)',
-                }}>
-                <span aria-hidden style={{
-                  width: 11, height: 11, borderRadius: 4, background: c.color, flex: 'none',
-                  boxShadow: on ? `0 0 0 2px color-mix(in srgb, ${c.color} 30%, transparent)` : undefined,
-                  transition: 'box-shadow var(--k-base) var(--k-spring)',
-                }} />
-                {c.label}
-                {on && <Icon name="check" size={12} color="var(--tx2)" style={{ marginLeft: 'auto' }} />}
-              </button>
-            );
-          })}
+        <span style={LABEL}>Color</span>
+        <div style={{ marginBottom: 14 }}>
+          <EventColors value={color} onChange={setColor}/>
         </div>
-
-        <span style={LABEL}>All colors</span>
-        <EventColors value={color} onChange={setColor}/>
         <span style={LABEL}>Text</span>
         <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           {inks.map((k) => (
@@ -2778,15 +2777,14 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
 
         {/* What it will look like, before you close the sheet. */}
         <div style={{
-          marginBottom: 18, padding: '7px 10px', borderRadius: 8,
-          background: `color-mix(in srgb, ${color} 26%, var(--card))`,
-          borderLeft: `2px solid ${color}`,
+          marginBottom: 18, padding: '7px 10px', borderRadius: 4,
+          background: color,
           color: chipInk({ color, text_color: textColor }, dark),
           fontSize: 11, fontWeight: 700,
         }}>
           {title || 'Untitled'}
-          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.72, marginTop: 2 }}>
-            {selectedCat.id !== 'custom' ? `${selectedCat.label} · ` : ''}{from}–{to}
+          <span style={{ display: 'block', fontSize: 9.5, opacity: 0.88, marginTop: 2 }}>
+            {from}–{to}
           </span>
         </div>
 
