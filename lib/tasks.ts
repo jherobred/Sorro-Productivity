@@ -35,6 +35,7 @@ export type Task = {
   source?: string | null;
   /** Calendar-only projection. Canvas's real deadline is never overwritten by a study plan. */
   calendar_original_due_at?: string | null;
+  calendar_original_due_on?: string | null;
   calendar_planned?: boolean;
 };
 

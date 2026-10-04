@@ -7,6 +7,7 @@ import { chipLabel, resolveCategory } from '@/lib/eventCategories';
 import { deadlineClock, deadlineOf } from '@/lib/todayCycle';
 import { chipInk, type Ev } from '@/lib/events';
 import type { Task } from '@/lib/tasks';
+import { CalendarSourceIcon } from './CalendarSourceIcon';
 import { CalendarTimers } from './CalendarTimers';
 
 const clock = (iso: string, time24: boolean) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !time24 });
@@ -71,7 +72,7 @@ export function NextView({ events, tasks, time24, onOpenEvent, onOpenTask, onSno
                 onClick={(ev) => onOpenEvent(e, ev.clientX, ev.clientY)}>
                 <span className="cal-next-time" style={{ color: e.detail_color || chipInk(e) }}>{e.all_day ? 'All day' : clock(e.starts_at, time24)}</span>
                 <span className="cal-next-bar" aria-hidden="true" />
-                <span className="cal-next-main"><b style={{ color: e.title_color || chipInk(e) }}>{chipLabel(e)}</b><small style={{ color: e.detail_color || chipInk(e) }}>{details}</small></span>
+                <span className="cal-next-main"><b style={{ color: e.title_color || chipInk(e) }}><CalendarSourceIcon source={e.source}/>{chipLabel(e)}</b><small style={{ color: e.detail_color || chipInk(e) }}>{details}</small></span>
                 {!e.all_day && <span style={{ color: e.detail_color || chipInk(e), background: e.color }} className={'cal-next-count' + (ongoing ? ' is-now' : '')}>{ongoing ? 'Now' : 'in ' + deadlineClock(Date.parse(e.starts_at), now).text}</span>}
               </button>
             );
@@ -83,7 +84,7 @@ export function NextView({ events, tasks, time24, onOpenEvent, onOpenTask, onSno
             <button key={t.id} type="button" className="cal-next-row is-task" onClick={(ev) => onOpenTask(t, ev.clientX, ev.clientY)}>
               <span className="cal-next-time">{t.due_at ? clock(t.due_at, time24) : 'Today'}</span>
               <span className="cal-next-check" aria-hidden="true" />
-              <span className="cal-next-main"><b>{t.title}</b><small>{t.due_at ? `Task due at ${clock(t.due_at, time24)}` : 'Task due by the end of today'}</small></span>
+              <span className="cal-next-main"><b><CalendarSourceIcon source={t.source}/>{t.title}</b><small>{t.due_at ? `Task due at ${clock(t.due_at, time24)}` : 'Task due by the end of today'}</small></span>
               <span className={'cal-next-count' + (late ? ' is-late' : '')}>{late ? 'Overdue' : 'in ' + deadlineClock(due, now).text}</span>
             </button>
           );

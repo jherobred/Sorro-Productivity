@@ -19,7 +19,7 @@ export const isLightColor = (color: string) => readableInk(color) === '#000000';
 /** Always visible, touch/pen friendly, and commits one write per gesture. */
 export function EventColors({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   return <div className="event-colors">
-    <ColorWheel value={value} onChange={onChange}/>
+    <ColorSquare value={value} onChange={onChange}/>
     <details className="calendar-presets"><summary>Google Calendar colors</summary>
       <div className="calendar-color-picker" role="group" aria-label="Color presets">
         {EVENT_COLORS.map(([name, color]) => <button type="button" key={color} aria-label={name} title={name}
@@ -31,7 +31,7 @@ export function EventColors({ value, onChange }: { value: string; onChange: (col
   </div>;
 }
 
-function ColorWheel({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+function ColorSquare({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(value));
   const [code, setCode] = useState(value.toUpperCase());
   const [invalid, setInvalid] = useState(false);
@@ -45,8 +45,7 @@ function ColorWheel({ value, onChange }: { value: string; onChange: (color: stri
   }, [value]);
   const pick = (x: number, y: number) => {
     const r = ref.current!.getBoundingClientRect();
-    const dx = x - r.left - r.width / 2, dy = y - r.top - r.height / 2;
-    const next = { h: (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360, s: Math.min(1, Math.hypot(dx, dy) / (r.width / 2)), v: latest.current.v };
+    const next = { h: latest.current.h, s: Math.max(0, Math.min(1, (x - r.left) / r.width)), v: 1 - Math.max(0, Math.min(1, (y - r.top) / r.height)) };
     preview(next);
     return next;
   };
@@ -55,12 +54,11 @@ function ColorWheel({ value, onChange }: { value: string; onChange: (color: stri
     setInvalid(!normalized);
     if (normalized) { preview(hexToHsv(normalized)); onChange(normalized); }
   };
-  const angle = hsv.h * Math.PI / 180;
   return <div className="color-wheel">
-    <div ref={ref} className="color-wheel-disc" role="slider" tabIndex={0} aria-label="Color wheel hue and saturation"
-      aria-valuetext={`${hex}, saturation ${Math.round(hsv.s * 100)} percent`} aria-valuenow={Math.round(hsv.h)} aria-valuemin={0} aria-valuemax={360}
-      aria-description="Drag to select a color. Left and right change hue; up and down change saturation."
-      style={{ '--v': 1 - hsv.v } as React.CSSProperties}
+    <div ref={ref} className="color-square" role="slider" tabIndex={0} aria-label="Color square saturation and brightness"
+      aria-valuetext={`${hex}, saturation ${Math.round(hsv.s * 100)} percent, brightness ${Math.round(hsv.v * 100)} percent`} aria-valuenow={Math.round(hsv.s * 100)} aria-valuemin={0} aria-valuemax={100}
+      aria-description="Drag to select a color. Left and right change saturation; up and down change brightness."
+      style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), hsl(${hsv.h} 100% 50%)` }}
       onPointerDown={e => { e.preventDefault(); dragging.current = true; e.currentTarget.setPointerCapture(e.pointerId); pick(e.clientX, e.clientY); }}
       onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) pick(e.clientX, e.clientY); }}
       onPointerUp={e => { if (!dragging.current) return; const next = pick(e.clientX, e.clientY); dragging.current = false; e.currentTarget.releasePointerCapture(e.pointerId); onChange(hsvToHex(next)); }}
@@ -69,11 +67,11 @@ function ColorWheel({ value, onChange }: { value: string; onChange: (color: stri
         if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
         e.preventDefault();
         const next = { ...latest.current };
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') next.h = (next.h + (e.key === 'ArrowRight' ? 3 : 357)) % 360;
-        else next.s = Math.max(0, Math.min(1, next.s + (e.key === 'ArrowUp' ? .02 : -.02)));
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') next.s = Math.max(0, Math.min(1, next.s + (e.key === 'ArrowRight' ? .02 : -.02)));
+        else next.v = Math.max(0, Math.min(1, next.v + (e.key === 'ArrowUp' ? .02 : -.02)));
         preview(next); onChange(hsvToHex(next));
       }}>
-      <span className="color-wheel-mark" style={{ left: `${50 + Math.sin(angle) * hsv.s * 50}%`, top: `${50 - Math.cos(angle) * hsv.s * 50}%`, background: hex }}/>
+      <span className="color-wheel-mark" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: hex }}/>
     </div>
     <div className="color-wheel-side">
       <span className="color-wheel-swatch" style={{ background: hex }}/>
@@ -81,10 +79,10 @@ function ColorWheel({ value, onChange }: { value: string; onChange: (color: stri
         onChange={e => { setCode(e.target.value); setInvalid(false); }} onBlur={applyCode}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }}/></label>
       {invalid && <small role="alert">Use 3 or 6 hex digits, e.g. #4285F4.</small>}
-      <label>Brightness<input type="range" min={0} max={100} value={Math.round(hsv.v * 100)} aria-label="Color brightness"
-        className="color-wheel-bright" style={{ background: `linear-gradient(to right, #000, ${hsvToHex({ ...hsv, v: 1 })})` }}
+      <label>Hue<input type="range" min={0} max={359} value={Math.round(hsv.h)} aria-label="Color hue"
+        className="color-wheel-bright" style={{ background: 'linear-gradient(to right, red, #ff0, lime, cyan, blue, magenta, red)' }}
         onPointerDown={() => { dragging.current = true; }}
-        onChange={e => preview({ ...latest.current, v: Number(e.target.value) / 100 })}
+        onChange={e => preview({ ...latest.current, h: Number(e.target.value) })}
         onPointerUp={() => { dragging.current = false; onChange(hsvToHex(latest.current)); }}
         onPointerCancel={() => { dragging.current = false; preview(hexToHsv(value)); }}
         onKeyUp={() => onChange(hsvToHex(latest.current))}/></label>

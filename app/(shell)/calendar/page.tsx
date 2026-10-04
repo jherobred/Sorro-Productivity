@@ -13,7 +13,9 @@ const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCa
 import { EventBubble } from '@/components/calendar/EventBubble';
 import { EventAppearance, EVENT_COLORS } from '@/components/calendar/EventColors';
 import { GoogleEventDelete } from '@/components/calendar/GoogleEventDelete';
-import { calendarTask, snapCalendarHour, slotClickCreates } from '@/lib/calendarPlanning';
+import { CalendarSourceIcon } from '@/components/calendar/CalendarSourceIcon';
+import { CanvasConnections } from '@/components/calendar/CanvasConnections';
+import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, snapCalendarHour, slotClickCreates } from '@/lib/calendarPlanning';
 import { useCalendarClock } from '@/lib/useCalendarClock';
 import { getPrefs, setPrefs } from '@/lib/prefs';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
@@ -312,8 +314,12 @@ export default function CalendarPage() {
     if (t.source === 'canvas_lms') {
       const before = getPrefs().calendarTaskPlans?.[t.id];
       const next = { date: due_on, starts_at: hour === null ? null : date.toISOString() };
-      setPrefs({ calendarTaskPlans: { ...getPrefs().calendarTaskPlans, [t.id]: next } });
-      toast('Study time moved. Canvas deadline kept.', () => {
+      const original = { ...t, due_on: t.calendar_planned ? t.calendar_original_due_on ?? t.due_on : t.due_on, due_at: t.calendar_planned ? t.calendar_original_due_at : t.due_at };
+      const restored = isOriginalTaskSlot(original, next);
+      const plans = { ...getPrefs().calendarTaskPlans };
+      if (restored) delete plans[t.id]; else plans[t.id] = next;
+      setPrefs({ calendarTaskPlans: plans });
+      toast(restored ? 'Returned to the Canvas deadline.' : 'Study time moved. Canvas deadline kept.', () => {
         const plans = { ...getPrefs().calendarTaskPlans };
         if (before) plans[t.id] = before; else delete plans[t.id];
         setPrefs({ calendarTaskPlans: plans });
@@ -535,6 +541,8 @@ export default function CalendarPage() {
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    const viewport = (e.target as HTMLElement).closest('.cal-grid-viewport');
+    if (viewport && viewport.scrollWidth > viewport.clientWidth + 1) { touchStartRef.current = null; return; }
     if ((e.target as HTMLElement).closest('.cal-task,.cal-event,.cal-all-day-event,.cal-deadline-ghost')) { touchStartRef.current = null; return; }
     if (e.touches.length === 1) {
       touchStartRef.current = {
@@ -607,6 +615,7 @@ export default function CalendarPage() {
         { label: 'Layout & focus hours', icon: 'cal', run: () => setLayoutOpen(v => !v) },
         { label: 'Up next and Today ends timers', icon: 'clock', checked: showTimers, run: toggleTimers },
         { label: 'Free time between events', icon: 'eye', checked: showVacant, run: toggleVacant },
+        { label: 'Free-time arrows', icon: 'arrowRight', checked: !!prefs.calendarFreeTimeArrows, run: () => void update({ calendarFreeTimeArrows: !prefs.calendarFreeTimeArrows }) },
       ],
     },
     {
@@ -633,12 +642,7 @@ export default function CalendarPage() {
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
       <header className="cal-head" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 30 : 0 }}>
-        <div className="cal-head-title">
-          <h1>{heading}</h1>
-          <p>{subline}{prefs.lockEvents && <span className="cal-head-lock"><Icon name="lock" size={11} />Locked</span>}</p>
-        </div>
-
-        <div className="cal-head-nav">
+        <div className="cal-date-navigation">
           {view !== 'countdown' && (
             <div className="cal-pager" role="group" aria-label="Move through the calendar">
               <button type="button" onClick={() => shift(-1)} aria-label={`Previous ${view}`} title={`Previous ${view}`}>
@@ -650,6 +654,12 @@ export default function CalendarPage() {
               </button>
             </div>
           )}
+        <div className="cal-head-title">
+          <h1>{heading}</h1>
+          <p>{subline}{prefs.lockEvents && <span className="cal-head-lock"><Icon name="lock" size={11} />Locked</span>}</p>
+        </div>
+        </div>
+        <div className="cal-head-nav">
           <ViewSwitcher view={view} onChange={setCalView} phone={phone} />
           {(view === 'week' || view === 'day') && <div className="cal-zoom" role="group" aria-label="Calendar zoom">
             <button aria-label="Zoom out calendar" title="Zoom out" disabled={(!zoomRange && prefs.calendarHourHeight === 0) || effectiveHourHeight <= 16} onClick={() => { setZoomRange(null); void update({ calendarHourHeight: Math.max(16, effectiveHourHeight - 8) }); }}>−</button>
@@ -682,6 +692,8 @@ export default function CalendarPage() {
           }}>Fit these hours</button></div>
         <label>Timers<select value={prefs.calendarTimersPosition ?? 'top'} onChange={e => void update({ calendarTimersPosition: e.target.value as 'top' | 'bottom' })}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
         <label>Date & view bar<select value={prefs.calendarToolbarPosition ?? 'top'} onChange={e => void update({ calendarToolbarPosition: e.target.value as 'top' | 'bottom' })}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
+        <label>Calendar style<select value={prefs.calendarSurfaceStyle ?? 'solid'} disabled={prefs.reduceTransparency} onChange={e => void update({ calendarSurfaceStyle: e.target.value as 'solid' | 'translucent' })}><option value="solid">Solid</option><option value="translucent">Translucent</option></select></label>
+        <label className="cal-layout-check"><input type="checkbox" checked={!!prefs.calendarFreeTimeArrows} onChange={e => void update({ calendarFreeTimeArrows: e.target.checked })}/>Free-time arrows</label>
         <button className="cal-icon-button" aria-label="Close layout controls" onClick={() => setLayoutOpen(false)}><Icon name="close" size={16}/></button>
       </section>}
 
@@ -1449,10 +1461,14 @@ function Grid({
   };
 
   /** Dragging between the tray and the visible time grid assigns/removes time. */
-  const pressTask = (e: React.PointerEvent, t: Task, _fromTray: boolean) => {
+  const pressTask = (e: React.PointerEvent, t: Task, fromTray: boolean) => {
     if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation(); gestureCleanup.current?.();
     const startX = e.clientX, startY = e.clientY;
+    const gridBounds = bodyRef.current?.getBoundingClientRect();
+    const grabOffset = fromTray || !t.due_at || !gridBounds ? 0 : calendarPointerHour(startY, gridBounds.top, gridBounds.height) - hoursOf(t.due_at);
+    const original = t.source === 'canvas_lms' ? (t.calendar_planned ? t.calendar_original_due_at : t.due_at) : null;
+    const origin = original ? { day: dayIndex(original, ws), hour: hoursOf(original) } : null;
     let moved = false;
     let pointer = { x: startX, y: startY };
     let target: { day: number; hour: number | null } | null = null;
@@ -1465,7 +1481,7 @@ function Grid({
       const inGrid = pointer.y >= visible.top && pointer.y <= visible.bottom;
       if (!inX || (!inTray && !inGrid)) { target = null; setTaskDrag(null); return; }
       const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor((pointer.x - r.left) / r.width * days)));
-      const hour = inTray ? null : snapCalendarHour((pointer.y - r.top) / r.height * SPAN);
+      const hour = inTray ? null : taskDropHour(calendarPointerHour(pointer.y, r.top, r.height), grabOffset, day, origin);
       target = { day, hour };
       setTaskDrag(prev => prev?.task.id === t.id && prev.day === day && prev.hour === hour ? prev : { task: t, day, hour });
     };
@@ -1490,6 +1506,9 @@ function Grid({
     const cancel = () => cleanup();
     const onUp = (m: PointerEvent) => {
       cleanup();
+      // The pointer release must not also create an all-day item beneath it.
+      suppressClick.current = true;
+      setTimeout(() => { suppressClick.current = false; }, 0);
       if (!moved) openTask(t, m.clientX, m.clientY);
       else if (prefs.lockEvents) toast('Events are locked. Unlock to move tasks.');
       else if (target) onSchedule(t, target.day, target.hour);
@@ -1505,9 +1524,12 @@ function Grid({
     tasks.filter((t) => t.due_at && dayIndex(t.due_at, ws) === col);
 
   return (
-    <div className="cal-grid-surface">
+    <div className="cal-grid-viewport" role="region" aria-label="Calendar days" tabIndex={0}
+      onScroll={e => e.currentTarget.style.setProperty('--calendar-scroll-x', `${e.currentTarget.scrollLeft}px`)}
+      onKeyDown={e => { if (e.target === e.currentTarget && ['ArrowLeft', 'ArrowRight'].includes(e.key)) e.stopPropagation(); }}>
+    <div className={"cal-grid-surface" + (days === 7 ? ' is-week' : '') + (prefs.calendarSurfaceStyle === 'translucent' && !prefs.reduceTransparency ? ' is-translucent' : '')}>
       <div style={{ display: 'flex', flex: 'none', position: 'relative' }}>
-        <div style={{ width: GUTTER, flex: 'none', borderBottom: '1px solid var(--line)' }} />
+        <div className="cal-axis-corner" style={{ width: GUTTER, flex: 'none', borderBottom: '1px solid var(--line)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
         {/* day headers */}
         <div className={'cal-dayheads' + (days === 1 ? ' is-single' : '')} style={{ gridTemplateColumns: `repeat(${days}, 1fr)` }}>
@@ -1528,7 +1550,7 @@ function Grid({
 
         {/* all-day strip: whole-day events plus every undated task for that day */}
         <div ref={trayRef} className="cal-all-day-tray">
-          <div aria-hidden style={{
+          <div className="cal-all-day-label" aria-hidden style={{
             position: 'absolute', left: 0, width: GUTTER, marginTop: 4,
             fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
             color: 'var(--tx3)', textAlign: 'right', paddingRight: 8, pointerEvents: 'none',
@@ -1541,31 +1563,29 @@ function Grid({
             const untimed = trayTasks(idx);
             const dropping = taskDrag?.hour === null && taskDrag.day === idx;
             return (
-              <div key={i} style={{
+              <div key={i} className="cal-all-day-column" style={{
                 flex: 1, minWidth: 0, padding: '4px 3px',
                 borderRight: i < days - 1 ? '1px solid var(--line)' : undefined,
                 background: dropping ? 'color-mix(in srgb, var(--acc) 12%, transparent)' : undefined,
                 transition: 'background .2s',
               }}>
                 {allDay.map((e) => (
-                  <div key={e.id} className="cal-all-day-event" role="button" tabIndex={0} onClick={p => { if (suppressClick.current) { suppressClick.current = false; return; } openEvent(e, p.clientX, p.clientY); }} onKeyDown={p => { if (p.key === 'Enter') { const r = p.currentTarget.getBoundingClientRect(); openEvent(e, r.left, r.top); } }} onPointerDown={(p) => press(p, e, 'move')}
+                  <div key={e.id} className={"cal-all-day-event" + (Date.parse(e.ends_at) < nowMs ? " is-past" : "")} role="button" tabIndex={0} onClick={p => { if (suppressClick.current) { suppressClick.current = false; return; } openEvent(e, p.clientX, p.clientY); }} onKeyDown={p => { if (p.key === 'Enter') { const r = p.currentTarget.getBoundingClientRect(); openEvent(e, r.left, r.top); } }} onPointerDown={(p) => press(p, e, 'move')}
                     onContextMenu={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
                     style={{
                       fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, marginBottom: 2, cursor: 'grab',
                       background: e.color, color: e.title_color || chipInk(e),
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>{chipLabel(e)}</div>
+                    }}><CalendarSourceIcon source={e.source}/><span>{chipLabel(e)}</span></div>
                 ))}
 
                 {untimed.map((t) => (
-                  <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} onOpen={(x, y) => openTask(t, x, y)} compact />
+                  <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} onOpen={(x, y) => openTask(t, x, y)} compact nowMs={nowMs} />
                 ))}
 
-                <button onPointerDown={slot.press} onClick={(p) => { if (slot.tapped(p)) openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task'); }} className="hov"
-                  title="Add a task or all-day item" aria-label="Add a task or all-day item"
-                  style={{ display: 'block', width: '100%', minHeight: 16, fontSize: 9.5, color: 'var(--tx3)', textAlign: 'left', padding: '2px 4px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                  <Icon name="plus" size={12}/>
-                </button>
+                <button className="cal-all-day-create" onPointerDown={slot.press}
+                  onClick={p => { if (suppressClick.current) return; if (slot.tapped(p)) openSlot(idx, GRID_START, p.clientX, p.clientY, true, undefined, 'task'); }}
+                  title="Create an all-day task or event" aria-label={`Create an all-day task or event on ${new Date(at(ws, idx, 12)).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`} />
               </div>
             );
           })}
@@ -1576,7 +1596,7 @@ function Grid({
       {/* the scrolling day */}
       <div ref={scroller} className="navsb cal-time-scroller" style={{ display: 'flex', overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0 }}>
         {/* Hour axis */}
-        <div style={{ width: GUTTER, flex: 'none', position: 'relative', height: GRID_H }}>
+        <div className="cal-hour-axis" style={{ width: GUTTER, flex: 'none', position: 'relative', height: GRID_H }}>
           {hours.map((h, i) => {
             const first = i === 0;
             const last = i === hours.length - 1;
@@ -1710,6 +1730,7 @@ function Grid({
                       endHour={v.endHour}
                       targetStartsAt={v.targetStartsAt}
                       isNext={v.isNext}
+                      showArrows={!!prefs.calendarFreeTimeArrows} pixelHeight={(v.endHour - v.startHour) * HOUR_H}
                     />
                   ));
                 })()}
@@ -1718,7 +1739,7 @@ function Grid({
                 {(() => {
                   type ScheduleItem =
                     | { kind: 'event'; ev: Ev; id: string }
-                    | { kind: 'task' | 'ghost'; task: Task; id: string };
+                    | { kind: 'task'; task: Task; id: string };
 
                   const dayColEvents = events
                     .filter((e) => !e.all_day && !e.deleted_at
@@ -1749,17 +1770,26 @@ function Grid({
                   const dayColTasks = slotTasks(idx).filter(t => taskDrag?.task.id !== t.id).map(t => ({
                     ev: { kind: 'task' as const, task: t, id: t.id }, start: hoursOf(t.due_at!), end: Math.min(24, hoursOf(t.due_at!) + 1),
                   }));
-                  const ghosts = tasks.filter(t => {
-                    const original = t.calendar_original_due_at || (taskDrag?.task.id === t.id && t.source === 'canvas_lms' ? t.due_at : null);
-                    return original && dayIndex(original, ws) === idx && (original !== t.due_at || !!taskDrag);
-                  }).map(t => {
-                    const original = t.calendar_original_due_at || t.due_at!;
-                    return { ev: { kind: 'ghost' as const, task: t, id: `ghost-${t.id}` }, start: hoursOf(original), end: Math.min(24, hoursOf(original) + 1) };
+                  const ghosts = tasks.flatMap(t => {
+                    if (t.source !== 'canvas_lms') return [];
+                    const original = t.calendar_planned ? t.calendar_original_due_at : t.due_at;
+                    const destination = taskDrag?.task.id === t.id ? (taskDrag.hour === null ? null : at(ws, taskDrag.day, taskDrag.hour)) : t.due_at;
+                    if (!original || dayIndex(original, ws) !== idx || sameCalendarTime(original, destination)) return [];
+                    const start = hoursOf(original), end = Math.min(24, start + 1);
+                    return [{ task: t, start, end, obstructed: [...dayColEvents, ...dayColTasks].some(item => item.start < end && item.end > start) }];
                   });
-                  const allItems = [...dayColEvents, ...dayColTasks, ...ghosts];
+                  const allItems = [...dayColEvents, ...dayColTasks];
                   const positioned = layoutOverlappingEvents<ScheduleItem>(allItems);
 
-                  return positioned.map((pos) => {
+                  return <>{ghosts.map(({ task, start, end, obstructed }) => <div key={`ghost-${task.id}`} data-calendar-ghost-id={task.id}
+                    className={"cal-deadline-ghost" + (obstructed ? " is-obstructed" : "")}
+                    style={{ position: 'absolute', left: 3, right: 3, top: `${Math.min(pct(start), 100 - 24 / GRID_H * 100)}%`, height: Math.max(24, (end - start) * HOUR_H) }}>
+                    <button type="button" className="cal-deadline-label" aria-label={`Canvas deadline: ${task.title} · ${hhmm(start)}`}
+                      title={`${task.title} · Canvas deadline ${hhmm(start)} · Drag study time here to restore`}
+                      onClick={p => openTask(task, p.clientX, p.clientY)}>
+                      <CalendarSourceIcon source="canvas_lms"/><span><b>{task.title}</b><small>Due {hhmm(start)}</small></span>
+                    </button>
+                  </div>)}{positioned.map((pos) => {
                     const item = pos.ev;
                     const leftPct = (pos.colIndex / pos.totalCols) * 100;
                     const widthPct = (1 / pos.totalCols) * 100;
@@ -1777,8 +1807,8 @@ function Grid({
                           key={`ev-${e.id}`}
                           ev={e}
                           pixelHeight={(pos.end - pos.start) * HOUR_H}
-                          top={Math.min(pct(pos.start), 100 - 14 / GRID_H * 100)}
-                          height={Math.max(14 / GRID_H * 100, pct(pos.end) - pct(pos.start))}
+                          top={Math.min(pct(pos.start), 100 - 20 / GRID_H * 100)}
+                          height={Math.max(20 / GRID_H * 100, pct(pos.end) - pct(pos.start))}
                           left={leftStyle}
                           width={widthStyle}
                           label={`${hhmm(pos.start)} – ${hhmm(pos.end)}`}
@@ -1787,20 +1817,13 @@ function Grid({
                           isNext={e.id === nextEventId}
                           onPointerDown={(p) => press(p, e, 'move')}
                           onResize={(p) => press(p, e, 'resize')}
-                          dark={dark}
+                          dark={dark} nowMs={nowMs}
                           onOpen={(p) => { if (suppressClick.current) { suppressClick.current = false; return; } openEvent(e, p.clientX, p.clientY); }}
                           onContext={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
                         />
                       );
                     } else {
                       const t = item.task;
-                      if (item.kind === 'ghost') return <button key={item.id} type="button" className={"cal-deadline-ghost" + ((pos.end - pos.start) * HOUR_H < 42 ? " is-short" : "")}
-                        aria-label={`Canvas deadline: ${t.title}`} title={`Original Canvas deadline · ${hhmm(pos.start)}`}
-                        onClick={p => openTask(t, p.clientX, p.clientY)}
-                        style={{ position: 'absolute', left: leftStyle, width: widthStyle, top: `${Math.min(pct(pos.start), 100 - 30 / GRID_H * 100)}%`, height: Math.max(30, (pos.end - pos.start) * HOUR_H) }}>
-                        <b>{t.title}</b><small>Canvas due · {hhmm(pos.start)}</small>
-                      </button>;
-                      const ghost = taskDrag?.task.id === t.id;
                       return (
                         <TaskChip
                           key={`task-${t.id}`}
@@ -1808,48 +1831,34 @@ function Grid({
                           onPointerDown={(p) => pressTask(p, t, false)} onOpen={(x, y) => openTask(t, x, y)}
                           timeLabel={`${hhmm(pos.start)} – ${hhmm(pos.end)}`}
                           pixelHeight={Math.max(24, (pos.end - pos.start) * HOUR_H)}
-                          compact={pos.totalCols > 1}
+                          nowMs={nowMs}
                           style={{
                             position: 'absolute',
                             left: leftStyle,
                             width: widthStyle,
                             top: `${Math.min(pct(pos.start), 100 - 24 / GRID_H * 100)}%`,
                             height: Math.max(24, (pos.end - pos.start) * HOUR_H),
-                            opacity: ghost ? 0.4 : 1,
                             zIndex: 2,
                           }}
                         />
                       );
                     }
-                  });
+                  })}</>;
                 })()}
 
                 {taskDrag && taskDrag.hour !== null && taskDrag.day === idx && <TaskChip task={taskDrag.task}
-                  onPointerDown={() => {}} pixelHeight={Math.max(24, HOUR_H)} timeLabel={`${hhmm(taskDrag.hour)} – ${hhmm(taskDrag.hour + 1)}`}
+                  onPointerDown={() => {}} nowMs={nowMs} pixelHeight={Math.max(24, HOUR_H)} timeLabel={`${hhmm(taskDrag.hour)} – ${hhmm(taskDrag.hour + 1)}`}
                   style={{ position: 'absolute', left: 3, right: 20, top: `${pct(taskDrag.hour)}%`, height: `${100 / SPAN}%`, zIndex: 8, pointerEvents: 'none', boxShadow: '0 6px 20px #0003' }}/>}
               </div>
             );
           })}
 
-          <svg className="cal-task-connections" width="100%" height="100%" viewBox={`0 0 ${viewport.width} ${GRID_H}`} preserveAspectRatio="none" aria-hidden="true">
-            <defs><marker id="canvas-plan-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>
-            {tasks.filter(t => t.source === 'canvas_lms').map(t => {
-              const original = t.calendar_original_due_at || t.due_at;
-              const destination = taskDrag?.task.id === t.id ? (taskDrag.hour === null ? null : at(ws, taskDrag.day, taskDrag.hour)) : t.due_at;
-              if (!original || !destination || original === destination) return null;
-              const originDay = dayIndex(original, ws) - dayOffset, destDay = dayIndex(destination, ws) - dayOffset;
-              if ((originDay < 0 || originDay >= days) && (destDay < 0 || destDay >= days)) return null;
-              const columnWidth = viewport.width / days;
-              const x1 = Math.max(4, Math.min(viewport.width - 4, (originDay + 1) * columnWidth - 9));
-              const x2 = Math.max(4, Math.min(viewport.width - 4, (destDay + 1) * columnWidth - 9));
-              const y1 = Math.min(23.8, hoursOf(original) + .25) * HOUR_H, y2 = Math.min(23.8, hoursOf(destination) + .25) * HOUR_H;
-              const middle = (y1 + y2) / 2;
-              return <path key={t.id} d={`M ${x1} ${y1} C ${x1} ${middle}, ${x2} ${middle}, ${x2} ${y2}`} fill="none" stroke="currentColor" strokeWidth="1.5" markerStart="url(#canvas-plan-arrow)" markerEnd="url(#canvas-plan-arrow)"/>;
-            })}
-          </svg>
+          <CanvasConnections root={bodyRef} layoutKey={JSON.stringify([ws, days, dayOffset, HOUR_H, viewport.width, taskDrag, drag, resize, tasks.map(t => [t.id, t.due_at, t.calendar_original_due_at]), events.map(e => [e.id, e.starts_at, e.ends_at])])}/>
+
         </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -1897,7 +1906,7 @@ function EventChip({
   const isPast = new Date(ev.ends_at).getTime() < nowMs;
   const cd = !isPast && isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
   // Under ~45 minutes there is one line of room, so the time sits beside the title.
-  const short = pixelHeight < 42;
+  const short = pixelHeight < 42 || Date.parse(ev.ends_at) - Date.parse(ev.starts_at) <= 30 * 60_000;
   const tiny = pixelHeight < 24;
   const className = [
     'cal-event', short && 'is-short', tiny && 'is-tiny', selected && 'is-selected',
@@ -1915,7 +1924,7 @@ function EventChip({
       style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, '--event-title-ink': ev.title_color || ink, '--event-detail-ink': ev.detail_color || ink, background: ev.color, color: ink } as React.CSSProperties}
       title={`${chipLabel(ev)} · ${label}`}>
       <span className="cal-event-title">
-        {locked && <Icon name="lock" size={9} color={ink} />}
+        <CalendarSourceIcon source={ev.source}/>
         <b>{chipLabel(ev)}</b>
 
       </span>
@@ -1937,8 +1946,9 @@ function VacantTimeIndicator({
   startHour,
   endHour,
   targetStartsAt,
-  isNext,
+  isNext, showArrows, pixelHeight,
 }: {
+  showArrows: boolean; pixelHeight: number;
   startHour: number;
   endHour: number;
   targetStartsAt?: string;
@@ -1949,11 +1959,12 @@ function VacantTimeIndicator({
   const durationHours = endHour - startHour;
   if (durationHours <= 0.25) return null;
   return (
-    <div aria-hidden className={'cal-free' + (isNext ? ' is-next' : '')} style={{ top: `${topPct}%`, height: `${heightPct}%` }}>
+    <div aria-hidden className={'cal-free' + (isNext ? ' is-next' : '') + (showArrows ? ' has-arrows' : '')} style={{ top: `${topPct}%`, height: `${heightPct}%` }}>
       {durationHours >= 0.5 && (
         <span className="cal-free-label">
           <b>{formatDurationHours(durationHours)} free</b>
-          {isNext && targetStartsAt && durationHours >= 1 && <VacantCountdown targetStartsAt={targetStartsAt} />}
+          {pixelHeight >= 52 && <small>{hhmm(startHour)} – {hhmm(endHour)}</small>}
+          {isNext && targetStartsAt && pixelHeight >= 76 && <VacantCountdown targetStartsAt={targetStartsAt} />}
         </span>
       )}
     </div>
@@ -2035,19 +2046,20 @@ function SpanChip({ span: s, days, offset, dark, nowMs = Date.now(), onPointerDo
   );
 }
 
-function TaskChip({ task, onPointerDown, onOpen, style, compact, timeLabel, pixelHeight }: {
-  task: Task; onPointerDown: (e: React.PointerEvent) => void; onOpen?: (x: number, y: number) => void; style?: React.CSSProperties; compact?: boolean; timeLabel?: string; pixelHeight?: number;
+function TaskChip({ task, onPointerDown, onOpen, style, compact, timeLabel, pixelHeight, nowMs = Date.now() }: {
+  task: Task; onPointerDown: (e: React.PointerEvent) => void; onOpen?: (x: number, y: number) => void; style?: React.CSSProperties; compact?: boolean; timeLabel?: string; pixelHeight?: number; nowMs?: number;
 }) {
   const alert = getTaskAlert(task);
   const hue = task.source === 'canvas_lms' ? '#3f51b5' : '#0b8043';
+  const isPast = (task.due_at ? Date.parse(task.due_at) + 3600_000 : new Date(`${task.due_on}T23:59:59`).getTime()) < nowMs;
   return (
-    <div onPointerDown={onPointerDown} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
+    <div data-calendar-task-id={task.id} onPointerDown={onPointerDown} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
       aria-label={`${task.title}${timeLabel ? ` · ${timeLabel}` : " · All day"}`}
       onKeyDown={e => { if (onOpen && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); onOpen(r.left, r.top); } }} title={`${task.title} · drag it to a time`}
-      className={'cal-task' + (pixelHeight !== undefined && pixelHeight < 42 ? ' is-short' : '') + (compact ? ' is-compact' : '') + (style?.position === 'absolute' ? ' is-timed' : '') + (alert?.tier === 'red' ? ' is-due' : '')}
+      className={'cal-task' + (isPast ? ' is-past' : '') + (pixelHeight !== undefined && pixelHeight < 42 ? ' is-short' : '') + (compact ? ' is-compact' : '') + (style?.position === 'absolute' ? ' is-timed' : '') + (alert?.tier === 'red' ? ' is-due' : '')}
       style={{ '--hue': hue, color: '#fff', ...style } as React.CSSProperties}>
-      <span className="cal-task-ring" aria-hidden="true" />
-      <span className="cal-task-copy"><span className="cal-task-title">{task.title}</span>{timeLabel && <small className="cal-task-time-label"><span className="cal-task-time-full">{timeLabel}</span><span className="cal-task-time-compact" aria-hidden="true">{timeLabel.replace(/\s?[AP]M/g, '').replace(' – ', '–')}</span></small>}{task.calendar_planned && !compact && <small className="cal-task-plan-label">Study time</small>}</span>
+      {task.source !== 'canvas_lms' && <span className="cal-task-ring" aria-hidden="true" />}
+      <span className="cal-task-copy"><span className="cal-task-title"><CalendarSourceIcon source={task.source}/>{task.title}</span>{timeLabel && <small className="cal-task-time-label"><span className="cal-task-time-full">{timeLabel}</span><span className="cal-task-time-compact" aria-hidden="true">{timeLabel.replace(/\s?[AP]M/g, '').replace(' – ', '–')}</span></small>}{task.calendar_planned && !compact && (pixelHeight === undefined || pixelHeight >= 72) && <small className="cal-task-plan-label">Study time</small>}</span>
     </div>
   );
 }
@@ -2167,13 +2179,13 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
   const nowMs = useSecond();
 
   const byDay = useMemo(() => {
-    const m = new Map<string, { id?: string; title: string; short_name?: string | null; color: string; text_color?: string | null; title_color?: string | null; detail_color?: string | null; starts_at?: string; ends_at?: string; task?: boolean }[]>();
-    const push = (k: string, v: { id?: string; title: string; short_name?: string | null; color: string; text_color?: string | null; title_color?: string | null; detail_color?: string | null; starts_at?: string; ends_at?: string; task?: boolean }) =>
+    const m = new Map<string, { id?: string; title: string; short_name?: string | null; color: string; text_color?: string | null; title_color?: string | null; detail_color?: string | null; starts_at?: string; ends_at?: string; source?: string | null; task?: boolean }[]>();
+    const push = (k: string, v: { id?: string; title: string; short_name?: string | null; color: string; text_color?: string | null; title_color?: string | null; detail_color?: string | null; starts_at?: string; ends_at?: string; source?: string | null; task?: boolean }) =>
       m.set(k, [...(m.get(k) ?? []), v]);
-    for (const e of events) push(new Date(e.starts_at).toDateString(), { id: e.id, title: e.title, short_name: e.short_name, color: e.color, text_color: e.text_color, title_color: e.title_color, detail_color: e.detail_color, starts_at: e.starts_at, ends_at: e.ends_at });
+    for (const e of events) push(new Date(e.starts_at).toDateString(), { id: e.id, title: e.title, short_name: e.short_name, color: e.color, text_color: e.text_color, title_color: e.title_color, detail_color: e.detail_color, starts_at: e.starts_at, ends_at: e.ends_at, source: e.source });
     for (const t of tasks) {
       if (!t.due_on) continue;
-      push(new Date(`${t.due_on}T12:00:00`).toDateString(), { id: t.id, title: t.title, color: t.source === 'canvas_lms' ? '#3f51b5' : '#0b8043', task: true });
+      push(new Date(`${t.due_on}T12:00:00`).toDateString(), { id: t.id, title: t.title, color: t.source === 'canvas_lms' ? '#3f51b5' : '#0b8043', source: t.source, task: true });
     }
     return m;
   }, [events, tasks]);
@@ -2238,12 +2250,10 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
 
                 return (
                   <span key={n} data-month-chip
-                    className={urgent ? 'red-alert-pulse' : undefined}
+                    className={'cal-month-event' + (isPast ? ' is-past' : '') + (urgent ? ' red-alert-pulse' : '')}
                     style={{
                       fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, flex: 'none',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
-                      opacity: 1,
-
                       background: it.color,
                       border: it.task ? '1px dashed currentColor' : undefined,
                       color: it.title_color || chipInk(it),
@@ -2252,7 +2262,7 @@ function Month({ ws, month, events, tasks, onPickDay, nextEventId }: {
                       justifyContent: 'space-between',
                       gap: 3,
                     }}>
-                    <span aria-hidden style={{ width: 5, height: 5, borderRadius: 3, background: it.color, flex: 'none' }} />
+                    <CalendarSourceIcon source={it.source}/>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: urgent ? 800 : 700 }}>
                       {chipLabel(it)}
                     </span>
@@ -2302,20 +2312,21 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
           color: string;
           text_color?: string | null; title_color?: string | null; detail_color?: string | null; all_day?: boolean;
           task: boolean;
+          source?: string | null;
         };
 
         const evItems: AgendaItem[] = events
           .filter((e) => dayIndex(e.starts_at, ws) === i)
           .map((e) => ({
             id: e.id, time: hoursOf(e.starts_at), starts_at: e.starts_at, ends_at: e.ends_at,
-            title: e.title, short_name: e.short_name, meta: e.location, color: e.color, text_color: e.text_color, title_color: e.title_color, detail_color: e.detail_color, all_day: e.all_day, task: false,
+            title: e.title, short_name: e.short_name, meta: e.location, color: e.color, text_color: e.text_color, title_color: e.title_color, detail_color: e.detail_color, all_day: e.all_day, source: e.source, task: false,
           }));
 
         const taskItems: AgendaItem[] = tasks
           .filter((t) => dayIndex(`${t.due_on}T12:00:00`, ws) === i)
           .map((t) => ({
             id: t.id, time: t.due_at ? hoursOf(t.due_at) : 23.9, starts_at: t.due_at ?? null, ends_at: null,
-            title: t.title, meta: t.due_at ? 'Task' : 'Task · no set time', color: t.source === 'canvas_lms' ? '#3f51b5' : '#0b8043', task: true,
+            title: t.title, meta: t.due_at ? 'Task' : 'Task · no set time', color: t.source === 'canvas_lms' ? '#3f51b5' : '#0b8043', source: t.source, task: true,
           }));
 
         const items = [...evItems, ...taskItems].sort((a, b) => a.time - b.time);
@@ -2340,10 +2351,11 @@ function Agenda({ ws, events, tasks, nextEventId }: { ws: Date; events: Ev[]; ta
               const urgent = isUrgentEvent(a.color) && !isPast;
 
               return (
-                <div key={a.id} className="cal-agenda-event" style={{
+                <div key={a.id} className={"cal-agenda-event" + (isPast ? " is-past" : "")} style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '8px', marginTop: 4, borderRadius: 4,
                   background: a.color, color: chipInk(a),
                 }}>
+                  <CalendarSourceIcon source={a.source}/>
                   <span
                     className={urgent ? 'red-alert-pulse' : undefined}
                     style={{

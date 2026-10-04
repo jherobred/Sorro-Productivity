@@ -118,6 +118,7 @@ export function seedDevFixtures() {
     // What the Canvas sync writes: no list, the course and link in notes, source canvas_lms.
     { ...task('c1', '', 'Problem Set 5: Graph Algorithms', ymdOf(1), 'med', 0, 'CS 191 — https://ust.instructure.com/courses/41021/assignments/88710'), list_id: null, due_at: iso(1, 23, 59), source: 'canvas_lms' },
     { ...task('c2', '', 'Reflection Paper: Technology and Society', ymdOf(3), 'med', 0, 'STS 1 — https://ust.instructure.com/courses/41007/assignments/88452'), list_id: null, due_at: iso(3, 17, 0), source: 'canvas_lms' },
+    { ...task('preview-canvas-overlap', '', 'Preview · Canvas assignment', ymdOf(0), 'med', 0), list_id: null, due_at: iso(0, 12, 0), source: 'canvas_lms' },
     { ...task('c3', '', 'Quiz 3: Normal Forms', ymdOf(0), 'med', 0, 'IT 222 — https://ust.instructure.com/courses/41033/quizzes/19220'), list_id: null, due_at: iso(0, 21, 0), source: 'canvas_lms' },
   ]);
 
@@ -138,6 +139,9 @@ export function seedDevFixtures() {
    * which is what the spanning-chip grouping pass collapses into one bar.
    */
   seed(['events'], [
+    ev('preview-overlap', 'Preview · Class', 0, 12, 0, 13, 0, '', '#039be5', 'gcal_ics'),
+    ev('preview-short', 'Quick review', 0, 13, 30, 14, 0, '', '#33b679'),
+    ev('preview-short-future', 'Team call', 1, 9, 30, 10, 0, '', '#039be5', 'gcal_ics'),
     { ...ev('preview-google', 'Preview · Google meeting', 0, 14, 0, 15, 0, '', '#039be5'), source: 'gcal_ics', external_id: 'preview-event@google.com' },
     // A rolling future item lets countdown and wake-lock previews work on weekends too.
     { ...ev('preview-up-next', 'Preview · study session', 0, 9, 0, 10, 0, 'Library', '#2563eb'), starts_at: new Date(Date.now() + 3600000).toISOString(), ends_at: new Date(Date.now() + 7200000).toISOString() },

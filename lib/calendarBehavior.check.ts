@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { contrastRatio, readableInk, normalizeHex, hexToHsv, hsvToHex } from './calendarAppearance.ts';
-import { calendarTask, snapCalendarHour, slotClickCreates } from './calendarPlanning.ts';
+import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, canvasConnectionPath, snapCalendarHour, slotClickCreates } from './calendarPlanning.ts';
 import { deleteGoogleOccurrence, googleCalendarId, googleOccurrence, GoogleAuthorizationError } from './googleCalendarApi.ts';
 
 test('automatic ink meets 4.5:1 on saturated, pastel, neutral and arbitrary solid fills', () => {
@@ -13,7 +13,7 @@ test('automatic ink meets 4.5:1 on saturated, pastel, neutral and arbitrary soli
     assert.ok(contrastRatio(color, readableInk(color)) >= 4.5, color);
   }
 });
-test('wheel and hex round-trip white, black, grays and arbitrary colors without drift', () => {
+test('picker and hex round-trip white, black, grays and arbitrary colors without drift', () => {
   for (const color of ['#000000', '#ffffff', '#777777', '#4285f4', '#ffeedd', '#e67c73']) assert.equal(hsvToHex(hexToHsv(color)), color);
   assert.equal(normalizeHex(' AbC '), '#aabbcc');
   assert.equal(normalizeHex('#4285F4'), '#4285f4');
@@ -85,5 +85,40 @@ test('unknown occurrence, recurring master, denied scope and ambiguous matches n
     }) as typeof fetch;
     await assert.rejects(deleteGoogleOccurrence({ token: 'test', calendarId: 'calendar', externalId: 'uid', fetcher }), mode === 'denied' ? GoogleAuthorizationError : Error);
     assert.equal(deletes, 0);
+  }
+});
+
+
+test('Canvas drop keeps the grab offset and restores an exact deadline near midnight', () => {
+  assert.equal(taskDropHour(15.75, .75, 1), 15);
+  assert.equal(taskDropHour(12.8, .75, 1, { day: 1, hour: 12 }), 12);
+  assert.equal(taskDropHour(23.9, 0, 2, { day: 2, hour: 23 + 59 / 60 }), 23 + 59 / 60);
+  assert.equal(taskDropHour(23.9, 0, 3, { day: 2, hour: 23 + 59 / 60 }), 23);
+});
+
+test('returning to the original Canvas slot clears the ghost even across timestamp formats', () => {
+  const original = { id: 'canvas', source: 'canvas_lms', due_on: '2026-10-04', due_at: '2026-10-04T12:00:00+08:00' };
+  const plan = { date: '2026-10-04', starts_at: '2026-10-04T04:00:00.000Z' };
+  assert.equal(isOriginalTaskSlot(original, plan), true);
+  assert.equal(sameCalendarTime(original.due_at, plan.starts_at), true);
+  assert.equal(calendarTask(original, { canvas: plan }).calendar_planned, false);
+  assert.equal(calendarTask(original, { canvas: plan }).calendar_original_due_at, undefined);
+  assert.equal(isOriginalTaskSlot(original, { ...plan, starts_at: null }), false);
+  const undatedTime = { ...original, due_at: null };
+  assert.equal(isOriginalTaskSlot(undatedTime, { ...plan, starts_at: null }), true);
+  assert.equal(calendarTask(undatedTime, { canvas: plan }).calendar_original_due_on, original.due_on);
+});
+
+test('workspace scaling and scrolling preserve task drop times and arrow endpoints', () => {
+  const body = { left: 100, top: -200, width: 1600, height: 1344 };
+  const origin = { left: 1200, top: 472, width: 220, height: 56 };
+  const destination = { left: 1320, top: 584, width: 100, height: 56 };
+  const reference = canvasConnectionPath(body, 1600, 1344, origin, destination);
+  for (const scale of [.75, .875, 1, 1.25]) {
+    const rect = (r: typeof body) => ({ left: r.left * scale, top: r.top * scale, width: r.width * scale, height: r.height * scale });
+    assert.equal(canvasConnectionPath(rect(body), 1600, 1344, rect(origin), rect(destination)), reference);
+    const grab = calendarPointerHour((body.top + 12.75 * 56) * scale, body.top * scale, body.height * scale) - 12;
+    const pointer = calendarPointerHour((body.top + 15.75 * 56) * scale, body.top * scale, body.height * scale);
+    assert.equal(taskDropHour(pointer, grab, 2), 15);
   }
 });

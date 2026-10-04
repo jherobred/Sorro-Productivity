@@ -14,6 +14,8 @@ import { PreferenceOutbox, preferenceDelta, mergePreferencePatch, type Preferenc
 export type Prefs = {
   taskEventLinks?: Record<string, string[]>;
   calendarHourHeight?: number;
+  calendarFreeTimeArrows?: boolean;
+  calendarSurfaceStyle?: 'solid' | 'translucent';
   calendarTimersPosition?: 'top' | 'bottom';
   calendarToolbarPosition?: 'top' | 'bottom';
   calendarPowerSave?: boolean;
