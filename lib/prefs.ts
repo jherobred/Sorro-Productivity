@@ -1,16 +1,24 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
-import { supabase, currentUserId } from './supabase';
+import { supabase, currentUserId, cachedUserId } from './supabase';
 import { DEFAULT_ACCENT, RETIRED_ACCENT } from './pal';
 import { DEFAULT_SHELL, isShellLayout, type ShellLayout } from './shellLayouts';
 import { EMPTY_PLAN } from './lift';
 import type { Tag } from './tagList';
 import type { TaskRepeat } from './taskRepeat';
-import type { RecurrenceRule } from './events';
+import type { EventLocalMeta } from './events';
+import { defineMutation, queryClient } from './offline';
+import { PreferenceOutbox, preferenceDelta, mergePreferencePatch, type PreferencePatch } from './preferenceSync';
 
 export type Prefs = {
   taskEventLinks?: Record<string, string[]>;
+  calendarHourHeight?: number;
+  calendarTimersPosition?: 'top' | 'bottom';
+  calendarToolbarPosition?: 'top' | 'bottom';
+  calendarPowerSave?: boolean;
+  calendarTaskPlans?: Record<string, { date: string; starts_at: string | null }>;
+
   theme: 'dark' | 'light';
   accent: string;
   motion: boolean;
@@ -96,7 +104,7 @@ export type Prefs = {
    * the device that set them, so a repeating class showed once on every other
    * device; here they follow the account. See getEventMetaMap in lib/events.ts.
    */
-  eventMeta?: Record<string, { short_name?: string; recurrence?: RecurrenceRule | null }>;
+  eventMeta?: Record<string, EventLocalMeta>;
 };
 
 export type TaskSortKey = 'smart' | 'due' | 'priority' | 'stars' | 'title' | 'created';
@@ -233,6 +241,29 @@ let hydrated = false;
 let loadedFromServer = false;
 export const prefsLoaded = () => loadedFromServer;
 const listeners = new Set<() => void>();
+const preview = process.env.NEXT_PUBLIC_DEV_FIXTURES === '1' && process.env.NODE_ENV !== 'production';
+const outbox = typeof window === 'undefined' ? null : new PreferenceOutbox(window.localStorage);
+let owner: string | null = null;
+let hydrationEdits: PreferencePatch = {};
+
+const SAVE_PREFS = defineMutation('prefs.save', async ({ uid }: { uid: string }) => {
+  if (!outbox || preview || await currentUserId() !== uid) return;
+  await outbox.flush(uid, async () => {
+    const { data, error } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+    if (error) throw error;
+    return data?.prefs ?? {};
+  }, async prefs => {
+    const { error } = await supabase.from('bd_profiles').update({ prefs }).eq('user_id', uid).select('user_id').single();
+    if (error) throw error;
+  });
+});
+queryClient.setMutationDefaults(SAVE_PREFS, { ...queryClient.getMutationDefaults(SAVE_PREFS), scope: { id: 'preferences' } });
+function syncPreferences(uid: string) {
+  if (preview || !outbox || !Object.keys(outbox.pending(uid)).length) return;
+  // The shared save indicator and retry action observe this mutation too.
+  void queryClient.getMutationCache().build<unknown, Error, { uid: string }, unknown>(queryClient, { mutationKey: SAVE_PREFS }).execute({ uid }).catch(() => {});
+}
+if (typeof window !== 'undefined') window.addEventListener('online', () => { if (owner) syncPreferences(owner); });
 
 const emit = () => { for (const l of listeners) l(); };
 
@@ -248,31 +279,39 @@ function subscribe(l: () => void) {
   return () => { listeners.delete(l); };
 }
 
-/** Prefs follow the user across devices; the server copy wins once it lands. */
+/** Hydrate account preferences while preserving local changes still waiting to sync. */
 async function hydrateFromServer() {
   const uid = await currentUserId().catch(() => null);
   if (!uid) return;
+  owner = uid;
+  if (preview) { loadedFromServer = true; return; }
   const { data, error } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
-  if (!error) loadedFromServer = true;
+  if (await currentUserId().catch(() => null) !== uid) return;
   const remote = data?.prefs as Partial<Prefs> | undefined;
-  if (!remote || Object.keys(remote).length === 0) return;
-  state = { ...DEFAULT_PREFS, ...remote };
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
-  applyPrefs(state);
-  emit();
+  if (!error) {
+    const pending = mergePreferencePatch(outbox?.pending(uid) ?? {}, hydrationEdits, true);
+    const saved = remote && Object.keys(remote).length ? remote : state;
+    state = mergePreferencePatch({ ...DEFAULT_PREFS, ...saved }, pending) as Prefs;
+    loadedFromServer = true;
+    hydrationEdits = {};
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    applyPrefs(state);
+    emit();
+  }
+  syncPreferences(uid);
 }
 
 export function setPrefs(patch: Partial<Prefs>) {
+  const delta = preferenceDelta(state, patch);
   state = { ...state, ...patch };
   localStorage.setItem(LS_KEY, JSON.stringify(state));
   applyPrefs(state);
   emit();
-  // Fire-and-forget: the local write already happened, so a failed sync costs
-  // nothing the next hydrate will not fix.
-  const snapshot = state;
-  void currentUserId()
-    .then((uid) => supabase.from('bd_profiles').update({ prefs: snapshot }).eq('user_id', uid))
-    .catch(() => { /* signed out */ });
+  if (preview || !Object.keys(delta).length) return;
+  if (!loadedFromServer) hydrationEdits = mergePreferencePatch(hydrationEdits, delta, true);
+  const queue = (uid: string) => { outbox?.enqueue(uid, delta); syncPreferences(uid); };
+  if (owner && cachedUserId() === owner) queue(owner);
+  else void currentUserId().then(uid => { owner = uid; queue(uid); }).catch(() => { /* signed out: device preferences only */ });
 }
 
 /** The current prefs, for code outside React: a mutation, a query function. */

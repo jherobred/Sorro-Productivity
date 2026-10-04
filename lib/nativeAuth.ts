@@ -18,7 +18,7 @@ export const NATIVE_REDIRECT = 'com.basedly.app://auth';
  */
 export async function signInWithGoogle(
   /** `prompt: 'select_account'` forces Google's chooser — see lib/accounts.ts. */
-  opts: { prompt?: string } = {},
+  opts: { prompt?: string; scopes?: string } = {},
 ): Promise<{ error?: string }> {
   const redirectTo = isNative() ? NATIVE_REDIRECT : `${window.location.origin}/auth/callback/`;
 
@@ -26,6 +26,7 @@ export async function signInWithGoogle(
     provider: 'google',
     options: {
       redirectTo,
+      ...(opts.scopes ? { scopes: opts.scopes } : {}),
       skipBrowserRedirect: isNative(),
       ...(opts.prompt ? { queryParams: { prompt: opts.prompt } } : {}),
     },

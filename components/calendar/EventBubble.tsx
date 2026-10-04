@@ -1,8 +1,9 @@
 'use client';
+import { useCalendarClock } from '@/lib/useCalendarClock';
 
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { EventColors } from './EventColors';
+import { EventAppearance } from './EventColors';
 import { AsciiBar } from '@/components/AsciiBar';
 import { CalPopover } from '@/components/CalPopover';
 import { EVENT_CATEGORIES, resolveCategory } from '@/lib/eventCategories';
@@ -47,11 +48,8 @@ export function EventBubble({
   onTakeNotes: () => void;
   onSwitchToTask?: () => void;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useCalendarClock();
+
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at), end = new Date(ev.ends_at);
   const untitled = !ev.title?.trim() || ev.title === '(No title)';
@@ -87,8 +85,8 @@ export function EventBubble({
           {!locked && <>
             <button type="button" className="cal-icon-button" onClick={onEdit} aria-label="Edit all details" title="Edit all details"><Icon name="edit" size={15} /></button>
             <button type="button" className="cal-icon-button" onClick={onDuplicate} aria-label="Duplicate event" title="Duplicate"><Icon name="copy" size={15} /></button>
-            <button type="button" className="cal-icon-button is-danger" onClick={onDelete} aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'} title={runDays > 1 ? 'Delete this day' : 'Delete'}><Icon name="trash" size={15} /></button>
           </>}
+            <button type="button" className="cal-icon-button is-danger" onClick={onDelete} aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'} title={runDays > 1 ? 'Delete this day' : 'Delete'}><Icon name="trash" size={15} /></button>
           <button type="button" className="cal-icon-button" onClick={onClose} aria-label="Close" title="Close"><Icon name="close" size={15} /></button>
         </div>
 
@@ -134,12 +132,9 @@ export function EventBubble({
           </div>
         )}
 
+        <details className="cal-appearance-details"><summary>Colors & text</summary><EventAppearance event={ev} onChange={onPatch}/></details>
         {!locked && (
           <>
-            <div className="cal-bubble-field">
-              <span>Color</span>
-              <EventColors value={ev.color} onChange={(color) => onPatch({ color })} />
-            </div>
             <div className="cal-bubble-field">
               <span>Reminder</span>
               <div className="cal-chips" role="radiogroup" aria-label="Reminder">
@@ -165,7 +160,7 @@ export function EventBubble({
             <Icon name="trash" size={14} />Delete all {runDays} days of this
           </button>
         )}
-        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. You can delete it here anytime.</p>}
+        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. Colors apply in Basedly. Use Delete to hide it or delete it from Google too.</p>}
       </div>
     </CalPopover>
   );

@@ -1,4 +1,5 @@
 'use client';
+import { useCalendarClock } from '@/lib/useCalendarClock';
 
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
@@ -29,7 +30,7 @@ function moveTo(task: Task, day: Date | null): Partial<Task> {
  */
 export function TaskBubble({
   task, x, y, draft, lists, tags, time24,
-  onClose, onComplete, onDelete, onUpdateTitle, onPatch, onOpenInTasks, onSwitchToEvent,
+  onClose, onComplete, onDelete, onUpdateTitle, onPatch, onOpenInTasks, onSwitchToEvent, onClearPlan,
 }: {
   task: Task; x: number; y: number;
   draft: boolean;
@@ -43,12 +44,10 @@ export function TaskBubble({
   onPatch: (patch: Partial<Task>) => void;
   onOpenInTasks: () => void;
   onSwitchToEvent?: () => void;
+  onClearPlan?: () => void;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useCalendarClock();
+
   const [done, setDone] = useState(task.done);
   const untitled = !task.title?.trim() || task.title === '(No title)';
   const [editing, setEditing] = useState(untitled);
@@ -128,6 +127,16 @@ export function TaskBubble({
           </div>
         )}
 
+        {task.calendar_planned && <p className="cal-plan-info">Study time in Basedly. Canvas deadline: {task.calendar_original_due_at ? new Date(task.calendar_original_due_at).toLocaleString() : 'No time set'}<button type="button" onClick={onClearPlan}>Reset to Canvas deadline</button></p>}
+        <label className="cal-task-time">{task.source === 'canvas_lms' ? 'Study time' : 'Time'}
+          <input type="time" aria-label="Task time" value={task.due_at ? `${String(new Date(task.due_at).getHours()).padStart(2, '0')}:${String(new Date(task.due_at).getMinutes()).padStart(2, '0')}` : ''}
+            onChange={e => {
+              if (!e.target.value) { onPatch({ due_at: null }); return; }
+              const day = task.due_on || ymd(new Date());
+              onPatch({ due_on: day, due_at: new Date(`${day}T${e.target.value}`).toISOString() });
+            }}/>
+          {task.due_at && <button type="button" onClick={() => onPatch({ due_at: null })}>All day</button>}
+        </label>
         <div className="cal-bubble-field">
           <span>Move to</span>
           <div className="cal-chips">

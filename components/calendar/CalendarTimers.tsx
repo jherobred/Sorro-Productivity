@@ -1,4 +1,5 @@
 'use client';
+import { useCalendarClock } from '@/lib/useCalendarClock';
 
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
@@ -23,12 +24,9 @@ export function CalendarTimers({ events, time24, large = false, onOpen }: {
   large?: boolean;
   onOpen?: (ev: Ev, x: number, y: number) => void;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  const now = useCalendarClock();
   const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+
 
   const { next, previousEnd } = nextTimedEvent(events, now);
   const wait = next ? eventCountdown(next, previousEnd, now) : null;

@@ -6,10 +6,11 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { K } from './pal';
-import { fixture } from './devFixtures';
+import { fixture, changeFixture } from './devFixtures';
 import { settler } from './settle';
 import { gridRange as localGridRange } from './calendarRange';
 import { getPrefs, prefsLoaded, setPrefs, usePrefs } from './prefs';
+import { readableInk } from './calendarAppearance';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom';
@@ -41,6 +42,9 @@ export type Ev = {
    * somebody picks a pale swatch in dark mode, or a dark one in light.
    */
   text_color?: string | null;
+  title_color?: string | null;
+  detail_color?: string | null;
+  external_id?: string | null;
   /** 'app' for anything created here; 'gcal_ics' rows are a read-only mirror. */
   source?: string;
   remind_minutes: number | null;
@@ -90,6 +94,11 @@ export function unmarkGcalDeleted(ev: Ev) {
 }
 
 export type EventLocalMeta = {
+  color?: string;
+  text_color?: string | null;
+  title_color?: string | null;
+  detail_color?: string | null;
+  hidden?: boolean;
   short_name?: string;
   recurrence?: RecurrenceRule | null;
 };
@@ -498,7 +507,7 @@ export function useEvents(ws: Date, days = 7) {
     void queryClient.invalidateQueries({ queryKey: EVENTS_KEY });
   }, [meta]);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: [...EVENTS_KEY, ws.toISOString(), days],
     queryFn: async (): Promise<Ev[]> => {
       // Dev preview: the window is computed, so there is no fixed key to seed.
@@ -508,7 +517,7 @@ export function useEvents(ws: Date, days = 7) {
 
       const { data, error } = await supabase
         .from('bd_events')
-        .select('id,title,starts_at,ends_at,all_day,location,color,text_color,source,remind_minutes,snoozed_until,deleted_at')
+        .select('id,title,starts_at,ends_at,all_day,location,color,text_color,source,external_id,remind_minutes,snoozed_until,deleted_at')
         .is('deleted_at', null)
         .order('starts_at');
       if (error) throw error;
@@ -521,6 +530,10 @@ export function useEvents(ws: Date, days = 7) {
       return expandRecurringEvents(rawEvents, from, to);
     },
   });
+  // Appearance and hidden state are independent of the imported mirror. Sync
+  // can update that mirror without resurrecting hidden events or our colors.
+  const local = getEventMetaMap();
+  return { ...query, data: query.data?.filter(e => !local[e.master_id || e.id]?.hidden).map(e => ({ ...e, ...local[e.master_id || e.id] })) };
 }
 
 /**
@@ -577,26 +590,9 @@ export function spanRuns(events: Ev[], ws: Date, dayCount: number): Span[] {
   return out;
 }
 
-/**
- * What colour to draw an event's label in.
- *
- * An explicit choice wins. Otherwise it is decided from the *background the
- * chip actually has*, which is 26% of the event colour over the card — so it
- * follows the theme, and a yellow event is not black text in dark mode and
- * white text in light. sRGB relative luminance, the same sum WCAG uses.
- */
-export function chipInk(ev: Pick<Ev, 'color' | 'text_color'>, dark: boolean): string {
-  if (ev.text_color) return ev.text_color;
-  const hex = /^#([0-9a-f]{6})$/i.exec(ev.color.trim());
-  if (!hex) return 'var(--tx)';
-  const n = parseInt(hex[1], 16);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => lin(c / 255));
-  const evL = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  // The chip is mostly card, not event colour, so the ground's own lightness
-  // dominates; the event tint only nudges it.
-  const groundL = dark ? 0.06 : 0.96;
-  return evL * 0.26 + groundL * 0.74 > 0.45 ? '#141220' : '#F4F2FB';
+/** Explicit ink wins; otherwise use the higher contrast ink on the solid fill. */
+export function chipInk(ev: Pick<Ev, 'color' | 'text_color'>, _dark?: boolean): string {
+  return ev.text_color || readableInk(ev.color);
 }
 
 /* ---- Mutations (registered so offline writes replay after a restart) ---- */
@@ -615,6 +611,7 @@ const CREATE = defineMutation(
     location?: string;
     recurrence?: RecurrenceRule | null;
   }) => {
+    if (changeFixture<Ev>('events', rows => [...rows.filter(e => e.id !== v.id), { ...v, all_day: v.all_day ?? false, location: v.location ?? '', remind_minutes: null, snoozed_until: null, deleted_at: null }])) return;
     const user_id = await currentUserId();
     const { short_name, recurrence, ...payload } = v;
     if (short_name !== undefined || recurrence !== undefined) {
@@ -631,7 +628,11 @@ const CREATE = defineMutation(
 // Drag and resize both land here. Fires on drop, not per frame, and must
 // accept partials (BACKEND.md "PATCH /events/:id").
 const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Partial<Ev> }) => {
-  const { short_name, recurrence, master_id, is_recurring_instance, ...patch } = v.patch;
+  if (changeFixture<Ev>('events', rows => rows.map(e => e.id === v.id ? { ...e, ...v.patch } : e))) return;
+  const { short_name, recurrence, master_id, is_recurring_instance, title_color, detail_color, ...patch } = v.patch;
+  if (title_color !== undefined || detail_color !== undefined) setEventMeta(v.id, {
+    ...(title_color !== undefined ? { title_color } : {}), ...(detail_color !== undefined ? { detail_color } : {}),
+  });
   if (short_name !== undefined || recurrence !== undefined) {
     setEventMeta(v.id, {
       short_name: short_name ?? undefined,
@@ -645,6 +646,7 @@ const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Par
 });
 
 const DELETE = defineMutation('event.delete', async (v: { id: string }) => {
+  if (changeFixture<Ev>('events', rows => rows.filter(e => e.id !== v.id))) return;
   const { error } = await supabase
     .from('bd_events')
     .update({ deleted_at: new Date().toISOString() })
@@ -706,6 +708,12 @@ const SNOOZE = defineMutation('event.snooze', async (v: { id: string }) => {
   const { error } = await supabase.from('bd_events').update({ snoozed_until: until }).eq('id', v.id);
   if (error) throw error;
 });
+
+// A slot creates a row before its editor opens. Serialize its follow-up writes
+// so fast typing or dismissal cannot update/delete before the insert finishes.
+for (const key of [CREATE, UPDATE, DELETE, RESTORE]) {
+  queryClient.setMutationDefaults(key, { ...queryClient.getMutationDefaults(key), scope: { id: 'calendar-event-writes' } });
+}
 
 export function useEventActions(ws: Date) {
   const qc = useQueryClient();
@@ -773,6 +781,11 @@ export function useEventActions(ws: Date) {
   const update = useMutation({
     mutationKey: UPDATE,
     onMutate: (v: { id: string; patch: Partial<Ev> }) => {
+      const appearance: EventLocalMeta = {};
+      for (const key of ['color', 'text_color', 'title_color', 'detail_color'] as const) {
+        if (v.patch[key] !== undefined) Object.assign(appearance, { [key]: v.patch[key] });
+      }
+      if (Object.keys(appearance).length) setEventMeta(v.id, appearance);
       if (v.patch.short_name !== undefined || v.patch.recurrence !== undefined) {
         setEventMeta(v.id, {
           short_name: v.patch.short_name ?? undefined,
@@ -888,7 +901,13 @@ export function useEventActions(ws: Date) {
     toast(`Duplicated to ${s.toLocaleDateString(undefined, { weekday: 'short' })}`);
   };
 
+  const hideGoogle = (ev: Ev, offerUndo = true) => {
+    setEventMeta(ev.id, { hidden: true });
+    if (offerUndo) toast(`Hidden “${ev.title}” from Basedly`, () => setEventMeta(ev.id, { hidden: false }));
+  };
+
   const removeWithUndo = (ev: Ev) => {
+    if (isReadOnly(ev)) { hideGoogle(ev); return; }
     remove.mutate({ id: ev.id });
     toast(`Deleted “${ev.title}”`, () => restore.mutate({ id: ev.id }));
   };
@@ -918,7 +937,7 @@ export function useEventActions(ws: Date) {
 
   return {
     create, update, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
-    duplicate, removeWithUndo, wipe, wipeRun,
+    duplicate, removeWithUndo, hideGoogle, wipe, wipeRun,
   };
 }
 

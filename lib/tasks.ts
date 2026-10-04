@@ -8,6 +8,7 @@ import { settler } from './settle';
 import { triggerFireworks } from './fireworks';
 import { getPrefs, setPrefs } from './prefs';
 import { nextDue, isRepeat } from './taskRepeat';
+import { changeFixture } from './devFixtures';
 
 export type Task = {
   id: string;
@@ -32,6 +33,9 @@ export type Task = {
   course?: string | null;
   /** Where a synced task came from, 'canvas_lms' for a Canvas assignment. Null for your own. */
   source?: string | null;
+  /** Calendar-only projection. Canvas's real deadline is never overwritten by a study plan. */
+  calendar_original_due_at?: string | null;
+  calendar_planned?: boolean;
 };
 
 export type List = { id: string; name: string; color: string; position: number };
@@ -384,6 +388,7 @@ const VALID_DB_TASK_COLS = new Set([
 ]);
 
 const UPDATE = defineMutation('task.update', async (v: { id: string; patch: Partial<Task> }) => {
+  if (changeFixture<Task>('tasks', rows => rows.map(t => t.id === v.id ? { ...t, ...v.patch } : t))) return;
   const rawPatch: Record<string, unknown> = { ...v.patch };
   if ('listId' in rawPatch && !('list_id' in rawPatch)) {
     rawPatch.list_id = rawPatch.listId;

@@ -60,8 +60,10 @@ export function CalPopover({
     place();
     // The bubble is fixed to the viewport, so a window resize would leave it
     // stranded outside the new bounds — re-clamp whenever the frame changes.
+    const observer = new ResizeObserver(place);
+    observer.observe(el);
     window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    return () => { observer.disconnect(); window.removeEventListener('resize', place); };
   }, [x, y, width]);
 
   return createPortal(

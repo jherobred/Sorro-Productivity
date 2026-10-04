@@ -62,6 +62,15 @@ export function fixture<T>(prefix: string): T | null {
   return (store.get(prefix) as T | undefined) ?? null;
 }
 
+/** Keep preview calendar interactions local; production never enters this path. */
+export function changeFixture<T>(prefix: string, change: (rows: T[]) => T[]): boolean {
+  if (!DEV_FIXTURES) return false;
+  const rows = store.get(prefix);
+  if (!Array.isArray(rows)) return false;
+  store.set(prefix, change(rows as T[]));
+  return true;
+}
+
 export function seedDevFixtures() {
   if (!DEV_FIXTURES) return;
 
@@ -129,6 +138,7 @@ export function seedDevFixtures() {
    * which is what the spanning-chip grouping pass collapses into one bar.
    */
   seed(['events'], [
+    { ...ev('preview-google', 'Preview · Google meeting', 0, 14, 0, 15, 0, '', '#039be5'), source: 'gcal_ics', external_id: 'preview-event@google.com' },
     // A rolling future item lets countdown and wake-lock previews work on weekends too.
     { ...ev('preview-up-next', 'Preview · study session', 0, 9, 0, 10, 0, 'Library', '#2563eb'), starts_at: new Date(Date.now() + 3600000).toISOString(), ends_at: new Date(Date.now() + 7200000).toISOString() },
     ev('e1', 'CS 150 Lecture', D(0), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),

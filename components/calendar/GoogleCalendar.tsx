@@ -6,7 +6,7 @@ import {syncMessage} from '@/lib/syncMessage';
  *
  * The connection is Google's own secret iCal address for a calendar, read on
  * the server by the `sync` function on a schedule: no Google sign-in to renew
- * every hour, and nothing written back to Google. Repeating events arrive as
+ * every hour. Super Delete separately requests Google write access. Repeating events arrive as
  * every one of their dates, and an event deleted in Google leaves here too.
  */
 
@@ -92,7 +92,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
                 placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" aria-invalid={!!url && !ok} />
               {url && !ok && <small className="is-bad">That does not look like an iCal address. It ends in .ics.</small>}
             </label>
-            <p className="gcal-note">Read-only: events come from Google into Basedly, nothing goes back. The address is kept with your account alone; anyone holding it could read the calendar, so do not share it.</p>
+            <p className="gcal-note">The iCal feed brings events into Basedly. Hide keeps an event out of Basedly after sync. Super Delete asks for separate Google permission and deletes the original event too. The address is kept with your account alone; anyone holding it could read the calendar, so do not share it.</p>
             <div className="gcal-actions">
               {row && <button type="button" className="gcal-ghost" onClick={() => { setEditing(false); setUrl(row.config.ics_url ?? ''); }}>Cancel</button>}
               <button type="button" className="studio-button primary" disabled={!ok || A.save.isPending} onClick={connect}><Icon name="plug" size={16} />{row ? 'Save and sync' : 'Connect'}</button>
@@ -103,7 +103,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
             <ul className="gcal-facts">
               <li><Icon name="repeat" size={15} />Repeating events come in as every one of their dates.</li>
               <li><Icon name="refresh" size={15} />It checks Google again on its own every little while, and when you come back to the app.</li>
-              <li><Icon name="trash" size={15} />An event deleted in Google leaves here on the next sync.</li>
+              <li><Icon name="trash" size={15} />Hide an event in Basedly, or choose Super Delete to remove it from Google too.</li>
             </ul>
             <div className="gcal-actions">
               <button type="button" className="gcal-ghost is-danger" onClick={() => A.remove.mutate({ kind: 'gcal_ics' }, { onSuccess: () => { toast('Google Calendar disconnected'); onClose(); } })}>Disconnect</button>
