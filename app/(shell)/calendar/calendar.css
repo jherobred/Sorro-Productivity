@@ -328,7 +328,7 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 .cal-task-time-compact{white-space:nowrap}
 .cal-date-navigation{display:flex;align-items:center;gap:18px;flex:1 1 300px;min-width:0}
 .cal-date-navigation .cal-head-title{flex:1 1 auto;min-width:0}
-.cal-date-navigation .cal-pager{order:0}
+.cal-date-navigation .cal-pager{order:1;margin-left:auto}
 .cal-source-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;height:14px;border-radius:3px;background:#fff;vertical-align:middle;overflow:hidden}
 .cal-source-icon svg{display:block;width:12px;height:12px}
 .cal-all-day-column{position:relative;min-height:54px;padding-bottom:22px!important}
@@ -358,3 +358,48 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 @media(max-width:760px){.cal-date-navigation{flex:1 1 100%;gap:12px;order:0}.cal-date-navigation .cal-pager{order:1;margin-left:auto}.cal-date-navigation .cal-head-title{min-width:0}.cal-head-actions{order:2;margin-left:auto}.cal-head-nav{order:1;width:auto;flex:1 1 auto;justify-content:flex-start}.cal-head-nav .cal-zoom{margin-left:0}.color-square{width:128px;height:128px}}
 
 .cal-event.is-past:hover,.cal-event.is-past:focus-visible,.cal-task.is-past:hover,.cal-task.is-past:focus-visible,.cal-all-day-event.is-past:hover,.cal-all-day-event.is-past:focus-visible{opacity:1;filter:none}
+
+/* Native scrolling and held dragging have separate owners on touch screens. */
+.cal-event,.cal-task,.cal-all-day-event,.cal-event-resize{touch-action:pan-x pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.cal-day-strip{display:flex;flex:none;gap:6px;min-width:0;max-width:100%;margin-bottom:10px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x;scroll-snap-type:x proximity;padding:2px 0 4px}
+.cal-grid-viewport{touch-action:pan-x pan-y}
+.studio-main[data-page='calendar']{padding-bottom:var(--calendar-nav-clearance,14px)}
+@media(max-width:760px){
+ .studio-main[data-page='calendar']{overflow-y:auto;padding-inline:12px}
+ .calendar-page{min-height:540px!important}
+ .cal-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:10px}
+ .cal-date-navigation{grid-column:1/-1;width:100%;gap:8px}
+ .cal-date-navigation .cal-head-title{min-width:0;flex:1 1 auto}
+ .cal-head-title h1{font-size:20px;white-space:normal;line-height:1.15}
+ .cal-head-title p{font-size:11px;line-height:1.25}
+ .cal-pager{height:44px;padding:0;border-radius:8px;gap:0}
+ .cal-pager button{width:36px;height:44px;border-radius:6px}
+ .cal-pager .cal-pager-today{padding:0 8px;font-size:12px;background:transparent}
+ .cal-head-nav{display:contents}
+ .cal-view-switcher{grid-column:1/-1;grid-row:2;justify-self:stretch;gap:0!important;padding:0!important;max-width:100%;border-radius:8px!important}
+ .cal-view-switcher button{flex:1;width:auto!important;min-width:44px;height:44px!important}
+ .cal-head-actions{grid-column:2;grid-row:3;gap:4px;margin:0}
+ .cal-head-actions .cal-google{min-width:44px;height:44px;padding:0 5px;border-radius:8px;gap:3px}
+ .cal-head-actions .cal-google-mark{width:22px;height:22px}
+ .cal-head-actions .cal-new,.cal-head-actions .cal-more{width:44px;height:44px;border-radius:8px}
+ .cal-head .cal-zoom{grid-column:1;grid-row:3;justify-self:start;margin:0;min-height:40px}
+ .cal-head .cal-zoom button{height:40px;min-width:40px}
+ .cal-timers{gap:8px;margin-bottom:8px}
+ .cal-timer{gap:5px;padding:8px;min-height:0}
+ .cal-timer-label{font-size:11px}
+ .cal-timer-title.is-empty{font-size:11px;line-height:1.35}
+ .cal-all-day-label{white-space:nowrap;font-size:8px!important;letter-spacing:0!important;padding-right:4px!important}
+ .cal-day-strip button{min-height:48px!important}
+ .cal-timers.is-large .cal-timer{padding:14px;gap:8px;border-radius:12px}
+ .cal-timers.is-large .cal-timer-main strong{font-size:32px}
+ .cal-next{gap:10px}
+ .cal-next-list{padding:12px}
+}
+@media(max-width:359px){.cal-head-title h1{font-size:18px}}
+@media(max-height:540px){
+ .studio-workspace:has(.calendar-page)>.studio-topbar{position:relative;z-index:10}
+ .studio-main[data-page='calendar']{overflow-y:auto}
+ .calendar-page{min-height:480px!important}
+ .cal-content{flex:0 0 380px!important;height:380px;min-height:380px!important}
+ .cal-grid-viewport{min-height:280px}
+}

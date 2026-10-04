@@ -17,6 +17,8 @@ import { CalendarSourceIcon } from '@/components/calendar/CalendarSourceIcon';
 import { CanvasConnections } from '@/components/calendar/CanvasConnections';
 import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, snapCalendarHour, slotClickCreates } from '@/lib/calendarPlanning';
 import { useCalendarClock } from '@/lib/useCalendarClock';
+import { calendarStripDates, moveCalendarDate } from '@/lib/calendarNavigation';
+import { startCalendarGesture, type CalendarPoint } from '@/lib/calendarGesture';
 import { getPrefs, setPrefs } from '@/lib/prefs';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
 import { CalendarTimers } from '@/components/calendar/CalendarTimers';
@@ -75,14 +77,30 @@ export default function CalendarPage() {
   const { phone } = useLayout();
   const { prefs, update } = usePrefs();
   const nowMs = useCalendarClock(15_000);
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const main = pageRef.current?.closest<HTMLElement>('.studio-main');
+    const nav = document.querySelector<HTMLElement>('.studio-bottom-nav');
+    if (!main || !nav) return;
+    const measure = () => {
+      const scale = main.getBoundingClientRect().width / main.offsetWidth || 1;
+      const height = nav.getBoundingClientRect().height;
+      const clearance = `${height ? (height + 12) / scale : 14}px`;
+      if (main.style.getPropertyValue('--calendar-nav-clearance') !== clearance) main.style.setProperty('--calendar-nav-clearance', clearance);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav); observer.observe(main); measure();
+    return () => { observer.disconnect(); main.style.removeProperty('--calendar-nav-clearance'); };
+  }, []);
   const [googleDelete, setGoogleDelete] = useState<Ev | null>(null);
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [focusFrom, setFocusFrom] = useState('08:00');
   const [focusTo, setFocusTo] = useState('18:00');
   const [effectiveHourHeight, setEffectiveHourHeight] = useState(56);
   const [zoomRange, setZoomRange] = useState<{ start: number; end: number; key: number } | null>(null);
-  const [ws, setWs] = useState(() => weekStart(new Date(), prefs.weekStart));
-  const [focusDay, setFocusDay] = useState(() => dayIndex(new Date().toISOString(), weekStart(new Date(), prefs.weekStart)));
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const ws = useMemo(() => weekStart(selectedDate, prefs.weekStart), [selectedDate, prefs.weekStart]);
+  const focusDay = dayIndex(selectedDate.toISOString(), ws);
   const [sel, setSel] = useState<string | null>(null);
   /**
    * One bubble at a time: `event` when you click something, `slot` when you
@@ -112,17 +130,20 @@ export default function CalendarPage() {
 
   // Week is the desktop default, Day the phone-portrait default.
   const [view, setView] = useState<View>(prefs.calView);
+  const pickedView = useRef(false);
   const [importing, setImporting] = useState(false);
   const [google, setGoogle] = useState(false);
-  useEffect(() => { if (phone && prefs.calView === 'week') setView('day'); }, [phone, prefs.calView]);
+  useEffect(() => {
+    if (!pickedView.current) setView(phone && prefs.calView === 'week' ? 'day' : prefs.calView);
+  }, [phone, prefs.calView]);
 
   // Month needs six weeks of events, not one — the window follows the view.
   const windowDays = view === 'month' ? 42 : 7;
   const windowStart = useMemo(() => {
     if (view !== 'month') return ws;
-    const first = new Date(ws.getFullYear(), ws.getMonth(), 1);
+    const first = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
     return weekStart(first, prefs.weekStart);
-  }, [view, ws, prefs.weekStart]);
+  }, [view, ws, selectedDate, prefs.weekStart]);
 
   const { data: events = [], isPending } = useEvents(windowStart, windowDays);
   const { data: tasks = [] } = useTasks();
@@ -180,6 +201,7 @@ export default function CalendarPage() {
   };
 
   const setCalView = useCallback((v: View) => {
+    pickedView.current = true;
     setView(v);
     void update({ calView: v });
   }, [update]);
@@ -242,31 +264,13 @@ export default function CalendarPage() {
   /* ------------------------------------------------------------ paging */
 
   /** Prev/next moves by whatever the view actually shows. */
-  const shift = (dir: number) => {
-    const n = new Date(ws);
-    if (view === 'month') n.setMonth(n.getMonth() + dir);
-    else if (view === 'day') n.setDate(n.getDate() + dir);
-    else n.setDate(n.getDate() + dir * 7);
-    if (view === 'day') {
-      // Day paging walks days, so recompute both the week and the focused column.
-      setWs(weekStart(n, prefs.weekStart));
-      setFocusDay(dayIndex(n.toISOString(), weekStart(n, prefs.weekStart)));
-    } else {
-      setWs(view === 'month' ? weekStart(new Date(n.getFullYear(), n.getMonth(), 1), prefs.weekStart) : n);
-    }
-  };
+  const shift = (dir: number) => setSelectedDate(date => moveCalendarDate(date, view, dir));
   shiftRef.current = shift;
-
-  const goToday = () => {
-    const today = new Date();
-    const w = weekStart(today, prefs.weekStart);
-    setWs(w);
-    setFocusDay(dayIndex(today.toISOString(), w));
-  };
+  const goToday = () => setSelectedDate(new Date());
 
   /* The title names the month; the line under it says which days and how much is on them. */
   const weekEnd = new Date(at(ws, 6, 12));
-  const monthShown = new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + 6);
+  const monthShown = selectedDate;
   const heading = view === 'countdown'
     ? 'Up next'
     : view === 'day'
@@ -541,6 +545,7 @@ export default function CalendarPage() {
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.cal-day-strip')) { touchStartRef.current = null; return; }
     const viewport = (e.target as HTMLElement).closest('.cal-grid-viewport');
     if (viewport && viewport.scrollWidth > viewport.clientWidth + 1) { touchStartRef.current = null; return; }
     if ((e.target as HTMLElement).closest('.cal-task,.cal-event,.cal-all-day-event,.cal-deadline-ghost')) { touchStartRef.current = null; return; }
@@ -638,11 +643,15 @@ export default function CalendarPage() {
   ];
 
   return (
-    <div className="calendar-page" style={{
+    <div ref={pageRef} className="calendar-page" style={{
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
     }}>
       <header className="cal-head" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 30 : 0 }}>
         <div className="cal-date-navigation">
+        <div className="cal-head-title">
+          <h1>{heading}</h1>
+          <p>{subline}{prefs.lockEvents && <span className="cal-head-lock"><Icon name="lock" size={11} />Locked</span>}</p>
+        </div>
           {view !== 'countdown' && (
             <div className="cal-pager" role="group" aria-label="Move through the calendar">
               <button type="button" onClick={() => shift(-1)} aria-label={`Previous ${view}`} title={`Previous ${view}`}>
@@ -654,10 +663,7 @@ export default function CalendarPage() {
               </button>
             </div>
           )}
-        <div className="cal-head-title">
-          <h1>{heading}</h1>
-          <p>{subline}{prefs.lockEvents && <span className="cal-head-lock"><Icon name="lock" size={11} />Locked</span>}</p>
-        </div>
+
         </div>
         <div className="cal-head-nav">
           <ViewSwitcher view={view} onChange={setCalView} phone={phone} />
@@ -713,7 +719,7 @@ export default function CalendarPage() {
         data-tour="calendar-grid"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        style={{ order: 10, flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column', touchAction: 'pan-y' }}
+        className="cal-content" style={{ order: 10, flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}
       >
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: view === 'agenda' || view === 'countdown' ? 'auto' : undefined }}>
           {/* The chrome above is not data-dependent and paints immediately;
@@ -729,7 +735,7 @@ export default function CalendarPage() {
           )}
           {!isPending && view === 'day' && (
             <>
-              <DayStrip ws={ws} focus={focusDay} onPick={setFocusDay} onJump={(w, d) => { setWs(w); setFocusDay(d); }} />
+              <DayStrip selectedDate={selectedDate} onPick={setSelectedDate} />
               <Grid zoomRange={zoomRange} onHourHeightChange={setEffectiveHourHeight} days={1} dayOffset={focusDay} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId} showVacant={showVacant}
                 sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} openMenu={(ev, x, y, span) => setCtx({ ev, x, y, span })} />
             </>
@@ -740,16 +746,14 @@ export default function CalendarPage() {
               // week that contains the 1st can begin in the previous month,
               // and reading the month off `ws` dimmed the first rows of the
               // real month. ws+6 days always lands inside it.
-              month={new Date(windowStart.getFullYear(), windowStart.getMonth(), windowStart.getDate() + 6).getMonth()}
+              month={selectedDate.getMonth()}
               events={events} tasks={windowTasks} nextEventId={nextEventId}
 
               onPickDay={(date) => {
                 // Open the week that actually contains the clicked date. The
                 // old version reused the current week and only moved the
                 // column, so clicking the 25th showed a day in this week.
-                const w = weekStart(date, prefs.weekStart);
-                setWs(w);
-                setFocusDay(dayIndex(date.toISOString(), w));
+                setSelectedDate(date);
                 setCalView('day');
               }} />
           )}
@@ -1001,7 +1005,7 @@ export default function CalendarPage() {
  */
 function ViewSwitcher({ view, onChange, phone }: { view: View; onChange: (v: View) => void; phone: boolean }) {
   return (
-    <div data-tour="calendar-view-toggle"
+    <div className="cal-view-switcher" data-tour="calendar-view-toggle"
       style={{ position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 999, background: 'var(--card2)', border: '1px solid var(--line)' }}>
       {(['month', 'week', 'day', 'agenda', 'countdown'] as View[]).map((v) => {
         const on = view === v;
@@ -1110,6 +1114,14 @@ function Grid({
   const oldHourHeight = useRef(HOUR_H);
   const pendingHour = useRef<number | null>(SCROLL_TO_HOUR);
   const suppressClick = useRef(false);
+  const lastTouch = useRef(false);
+  const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockReleaseClick = () => {
+    suppressClick.current = true;
+    if (suppressTimer.current) clearTimeout(suppressTimer.current);
+    suppressTimer.current = setTimeout(() => { suppressClick.current = false; }, 500);
+  };
+  useEffect(() => () => { if (suppressTimer.current) clearTimeout(suppressTimer.current); }, []);
   const gestureCleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => gestureCleanup.current?.(), []);
   useEffect(() => {
@@ -1220,6 +1232,7 @@ function Grid({
    * behind.
    */
   const slot = useTapGuard();
+  const touchSlot = useRef(false);
 
   const DAYS_SHORT = dayLabels(prefs.weekStart);
   const colOf = (i: number) => (days === 1 ? dayOffset : i);
@@ -1246,129 +1259,69 @@ function Grid({
     return { day: col, ev: hitEv };
   };
 
+  const lastDragFrame = useRef(0);
+  const scrollDuringDrag = (point: CalendarPoint, locate: () => void) => {
+    const el = scroller.current, r = el?.getBoundingClientRect();
+    if (!el || !r || point.y < r.top || point.y > r.bottom) return;
+    const now = performance.now();
+    const seconds = Math.min(32, now - lastDragFrame.current) / 1000;
+    lastDragFrame.current = now;
+    const edge = point.y > r.bottom - 32 ? (point.y - r.bottom + 32) / 32 : point.y < r.top + 32 ? (point.y - r.top - 32) / 32 : 0;
+    const delta = edge * 120 * seconds;
+    if (delta) { el.scrollTop += delta; locate(); }
+  };
+
   const press = (e: React.PointerEvent, ev: Ev, action: 'move' | 'resize') => {
+    lastTouch.current = e.pointerType === 'touch' || e.pointerType === 'pen';
     if (e.button !== 0) return;
-    gestureCleanup.current?.();
-    const isTouch = phone || e.pointerType === 'touch';
-    if (!isTouch) {
-      e.preventDefault();
-    }
-    e.stopPropagation();
+    e.stopPropagation(); gestureCleanup.current?.(); suppressClick.current = false;
     setSel(ev.id);
-
-    const rect = bodyRef.current?.getBoundingClientRect();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origDay = dayIndex(ev.starts_at, ws);
-    const origHour = hoursOf(ev.starts_at);
+    const originalBounds = bodyRef.current?.getBoundingClientRect();
+    if (!originalBounds) return;
+    const origDay = dayIndex(ev.starts_at, ws), origHour = hoursOf(ev.starts_at);
     const origEnd = gridRange(ev.starts_at, ev.ends_at).end;
-    const len = ev.all_day ? 1 : Math.max(0.5, Math.min(origEnd - origHour, GRID_END - origHour));
-    const locked = isReadOnly(ev) || prefs.lockEvents;
-    let targetDrag: { day: number; hour: number } | null = null;
+    const length = ev.all_day ? 1 : Math.max(.5, origEnd - origHour);
+    const grabOffset = ev.all_day ? 0 : calendarPointerHour(e.clientY, originalBounds.top, originalBounds.height) - origHour;
+    const resizeOffset = calendarPointerHour(e.clientY, originalBounds.top, originalBounds.height) - origEnd;
+    let target: { day: number; hour: number | null } | null = null;
     let targetEnd: number | null = null;
-
-    let holdTriggered = !isTouch || action === 'resize';
-    let moved = false;
-
-    // Mobile error prevention: Require holding still for 500ms before dragging.
-    // If the user swipes down to scroll, any finger slide > 6px or container scroll
-    // cancels the hold immediately, allowing vertical scrolling without moving the event.
-    const holdTimer = isTouch && action === 'move'
-      ? window.setTimeout(() => {
-          if (moved || locked) return;
-          holdTriggered = true;
-          if (prefs.haptics) navigator.vibrate?.(K.hapticMs);
-          setDrag({ id: ev.id, day: origDay, hour: origHour });
-        }, 500)
-      : null;
-
-    const onScroll = () => {
-      if (isTouch && !holdTriggered) {
-        if (holdTimer) clearTimeout(holdTimer);
-        moved = true;
-      }
-    };
-    const scrollerEl = scroller.current;
-    scrollerEl?.addEventListener('scroll', onScroll, { passive: true });
-
-    const onMove = (m: PointerEvent) => {
-      const dx = m.clientX - startX;
-      const dy = m.clientY - startY;
-      const dist = Math.hypot(dx, dy);
-
-      if (isTouch && action === 'move' && !holdTriggered) {
-        if (dist > 6) {
-          if (holdTimer) clearTimeout(holdTimer);
-          moved = true;
-        }
-        return;
-      }
-
-      if (!moved && dist > K.longPressCancelPx) {
-        moved = true;
-      }
-
-      if (locked || !rect) return;
-
-      const steps = Math.round(dy / (GRID_H / SPAN / 2));
-
-      if (action === 'move') {
-        const d = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor(((m.clientX - rect.left) / rect.width) * days)));
-        const rawH = ev.all_day ? ((m.clientY - rect.top) / rect.height) * SPAN : origHour + steps * 0.5;
-        const h = Math.max(GRID_START, Math.min(GRID_END - len, Math.round(rawH * 2) / 2));
-        targetDrag = { day: d, hour: h };
-        setDrag((p) => (p && p.id === ev.id && p.day === d && p.hour === h ? p : { id: ev.id, day: d, hour: h }));
+    const locate = (point: CalendarPoint) => {
+      const r = bodyRef.current?.getBoundingClientRect(), visible = scroller.current?.getBoundingClientRect(), tray = trayRef.current?.getBoundingClientRect();
+      if (!r || !visible || !tray) return;
+      const inTray = point.y >= tray.top && point.y <= tray.bottom;
+      if (point.x < r.left || point.x > r.right || (!inTray && (point.y < visible.top || point.y > visible.bottom))) { target = null; targetEnd = null; return; }
+      const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor((point.x - r.left) / r.width * days)));
+      const pointerHour = calendarPointerHour(point.y, r.top, r.height);
+      if (action === 'resize') {
+        targetEnd = Math.max(origHour + .5, Math.min(24, Math.round((pointerHour - resizeOffset) * 2) / 2));
+        setResize({ id: ev.id, end: targetEnd });
       } else {
-        const rawE = origEnd + steps * 0.5;
-        const end = Math.max(origHour + 0.5, Math.min(GRID_END, Math.round(rawE * 2) / 2));
-        targetEnd = end;
-        setResize((p) => (p && p.id === ev.id && p.end === end ? p : { id: ev.id, end }));
+        const hour = inTray ? null : snapCalendarHour(pointerHour - grabOffset, length);
+        target = { day, hour };
+        setDrag({ id: ev.id, day, hour: hour ?? origHour });
       }
     };
-
-    const cleanup = () => {
-      if (holdTimer) clearTimeout(holdTimer);
-      scrollerEl?.removeEventListener('scroll', onScroll);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-      gestureCleanup.current = null;
-    };
-
-    const onCancel = () => {
-      cleanup();
-      setDrag(null);
-      setResize(null);
-    };
-
-    const onUp = (m: PointerEvent) => {
-      cleanup();
-
-      if (locked) {
-        if (moved) toast('Events are locked — unlock to move them');
-        return;
-      }
-
-      if (isTouch && !holdTriggered) {
-        if (Math.hypot(m.clientX - startX, m.clientY - startY) < 10) {
-          openEvent(ev, startX, startY);
-        }
-        return;
-      }
-
-      if (moved) { suppressClick.current = true; window.setTimeout(() => { suppressClick.current = false; }, 0); }
-      if (moved && targetDrag && (targetDrag.day !== origDay || targetDrag.hour !== origHour || ev.all_day)) {
-        if (ev.all_day) A.update.mutate({ id: ev.id, patch: { all_day: false, starts_at: at(ws, targetDrag.day, targetDrag.hour), ends_at: at(ws, targetDrag.day, targetDrag.hour + 1) } });
-        else A.moveTo(ev, targetDrag.day, targetDrag.hour);
-      }
-      if (moved && targetEnd !== null && targetEnd !== origEnd) A.resizeTo(ev, targetEnd);
-      setDrag(null); setResize(null);
-    };
-
-    gestureCleanup.current = onCancel;
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onCancel);
+    gestureCleanup.current = startCalendarGesture(e.nativeEvent, e.currentTarget as HTMLElement, {
+      locked: isReadOnly(ev) || prefs.lockEvents,
+      onStart: () => {
+        if (prefs.haptics && lastTouch.current) navigator.vibrate?.(K.hapticMs);
+        setDrag({ id: ev.id, day: origDay, hour: origHour });
+      },
+      onMove: locate,
+      onFrame: point => scrollDuringDrag(point, () => locate(point)),
+      onFinish: (result, point) => {
+        blockReleaseClick(); gestureCleanup.current = null;
+        setDrag(null); setResize(null);
+        if (result === 'tap') { openEvent(ev, point.x, point.y); return; }
+        if (result !== 'drop') return;
+        if (action === 'resize' && targetEnd !== null && targetEnd !== origEnd) A.resizeTo(ev, targetEnd);
+        if (action !== 'move' || !target) return;
+        if (target.hour === null) {
+          if (!ev.all_day || target.day !== origDay) A.update.mutate({ id: ev.id, patch: { all_day: true, starts_at: at(ws, target.day, 0), ends_at: at(ws, target.day + 1, 0) } });
+        } else if (ev.all_day) A.update.mutate({ id: ev.id, patch: { all_day: false, starts_at: at(ws, target.day, target.hour), ends_at: at(ws, target.day, target.hour + 1) } });
+        else if (target.day !== origDay || target.hour !== origHour) A.moveTo(ev, target.day, target.hour);
+      },
+    });
   };
 
   /**
@@ -1462,60 +1415,38 @@ function Grid({
 
   /** Dragging between the tray and the visible time grid assigns/removes time. */
   const pressTask = (e: React.PointerEvent, t: Task, fromTray: boolean) => {
+    lastTouch.current = e.pointerType === 'touch' || e.pointerType === 'pen';
     if (e.button !== 0) return;
-    e.preventDefault(); e.stopPropagation(); gestureCleanup.current?.();
-    const startX = e.clientX, startY = e.clientY;
+    e.stopPropagation(); gestureCleanup.current?.(); suppressClick.current = false;
     const gridBounds = bodyRef.current?.getBoundingClientRect();
-    const grabOffset = fromTray || !t.due_at || !gridBounds ? 0 : calendarPointerHour(startY, gridBounds.top, gridBounds.height) - hoursOf(t.due_at);
+    const grabOffset = fromTray || !t.due_at || !gridBounds ? 0 : calendarPointerHour(e.clientY, gridBounds.top, gridBounds.height) - hoursOf(t.due_at);
     const original = t.source === 'canvas_lms' ? (t.calendar_planned ? t.calendar_original_due_at : t.due_at) : null;
     const origin = original ? { day: dayIndex(original, ws), hour: hoursOf(original) } : null;
-    let moved = false;
-    let pointer = { x: startX, y: startY };
     let target: { day: number; hour: number | null } | null = null;
-    let frame = 0;
-    const locate = () => {
+    const locate = (point: CalendarPoint) => {
       const r = bodyRef.current?.getBoundingClientRect(), visible = scroller.current?.getBoundingClientRect(), tray = trayRef.current?.getBoundingClientRect();
-      if (!r || !visible || !tray || !moved) return;
-      const inX = pointer.x >= r.left && pointer.x <= r.right;
-      const inTray = pointer.y >= tray.top && pointer.y <= tray.bottom;
-      const inGrid = pointer.y >= visible.top && pointer.y <= visible.bottom;
-      if (!inX || (!inTray && !inGrid)) { target = null; setTaskDrag(null); return; }
-      const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor((pointer.x - r.left) / r.width * days)));
-      const hour = inTray ? null : taskDropHour(calendarPointerHour(pointer.y, r.top, r.height), grabOffset, day, origin);
+      if (!r || !visible || !tray) return;
+      const inTray = point.y >= tray.top && point.y <= tray.bottom;
+      if (point.x < r.left || point.x > r.right || (!inTray && (point.y < visible.top || point.y > visible.bottom))) { target = null; setTaskDrag(null); return; }
+      const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor((point.x - r.left) / r.width * days)));
+      const hour = inTray ? null : taskDropHour(calendarPointerHour(point.y, r.top, r.height), grabOffset, day, origin);
       target = { day, hour };
       setTaskDrag(prev => prev?.task.id === t.id && prev.day === day && prev.hour === hour ? prev : { task: t, day, hour });
     };
-    const scroll = () => {
-      const el = scroller.current, r = el?.getBoundingClientRect();
-      if (moved && el && r && pointer.y >= r.top && pointer.y <= r.bottom) {
-        const delta = pointer.y > r.bottom - 36 ? 8 : pointer.y < r.top + 36 ? -8 : 0;
-        if (delta) { el.scrollTop += delta; locate(); }
-      }
-      frame = requestAnimationFrame(scroll);
-    };
-    const onMove = (m: PointerEvent) => {
-      pointer = { x: m.clientX, y: m.clientY };
-      if (Math.hypot(pointer.x - startX, pointer.y - startY) > 5) moved = true;
-      if (!prefs.lockEvents) locate();
-    };
-    const cleanup = () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', cancel);
-      gestureCleanup.current = null; setTaskDrag(null);
-    };
-    const cancel = () => cleanup();
-    const onUp = (m: PointerEvent) => {
-      cleanup();
-      // The pointer release must not also create an all-day item beneath it.
-      suppressClick.current = true;
-      setTimeout(() => { suppressClick.current = false; }, 0);
-      if (!moved) openTask(t, m.clientX, m.clientY);
-      else if (prefs.lockEvents) toast('Events are locked. Unlock to move tasks.');
-      else if (target) onSchedule(t, target.day, target.hour);
-    };
-    gestureCleanup.current = cancel;
-    window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', cancel);
-    frame = requestAnimationFrame(scroll);
+    gestureCleanup.current = startCalendarGesture(e.nativeEvent, e.currentTarget as HTMLElement, {
+      locked: prefs.lockEvents,
+      onStart: () => {
+        if (prefs.haptics && lastTouch.current) navigator.vibrate?.(K.hapticMs);
+        setTaskDrag({ task: t, day: dayIndex(`${t.due_on}T12:00:00`, ws), hour: t.due_at ? hoursOf(t.due_at) : null });
+      },
+      onMove: locate,
+      onFrame: point => scrollDuringDrag(point, () => locate(point)),
+      onFinish: (result, point) => {
+        blockReleaseClick(); gestureCleanup.current = null; setTaskDrag(null);
+        if (result === 'tap') openTask(t, point.x, point.y);
+        else if (result === 'drop' && target) onSchedule(t, target.day, target.hour);
+      },
+    });
   };
 
   const trayTasks = (col: number) =>
@@ -1524,7 +1455,7 @@ function Grid({
     tasks.filter((t) => t.due_at && dayIndex(t.due_at, ws) === col);
 
   return (
-    <div className="cal-grid-viewport" role="region" aria-label="Calendar days" tabIndex={0}
+    <div className="cal-grid-viewport" onContextMenuCapture={e => { if (lastTouch.current) { e.preventDefault(); e.stopPropagation(); } }} role="region" aria-label="Calendar days" tabIndex={0}
       onScroll={e => e.currentTarget.style.setProperty('--calendar-scroll-x', `${e.currentTarget.scrollLeft}px`)}
       onKeyDown={e => { if (e.target === e.currentTarget && ['ArrowLeft', 'ArrowRight'].includes(e.key)) e.stopPropagation(); }}>
     <div className={"cal-grid-surface" + (days === 7 ? ' is-week' : '') + (prefs.calendarSurfaceStyle === 'translucent' && !prefs.reduceTransparency ? ' is-translucent' : '')}>
@@ -1570,8 +1501,8 @@ function Grid({
                 transition: 'background .2s',
               }}>
                 {allDay.map((e) => (
-                  <div key={e.id} className={"cal-all-day-event" + (Date.parse(e.ends_at) < nowMs ? " is-past" : "")} role="button" tabIndex={0} onClick={p => { if (suppressClick.current) { suppressClick.current = false; return; } openEvent(e, p.clientX, p.clientY); }} onKeyDown={p => { if (p.key === 'Enter') { const r = p.currentTarget.getBoundingClientRect(); openEvent(e, r.left, r.top); } }} onPointerDown={(p) => press(p, e, 'move')}
-                    onContextMenu={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
+                  <div key={e.id} className={"cal-all-day-event" + (Date.parse(e.ends_at) < nowMs ? " is-past" : "")} role="button" tabIndex={0} onClick={p => { if (suppressClick.current) return; openEvent(e, p.clientX, p.clientY); }} onKeyDown={p => { if (p.key === 'Enter') { const r = p.currentTarget.getBoundingClientRect(); openEvent(e, r.left, r.top); } }} onPointerDown={(p) => press(p, e, 'move')}
+                    onContextMenu={(p) => { p.preventDefault(); p.stopPropagation(); if (!lastTouch.current) openMenu(e, p.clientX, p.clientY); }}
                     style={{
                       fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, marginBottom: 2, cursor: 'grab',
                       background: e.color, color: e.title_color || chipInk(e),
@@ -1580,7 +1511,7 @@ function Grid({
                 ))}
 
                 {untimed.map((t) => (
-                  <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} onOpen={(x, y) => openTask(t, x, y)} compact nowMs={nowMs} />
+                  <TaskChip key={t.id} task={t} onPointerDown={(p) => pressTask(p, t, true)} onOpen={(x, y) => { if (!suppressClick.current) openTask(t, x, y); }} compact nowMs={nowMs} />
                 ))}
 
                 <button className="cal-all-day-create" onPointerDown={slot.press}
@@ -1665,9 +1596,9 @@ function Grid({
                 {hours.slice(0, -1).map((h, hi) => (
                   <div
                     key={h}
-                    onPointerDown={phone ? slot.press : (p) => onSlotPointerDown(p, idx, h)}
+                    onPointerDown={p => { touchSlot.current = p.pointerType !== 'mouse'; if (phone || touchSlot.current) slot.press(p); else onSlotPointerDown(p, idx, h); }}
                     onClick={(p) => {
-                      if (slotClickCreates(phone, p.detail) && (!phone || slot.tapped(p))) {
+                      if (!suppressClick.current && slotClickCreates(phone || touchSlot.current, p.detail) && (!(phone || touchSlot.current) || slot.tapped(p))) {
                         const targetRect = p.currentTarget.getBoundingClientRect();
                         const relY = Math.max(0, Math.min(0.99, (p.clientY - targetRect.top) / targetRect.height));
                         const startH = h + (relY >= 0.5 ? 0.5 : 0);
@@ -1742,14 +1673,14 @@ function Grid({
                     | { kind: 'task'; task: Task; id: string };
 
                   const dayColEvents = events
-                    .filter((e) => !e.all_day && !e.deleted_at
+                    .filter((e) => (!e.all_day || drag?.id === e.id && drag.day === idx) && !e.deleted_at
                       // A multi-day run is drawn as one bar by SpanChip; the
                       // per-day pass skips its members so the run does not
                       // also appear as N separate chips. (The `spanned` set
                       // existed for exactly this and was never consulted —
                       // that is why run bars never appeared.)
                       && !spanned.has(e.id)
-                      && (drag?.id === e.id ? drag.day === idx : dayIndex(e.starts_at, ws) === idx))
+                      && (dayIndex(e.starts_at, ws) === idx || drag?.id === e.id && drag.day === idx))
                     .map((e) => {
                       const isDrag = drag?.id === e.id;
                       const isResize = resize?.id === e.id;
@@ -1757,9 +1688,9 @@ function Grid({
                       // day it starts on instead of folding it to a negative
                       // height.
                       const range = gridRange(e.starts_at, e.ends_at);
-                      const len = Math.max(0.5, range.end - range.start);
-                      const start = isDrag ? drag.hour : range.start;
-                      const end = isResize ? resize.end : isDrag ? drag.hour + len : range.end;
+                      const len = e.all_day ? 1 : Math.max(0.5, range.end - range.start);
+                      const start = isDrag && drag.day === idx ? drag.hour : range.start;
+                      const end = isResize ? resize.end : isDrag && drag.day === idx ? drag.hour + len : range.end;
                       return {
                         ev: { kind: 'event' as const, ev: e, id: e.id },
                         start,
@@ -1767,7 +1698,7 @@ function Grid({
                       };
                     });
 
-                  const dayColTasks = slotTasks(idx).filter(t => taskDrag?.task.id !== t.id).map(t => ({
+                  const dayColTasks = slotTasks(idx).map(t => ({
                     ev: { kind: 'task' as const, task: t, id: t.id }, start: hoursOf(t.due_at!), end: Math.min(24, hoursOf(t.due_at!) + 1),
                   }));
                   const ghosts = tasks.flatMap(t => {
@@ -1800,7 +1731,7 @@ function Grid({
                       const e = item.ev;
                       const isDrag = drag?.id === e.id;
                       const isResize = resize?.id === e.id;
-                      if (isDrag && drag.day !== idx) return null;
+                      const hiddenOrigin = isDrag && drag.day !== idx;
 
                       return (
                         <EventChip
@@ -1812,14 +1743,14 @@ function Grid({
                           left={leftStyle}
                           width={widthStyle}
                           label={`${hhmm(pos.start)} – ${hhmm(pos.end)}`}
-                          lifted={isDrag || isResize}
+                          lifted={isDrag || isResize} hiddenOrigin={hiddenOrigin}
                           selected={sel === e.id}
                           isNext={e.id === nextEventId}
                           onPointerDown={(p) => press(p, e, 'move')}
                           onResize={(p) => press(p, e, 'resize')}
                           dark={dark} nowMs={nowMs}
-                          onOpen={(p) => { if (suppressClick.current) { suppressClick.current = false; return; } openEvent(e, p.clientX, p.clientY); }}
-                          onContext={(p) => { p.preventDefault(); p.stopPropagation(); openMenu(e, p.clientX, p.clientY); }}
+                          onOpen={(p) => { if (suppressClick.current) return; openEvent(e, p.clientX, p.clientY); }}
+                          onContext={(p) => { p.preventDefault(); p.stopPropagation(); if (!lastTouch.current) openMenu(e, p.clientX, p.clientY); }}
                         />
                       );
                     } else {
@@ -1828,7 +1759,7 @@ function Grid({
                         <TaskChip
                           key={`task-${t.id}`}
                           task={t}
-                          onPointerDown={(p) => pressTask(p, t, false)} onOpen={(x, y) => openTask(t, x, y)}
+                          onPointerDown={(p) => pressTask(p, t, false)} onOpen={(x, y) => { if (!suppressClick.current) openTask(t, x, y); }}
                           timeLabel={`${hhmm(pos.start)} – ${hhmm(pos.end)}`}
                           pixelHeight={Math.max(24, (pos.end - pos.start) * HOUR_H)}
                           nowMs={nowMs}
@@ -1838,7 +1769,7 @@ function Grid({
                             width: widthStyle,
                             top: `${Math.min(pct(pos.start), 100 - 24 / GRID_H * 100)}%`,
                             height: Math.max(24, (pos.end - pos.start) * HOUR_H),
-                            zIndex: 2,
+                            zIndex: 2, opacity: taskDrag?.task.id === t.id ? 0 : undefined,
                           }}
                         />
                       );
@@ -1892,9 +1823,9 @@ function CdBadge({ cd, subtle }: { cd: { status: string; badge: string }; subtle
 }
 
 function EventChip({
-  ev, top, height, pixelHeight, left = '3px', width = 'calc(100% - 21px)', label, lifted, selected, dark, isNext, nowMs = Date.now(), onPointerDown, onResize, onOpen, onContext,
+  ev, top, height, pixelHeight, left = '3px', width = 'calc(100% - 21px)', label, lifted, hiddenOrigin, selected, dark, isNext, nowMs = Date.now(), onPointerDown, onResize, onOpen, onContext,
 }: {
-  ev: Ev; top: number; height: number; pixelHeight: number; left?: string | number; width?: string | number; label: string; lifted: boolean; selected: boolean;
+  ev: Ev; top: number; height: number; pixelHeight: number; left?: string | number; width?: string | number; label: string; lifted: boolean; hiddenOrigin?: boolean; selected: boolean;
   dark: boolean; isNext?: boolean; nowMs?: number;
   onPointerDown: (e: React.PointerEvent) => void;
   onResize: (e: React.PointerEvent) => void;
@@ -1921,7 +1852,7 @@ function EventChip({
       className={className}
       role="button" tabIndex={0} aria-label={`${chipLabel(ev)} · ${label}`}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } }}
-      style={{ left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, '--event-title-ink': ev.title_color || ink, '--event-detail-ink': ev.detail_color || ink, background: ev.color, color: ink } as React.CSSProperties}
+      style={{ opacity: hiddenOrigin ? 0 : undefined, pointerEvents: hiddenOrigin ? 'none' : undefined, left, width, top: `${top}%`, height: `${height}%`, '--hue': ev.color, '--event-title-ink': ev.title_color || ink, '--event-detail-ink': ev.detail_color || ink, background: ev.color, color: ink } as React.CSSProperties}
       title={`${chipLabel(ev)} · ${label}`}>
       <span className="cal-event-title">
         <CalendarSourceIcon source={ev.source}/>
@@ -2053,7 +1984,7 @@ function TaskChip({ task, onPointerDown, onOpen, style, compact, timeLabel, pixe
   const hue = task.source === 'canvas_lms' ? '#3f51b5' : '#0b8043';
   const isPast = (task.due_at ? Date.parse(task.due_at) + 3600_000 : new Date(`${task.due_on}T23:59:59`).getTime()) < nowMs;
   return (
-    <div data-calendar-task-id={task.id} onPointerDown={onPointerDown} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
+    <div data-calendar-task-id={task.id} onContextMenu={e => e.preventDefault()} onPointerDown={onPointerDown} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
       aria-label={`${task.title}${timeLabel ? ` · ${timeLabel}` : " · All day"}`}
       onKeyDown={e => { if (onOpen && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); onOpen(r.left, r.top); } }} title={`${task.title} · drag it to a time`}
       className={'cal-task' + (isPast ? ' is-past' : '') + (pixelHeight !== undefined && pixelHeight < 42 ? ' is-short' : '') + (compact ? ' is-compact' : '') + (style?.position === 'absolute' ? ' is-timed' : '') + (alert?.tier === 'red' ? ' is-due' : '')}
@@ -2097,35 +2028,27 @@ function NowLine({ ws, days, dayOffset }: { ws: Date; days: number; dayOffset: n
  * selected day the accent border, and a month divider appears where the month
  * turns over so a long scroll stays legible.
  */
-const STRIP_BACK = 7;      // days of history you can scroll back to
-const STRIP_AHEAD = 60;    // ~two months forward
-
-function DayStrip({ ws, focus, onPick, onJump }: {
-  ws: Date; focus: number;
-  onPick: (d: number) => void;
-  onJump: (weekStartDate: Date, dayIndex: number) => void;
-}) {
+function DayStrip({ selectedDate, onPick }: { selectedDate: Date; onPick: (date: Date) => void }) {
   const { prefs } = usePrefs();
   const rail = useRef<HTMLDivElement>(null);
-
-  const selected = useMemo(() => { const d = new Date(ws); d.setDate(d.getDate() + focus); d.setHours(0, 0, 0, 0); return d; }, [ws, focus]);
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
-
-  const days = useMemo(() => Array.from({ length: STRIP_BACK + STRIP_AHEAD }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - STRIP_BACK + i);
-    return d;
-  }), [today]);
-
-  // Keep the chosen day on screen when it changes from anywhere else.
+  const tap = useTapGuard();
+  const selected = useMemo(() => { const d = new Date(selectedDate); d.setHours(0, 0, 0, 0); return d; }, [selectedDate]);
+  const today = new Date();
+  const year = selected.getFullYear(), month = selected.getMonth();
+  const days = useMemo(() => calendarStripDates(new Date(year, month, 1)), [year, month]);
   useEffect(() => {
-    rail.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    const el = rail.current;
+    const button = el?.querySelector<HTMLElement>('[data-sel="1"]');
+    if (!el || !button) return;
+    const scale = el.getBoundingClientRect().width / el.clientWidth;
+    const box = button.getBoundingClientRect(), bounds = el.getBoundingClientRect();
+    el.scrollTo({ left: el.scrollLeft + (box.left + box.width / 2 - bounds.left - bounds.width / 2) / scale, behavior: 'auto' });
   }, [selected]);
 
   return (
-    <div ref={rail} className="hbar" style={{ display: 'flex', gap: 6, marginBottom: 10, overflowX: 'auto', paddingBottom: 2, scrollSnapType: 'x proximity' }}>
+    <div ref={rail} className="hbar cal-day-strip" role="region" aria-label="Choose a date" onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()} onKeyDown={e => { if (['ArrowLeft', 'ArrowRight'].includes(e.key)) e.stopPropagation(); }}>
       {days.map((date, i) => {
-        const on = date.getTime() === selected.getTime();
+        const on = date.toDateString() === selected.toDateString();
         const isToday = date.getTime() === today.getTime();
         const newMonth = i === 0 || date.getDate() === 1;
         return (
@@ -2140,11 +2063,8 @@ function DayStrip({ ws, focus, onPick, onJump }: {
             )}
             <button
               data-sel={on ? '1' : '0'}
-              onClick={() => {
-                const w = weekStart(date, prefs.weekStart);
-                if (w.getTime() === ws.getTime()) onPick(dayIndex(date.toISOString(), w));
-                else onJump(w, dayIndex(date.toISOString(), w));
-              }}
+              onPointerDown={tap.press}
+              onClick={e => { if (tap.tapped(e)) onPick(date); }}
               className="tt k-chip"
               aria-current={on ? 'date' : undefined}
               aria-label={date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
