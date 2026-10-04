@@ -128,14 +128,14 @@ export default function CalendarPage() {
   /** Right-click target. The context menu reads everything it needs from here. */
   const [ctx, setCtx] = useState<{ ev: Ev; span?: Span | null; x: number; y: number } | null>(null);
 
-  // Week is the desktop default, Day the phone-portrait default.
+  // Week fits all seven days on phones too, so keep the user's saved view.
   const [view, setView] = useState<View>(prefs.calView);
   const pickedView = useRef(false);
   const [importing, setImporting] = useState(false);
   const [google, setGoogle] = useState(false);
   useEffect(() => {
-    if (!pickedView.current) setView(phone && prefs.calView === 'week' ? 'day' : prefs.calView);
-  }, [phone, prefs.calView]);
+    if (!pickedView.current) setView(prefs.calView);
+  }, [prefs.calView]);
 
   // Month needs six weeks of events, not one — the window follows the view.
   const windowDays = view === 'month' ? 42 : 7;
@@ -731,6 +731,7 @@ export default function CalendarPage() {
           )}
           {!isPending && view === 'week' && (
             <Grid zoomRange={zoomRange} onHourHeightChange={setEffectiveHourHeight} days={7} ws={ws} events={events} tasks={windowTasks} A={A} TA={TA} nowMs={nowMs} nextEventId={nextEventId} showVacant={showVacant}
+              onPickDay={date => { setSelectedDate(date); setCalView('day'); }}
               sel={sel} setSel={setSel} openEvent={openEvent} openTask={openTask} openSlot={openSlot} onSchedule={schedule} openMenu={(ev, x, y, span) => setCtx({ ev, x, y, span })} />
           )}
           {!isPending && view === 'day' && (
@@ -1079,9 +1080,10 @@ function contextItems(
 }
 
 function Grid({
-  days, dayOffset = 0, zoomRange, onHourHeightChange, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, openMenu, nowMs = Date.now(), nextEventId, showVacant = true,
+  days, dayOffset = 0, zoomRange, onHourHeightChange, ws, events, tasks, A, TA, sel, setSel, openEvent, openTask, openSlot, onSchedule, openMenu, onPickDay, nowMs = Date.now(), nextEventId, showVacant = true,
 }: {
   days: number;
+  onPickDay?: (date: Date) => void;
   dayOffset?: number;
   zoomRange: { start: number; end: number; key: number } | null;
   onHourHeightChange: (height: number) => void;
@@ -1470,8 +1472,13 @@ function Grid({
             d.setDate(d.getDate() + idx);
             const today = d.toDateString() === new Date().toDateString();
             const past = !today && d.getTime() < new Date().setHours(0, 0, 0, 0);
+            const headingClass = 'cal-dayhead' + (today ? ' is-today' : past ? ' is-past' : '');
+            if (days === 7) return <button key={i} type="button" className={headingClass} aria-current={today ? 'date' : undefined}
+              aria-label={`Show ${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`} onClick={() => onPickDay?.(d)}>
+              <span>{d.toLocaleDateString(undefined, { weekday: 'short' })}</span><b>{d.getDate()}</b>
+            </button>;
             return (
-              <div key={i} className={'cal-dayhead' + (today ? ' is-today' : past ? ' is-past' : '')} aria-current={today ? 'date' : undefined}>
+              <div key={i} className={headingClass} aria-current={today ? 'date' : undefined}>
                 <span>{DAYS_SHORT[idx]}</span>
                 <b>{d.getDate()}</b>
               </div>
@@ -1532,12 +1539,12 @@ function Grid({
             const first = i === 0;
             const last = i === hours.length - 1;
             return (
-            <div key={h} style={{
+            <div key={h} className="cal-hour-label" style={{
               position: 'absolute', right: 8, top: `${(i / SPAN) * 100}%`,
               transform: first ? 'none' : last ? 'translateY(-100%)' : 'translateY(-50%)',
               fontSize: 9.5, color: 'var(--tx3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             }}>
-              {hhmm(h)}
+              {days === 7 ? hhmm(h).replace(':00', '') : hhmm(h)}
             </div>
             );
           })}
@@ -1546,7 +1553,7 @@ function Grid({
         <div style={{ flex: 1, minWidth: 0 }}>
         <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: GRID_H }}>
           {hours.map((h, i) => (
-            <div key={`r${h}`} aria-hidden style={{
+            <div key={`r${h}`} className="cal-hour-line" aria-hidden style={{
               position: 'absolute', left: 0, right: 0, top: `${(i / SPAN) * 100}%`,
               height: 1, background: 'var(--line)', pointerEvents: 'none',
             }} />
@@ -1557,7 +1564,7 @@ function Grid({
           {Array.from({ length: days }, (_, i) => {
             const idx = colOf(i);
             return (
-              <div key={i} style={{ position: 'relative', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined }}>
+              <div key={i} className="cal-day-column" style={{ position: 'relative', borderRight: i < days - 1 ? '1px solid var(--line)' : undefined }}>
                 {/* Google Calendar Drag-to-Create Live Preview Block (Desktop only) */}
                 {!phone && slotDrag && slotDrag.day === idx && (() => {
                   const s = Math.min(slotDrag.startHour, slotDrag.currentHour);
@@ -1612,7 +1619,7 @@ function Grid({
                       const startH = h + (relY >= 0.5 ? 0.5 : 0);
                       openSlot(idx, startH, p.clientX, p.clientY, false, startH + 1);
                     }}
-                    className={phone ? '' : 'hov'}
+                    className={'cal-hour-slot' + (phone ? '' : ' hov')}
                     role="button" tabIndex={0}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); openSlot(idx, h, r.left, r.top, false, Math.min(24, h + 1)); } }}
                     aria-label={`Add event at ${hhmm(h)}`}
@@ -1711,6 +1718,9 @@ function Grid({
                   });
                   const allItems = [...dayColEvents, ...dayColTasks];
                   const positioned = layoutOverlappingEvents<ScheduleItem>(allItems);
+                  // A narrow week column needs its width for text. Reserve an
+                  // arrow lane only where an original Canvas deadline needs it.
+                  const connectionSpace = days === 7 ? (ghosts.length ? 12 : 0) : 18;
 
                   return <>{ghosts.map(({ task, start, end, obstructed }) => <div key={`ghost-${task.id}`} data-calendar-ghost-id={task.id}
                     className={"cal-deadline-ghost" + (obstructed ? " is-obstructed" : "")}
@@ -1724,8 +1734,8 @@ function Grid({
                     const item = pos.ev;
                     const leftPct = (pos.colIndex / pos.totalCols) * 100;
                     const widthPct = (1 / pos.totalCols) * 100;
-                    const leftStyle = pos.totalCols > 1 ? `calc(${leftPct}% - ${18 * pos.colIndex / pos.totalCols}px + 2px)` : '3px';
-                    const widthStyle = pos.totalCols > 1 ? `calc(${widthPct}% - ${18 / pos.totalCols + 4}px)` : 'calc(100% - 21px)';
+                    const leftStyle = `calc(${leftPct}% - ${connectionSpace * pos.colIndex / pos.totalCols}px + 2px)`;
+                    const widthStyle = `calc(${widthPct}% - ${connectionSpace / pos.totalCols + 4}px)`;
 
                     if (item.kind === 'event') {
                       const e = item.ev;
@@ -1779,7 +1789,7 @@ function Grid({
 
                 {taskDrag && taskDrag.hour !== null && taskDrag.day === idx && <TaskChip task={taskDrag.task}
                   onPointerDown={() => {}} nowMs={nowMs} pixelHeight={Math.max(24, HOUR_H)} timeLabel={`${hhmm(taskDrag.hour)} – ${hhmm(taskDrag.hour + 1)}`}
-                  style={{ position: 'absolute', left: 3, right: 20, top: `${pct(taskDrag.hour)}%`, height: `${100 / SPAN}%`, zIndex: 8, pointerEvents: 'none', boxShadow: '0 6px 20px #0003' }}/>}
+                  style={{ position: 'absolute', left: 2, right: days === 7 ? 2 : 20, top: `${pct(taskDrag.hour)}%`, height: `${100 / SPAN}%`, zIndex: 8, pointerEvents: 'none', boxShadow: '0 6px 20px #0003' }}/>}
               </div>
             );
           })}
@@ -2013,9 +2023,9 @@ function NowLine({ ws, days, dayOffset }: { ws: Date; days: number; dayOffset: n
   const width = days === 1 ? 100 : (1 / days) * 100;
 
   return (
-    <div aria-hidden style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: `${pct(hour)}%`, zIndex: 6, pointerEvents: 'none' }}>
-      <div style={{ height: 2, background: 'var(--pal-coral)', boxShadow: '0 0 8px color-mix(in srgb, var(--pal-coral) 60%, transparent)' }} />
-      <div className="k-breathe" style={{ position: 'absolute', left: -3, top: -3, width: 8, height: 8, borderRadius: 4, background: 'var(--pal-coral)' }} />
+    <div className="cal-now-line" aria-hidden style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: `${pct(hour)}%`, zIndex: 6, pointerEvents: 'none' }}>
+      <div style={{ height: 2, background: 'var(--calendar-now,var(--pal-coral))' }} />
+      <div className="k-breathe" style={{ position: 'absolute', left: -3, top: -3, width: 8, height: 8, borderRadius: 4, background: 'var(--calendar-now,var(--pal-coral))' }} />
     </div>
   );
 }

@@ -321,7 +321,7 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 
 /* Date navigation stays beside the date, ahead of view and creation controls. */
 .cal-grid-viewport{display:flex;flex:1;min-height:120px;overflow-x:auto;overscroll-behavior-x:contain}
-.cal-grid-surface.is-week{min-width:1172px}
+.cal-grid-surface.is-week{min-width:0;width:100%}
 .cal-hour-axis,.cal-axis-corner,.cal-all-day-label{transform:translateX(var(--calendar-scroll-x,0px));z-index:7;background:var(--card)}
 .cal-axis-corner{position:relative}
 .cal-task-title .cal-source-icon{margin-right:4px;vertical-align:text-top}
@@ -402,4 +402,59 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
  .calendar-page{min-height:480px!important}
  .cal-content{flex:0 0 380px!important;height:380px;min-height:380px!important}
  .cal-grid-viewport{min-height:280px}
+}
+
+/* Seven-day overview, sized to the screen like the mobile reference. */
+.cal-grid-surface.is-week{--week-slot:#f1f3f4;--calendar-now:var(--tx);border:0;border-radius:8px}
+:root[data-theme='dark'] .cal-grid-surface.is-week{--card:#202020;--week-slot:#121212;--line:#454545}
+.is-week .cal-dayheads{border:0}
+.is-week .cal-dayhead{min-width:0;gap:1px;padding:6px 0 8px;min-height:66px;background:transparent}
+.is-week .cal-dayhead span{text-transform:none;font-size:12px;font-weight:600;letter-spacing:0;color:var(--tx3)}
+.is-week .cal-dayhead b{font-size:24px;width:36px;min-width:0;height:36px;padding:0;font-weight:500}
+.is-week .cal-dayhead.is-today span{color:var(--tx)}
+.is-week .cal-dayhead.is-today b{background:var(--tx);color:var(--card);font-weight:650}
+.is-week .cal-dayhead:focus-visible{outline:2px solid var(--acc);outline-offset:-2px;border-radius:5px}
+.is-week .cal-dayhead:hover{background:color-mix(in srgb,var(--tx) 5%,transparent)}
+.is-week .cal-all-day-tray{border-bottom:3px solid var(--line);scrollbar-gutter:auto}
+.is-week .cal-all-day-column{border-right:0!important;padding:2px 2px 15px!important;min-height:30px}
+.is-week .cal-all-day-event,.is-week .cal-task.is-compact{padding:3px;border-radius:5px;min-height:21px;font-size:10px;gap:2px}
+.is-week .cal-all-day-label{font-size:8px!important;letter-spacing:0!important}
+.is-week .cal-time-scroller{scrollbar-width:thin;scrollbar-gutter:auto}
+.is-week .cal-hour-label{font-size:11px!important;color:var(--tx2)!important}
+.is-week .cal-hour-line{display:none}
+.is-week .cal-day-column{border:0!important}
+.is-week .cal-hour-slot::before{content:'';position:absolute;inset:2px;border-radius:6px;background:var(--week-slot);pointer-events:none}
+.is-week .cal-hour-slot:hover::before{background:color-mix(in srgb,var(--tx) 8%,var(--week-slot))}
+.is-week .cal-event,.is-week .cal-task.is-timed{z-index:2;border-radius:6px;padding:3px 4px;box-shadow:none;border:0}
+.is-week .cal-event.is-selected{z-index:4;box-shadow:inset 0 0 0 2px var(--tx)}
+.is-week .cal-event.is-lifted{z-index:10;box-shadow:0 6px 20px #0003}
+.is-week .cal-event-title{display:block;flex:0 1 auto;min-height:0;font-size:12px;line-height:1.25;overflow:hidden}
+.is-week .cal-event-title b{display:block;-webkit-line-clamp:unset;overflow-wrap:anywhere;font-weight:500}
+.is-week .cal-event-title .cal-source-icon{float:left;margin:1px 3px 0 0}
+.is-week .cal-event.is-short .cal-event-title b{white-space:nowrap}
+.is-week .cal-task.is-timed .cal-task-title{display:block;-webkit-line-clamp:unset;font-weight:500}
+.is-week .cal-task.is-timed .cal-task-ring{display:none}
+.is-week .cal-task-copy{height:100%;overflow:hidden}
+.is-week .cal-task-title{flex:0 1 auto;min-height:0}
+.is-week .cal-free{z-index:1;left:2px;right:2px;background:transparent;border:0}
+.is-week .cal-free-label{padding:2px 3px;border-radius:3px;background:var(--week-slot)}
+.is-week .cal-day-column{container-type:inline-size}
+@container(max-width:90px){
+ .is-week .cal-free-label{font-size:9px}
+ .is-week .cal-free-label small{display:none}
+}
+/* In narrow columns the hour axis supplies timing and a tap opens exact times.
+   Keep the available block area for the title, as in the reference. */
+@container(max-width:62px){
+ .is-week .cal-event-meta,.is-week .cal-event-location,.is-week .cal-event-count,.is-week .cal-task-time-label,.is-week .cal-task-plan-label{display:none}
+ .is-week .cal-event-title,.is-week .cal-task.is-timed .cal-task-title{font-size:11px;line-height:1.22}
+ .is-week .cal-event-title .cal-source-icon,.is-week .cal-task-title .cal-source-icon{width:10px;height:10px;margin-right:2px}
+ .is-week .cal-source-icon svg{width:9px;height:9px}
+}
+@media(max-width:760px){
+ .is-week .cal-dayhead b{font-size:23px;width:32px;height:32px}
+ .is-week .cal-dayhead span{font-size:11px}
+ .is-week .cal-all-day-event>.cal-source-icon{width:10px;height:10px}
+ .is-week .cal-event,.is-week .cal-task.is-timed{padding:3px 2px}
+ .is-week .cal-task.is-short .cal-task-copy{display:block}
 }
