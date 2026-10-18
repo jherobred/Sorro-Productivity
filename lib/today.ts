@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEvents, weekStart, hoursOf, type Ev } from './events';
 import { useTasks } from './tasks';
 import { useHabits, useTicks, ymd } from './habits';
+import { isDueOn, progress } from './habitSchedule';
 import { useBudgets, useTransactions } from './money';
 
 /**
@@ -69,8 +70,9 @@ export function useToday(): TodayShape {
     const dueToday = open.filter((t) => t.due_on === today).length;
     const overdue = open.filter((t) => !!t.due_on && t.due_on < today).length;
 
-    const doneIds = new Set(ticks.filter((t) => t.on_date === today).map((t) => t.habit_id));
-    const habitsDone = habits.filter((h) => doneIds.has(h.id)).length;
+    const todayTicks = new Map(ticks.filter((t) => t.on_date === today).map((t) => [t.habit_id, t]));
+    const dueHabits = habits.filter((h) => h.frequency === 'weekly' || isDueOn(h, now));
+    const habitsDone = dueHabits.filter((h) => progress(h, todayTicks.get(h.id)).done).length;
 
     // Budgets are per-category for the month; spend is every outgoing txn in it.
     const monthPrefix = today.slice(0, 7);
@@ -90,7 +92,7 @@ export function useToday(): TodayShape {
       dueToday,
       overdue,
       habitsDone,
-      habitsTotal: habits.length,
+      habitsTotal: dueHabits.length,
       leftCentavos: budgeted ? budgeted - spent : null,
       spentPct: budgeted ? Math.min(100, Math.round((spent / budgeted) * 100)) : 0,
     };

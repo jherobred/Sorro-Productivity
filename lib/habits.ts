@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useMemo, useSyncExternalStore } from 'react';
 import { supabase, currentUserId } from './supabase';
 import { fromYmd } from './days';
@@ -14,7 +14,6 @@ import type {
   TimeOfDay,
   HabitKind,
   HabitLog,
-  HabitMilestone,
 } from './habitTypes';
 import { HABIT_MILESTONES } from './habitTypes';
 
@@ -42,7 +41,16 @@ export type Habit = {
   created_at?: string;
 };
 
-export type Tick = { habit_id: string; on_date: string; value: number };
+export type Tick = {
+  habit_id: string;
+  on_date: string;
+  value: number;
+  note?: string | null;
+  mood?: HabitLog['mood'] | null;
+};
+
+export const HABIT_SELECT =
+  'id,name,short_name,show_in_home,color,kind,target,target_unit,position,archived_at,challenge_id,category,frequency,custom_days,time_of_day,icon,cue,reminder_time';
 
 const HABITS_KEY = ['habits'] as const;
 const TICKS_KEY = ['habit_ticks'] as const;
@@ -50,7 +58,10 @@ const HABITS_META_KEY = 'basedly-habits-meta-v2';
 const HABIT_LOGS_KEY = 'basedly-habit-logs-v2';
 const HABIT_FREEZES_KEY = 'basedly-habit-freezes-v2';
 
-/* ----------------------------------------------------------------- Metadata Store */
+/** Keeps recently archived habits in memory so Undo restores them optimistically. */
+const recentlyArchived = new Map<string, Habit>();
+
+/* ----------------------------------------------------------------- Legacy Local Meta Migration */
 
 type HabitMetaMap = Record<string, Partial<Habit>>;
 
@@ -67,14 +78,46 @@ function getLocalMeta(): HabitMetaMap {
 function saveLocalMeta(map: HabitMetaMap) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(HABITS_META_KEY, JSON.stringify(map));
+    if (Object.keys(map).length === 0) {
+      localStorage.removeItem(HABITS_META_KEY);
+    } else {
+      localStorage.setItem(HABITS_META_KEY, JSON.stringify(map));
+    }
   } catch {}
+}
+
+function normalizeHabitRow(raw: Record<string, unknown>, extra: Partial<Habit> = {}): Habit {
+  const kind = ((raw.kind as HabitKind) ?? extra.kind ?? 'bin') as HabitKind;
+  const defaultIcon = kind === 'dur' ? 'clock' : kind === 'count' ? 'plus' : 'check';
+  const defaultUnit = kind === 'dur' ? 'mins' : kind === 'count' ? 'times' : 'day';
+  return {
+    id: String(raw.id),
+    name: String(raw.name ?? ''),
+    short_name: (raw.short_name as string) || extra.short_name || '',
+    show_in_home: typeof raw.show_in_home === 'boolean' ? raw.show_in_home : (extra.show_in_home ?? true),
+    color: String(raw.color ?? '#FF6B6B'),
+    kind,
+    target: typeof raw.target === 'number' ? raw.target : raw.target != null ? Number(raw.target) : null,
+    target_unit: (raw.target_unit as string | null) ?? extra.target_unit ?? defaultUnit,
+    position: typeof raw.position === 'number' ? raw.position : 0,
+    archived_at: (raw.archived_at as string | null) ?? null,
+    challenge_id: (raw.challenge_id as string | null) ?? null,
+    category: ((raw.category as HabitCategory) || extra.category || 'health') as HabitCategory,
+    frequency: ((raw.frequency as HabitFrequency) || extra.frequency || 'daily') as HabitFrequency,
+    custom_days: Array.isArray(raw.custom_days)
+      ? (raw.custom_days as number[]).map(Number)
+      : extra.custom_days,
+    time_of_day: ((raw.time_of_day as TimeOfDay) || extra.time_of_day || 'anytime') as TimeOfDay,
+    icon: (raw.icon as string) || extra.icon || defaultIcon,
+    cue: (raw.cue as string) || extra.cue || '',
+    reminder_time: (raw.reminder_time as string | null) ?? extra.reminder_time ?? null,
+  };
 }
 
 /* ----------------------------------------------------------------- Habit Logs Store */
 
 let logsCache: HabitLog[] = [];
-let logsListeners = new Set<() => void>();
+const logsListeners = new Set<() => void>();
 
 function loadLogs(): HabitLog[] {
   if (typeof window === 'undefined') return [];
@@ -99,7 +142,6 @@ function saveLogs(logs: HabitLog[]) {
 if (typeof window !== 'undefined') {
   logsCache = loadLogs();
 }
-
 
 /**
  * Hoisted, not an inline arrow. useSyncExternalStore re-subscribes whenever
@@ -221,12 +263,12 @@ export function useStreakFreezes() {
           }
         } catch {}
       }
-      toast(`Used Streak Freeze for ${dateStr} 🛡️`);
+      toast(`Used Streak Freeze for ${dateStr}`);
       return true;
     },
     addFreeze: () => {
       setAvailableFreezes(count + 1);
-      toast('+1 Streak Freeze earned! 🛡️');
+      toast('+1 Streak Freeze earned');
     },
   };
 }
@@ -262,28 +304,36 @@ export function useHabits() {
     queryFn: async (): Promise<Habit[]> => {
       const { data, error } = await supabase
         .from('bd_habits')
-        .select('id,name,color,kind,target,position,archived_at,challenge_id')
+        .select(HABIT_SELECT)
         .is('archived_at', null)
         .order('position');
       if (error) throw error;
 
       const meta = getLocalMeta();
-      return (data ?? []).map((h) => {
-        const extra = meta[h.id] || {};
-        return {
-          ...h,
-          short_name: extra.short_name ?? '',
-          show_in_home: extra.show_in_home ?? true,
-          category: extra.category ?? 'health',
-          frequency: extra.frequency ?? 'daily',
-          custom_days: extra.custom_days,
-          time_of_day: extra.time_of_day ?? 'anytime',
-          icon: extra.icon ?? (h.kind === 'dur' ? 'clock' : h.kind === 'count' ? 'plus' : 'check'),
-          cue: extra.cue ?? '',
-          target_unit: extra.target_unit ?? (h.kind === 'dur' ? 'mins' : h.kind === 'count' ? 'times' : 'day'),
-          reminder_time: extra.reminder_time ?? null,
-        } as Habit;
+      let dirtyMeta = false;
+      const rows = (data ?? []).map((raw) => {
+        const extra = meta[raw.id];
+        const habit = normalizeHabitRow(raw as Record<string, unknown>, extra);
+        if (extra) {
+          delete meta[raw.id];
+          dirtyMeta = true;
+          void supabase.from('bd_habits').update({
+            short_name: habit.short_name ?? '',
+            show_in_home: habit.show_in_home ?? true,
+            category: habit.category ?? 'health',
+            frequency: habit.frequency ?? 'daily',
+            custom_days: habit.custom_days ?? null,
+            time_of_day: habit.time_of_day ?? 'anytime',
+            icon: habit.icon ?? null,
+            cue: habit.cue ?? '',
+            target_unit: habit.target_unit ?? null,
+            reminder_time: habit.reminder_time ?? null,
+          }).eq('id', habit.id);
+        }
+        return habit;
       });
+      if (dirtyMeta) saveLocalMeta(meta);
+      return rows;
     },
   });
 }
@@ -294,16 +344,13 @@ export function useArchivedHabits() {
     queryFn: async (): Promise<Habit[]> => {
       const { data, error } = await supabase
         .from('bd_habits')
-        .select('id,name,color,kind,target,position,archived_at,challenge_id')
+        .select(HABIT_SELECT)
         .not('archived_at', 'is', null)
         .order('position');
       if (error) throw error;
 
       const meta = getLocalMeta();
-      return (data ?? []).map((h) => ({
-        ...h,
-        ...(meta[h.id] || {}),
-      })) as Habit[];
+      return (data ?? []).map((raw) => normalizeHabitRow(raw as Record<string, unknown>, meta[raw.id]));
     },
   });
 }
@@ -315,10 +362,23 @@ export function useTicks(days: number) {
     queryFn: async (): Promise<Tick[]> => {
       const { data, error } = await supabase
         .from('bd_habit_ticks')
-        .select('habit_id,on_date,value')
+        .select('habit_id,on_date,value,note,mood')
         .gte('on_date', from);
       if (error) throw error;
-      return data ?? [];
+      const rows = (data ?? []) as Tick[];
+      // Sync any server-stored notes/moods into the local external store so HabitDetail sees them.
+      for (const r of rows) {
+        if (r.note || r.mood) {
+          logHabitEntry({
+            habit_id: r.habit_id,
+            on_date: r.on_date,
+            value: r.value,
+            note: r.note ?? undefined,
+            mood: (r.mood as HabitLog['mood']) ?? undefined,
+          });
+        }
+      }
+      return rows;
     },
   });
 }
@@ -427,11 +487,6 @@ export function calculateHabitGamification(habits: Habit[], ticks: Tick[]) {
 /**
  * `toggle` flips the day on or off. `set` writes an exact value and only
  * removes the row when that value drops to zero.
- *
- * Without the split, every caller that meant "record 3 reps" or "log 42
- * minutes" hit the toggling RPC and deleted the entry it was trying to
- * update, so a count habit could never pass 1 and finishing a timer on an
- * already-ticked habit un-ticked it.
  */
 export type TickMode = 'toggle' | 'set';
 
@@ -457,14 +512,18 @@ const TICK = defineMutation('habit.tick', async (v: TickVars) => {
       .eq('on_date', v.date)
       .maybeSingle();
 
+    const patch: Record<string, unknown> = { value: next };
+    if (v.note !== undefined) patch.note = v.note;
+    if (v.mood !== undefined) patch.mood = v.mood;
+
     const { error } = next <= 0
       ? (row?.id
         ? await supabase.from('bd_habit_ticks').delete().eq('id', row.id)
         : { error: null })
       : (row?.id
-        ? await supabase.from('bd_habit_ticks').update({ value: next }).eq('id', row.id)
+        ? await supabase.from('bd_habit_ticks').update(patch).eq('id', row.id)
         : await supabase.from('bd_habit_ticks').insert({
-          user_id, habit_id: v.habitId, on_date: v.date, value: next,
+          user_id, habit_id: v.habitId, on_date: v.date, ...patch,
         }));
     if (error) throw error;
     return;
@@ -477,7 +536,6 @@ const TICK = defineMutation('habit.tick', async (v: TickVars) => {
   });
 
   if (rpcErr) {
-    // Resilient fallback: direct insert/delete if RPC is missing or fails
     const { data: existing } = await supabase
       .from('bd_habit_ticks')
       .select('id')
@@ -486,10 +544,6 @@ const TICK = defineMutation('habit.tick', async (v: TickVars) => {
       .eq('on_date', v.date)
       .maybeSingle();
 
-    // The fallback's own failure has to reach the caller. Ignoring it resolved
-    // the mutation as a success on a write that never happened: no rollback, no
-    // retry, and the tick sat in the cache until some later refetch quietly
-    // removed it. Throwing lets `tick`'s onError put the square back.
     const { error } = existing?.id
       ? await supabase.from('bd_habit_ticks').delete().eq('id', existing.id)
       : await supabase.from('bd_habit_ticks').insert({
@@ -497,8 +551,20 @@ const TICK = defineMutation('habit.tick', async (v: TickVars) => {
         habit_id: v.habitId,
         on_date: v.date,
         value: v.value ?? 1,
+        ...(v.note !== undefined ? { note: v.note } : {}),
+        ...(v.mood !== undefined ? { mood: v.mood } : {}),
       });
     if (error) throw error;
+  } else if (v.note !== undefined || v.mood !== undefined) {
+    await supabase
+      .from('bd_habit_ticks')
+      .update({
+        ...(v.note !== undefined ? { note: v.note } : {}),
+        ...(v.mood !== undefined ? { mood: v.mood } : {}),
+      })
+      .eq('user_id', user_id)
+      .eq('habit_id', v.habitId)
+      .eq('on_date', v.date);
   }
 });
 
@@ -517,54 +583,55 @@ const CREATE = defineMutation('habit.create', async (v: {
   time_of_day?: TimeOfDay;
   icon?: string;
   cue?: string;
+  reminder_time?: string | null;
 }) => {
   const user_id = await currentUserId();
+  const kind = v.kind ?? 'bin';
   const { error } = await supabase.from('bd_habits').insert({
     id: v.id,
-    name: v.name,
-    color: v.color,
-    kind: v.kind ?? 'bin',
-    target: v.target ?? null,
     user_id,
-  });
-  if (error) throw error;
-
-  const meta = getLocalMeta();
-  meta[v.id] = {
-    short_name: v.short_name,
+    name: v.name,
+    short_name: v.short_name ?? '',
     show_in_home: v.show_in_home ?? true,
+    color: v.color,
+    kind,
+    target: v.target ?? null,
+    target_unit: v.target_unit ?? (kind === 'dur' ? 'mins' : kind === 'count' ? 'times' : 'day'),
     category: v.category ?? 'health',
     frequency: v.frequency ?? 'daily',
-    custom_days: v.custom_days,
+    custom_days: v.custom_days ?? null,
     time_of_day: v.time_of_day ?? 'anytime',
-    icon: v.icon,
-    cue: v.cue,
-    target_unit: v.target_unit,
-  };
-  saveLocalMeta(meta);
+    icon: v.icon ?? (kind === 'dur' ? 'clock' : kind === 'count' ? 'plus' : 'check'),
+    cue: v.cue ?? '',
+    reminder_time: v.reminder_time ?? null,
+  });
+  if (error) throw error;
 });
 
 const EDIT = defineMutation('habit.edit', async (v: { id: string; patch: Partial<Habit> }) => {
   const { patch } = v;
   const dbPatch: Record<string, unknown> = {};
   if (patch.name !== undefined) dbPatch.name = patch.name;
+  if (patch.short_name !== undefined) dbPatch.short_name = patch.short_name;
+  if (patch.show_in_home !== undefined) dbPatch.show_in_home = patch.show_in_home;
   if (patch.color !== undefined) dbPatch.color = patch.color;
   if (patch.kind !== undefined) dbPatch.kind = patch.kind;
   if (patch.target !== undefined) dbPatch.target = patch.target;
+  if (patch.target_unit !== undefined) dbPatch.target_unit = patch.target_unit;
   if (patch.position !== undefined) dbPatch.position = patch.position;
   if (patch.archived_at !== undefined) dbPatch.archived_at = patch.archived_at;
+  if (patch.category !== undefined) dbPatch.category = patch.category;
+  if (patch.frequency !== undefined) dbPatch.frequency = patch.frequency;
+  if (patch.custom_days !== undefined) dbPatch.custom_days = patch.custom_days ?? null;
+  if (patch.time_of_day !== undefined) dbPatch.time_of_day = patch.time_of_day;
+  if (patch.icon !== undefined) dbPatch.icon = patch.icon;
+  if (patch.cue !== undefined) dbPatch.cue = patch.cue;
+  if (patch.reminder_time !== undefined) dbPatch.reminder_time = patch.reminder_time;
 
   if (Object.keys(dbPatch).length > 0) {
     const { error } = await supabase.from('bd_habits').update(dbPatch).eq('id', v.id);
     if (error) throw error;
   }
-
-  const meta = getLocalMeta();
-  meta[v.id] = {
-    ...(meta[v.id] || {}),
-    ...patch,
-  };
-  saveLocalMeta(meta);
 });
 
 const ARCHIVE = defineMutation('habit.archive', async (v: { id: string; at: string | null }) => {
@@ -598,13 +665,17 @@ export async function mirrorHabit(v: {
 
   const id = crypto.randomUUID();
   const { error } = await supabase.from('bd_habits')
-    .insert({ id, user_id, name: v.name, color: v.color, challenge_id: v.challenge_id });
-  if (!error) {
-    const meta = getLocalMeta();
-    meta[id] = { category: 'productivity', time_of_day: 'anytime', icon: 'trophy' };
-    saveLocalMeta(meta);
-    return id;
-  }
+    .insert({
+      id,
+      user_id,
+      name: v.name,
+      color: v.color,
+      challenge_id: v.challenge_id,
+      category: 'productivity',
+      time_of_day: 'anytime',
+      icon: 'trophy',
+    });
+  if (!error) return id;
 
   const again = await supabase.from('bd_habits')
     .select('id').eq('user_id', user_id).eq('challenge_id', v.challenge_id).maybeSingle();
@@ -619,19 +690,20 @@ export async function retireMirror(challenge_id: string) {
     .eq('user_id', user_id).eq('challenge_id', challenge_id);
 }
 
+type TickCacheSnapshot = Array<[QueryKey, Tick[] | undefined]>;
+
 export function useHabitActions(days = 30) {
   const qc = useQueryClient();
-  const tKey = [...TICKS_KEY, days];
+  const tKey = [...TICKS_KEY, days] as const;
   const settle = settler(qc, TICKS_KEY, HABITS_KEY, ['challenges'], ['challenge_members'], ['challenge_days'], ['metric']);
 
-  const tick = useMutation({
+  const tick = useMutation<unknown, Error, TickVars, TickCacheSnapshot>({
     mutationKey: TICK,
     onMutate: (v: TickVars) => {
-      const prev = queryClient.getQueryData<Tick[]>(tKey) ?? [];
-      const on = prev.some((t) => t.habit_id === v.habitId && t.on_date === v.date);
+      const queries = queryClient.getQueriesData<Tick[]>({ queryKey: TICKS_KEY });
+      const primary = queryClient.getQueryData<Tick[]>(tKey) ?? queries.find(([, d]) => Array.isArray(d))?.[1] ?? [];
+      const on = primary.some((t) => t.habit_id === v.habitId && t.on_date === v.date);
 
-      // `set` writes the value it was given. Only `toggle` may clear the day,
-      // which is what a square in the grid and the Mark Done button mean.
       const next = v.value ?? 1;
       const clearing = v.mode === 'set' ? next <= 0 : on;
 
@@ -651,18 +723,39 @@ export function useHabitActions(days = 30) {
         removeHabitEntryLog(v.habitId, v.date);
       }
 
-      queryClient.setQueryData<Tick[]>(
-        tKey,
-        clearing
-          ? prev.filter((t) => !(t.habit_id === v.habitId && t.on_date === v.date))
-          : on
-            ? prev.map((t) => (t.habit_id === v.habitId && t.on_date === v.date
-              ? { ...t, value: next } : t))
-            : [...prev, { habit_id: v.habitId, on_date: v.date, value: next }]
-      );
-      return prev;
+      const patchList = (list: Tick[] = []): Tick[] => {
+        const exists = list.some((t) => t.habit_id === v.habitId && t.on_date === v.date);
+        if (clearing) {
+          return list.filter((t) => !(t.habit_id === v.habitId && t.on_date === v.date));
+        }
+        if (exists) {
+          return list.map((t) =>
+            t.habit_id === v.habitId && t.on_date === v.date
+              ? { ...t, value: next, ...(v.note !== undefined ? { note: v.note } : {}), ...(v.mood !== undefined ? { mood: v.mood } : {}) }
+              : t,
+          );
+        }
+        return [
+          ...list,
+          { habit_id: v.habitId, on_date: v.date, value: next, note: v.note ?? null, mood: v.mood ?? null },
+        ];
+      };
+
+      const hasTKey = queries.some(([k]) => JSON.stringify(k) === JSON.stringify(tKey));
+      const snapshots: TickCacheSnapshot = hasTKey ? queries : [...queries, [tKey, undefined]];
+
+      for (const [key, prev] of snapshots) {
+        queryClient.setQueryData<Tick[]>(key, patchList(prev ?? []));
+      }
+
+      return snapshots;
     },
-    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(tKey, ctx); },
+    onError: (_e, _v, snapshots) => {
+      if (!snapshots) return;
+      for (const [key, prev] of snapshots) {
+        queryClient.setQueryData(key, prev);
+      }
+    },
     onSettled: settle,
   });
 
@@ -670,13 +763,16 @@ export function useHabitActions(days = 30) {
     mutationKey: CREATE,
     onMutate: (v) => {
       const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
+      const kind = v.kind ?? 'bin';
       const newHabit: Habit = {
         id: v.id,
         name: v.name,
+        short_name: v.short_name ?? v.name.split(/\s+/)[0] ?? '',
+        show_in_home: v.show_in_home ?? true,
         color: v.color,
-        kind: v.kind ?? 'bin',
+        kind,
         target: v.target ?? null,
-        target_unit: v.target_unit ?? null,
+        target_unit: v.target_unit ?? (kind === 'dur' ? 'mins' : kind === 'count' ? 'times' : 'day'),
         position: prev.length,
         archived_at: null,
         challenge_id: null,
@@ -684,7 +780,7 @@ export function useHabitActions(days = 30) {
         frequency: v.frequency ?? 'daily',
         custom_days: v.custom_days,
         time_of_day: v.time_of_day ?? 'anytime',
-        icon: v.icon ?? 'check',
+        icon: v.icon ?? (kind === 'dur' ? 'clock' : kind === 'count' ? 'plus' : 'check'),
         cue: v.cue ?? '',
         reminder_time: v.reminder_time ?? null,
       };
@@ -701,7 +797,7 @@ export function useHabitActions(days = 30) {
       const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
       queryClient.setQueryData<Habit[]>(
         HABITS_KEY,
-        prev.map((h) => (h.id === v.id ? { ...h, ...v.patch } : h))
+        prev.map((h) => (h.id === v.id ? { ...h, ...v.patch } : h)),
       );
       return prev;
     },
@@ -709,24 +805,62 @@ export function useHabitActions(days = 30) {
     onSettled: settle,
   });
 
-  const archive = useMutation<unknown, Error, { id: string; at: string | null }>({
+  const archive = useMutation<unknown, Error, { id: string; at: string | null }, Habit[]>({
     mutationKey: ARCHIVE,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
+      if (v.at !== null) {
+        const target = prev.find((h) => h.id === v.id);
+        if (target) recentlyArchived.set(v.id, target);
+        queryClient.setQueryData<Habit[]>(
+          HABITS_KEY,
+          prev.filter((h) => h.id !== v.id),
+        );
+      } else {
+        const restored = recentlyArchived.get(v.id);
+        if (restored && !prev.some((h) => h.id === v.id)) {
+          const next = [...prev, { ...restored, archived_at: null }].sort((a, b) => a.position - b.position);
+          queryClient.setQueryData<Habit[]>(HABITS_KEY, next);
+        }
+      }
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(HABITS_KEY, ctx); },
     onSettled: settle,
   });
 
-  const rename = useMutation<unknown, Error, { id: string; name: string }>({
+  const rename = useMutation<unknown, Error, { id: string; name: string }, Habit[]>({
     mutationKey: RENAME,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
+      queryClient.setQueryData<Habit[]>(
+        HABITS_KEY,
+        prev.map((h) => (h.id === v.id ? { ...h, name: v.name } : h)),
+      );
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(HABITS_KEY, ctx); },
     onSettled: settle,
   });
 
-  const setKind = useMutation<unknown, Error, { id: string; kind: Habit['kind'] }>({
+  const setKind = useMutation<unknown, Error, { id: string; kind: Habit['kind'] }, Habit[]>({
     mutationKey: SET_KIND,
+    onMutate: (v) => {
+      const prev = queryClient.getQueryData<Habit[]>(HABITS_KEY) ?? [];
+      queryClient.setQueryData<Habit[]>(
+        HABITS_KEY,
+        prev.map((h) => (h.id === v.id ? { ...h, kind: v.kind } : h)),
+      );
+      return prev;
+    },
+    onError: (_e, _v, ctx) => { if (ctx) queryClient.setQueryData(HABITS_KEY, ctx); },
     onSettled: settle,
   });
 
   const removeWithUndo = (h: Habit) => {
+    recentlyArchived.set(h.id, h);
     archive.mutate({ id: h.id, at: new Date().toISOString() });
-    toast(`Deleted “${h.name}”`, () => archive.mutate({ id: h.id, at: null }));
+    toast(`Archived “${h.name}”`, () => archive.mutate({ id: h.id, at: null }));
   };
 
   const completeAllToday = (habits: Habit[]) => {
@@ -735,15 +869,15 @@ export function useHabitActions(days = 30) {
     const unticked = habits.filter((h) => !h.archived_at && !prevTicks.some((t) => t.habit_id === h.id && t.on_date === today));
 
     if (unticked.length === 0) {
-      toast('All habits already completed for today!');
+      toast('All habits already completed for today');
       return;
     }
 
     unticked.forEach((h) => {
-      tick.mutate({ habitId: h.id, date: today, value: h.target ?? 1 });
+      tick.mutate({ habitId: h.id, date: today, value: h.target ?? 1, mode: 'set' });
     });
     playCelebration();
-    toast(`Boom! Completed all ${unticked.length} habits for today! 🎉🔥`);
+    toast(`Completed ${unticked.length} ${unticked.length === 1 ? 'habit' : 'habits'} for today`);
   };
 
   const resetToday = (habits: Habit[]) => {
@@ -752,7 +886,7 @@ export function useHabitActions(days = 30) {
     const ticked = habits.filter((h) => prevTicks.some((t) => t.habit_id === h.id && t.on_date === today));
 
     ticked.forEach((h) => {
-      tick.mutate({ habitId: h.id, date: today });
+      tick.mutate({ habitId: h.id, date: today, value: 0, mode: 'set' });
     });
     toast(`Reset today's progress for ${ticked.length} habits`);
   };

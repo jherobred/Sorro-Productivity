@@ -190,17 +190,20 @@ export function seedDevFixtures() {
   // ch1 and ch2 below, so the divider and the second group have something to
   // draw in the preview.
   seed(['habits'], [
-    { id: 'h1', name: 'Read 20 pages', color: '#FF6B6B', kind: 'bin', target: null, position: 0, archived_at: null, challenge_id: null },
-    { id: 'h2', name: 'Drink 8 glasses', color: '#38D6F2', kind: 'bin', target: null, position: 1, archived_at: null, challenge_id: null },
-    { id: 'h3', name: 'No phone before bed', color: '#B07CFF', kind: 'bin', target: null, position: 2, archived_at: null, challenge_id: null },
-    { id: 'h4', name: '6 a.m. club', color: '#FFC24B', kind: 'bin', target: null, position: 3, archived_at: null, challenge_id: 'ch1' },
-    { id: 'h5', name: 'No-skip gym', color: '#FF6B6B', kind: 'bin', target: null, position: 4, archived_at: null, challenge_id: 'ch2' },
+    { id: 'h1', name: 'Read 20 pages', short_name: 'Read', show_in_home: true, color: '#FF6B6B', kind: 'bin', target: 1, target_unit: 'day', position: 0, archived_at: null, challenge_id: null, category: 'study', frequency: 'daily', time_of_day: 'evening', icon: 'book', cue: 'Leave book on pillow before dinner' },
+    { id: 'h2', name: 'Drink 8 glasses', short_name: 'Hydrate', show_in_home: true, color: '#38D6F2', kind: 'count', target: 8, target_unit: 'glasses', position: 1, archived_at: null, challenge_id: null, category: 'health', frequency: 'daily', time_of_day: 'anytime', icon: 'drop', cue: 'Keep water bottle on desk all day' },
+    { id: 'h3', name: 'No phone before bed', short_name: 'Unplug', show_in_home: true, color: '#B07CFF', kind: 'bin', target: 1, target_unit: 'day', position: 2, archived_at: null, challenge_id: null, category: 'mind', frequency: 'daily', time_of_day: 'evening', icon: 'moon', cue: 'Charge phone across the room at 10:30 PM' },
+    { id: 'h4', name: '6 a.m. club', short_name: '6 AM', show_in_home: true, color: '#FFC24B', kind: 'bin', target: 1, target_unit: 'day', position: 3, archived_at: null, challenge_id: 'ch1', category: 'lifestyle', frequency: 'weekdays', time_of_day: 'morning', icon: 'sun', cue: 'Stand up on first alarm and drink water' },
+    { id: 'h5', name: 'No-skip gym', short_name: 'Gym', show_in_home: true, color: '#34D9A0', kind: 'dur', target: 45, target_unit: 'mins', position: 4, archived_at: null, challenge_id: 'ch2', category: 'fitness', frequency: 'daily', time_of_day: 'afternoon', icon: 'gym', cue: 'Pack gym bag beside the door' },
   ]);
   const ticks: { habit_id: string; on_date: string; value: number }[] = [];
   for (let g = 0; g <= 5; g++) ticks.push({ habit_id: 'h1', on_date: ymdOf(-g), value: 1 });
-  for (let g = 1; g <= 9; g++) if (g !== 4) ticks.push({ habit_id: 'h2', on_date: ymdOf(-g), value: 1 });
+  ticks.push({ habit_id: 'h2', on_date: ymdOf(0), value: 5 });
+  for (let g = 1; g <= 9; g++) if (g !== 4) ticks.push({ habit_id: 'h2', on_date: ymdOf(-g), value: 8 });
   for (let g = 0; g <= 12; g++) if (g % 3) ticks.push({ habit_id: 'h3', on_date: ymdOf(-g), value: 1 });
-  for (const d of [7, 30, 365]) seed(['habit_ticks', d], ticks);
+  for (let g = 0; g <= 4; g++) ticks.push({ habit_id: 'h4', on_date: ymdOf(-g), value: 1 });
+  for (let g = 1; g <= 6; g++) ticks.push({ habit_id: 'h5', on_date: ymdOf(-g), value: 45 });
+  for (const d of [1, 7, 30, 365]) seed(['habit_ticks', d], ticks);
 
   seed(['scratch'], [
     { id: 's1', text: 'Ask about the thesis template margins', tag: 'Note', color: '#38D6F2', pinned: true, position: 0, created_at: iso(0, 9) },

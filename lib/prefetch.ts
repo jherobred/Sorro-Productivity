@@ -45,7 +45,7 @@ const WARM: Record<string, Warm> = {
     key: ['habits'],
     run: async () => {
       const { data } = await supabase.from('bd_habits')
-        .select('id,name,color,kind,target,position,archived_at,challenge_id')
+        .select('id,name,short_name,show_in_home,color,kind,target,target_unit,position,archived_at,challenge_id,category,frequency,custom_days,time_of_day,icon,cue,reminder_time')
         .is('archived_at', null).order('position');
       return data ?? [];
     },
