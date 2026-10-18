@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { contrastRatio, readableInk, normalizeHex, hexToHsv, hsvToHex } from './calendarAppearance.ts';
 import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, canvasConnectionPath, snapCalendarHour, slotClickCreates } from './calendarPlanning.ts';
-import { deleteGoogleOccurrence, patchGoogleOccurrence, googleCalendarId, googleOccurrence, GoogleAuthorizationError } from './googleCalendarApi.ts';
+import { deleteGoogleOccurrence, patchGoogleOccurrence, googleCalendarId, googleOccurrence, GoogleAuthorizationError, GoogleNotHereError, gcalUrls, withGoogleCalendar } from './googleCalendarApi.ts';
 
 test('automatic ink meets 4.5:1 on saturated, pastel, neutral and arbitrary solid fills', () => {
   for (let n = 0; n <= 0xffffff; n += 7919) {
@@ -148,4 +148,25 @@ test('workspace scaling and scrolling preserve task drop times and arrow endpoin
     const pointer = calendarPointerHour((body.top + 15.75 * 56) * scale, body.top * scale, body.height * scale);
     assert.equal(taskDropHour(pointer, grab, 2), 15);
   }
+});
+
+test('a Google write uses the calendar owner first, moves past calendars that lack the event, and names the account to reconnect', async () => {
+  assert.deepEqual(gcalUrls({ ics_url: ' a ', ics_url_2: '', ics_url_3: 'c' }), ['a', 'c']);
+  const tokens = [{ email: 'school@ust.edu.ph', token: 'S' }, { email: 'me@gmail.com', token: 'M' }];
+  const calls: string[] = [];
+  const result = await withGoogleCalendar(['me@gmail.com', 'school@ust.edu.ph'], tokens, async (token, id) => {
+    calls.push(`${token}:${id}`);
+    if (id === 'me@gmail.com') throw new GoogleNotHereError('not here');
+    return 'ok';
+  });
+  assert.equal(result, 'ok');
+  assert.deepEqual(calls, ['M:me@gmail.com', 'S:school@ust.edu.ph']);
+
+  const expired: string[] = [];
+  await assert.rejects(withGoogleCalendar(['third@gmail.com'], [], async () => 'x'),
+    (e: unknown) => e instanceof GoogleAuthorizationError && e.account === 'third@gmail.com');
+  await assert.rejects(withGoogleCalendar(['me@gmail.com'], tokens, async () => { throw new GoogleAuthorizationError('expired'); }, (t) => expired.push(t)),
+    (e: unknown) => e instanceof GoogleAuthorizationError);
+  assert.deepEqual(expired, ['M']);
+  await assert.rejects(withGoogleCalendar(['me@gmail.com'], tokens, async () => { throw new Error('412'); }), /412/);
 });

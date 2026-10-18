@@ -18,6 +18,8 @@ import { toast } from '@/lib/toast';
 import { useOverlayBack } from '@/lib/nav';
 import { ago } from '@/lib/notify';
 import { runSync, useIntegrationActions, useIntegrations } from '@/lib/integrations';
+import { gcalUrls, googleCalendarId } from '@/lib/googleCalendarApi';
+import { MAX_GOOGLE_ACCOUNTS, connectGoogleAccount, googleTokens } from '@/lib/googleAccounts';
 
 const SETTINGS_URL = 'https://calendar.google.com/calendar/r/settings';
 const looksLikeIcs = (v: string) => /^https:\/\/calendar\.google\.com\/calendar\/ical\/.+\.ics(\?.*)?$/i.test(v.trim()) || /^https:\/\/.+\.ics(\?.*)?$/i.test(v.trim());
@@ -46,9 +48,13 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
   const row = useGoogleCalendar();
   const A = useIntegrationActions();
   const [editing, setEditing] = useState(!row);
-  const [url, setUrl] = useState(row?.config.ics_url ?? '');
+  const saved = gcalUrls(row?.config);
+  const [urls, setUrls] = useState<string[]>(saved.length ? saved : ['']);
   const [busy, setBusy] = useState(false);
-  const ok = looksLikeIcs(url);
+  const filled = urls.map((u) => u.trim()).filter(Boolean);
+  const ok = filled.length > 0 && filled.every(looksLikeIcs);
+  const setUrl = (i: number, v: string) => setUrls((p) => p.map((u, j) => (j === i ? v : u)));
+  const editors = new Set(googleTokens().map((t) => t.email));
 
   const sync = async () => {
     setBusy(true);
@@ -58,7 +64,8 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
     for (const k of ['events', 'integrations']) void qc.invalidateQueries({ queryKey: [k] });
   };
   const connect = () => {
-    A.save.mutate({ kind: 'gcal_ics', config: { ics_url: url.trim() }, enabled: true }, {
+    const [ics_url = '', ics_url_2 = '', ics_url_3 = ''] = filled;
+    A.save.mutate({ kind: 'gcal_ics', config: { ics_url, ics_url_2, ics_url_3 }, enabled: true }, {
       onSuccess: () => { setEditing(false); void sync(); },
       onError: (e) => toast(`Could not save the address: ${e.message}`),
     });
@@ -86,20 +93,38 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
               <li>In <b>Integrate calendar</b>, copy the <b>Secret address in iCal format</b>.</li>
               <li>Paste it here.</li>
             </ol>
-            <label className="gcal-field">
-              <span>Secret address in iCal format</span>
-              <input type="url" inputMode="url" autoComplete="off" spellCheck={false} value={url} onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" aria-invalid={!!url && !ok} />
-              {url && !ok && <small className="is-bad">That does not look like an iCal address. It ends in .ics.</small>}
-            </label>
+            {urls.map((url, i) => (
+              <label key={i} className="gcal-field">
+                <span>{i === 0 ? 'Secret address in iCal format' : `Calendar ${i + 1}`}{i > 0 && <button type="button" className="gcal-ghost" onClick={() => setUrls((p) => p.filter((_, j) => j !== i))}>Remove</button>}</span>
+                <input type="url" inputMode="url" autoComplete="off" spellCheck={false} value={url} onChange={(e) => setUrl(i, e.target.value)}
+                  placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" aria-invalid={!!url.trim() && !looksLikeIcs(url)} />
+                {url.trim() && !looksLikeIcs(url) && <small className="is-bad">That does not look like an iCal address. It ends in .ics.</small>}
+              </label>
+            ))}
+            {urls.length < MAX_GOOGLE_ACCOUNTS && <button type="button" className="gcal-ghost gcal-add" onClick={() => setUrls((p) => [...p, ''])}><Icon name="plus" size={15} />Add a calendar from another Google account</button>}
             <p className="gcal-note">The iCal feed brings events into Basedly. Hide keeps an event out of Basedly after sync. Super Delete asks for separate Google permission and deletes the original event too. The address is kept with your account alone; anyone holding it could read the calendar, so do not share it.</p>
             <div className="gcal-actions">
-              {row && <button type="button" className="gcal-ghost" onClick={() => { setEditing(false); setUrl(row.config.ics_url ?? ''); }}>Cancel</button>}
+              {row && <button type="button" className="gcal-ghost" onClick={() => { setEditing(false); setUrls(saved.length ? saved : ['']); }}>Cancel</button>}
               <button type="button" className="studio-button primary" disabled={!ok || A.save.isPending} onClick={connect}><Icon name="plug" size={16} />{row ? 'Save and sync' : 'Connect'}</button>
             </div>
           </>
         ) : (
           <>
+            <ul className="gcal-cals">
+              {saved.map((u) => {
+                const id = googleCalendarId(u);
+                const on = !!id && editors.has(id.toLowerCase());
+                return (
+                  <li key={u}>
+                    <span className="cal-google-mark" aria-hidden="true">G</span>
+                    <b>{id ?? 'iCal calendar'}</b>
+                    {on ? <small>Editing on</small> : id && (
+                      <button type="button" className="gcal-ghost" onClick={() => void connectGoogleAccount(id).then((r) => { if (r.error) toast(r.error); })}>Allow editing</button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
             <ul className="gcal-facts">
               <li><Icon name="repeat" size={15} />Repeating events come in as every one of their dates.</li>
               <li><Icon name="refresh" size={15} />It checks Google again on its own every little while, and when you come back to the app.</li>
@@ -107,7 +132,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
             </ul>
             <div className="gcal-actions">
               <button type="button" className="gcal-ghost is-danger" onClick={() => A.remove.mutate({ kind: 'gcal_ics' }, { onSuccess: () => { toast('Google Calendar disconnected'); onClose(); } })}>Disconnect</button>
-              <button type="button" className="gcal-ghost" onClick={() => setEditing(true)}>Change address</button>
+              <button type="button" className="gcal-ghost" onClick={() => setEditing(true)}>{saved.length < MAX_GOOGLE_ACCOUNTS ? 'Add or change calendars' : 'Change calendars'}</button>
               <button type="button" className="studio-button primary" disabled={busy} onClick={() => void sync()}><Icon name="refresh" size={16} />{busy ? 'Syncing…' : 'Sync now'}</button>
             </div>
           </>

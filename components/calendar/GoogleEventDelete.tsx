@@ -2,10 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { importedSeriesKey, type Ev } from '@/lib/events';
-import { supabase } from '@/lib/supabase';
 import { useIntegrations } from '@/lib/integrations';
-import { signInWithGoogle } from '@/lib/nativeAuth';
-import { deleteGoogleOccurrence, googleCalendarId, GoogleAuthorizationError } from '@/lib/googleCalendarApi';
+import { connectGoogleAccount, forgetGoogleToken, googleTokens } from '@/lib/googleAccounts';
+import { deleteGoogleOccurrence, gcalUrls, googleCalendarId, withGoogleCalendar, GoogleAuthorizationError } from '@/lib/googleCalendarApi';
 import { useOverlayBack } from '@/lib/nav';
 import { Icon } from '@/components/Icon';
 
@@ -19,28 +18,29 @@ export function GoogleEventDelete({ event, onHide, onDeleted, onClose }: {
   const [error, setError] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const { data: rows = [] } = useIntegrations();
-  const calendarId = googleCalendarId(rows.find(r => r.kind === 'gcal_ics')?.config.ics_url ?? '');
+  const calendarIds = gcalUrls(rows.find(r => r.kind === 'gcal_ics')?.config).map(googleCalendarId).filter((id): id is string => !!id);
+  const calendarId = calendarIds[0] ?? null;
+  const [account, setAccount] = useState<string | undefined>();
   useOverlayBack(true, () => { if (!pending.current) onClose(); });
   useEffect(() => { const el = dialog.current; el?.showModal(); return () => el?.close(); }, []);
   const remove = async (series = false) => {
     if (pending.current || !calendarId || !event.external_id) return;
     pending.current = true; setBusy(true); setError('');
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.provider_token;
-      if (!token) throw new GoogleAuthorizationError('Connect your Google account to allow deletion from Google Calendar.');
-      await deleteGoogleOccurrence({ token, calendarId, externalId: event.external_id, series });
+      const externalId = event.external_id;
+      await withGoogleCalendar(calendarIds, googleTokens(),
+        (token, id) => deleteGoogleOccurrence({ token, calendarId: id, externalId, series }), forgetGoogleToken);
       onDeleted(series);
     } catch (e) {
       setNeedsAuth(e instanceof GoogleAuthorizationError);
+      if (e instanceof GoogleAuthorizationError) setAccount(e.account);
       setError(e instanceof Error ? e.message : 'Could not delete. Try again.');
     } finally { pending.current = false; setBusy(false); }
   };
   const connect = async () => {
     setBusy(true);
     try {
-      sessionStorage.setItem('basedly-after-auth', `/calendar/?googleDelete=${encodeURIComponent(event.id)}`);
-      const result = await signInWithGoogle({ prompt: 'consent', scopes: 'https://www.googleapis.com/auth/calendar.events' });
+      const result = await connectGoogleAccount(account, `/calendar/?googleDelete=${encodeURIComponent(event.id)}`);
       if (result.error) setError(result.error);
     } catch { setError('Could not open Google sign-in. Try again.'); }
     finally { setBusy(false); }

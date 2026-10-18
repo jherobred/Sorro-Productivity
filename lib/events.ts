@@ -872,11 +872,11 @@ export function useEventActions(ws: Date) {
    * row unreachable by drag.
    */
   const { data: integrations = [] } = useIntegrations();
-  const gcalUrl = integrations.find((r) => r.kind === 'gcal_ics')?.config.ics_url ?? '';
+  const gcalConfig = integrations.find((r) => r.kind === 'gcal_ics')?.config;
 
   /** One edit to one event. A Google event's time, title and place go to Google too. */
   const edit = (ev: Ev, patch: Partial<Ev>, quiet = false) => {
-    if (isReadOnly(ev)) void saveGoogleEdit(ev, patch, gcalUrl, (p) => update.mutate({ id: ev.id, patch: p }), quiet);
+    if (isReadOnly(ev)) void saveGoogleEdit(ev, patch, gcalConfig, (p) => update.mutate({ id: ev.id, patch: p }), quiet);
     else update.mutate({ id: ev.id, patch });
   };
 

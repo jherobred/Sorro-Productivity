@@ -264,8 +264,21 @@ const stripHtml = (s: string) => (s ?? '').replace(/<[^>]*>/g, ' ').replace(/&nb
 
 /* --------------------------------------------------------------------- ICS */
 
+/** Up to three addresses, one per Google account. Read together so that what
+    one calendar has is never cleared as "gone" by another calendar's sync. */
 async function syncIcs(db: SupabaseClient, user_id: string, config: Record<string, string>) {
-  const url = (config.ics_url ?? '').trim();
+  const urls = [config.ics_url, config.ics_url_2, config.ics_url_3].map((u) => (u ?? '').trim()).filter(Boolean);
+  if (!urls.length) throw new Error('The iCal address must start with https://');
+  const from = Date.now() - 30 * 864e5;
+  const to = Date.now() + 180 * 864e5;
+  const feeds = await Promise.all(urls.map((url) => readIcs(url, from, to)));
+  // The same meeting on two connected calendars has one UID: keep it once.
+  const byId = new Map<string, ReturnType<typeof readCalendar>[number]>();
+  for (const e of feeds.flat()) if (!byId.has(e.externalId)) byId.set(e.externalId, e);
+  return storeIcs(db, user_id, [...byId.values()], from, to);
+}
+
+async function readIcs(url: string, from: number, to: number) {
   if (!/^https:\/\//.test(url)) throw new Error('The iCal address must start with https://');
   if (isBlockedHost(url)) throw new Error('The iCal address must be a public URL');
 
@@ -280,13 +293,13 @@ async function syncIcs(db: SupabaseClient, user_id: string, config: Record<strin
   }
   const text = await res.text();
   if (!text.includes('BEGIN:VCALENDAR')) throw new Error('That address did not return a calendar');
-
   // Only the window the app actually renders, so a decade-old calendar does not
   // dump thousands of rows into the events table.
-  const from = Date.now() - 30 * 864e5;
-  const to = Date.now() + 180 * 864e5;
+  return readCalendar(text, from, to);
+}
 
-  const all = readCalendar(text, from, to)
+async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<typeof readCalendar>, from: number, to: number) {
+  const all = events
     .sort((a, b) => a.start.localeCompare(b.start))
     .map((e) => ({
       user_id,

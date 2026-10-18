@@ -3,7 +3,47 @@ export type GoogleEvent = {
   id: string; etag?: string; iCalUID?: string; recurrence?: string[]; status?: string;
   originalStartTime?: { dateTime?: string; date?: string };
 };
-export class GoogleAuthorizationError extends Error {}
+/** `account` is the Google email to reconnect, when one is known. */
+export class GoogleAuthorizationError extends Error {
+  account?: string;
+  constructor(message: string, account?: string) { super(message); this.account = account; }
+}
+/** This account or calendar does not hold the event; another connected one may. */
+export class GoogleNotHereError extends Error {}
+
+/** A Google Calendar connection holds up to three iCal addresses. */
+export const gcalUrls = (config: Record<string, string> | undefined): string[] =>
+  [config?.ics_url, config?.ics_url_2, config?.ics_url_3].map((u) => (u ?? '').trim()).filter(Boolean);
+
+/**
+ * Runs one Google write against whichever connected calendar holds the event,
+ * with the token of the account that owns that calendar first. A calendar's id
+ * is its owner's email for a primary calendar, so that pairing is tried first;
+ * shared calendars fall back to every live token.
+ */
+export async function withGoogleCalendar<T>(
+  calendarIds: string[], tokens: { email: string; token: string }[],
+  run: (token: string, calendarId: string) => Promise<T>,
+  onExpired: (token: string) => void = () => {},
+): Promise<T> {
+  if (!calendarIds.length) throw new Error('Sync your Google Calendar, then edit this event again.');
+  let last: unknown = null;
+  const missing: string[] = [];
+  for (const calendarId of calendarIds) {
+    const own = tokens.filter((t) => t.email === calendarId.toLowerCase());
+    if (!own.length && calendarId.includes('@') && !calendarId.endsWith('calendar.google.com')) missing.push(calendarId);
+    for (const { token } of own.length ? own : tokens) {
+      try { return await run(token, calendarId); } catch (e) {
+        if (e instanceof GoogleAuthorizationError) onExpired(token);
+        else if (!(e instanceof GoogleNotHereError)) throw e;
+        last = e;
+      }
+    }
+  }
+  if (missing.length) throw new GoogleAuthorizationError(`Connect ${missing[0]} to edit its Google events.`, missing[0]);
+  if (!tokens.length) throw new GoogleAuthorizationError('Connect Google to edit Google Calendar events.');
+  throw last instanceof Error ? last : new Error('Could not save to Google. Try again.');
+}
 
 export function googleCalendarId(icsUrl: string): string | null {
   try {
@@ -36,9 +76,10 @@ async function googleTarget(options: TargetOptions, verb: string) {
       if (response.status === 403 && (reason === 'insufficientPermissions' || reason === 'authError')) {
         throw new GoogleAuthorizationError(`Google Calendar permission is needed. Reconnect to ${verb} Google events.`);
       }
-      throw new Error(response.status === 403 ? `Google refused to ${verb} this event. Check that you have edit access to this calendar.`
-        : response.status === 412 ? `This event changed in Google. Sync again before you ${verb} it.`
-        : response.status === 404 ? 'Google could not find this calendar or event. Check the connected Google account, then sync again.'
+      if (response.status === 403 && reason === 'accessNotConfigured') throw new Error('Google Calendar access is turned off for Basedly. Try again in a few minutes.');
+      if (response.status === 403) throw new GoogleNotHereError(`Google refused to ${verb} this event. Check that you have edit access to this calendar.`);
+      if (response.status === 404) throw new GoogleNotHereError('Google could not find this calendar or event. Check the connected Google account, then sync again.');
+      throw new Error(response.status === 412 ? `This event changed in Google. Sync again before you ${verb} it.`
         : body.error?.message || `Google Calendar returned ${response.status}. Try again.`);
     }
     return response;
@@ -58,6 +99,7 @@ async function googleTarget(options: TargetOptions, verb: string) {
   };
   const matches = (await list(`${base}?${new URLSearchParams({ iCalUID: uid, maxResults: '250', showDeleted: 'false' })}`))
     .filter(e => e.iCalUID === uid && e.status !== 'cancelled');
+  if (!matches.length) throw new GoogleNotHereError('Google could not find this event in your connected calendars. Sync again; nothing was changed.');
   if (matches.length !== 1) throw new Error('Could not identify one matching Google event. Sync again; nothing was changed.');
   let target = matches[0];
   if (series) {

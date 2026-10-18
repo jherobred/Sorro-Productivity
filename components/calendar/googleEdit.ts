@@ -1,8 +1,7 @@
 'use client';
 import type { Ev } from '@/lib/events';
-import { supabase } from '@/lib/supabase';
-import { signInWithGoogle } from '@/lib/nativeAuth';
-import { googleCalendarId, patchGoogleOccurrence, GoogleAuthorizationError, type GoogleEventPatch } from '@/lib/googleCalendarApi';
+import { connectGoogleAccount, forgetGoogleToken, googleTokens } from '@/lib/googleAccounts';
+import { googleCalendarId, gcalUrls, patchGoogleOccurrence, withGoogleCalendar, GoogleAuthorizationError, type GoogleEventPatch } from '@/lib/googleCalendarApi';
 import { toast } from '@/lib/toast';
 
 const GOOGLE_FIELDS = ['title', 'location', 'starts_at', 'ends_at', 'all_day'] as const;
@@ -14,7 +13,7 @@ const GOOGLE_FIELDS = ['title', 'location', 'starts_at', 'ends_at', 'all_day'] a
  * short names and reminders are Basedly-only and save locally either way.
  * `quiet` skips the success toast for callers that show their own (a move's Undo).
  */
-export async function saveGoogleEdit(ev: Ev, patch: Partial<Ev>, icsUrl: string, update: (patch: Partial<Ev>) => void, quiet = false) {
+export async function saveGoogleEdit(ev: Ev, patch: Partial<Ev>, config: Record<string, string> | undefined, update: (patch: Partial<Ev>) => void, quiet = false) {
   const google: GoogleEventPatch = {};
   const local: Partial<Ev> = {};
   for (const [k, v] of Object.entries(patch)) {
@@ -31,21 +30,18 @@ export async function saveGoogleEdit(ev: Ev, patch: Partial<Ev>, icsUrl: string,
   const before = Object.fromEntries(Object.keys(google).map((k) => [k, (ev as Record<string, unknown>)[k]])) as Partial<Ev>;
   update(google as Partial<Ev>);
   try {
-    const calendarId = googleCalendarId(icsUrl);
-    if (!calendarId || !ev.external_id) throw new Error('Sync your Google Calendar, then edit this event again.');
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.provider_token;
-    if (!token) throw new GoogleAuthorizationError('Connect Google to edit Google Calendar events.');
-    await patchGoogleOccurrence({ token, calendarId, externalId: ev.external_id, patch: google });
+    const externalId = ev.external_id;
+    if (!externalId) throw new Error('Sync your Google Calendar, then edit this event again.');
+    const calendarIds = gcalUrls(config).map(googleCalendarId).filter((id): id is string => !!id);
+    await withGoogleCalendar(calendarIds, googleTokens(),
+      (token, calendarId) => patchGoogleOccurrence({ token, calendarId, externalId, patch: google }), forgetGoogleToken);
     if (!quiet) toast('Saved to Google Calendar');
   } catch (e) {
     update(before);
     const message = e instanceof Error ? e.message : 'Could not save to Google. Try again.';
     if (e instanceof GoogleAuthorizationError) {
-      toast(message, () => {
-        sessionStorage.setItem('basedly-after-auth', '/calendar/');
-        void signInWithGoogle({ prompt: 'consent', scopes: 'https://www.googleapis.com/auth/calendar.events' });
-      }, { action: 'Connect' });
+      const account = e.account;
+      toast(message, () => { void connectGoogleAccount(account).then((r) => { if (r.error) toast(r.error); }); }, { action: 'Connect' });
     } else toast(message);
   }
 }
