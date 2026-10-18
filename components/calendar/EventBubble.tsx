@@ -152,7 +152,7 @@ export function EventBubble({
 
         <div className="cal-bubble-actions">
           <button type="button" className="studio-button" onClick={onTakeNotes}><Icon name="files" size={16} />Take notes</button>
-          {!locked && <button type="button" className="studio-button" onClick={onEdit}>More options</button>}
+          <button type="button" className="studio-button" onClick={onEdit}>{locked ? 'Edit' : 'More options'}</button>
         </div>
 
         {runDays > 1 && !locked && (
@@ -160,7 +160,7 @@ export function EventBubble({
             <Icon name="trash" size={14} />Delete all {runDays} days of this
           </button>
         )}
-        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. Colors apply in Basedly. Use Delete to hide it or delete it from Google too.</p>}
+        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. Edits save to Google. Colors stay in Basedly.</p>}
       </div>
     </CalPopover>
   );

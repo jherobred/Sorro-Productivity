@@ -13,6 +13,7 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { handleMcp } from './mcp.ts';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -38,20 +39,34 @@ async function sameSecret(a: string, b: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return json({ ok: false, message: 'POST only' }, 405);
+  const url = new URL(req.url);
+  const mcp = url.pathname.endsWith('/mcp');
+  if (req.method !== 'POST' && !mcp) return json({ ok: false, message: 'POST only' }, 405);
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   // Same lookup as gemini-bot: platform secret first, then the app_secrets table.
   const secrets = new Map<string, string>();
   {
-    const { data } = await db.from('app_secrets').select('name,value').in('name', ['BOT_API_TOKEN', 'BOT_API_USER_ID']);
+    const { data } = await db.from('app_secrets').select('name,value').in('name', ['BOT_API_TOKEN', 'BOT_API_USER_ID', 'BOT_MCP_TOKEN']);
     for (const row of data ?? []) secrets.set(row.name, row.value);
   }
   const secret = (n: string) => Deno.env.get(n) ?? secrets.get(n) ?? '';
 
-  const token = secret('BOT_API_TOKEN');
   const uid = secret('BOT_API_USER_ID');
+
+  // /bot-api/mcp is Claude's notebook connector. Its own token, so the Grok
+  // token never reaches notes and either can be revoked alone. claude.ai
+  // connectors cannot send headers, so the key may come in the URL as ?key=.
+  if (mcp) {
+    const mcpToken = secret('BOT_MCP_TOKEN');
+    if (!mcpToken || !uid) return json({ ok: false, message: 'MCP is not configured' }, 503);
+    const given = url.searchParams.get('key') ?? req.headers.get('authorization')?.replace(/^Bearer /i, '') ?? '';
+    if (!(await sameSecret(given, mcpToken))) return json({ ok: false, message: 'Forbidden' }, 403);
+    return handleMcp(req, db, uid);
+  }
+
+  const token = secret('BOT_API_TOKEN');
   if (!token || !uid) return json({ ok: false, message: 'Bot API is not configured' }, 503);
   if (!(await sameSecret(req.headers.get('x-bot-token') ?? '', token))) {
     return json({ ok: false, message: 'Forbidden' }, 403);

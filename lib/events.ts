@@ -388,6 +388,33 @@ export function expandRecurringEvents(events: Ev[], from: Date, to: Date): Ev[] 
 /** Synced events belong to the other calendar; editing them here would diverge. */
 export const isReadOnly = (e: Ev) => e.source === 'gcal_ics';
 
+/**
+ * One key for every row of an imported repeat. Imports store each occurrence
+ * as its own row, so "delete the series" has to find the siblings by id shape:
+ * a scanned timetable row is `sched:<batch>:<row>:<n>`, a Google occurrence is
+ * `<uid>@<UTC start>`. Null for a one-off.
+ */
+export function importedSeriesKey(ev: Ev): string | null {
+  const ext = ev.external_id ?? '';
+  const m = ev.source === 'schedule_scan' ? /^(sched:.*):\d+$/.exec(ext)
+    : ev.source === 'gcal_ics' ? /^(.*)@\d{8}T\d{6}Z$/.exec(ext) : null;
+  return m ? `${ev.source}:${m[1]}` : null;
+}
+
+/** Live ids of a scanned series, optionally only from one start onward. Filtered
+    here rather than with LIKE, so a `%`, `_` or `*` in a class name cannot widen it. */
+export async function scanSeriesIds(ev: Ev, fromStart?: string): Promise<string[]> {
+  const prefix = /^(sched:.*:)\d+$/.exec(ev.external_id ?? '')?.[1];
+  if (!prefix) return [ev.id];
+  const fx = fixture<Ev[]>('events');
+  if (fx) return fx.filter((e) => e.external_id?.startsWith(prefix) && (!fromStart || e.starts_at >= fromStart)).map((e) => e.id);
+  let q = supabase.from('bd_events').select('id,external_id').eq('source', 'schedule_scan').is('deleted_at', null);
+  if (fromStart) q = q.gte('starts_at', fromStart);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).filter((r) => (r.external_id as string)?.startsWith(prefix)).map((r) => r.id as string);
+}
+
 const EVENTS_KEY = ['events'] as const;
 
 /** Last hour the grid draws. The band is 07:00–22:00 (Basedly.dc.html:4455). */
@@ -533,7 +560,7 @@ export function useEvents(ws: Date, days = 7) {
   // Appearance and hidden state are independent of the imported mirror. Sync
   // can update that mirror without resurrecting hidden events or our colors.
   const local = getEventMetaMap();
-  return { ...query, data: query.data?.filter(e => !local[e.master_id || e.id]?.hidden).map(e => ({ ...e, ...local[e.master_id || e.id] })) };
+  return { ...query, data: query.data?.filter(e => !local[e.master_id || e.id]?.hidden && !local[importedSeriesKey(e) ?? '']?.hidden).map(e => ({ ...e, ...local[e.master_id || e.id] })) };
 }
 
 /**
@@ -676,6 +703,7 @@ const CLEAR_ALL = defineMutation('event.clearAll', async () => {
 
 /** Soft-delete a named set — one run of a repeating class, usually. */
 const DELETE_MANY = defineMutation('event.deleteMany', async (v: { ids: string[] }) => {
+  if (changeFixture<Ev>('events', rows => rows.filter(e => !v.ids.includes(e.id)))) return;
   for (let i = 0; i < v.ids.length; i += 200) {
     const { error } = await supabase.from('bd_events')
       .update({ deleted_at: new Date().toISOString() }).in('id', v.ids.slice(i, i + 200));
@@ -906,6 +934,14 @@ export function useEventActions(ws: Date) {
     if (offerUndo) toast(`Hidden “${ev.title}” from Basedly`, () => setEventMeta(ev.id, { hidden: false }));
   };
 
+  /** Hides every occurrence, including ones a later sync brings into the window. */
+  const hideSeries = (ev: Ev, offerUndo = true) => {
+    const key = importedSeriesKey(ev);
+    if (!key) return hideGoogle(ev, offerUndo);
+    setEventMeta(key, { hidden: true });
+    if (offerUndo) toast(`Hidden every “${ev.title}”`, () => setEventMeta(key, { hidden: false }));
+  };
+
   const removeWithUndo = (ev: Ev) => {
     if (isReadOnly(ev)) { hideGoogle(ev); return; }
     remove.mutate({ id: ev.id });
@@ -937,7 +973,7 @@ export function useEventActions(ws: Date) {
 
   return {
     create, update, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
-    duplicate, removeWithUndo, hideGoogle, wipe, wipeRun,
+    duplicate, removeWithUndo, hideGoogle, hideSeries, wipe, wipeRun,
   };
 }
 

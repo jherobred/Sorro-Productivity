@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { contrastRatio, readableInk, normalizeHex, hexToHsv, hsvToHex } from './calendarAppearance.ts';
 import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, canvasConnectionPath, snapCalendarHour, slotClickCreates } from './calendarPlanning.ts';
-import { deleteGoogleOccurrence, googleCalendarId, googleOccurrence, GoogleAuthorizationError } from './googleCalendarApi.ts';
+import { deleteGoogleOccurrence, patchGoogleOccurrence, googleCalendarId, googleOccurrence, GoogleAuthorizationError } from './googleCalendarApi.ts';
 
 test('automatic ink meets 4.5:1 on saturated, pastel, neutral and arbitrary solid fills', () => {
   for (let n = 0; n <= 0xffffff; n += 7919) {
@@ -73,6 +73,33 @@ test('recurring Super Delete deletes exactly the original occurrence, including 
   await deleteGoogleOccurrence({ token: 'test', calendarId: 'calendar', externalId: 'series@google.com@20261004T130000Z', fetcher });
   assert.equal(deletes.length, 1);
   assert.ok(deletes[0].includes('/instance-id?'));
+});
+test('editing a Google occurrence PATCHes that instance with Google field names', async () => {
+  const writes: { url: string; init?: RequestInit }[] = [];
+  const fetcher = (async (url, init) => {
+    const path = String(url);
+    if (init?.method === 'PATCH') { writes.push({ url: path, init }); return Response.json({}); }
+    if (path.includes('/instances?')) return Response.json({ items: [{ id: 'instance-id', etag: 'e1', originalStartTime: { dateTime: '2026-10-27T14:30:00+08:00' } }] });
+    return Response.json({ items: [{ id: 'master-id', iCalUID: 'series@google.com', recurrence: ['RRULE:FREQ=WEEKLY'] }] });
+  }) as typeof fetch;
+  await patchGoogleOccurrence({ token: 't', calendarId: 'c', externalId: 'series@google.com@20261027T063000Z', fetcher,
+    patch: { title: 'DSA', starts_at: '2026-10-27T07:00:00.000Z', ends_at: '2026-10-27T08:30:00.000Z' } });
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0].url.includes('/instance-id?'));
+  assert.deepEqual(JSON.parse(String(writes[0].init?.body)), {
+    summary: 'DSA', start: { dateTime: '2026-10-27T07:00:00.000Z', date: null }, end: { dateTime: '2026-10-27T08:30:00.000Z', date: null },
+  });
+  assert.equal((writes[0].init?.headers as Record<string, string>)['If-Match'], 'e1');
+});
+test('series Super Delete deletes the master event, never one instance', async () => {
+  const deletes: string[] = [];
+  const fetcher = (async (url, init) => {
+    if (init?.method === 'DELETE') { deletes.push(String(url)); return new Response(null, { status: 204 }); }
+    return Response.json({ items: [{ id: 'master-id', iCalUID: 'series@google.com', recurrence: ['RRULE:FREQ=WEEKLY'] }] });
+  }) as typeof fetch;
+  await deleteGoogleOccurrence({ token: 'test', calendarId: 'calendar', externalId: 'series@google.com@20261004T130000Z', series: true, fetcher });
+  assert.equal(deletes.length, 1);
+  assert.ok(deletes[0].includes('/master-id?'));
 });
 test('unknown occurrence, recurring master, denied scope and ambiguous matches never delete', async () => {
   for (const mode of ['unknown', 'series', 'denied', 'ambiguous']) {

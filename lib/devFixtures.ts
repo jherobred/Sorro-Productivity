@@ -142,7 +142,9 @@ export function seedDevFixtures() {
     ev('preview-overlap', 'Preview · Class', 0, 12, 0, 13, 0, '', '#039be5', 'gcal_ics'),
     ev('preview-short', 'Quick review', 0, 13, 30, 14, 0, '', '#33b679'),
     ev('preview-short-future', 'Team call', 1, 9, 30, 10, 0, '', '#039be5', 'gcal_ics'),
-    { ...ev('preview-google', 'Preview · Google meeting', 0, 14, 0, 15, 0, '', '#039be5'), source: 'gcal_ics', external_id: 'preview-event@google.com' },
+    { ...ev('preview-google', 'Preview · Google meeting', 0, 14, 0, 15, 0, '', '#039be5'), source: 'gcal_ics', external_id: 'preview-event@google.com@20261018T060000Z' },
+    { ...ev('preview-scan-1', 'Preview · Scanned class', 1, 8, 0, 9, 30, 'Room 1', '#8b5cf6'), source: 'schedule_scan', external_id: 'sched:prev:1-Scanned:0' },
+    { ...ev('preview-scan-2', 'Preview · Scanned class', 3, 8, 0, 9, 30, 'Room 1', '#8b5cf6'), source: 'schedule_scan', external_id: 'sched:prev:1-Scanned:1' },
     // A rolling future item lets countdown and wake-lock previews work on weekends too.
     { ...ev('preview-up-next', 'Preview · study session', 0, 9, 0, 10, 0, 'Library', '#2563eb'), starts_at: new Date(Date.now() + 3600000).toISOString(), ends_at: new Date(Date.now() + 7200000).toISOString() },
     ev('e1', 'CS 150 Lecture', D(0), 9, 0, 10, 30, "Eng'g 214", '#7C8CFF'),

@@ -13,6 +13,8 @@ const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCa
 import { EventBubble } from '@/components/calendar/EventBubble';
 import { EventAppearance, EVENT_COLORS } from '@/components/calendar/EventColors';
 import { GoogleEventDelete } from '@/components/calendar/GoogleEventDelete';
+import { saveGoogleEdit } from '@/components/calendar/googleEdit';
+import { useIntegrations } from '@/lib/integrations';
 import { CalendarSourceIcon } from '@/components/calendar/CalendarSourceIcon';
 import { CanvasConnections } from '@/components/calendar/CanvasConnections';
 import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, snapCalendarHour, slotClickCreates } from '@/lib/calendarPlanning';
@@ -39,7 +41,7 @@ import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, useLists, getTaskAlert, type Task } from '@/lib/tasks';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
-  isReadOnly, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
+  isReadOnly, importedSeriesKey, scanSeriesIds, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
   computeVacantIntervals, formatVacantCountdown, formatDurationHours, displayedWeekNumber, gridRange,
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
@@ -150,6 +152,8 @@ export default function CalendarPage() {
   const { data: lists = [] } = useLists();
   const { data: notebooks = [] } = useNotebooks();
   const A = useEventActions(ws);
+  const { data: integrations = [] } = useIntegrations();
+  const gcalUrl = integrations.find((r) => r.kind === 'gcal_ics')?.config.ics_url ?? '';
   const TA = useTaskActions();
   const NA = useNoteActions();
   const router = useRouter();
@@ -246,7 +250,7 @@ export default function CalendarPage() {
 
   const requestDelete = (ev: Ev) => {
     if (isReadOnly(ev)) setGoogleDelete(ev);
-    else if (ev.is_recurring_instance || ev.recurrence) setRecModal({ action: 'delete', ev });
+    else if (ev.is_recurring_instance || ev.recurrence || importedSeriesKey(ev)) setRecModal({ action: 'delete', ev });
     else A.removeWithUndo(ev);
   };
   const returnedFromGoogle = useRef(false);
@@ -865,6 +869,11 @@ export default function CalendarPage() {
           ev={edit}
           onClose={() => setEdit(null)}
           onSave={(patch) => {
+            if (isReadOnly(edit)) {
+              void saveGoogleEdit(edit, patch, gcalUrl, (p) => A.update.mutate({ id: edit.id, patch: p }));
+              setEdit(null);
+              return;
+            }
             if (edit.is_recurring_instance) {
               setRecModal({ action: 'edit', ev: edit, patch });
               setEdit(null);
@@ -897,6 +906,16 @@ export default function CalendarPage() {
           onClose={() => setRecModal(null)}
           onChoose={(choice) => {
             const { action, ev, patch } = recModal;
+            // A scanned timetable is one row per class meeting, not a rule, so
+            // "following" and "all" are a batch soft delete with one Undo.
+            if (action === 'delete' && !ev.recurrence && !ev.is_recurring_instance && importedSeriesKey(ev)) {
+              if (choice === 'this') A.removeWithUndo(ev);
+              else void scanSeriesIds(ev, choice === 'following' ? ev.starts_at : undefined)
+                .then((ids) => A.wipeRun(ids.map((id) => ({ ...ev, id }))))
+                .catch(() => toast('Could not delete the series. Try again.'));
+              setRecModal(null);
+              return;
+            }
             const masterId = ev.master_id || ev.id;
             const masterEv = events.find((e) => e.id === masterId) || ev;
             const dateStr = ev.starts_at.slice(0, 10);
@@ -981,8 +1000,8 @@ export default function CalendarPage() {
       )}
 
       {googleDelete && <GoogleEventDelete event={googleDelete} onClose={() => setGoogleDelete(null)}
-        onHide={() => { A.hideGoogle(googleDelete); setGoogleDelete(null); }}
-        onDeleted={() => { A.hideGoogle(googleDelete, false); A.remove.mutate({ id: googleDelete.id }); setGoogleDelete(null); toast('Deleted this event from Google Calendar and Basedly'); }}/>}
+        onHide={(series) => { (series ? A.hideSeries : A.hideGoogle)(googleDelete); setGoogleDelete(null); }}
+        onDeleted={(series) => { (series ? A.hideSeries : A.hideGoogle)(googleDelete, false); if (!series) A.remove.mutate({ id: googleDelete.id }); setGoogleDelete(null); toast(series ? 'Deleted the series from Google Calendar and Basedly' : 'Deleted this event from Google Calendar and Basedly'); }}/>}
 
       {/* Right-click menu. Left click already opens the bubble; right click is
           for people who already know what they want, so it is all actions:
@@ -1055,7 +1074,7 @@ function contextItems(
   return [
     {
       items: [
-        ...(!isReadOnly(ev) ? [{ label: 'Edit', icon: 'edit' as const, run: () => setEdit(ev) }] : []),
+        { label: 'Edit', icon: 'edit' as const, run: () => setEdit(ev) },
         { label: 'Duplicate', icon: 'copy', run: () => A.duplicate(ev) },
       ],
     },
