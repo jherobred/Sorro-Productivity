@@ -129,8 +129,8 @@ export function CalendarGrid({
     const origHour = hoursOf(ev.starts_at);
     const origEnd = hoursOf(ev.ends_at);
     const colW = (bodyRef.current?.clientWidth ?? 322) / days;
-    // Locked by the toolbar toggle, or read-only because Google owns it.
-    const locked = isReadOnly(ev) || prefs.lockEvents;
+    // Locked by the toolbar toggle.
+    const locked = prefs.lockEvents;
     let moved = false;
 
     const timer = window.setTimeout(() => {
@@ -159,7 +159,7 @@ export function CalendarGrid({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       if (locked) {
-        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        if (moved) toast('Events are locked — unlock to move them');
         return;
       }
       // Commit on drop, not per frame.
@@ -204,7 +204,7 @@ export function CalendarGrid({
     const origDay = hit.day;
     const origHour = hoursOf(ev.starts_at);
     const origEnd = hoursOf(ev.ends_at);
-    const locked = isReadOnly(ev) || prefs.lockEvents;
+    const locked = prefs.lockEvents;
     let moved = false;
 
     const timer = window.setTimeout(() => {
@@ -230,7 +230,7 @@ export function CalendarGrid({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       if (locked) {
-        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        if (moved) toast('Events are locked — unlock to move them');
         return;
       }
       setSpanDrag((d) => {
@@ -476,7 +476,6 @@ function EventChip({
   onResize: (e: React.PointerEvent) => void;
   onOpen: (e: React.MouseEvent) => void;
 }) {
-  const locked = isReadOnly(ev);
   const ink = chipInk(ev, dark);
   return (
     <div
@@ -491,20 +490,17 @@ function EventChip({
         color: ink,
         boxShadow: lifted ? '0 8px 24px rgba(0,0,0,0.4)' : '0 1px 2px rgba(0,0,0,0.12)',
         transform: lifted ? 'scale(1.03)' : undefined,
-        cursor: locked ? 'default' : 'grab', touchAction: 'pan-y', zIndex: lifted ? 10 : 1,
+        cursor: 'grab', touchAction: 'pan-y', zIndex: lifted ? 10 : 1,
         outline: selected ? `2px solid var(--tx)` : undefined,
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, lineHeight: 1.25, overflow: 'hidden' }}>
-        {locked && <Icon name="lock" size={9} color={ink} />}
         {ev.title}
       </span>
       <span style={{ display: 'block', fontSize: 9.5, opacity: 0.88, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
         {label} {ev.location}
       </span>
-      {!locked && (
-        <div onPointerDown={onResize}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 8, cursor: 'ns-resize', touchAction: 'none' }} />
-      )}
+      <div onPointerDown={onResize}
+        style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 8, cursor: 'ns-resize', touchAction: 'none' }} />
     </div>
   );
 }
@@ -549,7 +545,7 @@ function SpanChip({ span: s, days, offset, dark, onPointerDown, onOpen }: {
         color: ink,
         boxShadow: lifted ? 'var(--shl)' : 'inset 0 0 0 1px color-mix(in srgb, ' + s.ev.color + ' 30%, transparent)',
         transform: lifted ? 'scale(1.01)' : undefined,
-        zIndex: lifted ? 5 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'none',
+        zIndex: lifted ? 5 : 2, cursor: 'grab', touchAction: 'none',
       }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
         {s.ev.title}

@@ -13,8 +13,6 @@ const GoogleCalendarSheet = dynamic(() => import('@/components/calendar/GoogleCa
 import { EventBubble } from '@/components/calendar/EventBubble';
 import { EventAppearance, EVENT_COLORS } from '@/components/calendar/EventColors';
 import { GoogleEventDelete } from '@/components/calendar/GoogleEventDelete';
-import { saveGoogleEdit } from '@/components/calendar/googleEdit';
-import { useIntegrations } from '@/lib/integrations';
 import { CalendarSourceIcon } from '@/components/calendar/CalendarSourceIcon';
 import { CanvasConnections } from '@/components/calendar/CanvasConnections';
 import { calendarTask, isOriginalTaskSlot, sameCalendarTime, taskDropHour, calendarPointerHour, snapCalendarHour, slotClickCreates } from '@/lib/calendarPlanning';
@@ -152,8 +150,6 @@ export default function CalendarPage() {
   const { data: lists = [] } = useLists();
   const { data: notebooks = [] } = useNotebooks();
   const A = useEventActions(ws);
-  const { data: integrations = [] } = useIntegrations();
-  const gcalUrl = integrations.find((r) => r.kind === 'gcal_ics')?.config.ics_url ?? '';
   const TA = useTaskActions();
   const NA = useNoteActions();
   const router = useRouter();
@@ -794,13 +790,12 @@ export default function CalendarPage() {
           }}
           onUpdateTitle={(title) => {
             if (title.trim() && title.trim() !== '(No title)') commitDraft();
-            const targetId = pop.ev.master_id || pop.ev.id;
-            A.update.mutate({ id: targetId, patch: { title } });
+            A.edit({ ...pop.ev, id: pop.ev.master_id || pop.ev.id }, { title });
             setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, title } } : prev);
           }}
           onPatch={(patch) => {
             commitDraft();
-            A.update.mutate({ id: pop.ev.master_id || pop.ev.id, patch });
+            A.edit({ ...pop.ev, id: pop.ev.master_id || pop.ev.id }, patch);
             setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, ...patch } } : prev);
           }}
           onTakeNotes={() => void takeNotes(pop.ev)}
@@ -870,7 +865,7 @@ export default function CalendarPage() {
           onClose={() => setEdit(null)}
           onSave={(patch) => {
             if (isReadOnly(edit)) {
-              void saveGoogleEdit(edit, patch, gcalUrl, (p) => A.update.mutate({ id: edit.id, patch: p }));
+              A.edit(edit, patch);
               setEdit(null);
               return;
             }
@@ -1323,7 +1318,7 @@ function Grid({
       }
     };
     gestureCleanup.current = startCalendarGesture(e.nativeEvent, e.currentTarget as HTMLElement, {
-      locked: isReadOnly(ev) || prefs.lockEvents,
+      locked: prefs.lockEvents,
       onStart: () => {
         if (prefs.haptics && lastTouch.current) navigator.vibrate?.(K.hapticMs);
         setDrag({ id: ev.id, day: origDay, hour: origHour });
@@ -1338,8 +1333,8 @@ function Grid({
         if (action === 'resize' && targetEnd !== null && targetEnd !== origEnd) A.resizeTo(ev, targetEnd);
         if (action !== 'move' || !target) return;
         if (target.hour === null) {
-          if (!ev.all_day || target.day !== origDay) A.update.mutate({ id: ev.id, patch: { all_day: true, starts_at: at(ws, target.day, 0), ends_at: at(ws, target.day + 1, 0) } });
-        } else if (ev.all_day) A.update.mutate({ id: ev.id, patch: { all_day: false, starts_at: at(ws, target.day, target.hour), ends_at: at(ws, target.day, target.hour + 1) } });
+          if (!ev.all_day || target.day !== origDay) A.edit(ev, { all_day: true, starts_at: at(ws, target.day, 0), ends_at: at(ws, target.day + 1, 0) });
+        } else if (ev.all_day) A.edit(ev, { all_day: false, starts_at: at(ws, target.day, target.hour), ends_at: at(ws, target.day, target.hour + 1) });
         else if (target.day !== origDay || target.hour !== origHour) A.moveTo(ev, target.day, target.hour);
       },
     });
@@ -1365,7 +1360,7 @@ function Grid({
     const startY = e.clientY;
     const origDay = hit.day;
     const origHour = hoursOf(ev.starts_at);
-    const locked = isReadOnly(ev) || prefs.lockEvents;
+    const locked = prefs.lockEvents;
 
     let holdTriggered = !isTouch;
     let moved = false;
@@ -1411,7 +1406,7 @@ function Grid({
       window.removeEventListener('pointerup', onUp);
 
       if (locked) {
-        if (moved) toast(isReadOnly(ev) ? 'Synced from Google — edit it there' : 'Events are locked — unlock to move them');
+        if (moved) toast('Events are locked — unlock to move them');
         return;
       }
 
@@ -1861,7 +1856,6 @@ function EventChip({
   onOpen: (e: React.MouseEvent) => void;
   onContext?: (e: React.MouseEvent) => void;
 }) {
-  const locked = isReadOnly(ev);
   const ink = chipInk(ev, dark);
   const isPast = new Date(ev.ends_at).getTime() < nowMs;
   const cd = !isPast && isNext ? formatEventCountdown(ev.starts_at, ev.ends_at, nowMs) : null;
@@ -1870,7 +1864,7 @@ function EventChip({
   const tiny = pixelHeight < 24;
   const className = [
     'cal-event', short && 'is-short', tiny && 'is-tiny', selected && 'is-selected',
-    isPast && 'is-past', lifted && 'is-lifted', locked && 'is-locked',
+    isPast && 'is-past', lifted && 'is-lifted',
   ].filter(Boolean).join(' ');
 
   return (
@@ -1892,7 +1886,7 @@ function EventChip({
       {!short && ev.location && <span className="cal-event-location">{ev.location}</span>}
       {cd && cd.status !== 'past' && !short && <span className="cal-event-count"><CdBadge cd={cd} /></span>}
       {/* bottom edge resizes the end time in 30-min steps */}
-      {!locked && <div className="cal-event-resize" onPointerDown={onResize} />}
+      <div className="cal-event-resize" onPointerDown={onResize} />
     </div>
   );
 }
@@ -1976,7 +1970,7 @@ function SpanChip({ span: s, days, offset, dark, nowMs = Date.now(), onPointerDo
         boxShadow: lifted ? 'var(--shl)' : `inset 0 0 0 1px color-mix(in srgb, ${s.ev.color} 30%, transparent)`,
         transform: lifted ? 'scale(1.01)' : undefined,
         transition: 'box-shadow var(--k-base) var(--k-spring), transform var(--k-base) var(--k-spring)',
-        zIndex: lifted ? 5 : urgent ? 3 : 2, cursor: isReadOnly(s.ev) ? 'default' : 'grab', touchAction: 'pan-y',
+        zIndex: lifted ? 5 : urgent ? 3 : 2, cursor: 'grab', touchAction: 'pan-y',
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',

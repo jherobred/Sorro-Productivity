@@ -11,6 +11,8 @@ import { settler } from './settle';
 import { gridRange as localGridRange } from './calendarRange';
 import { getPrefs, prefsLoaded, setPrefs, usePrefs } from './prefs';
 import { readableInk } from './calendarAppearance';
+import { useIntegrations } from './integrations';
+import { saveGoogleEdit } from '@/components/calendar/googleEdit';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom';
@@ -385,7 +387,7 @@ export function expandRecurringEvents(events: Ev[], from: Date, to: Date): Ev[] 
   return result.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 }
 
-/** Synced events belong to the other calendar; editing them here would diverge. */
+/** Synced from Google. Edits to them go to Google through `edit` in useEventActions. */
 export const isReadOnly = (e: Ev) => e.source === 'gcal_ics';
 
 /**
@@ -869,16 +871,24 @@ export function useEventActions(ws: Date) {
    * GRID_END is 22, not K.calEndHour (21) — clamping to 21 made the grid's last
    * row unreachable by drag.
    */
+  const { data: integrations = [] } = useIntegrations();
+  const gcalUrl = integrations.find((r) => r.kind === 'gcal_ics')?.config.ics_url ?? '';
+
+  /** One edit to one event. A Google event's time, title and place go to Google too. */
+  const edit = (ev: Ev, patch: Partial<Ev>, quiet = false) => {
+    if (isReadOnly(ev)) void saveGoogleEdit(ev, patch, gcalUrl, (p) => update.mutate({ id: ev.id, patch: p }), quiet);
+    else update.mutate({ id: ev.id, patch });
+  };
+
   const moveTo = (ev: Ev, day: number, hour: number) => {
     const rawLen = hoursOf(ev.ends_at) - hoursOf(ev.starts_at);
     const len = rawLen > 0 ? rawLen : 1;
     const h = Math.max(GRID_START, Math.min(GRID_END - len, hour));
-    const prevStart = ev.starts_at;
-    const prevEnd = ev.ends_at;
-    update.mutate({ id: ev.id, patch: { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) } });
-    const label = new Date(at(ws, day, h)).toLocaleDateString(undefined, { weekday: 'short' });
+    const moved = { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) };
+    edit(ev, moved, true);
+    const label = new Date(moved.starts_at).toLocaleDateString(undefined, { weekday: 'short' });
     toast(`Moved to ${label} ${hhmm(h)}`, () =>
-      update.mutate({ id: ev.id, patch: { starts_at: prevStart, ends_at: prevEnd } })
+      edit({ ...ev, ...moved }, { starts_at: ev.starts_at, ends_at: ev.ends_at }, true)
     );
   };
 
@@ -895,14 +905,14 @@ export function useEventActions(ws: Date) {
     if (!evs.length || (dayDelta === 0 && hourDelta === 0)) return;
     const len = hoursOf(evs[0].ends_at) - hoursOf(evs[0].starts_at);
     const h = Math.max(GRID_START, Math.min(GRID_END - len, hoursOf(evs[0].starts_at) + hourDelta));
-    const before = evs.map((e) => ({ id: e.id, starts_at: e.starts_at, ends_at: e.ends_at }));
-
-    for (const e of evs) {
+    const moves = evs.map((e) => {
       const day = dayIndex(e.starts_at, ws) + dayDelta;
-      update.mutate({ id: e.id, patch: { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) } });
-    }
+      const moved = { starts_at: at(ws, day, h), ends_at: at(ws, day, h + len) };
+      edit(e, moved, true);
+      return { e, moved };
+    });
     toast(`Moved ${evs.length} day${evs.length === 1 ? '' : 's'} to ${hhmm(h)}`, () => {
-      for (const b of before) update.mutate({ id: b.id, patch: { starts_at: b.starts_at, ends_at: b.ends_at } });
+      for (const { e, moved } of moves) edit({ ...e, ...moved }, { starts_at: e.starts_at, ends_at: e.ends_at }, true);
     });
   };
 
@@ -910,7 +920,7 @@ export function useEventActions(ws: Date) {
     const start = hoursOf(ev.starts_at);
     const h = Math.max(start + 0.5, Math.min(GRID_END, endHour));
     const day = dayIndex(ev.starts_at, ws);
-    update.mutate({ id: ev.id, patch: { ends_at: at(ws, day, h) } });
+    edit(ev, { ends_at: at(ws, day, h) });
   };
 
   /** Copy to the next day (BACKEND.md POST /events/:id/duplicate). */
@@ -972,7 +982,7 @@ export function useEventActions(ws: Date) {
   };
 
   return {
-    create, update, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
+    create, update, edit, remove, restore, snooze, addAt, moveTo, moveRun, resizeTo,
     duplicate, removeWithUndo, hideGoogle, hideSeries, wipe, wipeRun,
   };
 }

@@ -53,7 +53,7 @@ export function EventBubble({
   const locked = isReadOnly(ev);
   const start = new Date(ev.starts_at), end = new Date(ev.ends_at);
   const untitled = !ev.title?.trim() || ev.title === '(No title)';
-  const [editing, setEditing] = useState(untitled && !locked);
+  const [editing, setEditing] = useState(untitled);
   const [title, setTitle] = useState(untitled ? '' : ev.title);
   const category = resolveCategory(ev.color);
   const minutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
@@ -82,10 +82,8 @@ export function EventBubble({
             <span className="cal-bubble-kind"><i aria-hidden="true" />Event</span>
           )}
           <span className="cal-bubble-spacer" />
-          {!locked && <>
-            <button type="button" className="cal-icon-button" onClick={onEdit} aria-label="Edit all details" title="Edit all details"><Icon name="edit" size={15} /></button>
-            <button type="button" className="cal-icon-button" onClick={onDuplicate} aria-label="Duplicate event" title="Duplicate"><Icon name="copy" size={15} /></button>
-          </>}
+          <button type="button" className="cal-icon-button" onClick={onEdit} aria-label="Edit all details" title="Edit all details"><Icon name="edit" size={15} /></button>
+          <button type="button" className="cal-icon-button" onClick={onDuplicate} aria-label="Duplicate event" title="Duplicate"><Icon name="copy" size={15} /></button>
             <button type="button" className="cal-icon-button is-danger" onClick={onDelete} aria-label={runDays > 1 ? 'Delete this day' : 'Delete event'} title={runDays > 1 ? 'Delete this day' : 'Delete'}><Icon name="trash" size={15} /></button>
           <button type="button" className="cal-icon-button" onClick={onClose} aria-label="Close" title="Close"><Icon name="close" size={15} /></button>
         </div>
@@ -96,7 +94,7 @@ export function EventBubble({
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
         ) : (
           <h2 className="cal-bubble-title">
-            <button type="button" disabled={locked} onClick={() => setEditing(true)} title={locked ? undefined : 'Rename'}>
+            <button type="button" onClick={() => setEditing(true)} title="Rename">
               {untitled ? '(No title)' : ev.title}
             </button>
           </h2>
@@ -133,26 +131,22 @@ export function EventBubble({
         )}
 
         <details className="cal-appearance-details"><summary>Colors & text</summary><EventAppearance event={ev} onChange={onPatch}/></details>
-        {!locked && (
-          <>
-            <div className="cal-bubble-field">
-              <span>Reminder</span>
-              <div className="cal-chips" role="radiogroup" aria-label="Reminder">
-                {REMINDERS.map((r) => {
-                  const on = (ev.remind_minutes ?? 0) === r.minutes;
-                  return (
-                    <button key={r.minutes} type="button" role="radio" aria-checked={on}
-                      onClick={() => onPatch({ remind_minutes: r.minutes || null })}>{r.label}</button>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
+        <div className="cal-bubble-field">
+          <span>Reminder</span>
+          <div className="cal-chips" role="radiogroup" aria-label="Reminder">
+            {REMINDERS.map((r) => {
+              const on = (ev.remind_minutes ?? 0) === r.minutes;
+              return (
+                <button key={r.minutes} type="button" role="radio" aria-checked={on}
+                  onClick={() => onPatch({ remind_minutes: r.minutes || null })}>{r.label}</button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="cal-bubble-actions">
           <button type="button" className="studio-button" onClick={onTakeNotes}><Icon name="files" size={16} />Take notes</button>
-          <button type="button" className="studio-button" onClick={onEdit}>{locked ? 'Edit' : 'More options'}</button>
+          <button type="button" className="studio-button" onClick={onEdit}>More options</button>
         </div>
 
         {runDays > 1 && !locked && (
@@ -160,7 +154,7 @@ export function EventBubble({
             <Icon name="trash" size={14} />Delete all {runDays} days of this
           </button>
         )}
-        {locked && <p className="cal-bubble-note"><Icon name="lock" size={13} />Synced from Google Calendar. Edits save to Google. Colors stay in Basedly.</p>}
+        {locked && <p className="cal-bubble-note"><Icon name="cal" size={13} />Synced from Google Calendar. Time, title and place save to Google. Colors and reminders stay in Basedly.</p>}
       </div>
     </CalPopover>
   );
