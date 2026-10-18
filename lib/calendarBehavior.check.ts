@@ -91,6 +91,22 @@ test('editing a Google occurrence PATCHes that instance with Google field names'
   });
   assert.equal((writes[0].init?.headers as Record<string, string>)['If-Match'], 'e1');
 });
+test('an occurrence of a series with edited occurrences is found through the series', async () => {
+  const writes: string[] = [];
+  const fetcher = (async (url, init) => {
+    const path = String(url);
+    if (init?.method === 'PATCH') { writes.push(path); return Response.json({}); }
+    if (path.includes('/instances?')) return Response.json({ items: [{ id: 'master-id_20261019T200000Z', originalStartTime: { dateTime: '2026-10-19T20:00:00Z' } }] });
+    return Response.json({ items: [
+      { id: 'master-id', iCalUID: 'wake@google.com', recurrence: ['RRULE:FREQ=DAILY'] },
+      { id: 'master-id_20261021T200000Z', iCalUID: 'wake@google.com', recurringEventId: 'master-id' },
+    ] });
+  }) as typeof fetch;
+  await patchGoogleOccurrence({ token: 't', calendarId: 'c', externalId: 'wake@google.com@20261019T200000Z', fetcher,
+    patch: { starts_at: '2026-10-19T19:00:00.000Z', ends_at: '2026-10-19T20:00:00.000Z' } });
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0].includes('/master-id_20261019T200000Z?'));
+});
 test('series Super Delete deletes the master event, never one instance', async () => {
   const deletes: string[] = [];
   const fetcher = (async (url, init) => {

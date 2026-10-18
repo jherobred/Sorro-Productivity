@@ -100,8 +100,13 @@ async function googleTarget(options: TargetOptions, verb: string) {
   const matches = (await list(`${base}?${new URLSearchParams({ iCalUID: uid, maxResults: '250', showDeleted: 'false' })}`))
     .filter(e => e.iCalUID === uid && e.status !== 'cancelled');
   if (!matches.length) throw new GoogleNotHereError('Google could not find this event in your connected calendars. Sync again; nothing was changed.');
-  if (matches.length !== 1) throw new Error('Could not identify one matching Google event. Sync again; nothing was changed.');
-  let target = matches[0];
+  // A repeating event that has occurrences edited in Google lists those
+  // exceptions under the same iCalUID next to the series. The series is the
+  // one with a rule; its `instances` then include the edited occurrences.
+  const masters = matches.filter(e => e.recurrence?.length);
+  const found = matches.length === 1 ? matches[0] : (originalStart || series) && masters.length === 1 ? masters[0] : null;
+  if (!found) throw new Error('Could not identify one matching Google event. Sync again; nothing was changed.');
+  let target = found;
   if (series) {
     // The master event: a write to it reaches every occurrence in Google.
     if (!target.recurrence?.length) throw new Error('This is not a repeating Google event. Sync again; nothing was changed.');
