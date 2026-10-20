@@ -99,6 +99,11 @@ if(!mo){r.style.setProperty('--anim','paused');r.classList.add('nomo');}
 }catch(e){}})();`,
           }}
         />
+        {/* Offline shell for the website, the APK and the desktop app. Only the
+            export has a /sw.js; `next dev` would cache stale dev chunks. */}
+        {process.env.NODE_ENV === 'production' && (
+          <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator)addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})});` }} />
+        )}
       </head>
       <body>
         <Providers>{children}</Providers>
