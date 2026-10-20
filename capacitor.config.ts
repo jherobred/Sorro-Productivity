@@ -6,6 +6,14 @@ const config: CapacitorConfig = {
   // The static export. One `npm run build` feeds both the website and the APK,
   // which is what keeps the two in sync — same code, same Supabase.
   webDir: 'out',
+  // The app runs the live site, so every deploy reaches it on the next online
+  // launch with no reinstall. The service worker (/sw.js) keeps a copy of every
+  // page for offline launches. `offline.html` from the bundle shows only when
+  // the very first launch has no connection and nothing is cached yet.
+  server: {
+    url: 'https://basedly-web-jhemsini.vercel.app',
+    errorPath: 'offline.html',
+  },
   android: {
     // The app is dark-first and owns all its own scrolling.
     backgroundColor: '#07060D',
