@@ -91,7 +91,7 @@ export function useMeals(on: string) {
     queryKey: [...MEALS, on],
     queryFn: async (): Promise<Meal[]> => {
       const fx = fixture<Meal[]>('meals');
-      if (fx) return fx;
+      if (fx) return fx.filter((m) => m.on_date === on);
       const { data, error } = await supabase.from('bd_meals')
         .select('id,on_date,name,slot,kcal,protein,carbs,fat,photo_path,place')
         .eq('on_date', on).order('id');

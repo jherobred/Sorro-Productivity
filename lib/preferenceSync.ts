@@ -1,6 +1,6 @@
 /** A durable, per-account outbox. Only changed fields are merged into the server copy. */
 export type PreferencePatch = Record<string, unknown>;
-const maps = new Set(['eventMeta', 'calendarTaskPlans']);
+const maps = new Set(['eventMeta', 'calendarTaskPlans', 'taskBoard']);
 const record = (value: unknown): PreferencePatch => value && typeof value === 'object' && !Array.isArray(value) ? value as PreferencePatch : {};
 
 export function preferenceDelta(before: PreferencePatch, change: PreferencePatch): PreferencePatch {

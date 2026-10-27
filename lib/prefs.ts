@@ -7,6 +7,7 @@ import { DEFAULT_SHELL, isShellLayout, type ShellLayout } from './shellLayouts';
 import { EMPTY_PLAN } from './lift';
 import type { Tag } from './tagList';
 import type { TaskRepeat } from './taskRepeat';
+import type { BoardMap, Col } from './board';
 import type { EventLocalMeta } from './events';
 import { defineMutation, queryClient } from './offline';
 import { PreferenceOutbox, preferenceDelta, mergePreferencePatch, type PreferencePatch } from './preferenceSync';
@@ -101,6 +102,12 @@ export type Prefs = {
   linkCategories?: { name: string; color: string }[];
   /** How each repeating task comes back, by task id. See lib/taskRepeat.ts. */
   taskRepeat?: Record<string, TaskRepeat>;
+  /** Where each task sits on the Board tab, by task id. See lib/board.ts. */
+  taskBoard?: BoardMap;
+  /** Work-in-progress limits on the Board, by column. 0 is no limit. */
+  boardLimits?: Partial<Record<Col, number>>;
+  /** The Board as one row of columns, or one row per project. */
+  boardView?: 'status' | 'lanes';
   /**
    * An event's short name and how it repeats, by event id. These were kept on
    * the device that set them, so a repeating class showed once on every other

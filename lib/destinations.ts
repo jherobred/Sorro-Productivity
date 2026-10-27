@@ -3,11 +3,13 @@ export const DESTINATIONS = [
   { id: 'notebooks', name: 'Notebooks', icon: 'book' },
   { id: 'tasks', name: 'Tasks', icon: 'task' },
   { id: 'calendar', name: 'Calendar', icon: 'cal' },
+  { id: 'board', name: 'Board', icon: 'proj' },
   { id: 'focus', name: 'Focus', icon: 'focus' },
   { id: 'links', name: 'Links', icon: 'link' },
   { id: 'habits', name: 'Habits', icon: 'habit' },
   { id: 'fitness', name: 'Fitness', icon: 'gym' },
   { id: 'fuel', name: 'Fuel', icon: 'food' },
+  { id: 'plates', name: 'Plate diary', icon: 'cup' },
   { id: 'money', name: 'Money', icon: 'money' },
   { id: 'memories', name: 'Memories', icon: 'photo' },
 ] as const;

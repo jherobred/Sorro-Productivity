@@ -55,6 +55,47 @@ const LIST = {
 /** Matches BOT_ID in lib/bot.ts, so the label lights up in the preview too. */
 const BOT = '00000000-0000-4000-8000-00000000b07d';
 
+/**
+ * Plate diary preview: meals kept as memories over three weeks, with places,
+ * coordinates and @names, each pointing at a meal that wears a shipped
+ * illustration (fixture memories have no photo to show).
+ */
+function platePreview() {
+  const food = (f: string | null) => (f ? `/food/${f}.svg` : null);
+  const rows: [number, number, number, string, string | null, string, string, number, number][] = [
+    [0, 10, 54, 'Fried chicken wings with rice', 'inihaw', 'Pauline home', 'Mahal ko yan ihh @Pauline', 14.7581, 120.9482],
+    [0, 10, 58, 'Chicken salad wrap', 'ensalada', 'Pauline home', '', 14.7581, 120.9482],
+    [1, 19, 45, 'Sinigang na baboy', 'sinigang', "Kiel's Home", '', 14.7601, 121.1152],
+    [1, 15, 37, 'Iced coffee', null, "Kiel's Home", 'Eating while coding!!! Sarap ng mainit @Jerox', 14.7601, 121.1152],
+    [1, 11, 43, 'Tapsilog', 'silog', "Kiel's Home", '', 14.7601, 121.1152],
+    [1, 11, 50, 'Pritong isda', 'pritong-isda', "Kiel's Home", '', 14.7601, 121.1152],
+    [2, 22, 1, 'Isaw', 'isaw', "Kiel's Home", 'Late night @Jerox @Raja', 14.7601, 121.1152],
+    [2, 12, 56, 'Ensalada', 'ensalada', "Kiel's Home", '', 14.7601, 121.1152],
+    [2, 9, 22, 'Milk tea', null, 'Uncles John', 'Breakfast run with @Chan', 14.6362, 121.0973],
+    [2, 9, 25, 'Inihaw na liempo', 'inihaw', 'Uncles John', '', 14.6362, 121.0973],
+    [3, 18, 38, 'Sinigang', 'sinigang', 'Pauline home', '@Pauline @Yna', 14.7581, 120.9482],
+    [4, 16, 51, 'Iced americano', null, 'BL.CK Cafe Valenzuela', 'New stamp!', 14.7011, 120.9830],
+    [6, 13, 10, 'Katsu curry', null, 'Yabu', 'Katsu day with @Tita_Wena', 14.5869, 121.0567],
+    [8, 12, 30, 'Chicken rice', 'silog', 'Canteen', '', 14.6537, 121.0687],
+    [9, 12, 15, 'Tapsilog', 'silog', 'Canteen', '@Raja', 14.6537, 121.0687],
+    [12, 19, 30, 'Burger and fries', null, 'Mcdo', '', 14.6760, 121.0437],
+    [14, 13, 0, 'Pritong isda', 'pritong-isda', 'Pauline home', '@Pauline', 14.7581, 120.9482],
+    [18, 20, 10, 'Isaw', 'isaw', 'SM City Marilao', '@Jerox', 14.7573, 120.9530],
+    [21, 12, 40, 'Sinigang', 'sinigang', 'Pauline home', 'Sunday lunch @Pauline @Yna', 14.7581, 120.9482],
+    [24, 8, 5, 'Tapsilog', 'silog', 'Canteen', '', 14.6537, 121.0687],
+  ];
+  const slot = (h: number) => (h < 10 ? 'Breakfast' : h < 15 ? 'Lunch' : h < 21 ? 'Dinner' : 'Snack');
+  return rows.map(([back, h, m, name, art, place, caption, lat, lng], i) => {
+    const when = new Date();
+    when.setDate(when.getDate() - back);
+    when.setHours(h, m, 0, 0);
+    return {
+      meal: { id: `pm${i}`, on_date: ymdOf(-back), name, slot: slot(h), kcal: 0, protein: 0, carbs: 0, fat: 0, photo_path: food(art), place },
+      memory: { id: `preview-plate-${i}`, kind: 'meal', at: when.getTime(), caption, place, lat, lng, ref: `meal:pm${i}`, photo: false, km: null, minutes: null, route: null, updatedAt: Date.now() },
+    };
+  });
+}
+
 const store = new Map<string, unknown>();
 
 export function fixture<T>(prefix: string): T | null {
@@ -183,6 +224,7 @@ export function seedDevFixtures() {
   seed(['memories'], [
     { id: 'preview-memory-1', kind: 'moment', at: Date.now(), caption: 'Preview · afternoon at the library', place: 'Library', lat: null, lng: null, ref: null, photo: false, km: null, minutes: null, route: null, updatedAt: Date.now() },
     { id: 'preview-memory-2', kind: 'run', at: Date.now() - 86400000 * 35, caption: 'Preview · morning loop', place: 'Campus', lat: null, lng: null, ref: null, photo: false, km: 3, minutes: 24, route: null, updatedAt: Date.now() },
+    ...platePreview().map((p) => p.memory),
   ]);
 
   // `challenge_id` is what splits this page in two: null is one of yours, an id
@@ -486,6 +528,7 @@ export function seedDevFixtures() {
     { id: 'ml1', on_date: ymdOf(0), name: 'Tapsilog', slot: 'Breakfast', kcal: 620, protein: 34, carbs: 68, fat: 22, photo_path: null },
     { id: 'ml2', on_date: ymdOf(0), name: 'Chicken rice, canteen', slot: 'Lunch', kcal: 540, protein: 38, carbs: 62, fat: 14, photo_path: null },
     { id: 'ml3', on_date: ymdOf(0), name: 'Iced coffee and a pandesal', slot: 'Snack', kcal: 260, protein: 6, carbs: 40, fat: 8, photo_path: null },
+    ...platePreview().map((p) => p.meal),
   ]);
 
   seed(['workouts'], [
