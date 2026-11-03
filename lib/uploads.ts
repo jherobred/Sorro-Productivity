@@ -9,7 +9,7 @@ import { assertSafeFile, safeFileName, IMAGE_EXT } from './uploadGuard';
  * gradient placeholders that v1 replaces with real files.
  *
  * Storage RLS keys on the first path segment being the user's id, so every
- * object goes to `<uid>/<uuid>-<name>` (see the basedly_v1_schema policies).
+ * object goes to `<uid>/<uuid>-<name>` (see the sorro_v1_schema policies).
  */
 
 export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files' | 'bd-avatars';

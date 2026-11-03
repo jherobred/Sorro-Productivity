@@ -27,7 +27,7 @@ export function Crashed({ error, reset }: { error: Error & { digest?: string }; 
   const [copied, setCopied] = useState(false);
 
   // The console still gets it, in full, for anyone who does open one.
-  useEffect(() => { console.error('[basedly] render crash', error); }, [error]);
+  useEffect(() => { console.error('[sorro] render crash', error); }, [error]);
 
   const detail = [
     error.message || 'No message',

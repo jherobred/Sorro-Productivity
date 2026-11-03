@@ -1,5 +1,5 @@
 ---
-name: Basedly
+name: Sorro
 description: A motivating student workspace with bold discovery and calm work.
 colors:
   dark-poster-blue: "#345cff"
@@ -101,7 +101,7 @@ components:
     padding: "24px 27px"
 ---
 
-# Design System: Basedly
+# Design System: Sorro
 
 ## Overview
 
@@ -142,7 +142,7 @@ The paired dark and light tokens map to the existing bg, panel, card, card2, tx,
 
 ## Typography
 
-Display and body use the native system stacks in the frontmatter. The mono stack serves code and time. The lowercase basedly wordmark alone keeps Familjen Grotesk, provided by the existing font variable.
+Display and body use the native system stacks in the frontmatter. The mono stack serves code and time. The lowercase sorro wordmark alone keeps Familjen Grotesk, provided by the existing font variable.
 
 Display headings are compact and tightly spaced. Library display becomes (48px) on phones. Today has its own greeting scale, from (32px) to (54px), and (35px) on phones. Section titles use the title role. Navigation uses the label role. Note titles currently use (28px) desktop and (22px) phone at weight (800); use the editor's current styles rather than historical title sizes.
 

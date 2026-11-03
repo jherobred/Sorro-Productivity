@@ -1,5 +1,5 @@
-/* Basedly v1 design tokens + motion system.
-   Lifted verbatim from Basedly.dc.html <helmet>. Every number here is a spec
+/* Sorro v1 design tokens + motion system.
+   Lifted verbatim from the original prototype <helmet>. Every number here is a spec
    line (README.md "Fidelity"), not a suggestion. Do not "clean up" values. */
 
 /* The prototype's <helmet> loads the Modernist design-system stylesheet before
@@ -10,7 +10,7 @@
 @import './modernist.css';
 
 /* The kinetics motion vocabulary. Loaded after the design system so its spring
-   curves are available to every token block below, and before the Basedly
+   curves are available to every token block below, and before the Sorro
    overrides so a page can still take a curve off a specific element. */
 @import './kinetics.css';
 

@@ -6,7 +6,7 @@ const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_dFRyCNdg39_7Ee3OiObwHw_5CQK5szk';
 
 // Publishable key is safe in the client — RLS is what protects the data.
-// Every bd_* table has user_id = auth.uid() policies; see the basedly_v1_schema migration.
+// Every bd_* table has user_id = auth.uid() policies; see the sorro_v1_schema migration.
 export const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_KEY,

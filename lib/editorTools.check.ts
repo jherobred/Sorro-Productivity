@@ -23,7 +23,7 @@ test('schema cards and connections retain coordinates and old moodboard formats'
  assert.equal(readBoard(writeBoard({...board,connections:[{id:'broken',from:'a',to:'missing'}]})),null);
 });
 test('task note links are idempotent and preserve unrelated notes and links',()=>{
- const notes='Do the reading.\n🔗 Course page: https://school.example/lesson';const linked=attachNoteToTask(notes,'note-1','https://basedly.example');assert.equal(taskLinksNote(linked,'note-1'),true);assert.equal(taskLinksNote(linked,'note-10'),false);assert.equal(attachNoteToTask(linked,'note-1','https://other.example'),linked);assert.equal(detachNoteFromTask(linked,'note-1'),notes);
+ const notes='Do the reading.\n🔗 Course page: https://school.example/lesson';const linked=attachNoteToTask(notes,'note-1','https://sorro.example');assert.equal(taskLinksNote(linked,'note-1'),true);assert.equal(taskLinksNote(linked,'note-10'),false);assert.equal(attachNoteToTask(linked,'note-1','https://other.example'),linked);assert.equal(detachNoteFromTask(linked,'note-1'),notes);
 });
 test('find and replace treats the search term and the replacement as text, not patterns',()=>{
  const body='Total cost (total) is 5. TOTAL again.';

@@ -611,7 +611,7 @@ export default function CalendarPage() {
         all_day: false,
       });
     }
-    toast('Study & exam schedule built in Basedly calendar');
+    toast('Study & exam schedule built in Sorro calendar');
   };
 
   const menuItems: CtxGroup[] = [
@@ -997,7 +997,7 @@ export default function CalendarPage() {
 
       {googleDelete && <GoogleEventDelete event={googleDelete} onClose={() => setGoogleDelete(null)}
         onHide={(series) => { (series ? A.hideSeries : A.hideGoogle)(googleDelete); setGoogleDelete(null); }}
-        onDeleted={(series) => { (series ? A.hideSeries : A.hideGoogle)(googleDelete, false); if (!series) A.remove.mutate({ id: googleDelete.id }); setGoogleDelete(null); toast(series ? 'Deleted the series from Google Calendar and Basedly' : 'Deleted this event from Google Calendar and Basedly'); }}/>}
+        onDeleted={(series) => { (series ? A.hideSeries : A.hideGoogle)(googleDelete, false); if (!series) A.remove.mutate({ id: googleDelete.id }); setGoogleDelete(null); toast(series ? 'Deleted the series from Google Calendar and Sorro' : 'Deleted this event from Google Calendar and Sorro'); }}/>}
 
       {/* Right-click menu. Left click already opens the bubble; right click is
           for people who already know what they want, so it is all actions:

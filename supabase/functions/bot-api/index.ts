@@ -1,5 +1,5 @@
 /**
- * Basedly bot API — a token-gated way for outside bots (Grok) to read and
+ * Sorro bot API — a token-gated way for outside bots (Grok) to read and
  * write one user's tasks and calendar without signing in through Google.
  *
  * One POST endpoint, `{ action, ... }` in the body, `x-bot-token` header.

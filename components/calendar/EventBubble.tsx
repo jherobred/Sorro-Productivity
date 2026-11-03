@@ -154,7 +154,7 @@ export function EventBubble({
             <Icon name="trash" size={14} />Delete all {runDays} days of this
           </button>
         )}
-        {locked && <p className="cal-bubble-note"><Icon name="cal" size={13} />Synced from Google Calendar. Time, title and place save to Google. Colors and reminders stay in Basedly.</p>}
+        {locked && <p className="cal-bubble-note"><Icon name="cal" size={13} />Synced from Google Calendar. Time, title and place save to Google. Colors and reminders stay in Sorro.</p>}
       </div>
     </CalPopover>
   );

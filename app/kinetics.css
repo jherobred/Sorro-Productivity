@@ -2,7 +2,7 @@
    Kinetics — the motion vocabulary, ported from kinetics.colorion.co.
 
    That library is copy-paste snippets rather than a package, so this file is
-   the subset Basedly actually uses, kept as one vocabulary instead of scattered
+   the subset Sorro actually uses, kept as one vocabulary instead of scattered
    inline transitions. Four spring curves carry almost everything:
 
      --k-spring    overshoot-and-settle. Anything that "arrives": pops, chips,

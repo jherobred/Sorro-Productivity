@@ -49,7 +49,7 @@ function saveFollowing(list: FollowItem[]) {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(FOLLOWS_STORAGE_KEY, JSON.stringify(list));
-      window.dispatchEvent(new CustomEvent('basedly:follows_updated', { detail: list }));
+      window.dispatchEvent(new CustomEvent('sorro:follows_updated', { detail: list }));
     } catch {}
   }
   listeners.forEach((l) => l());
@@ -60,7 +60,7 @@ function saveFollowers(list: FollowItem[]) {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(FOLLOWERS_STORAGE_KEY, JSON.stringify(list));
-      window.dispatchEvent(new CustomEvent('basedly:followers_updated', { detail: list }));
+      window.dispatchEvent(new CustomEvent('sorro:followers_updated', { detail: list }));
     } catch {}
   }
   listeners.forEach((l) => l());
@@ -97,7 +97,7 @@ export async function notifyFollowedUser(params: {
 }) {
   const { targetUserId, targetHandle, followerName, followerHandle, followerUserId } = params;
   const title = `${followerName || 'Someone'} started following you`;
-  const body = `@${followerHandle || 'user'} is now following your updates and routines on Basedly.`;
+  const body = `@${followerHandle || 'user'} is now following your updates and routines on Sorro.`;
   const href = followerHandle ? `/profile/?u=${followerHandle}` : '/profile/';
 
   try {
@@ -121,7 +121,7 @@ export async function notifyFollowedUser(params: {
     // 2. Also record local notification event
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
-        new CustomEvent('basedly:new_notification', {
+        new CustomEvent('sorro:new_notification', {
           detail: {
             kind: 'social',
             title,
@@ -190,7 +190,7 @@ export function useFollows() {
       // Resolve my own profile for proper notification attribution
       void (async () => {
         const myUid = await currentUserId().catch(() => '');
-        let myName = 'A Basedly User';
+        let myName = 'A Sorro User';
         let myHandle: string | null = null;
         if (myUid) {
           const { data: p } = await supabase

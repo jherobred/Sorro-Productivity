@@ -1,4 +1,4 @@
-/* Extensions of Basedly's existing studio: document-like groups and explicit actions. */
+/* Extensions of Sorro's existing studio: document-like groups and explicit actions. */
 .sync-health{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--tx2);white-space:nowrap}
 .sync-health.needs-attention{color:var(--pal-coral)}
 .sync-diagnostics{padding:0 14px 14px;font-size:13px;color:var(--tx2)}

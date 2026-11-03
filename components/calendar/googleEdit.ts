@@ -7,10 +7,10 @@ import { toast } from '@/lib/toast';
 const GOOGLE_FIELDS = ['title', 'location', 'starts_at', 'ends_at', 'all_day'] as const;
 
 /**
- * Saves an edit to a Google-synced event. What Google stores shows in Basedly
+ * Saves an edit to a Google-synced event. What Google stores shows in Sorro
  * at once, so a drag does not snap back while Google answers, and is put back
  * if Google refuses, so the two never disagree until the next sync. Colors,
- * short names and reminders are Basedly-only and save locally either way.
+ * short names and reminders are Sorro-only and save locally either way.
  * `quiet` skips the success toast for callers that show their own (a move's Undo).
  */
 export async function saveGoogleEdit(ev: Ev, patch: Partial<Ev>, config: Record<string, string> | undefined, update: (patch: Partial<Ev>) => void, quiet = false) {

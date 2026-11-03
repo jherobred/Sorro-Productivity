@@ -61,3 +61,12 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 .sx-caption button { width: 46px; display: grid; place-items: center; color: var(--muted); transition: background-color .12s }
 .sx-caption button:hover { background: var(--soft); color: var(--ink) }
 .sx-caption .x:hover { background: var(--close); color: var(--on-media) }
+
+/* Sign-in: one column on the page colour, the fox and wordmark over one button. */
+.sx-signin { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--ink) }
+.sx-signin > div { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center }
+.sx-signin .sx-word { font-size: 28px }
+.sx-signin p { margin: 0 0 14px; color: var(--muted); font-size: 14px }
+.sx-signin .sx-pill { width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px }
+.sx-signin .sx-pill:disabled { opacity: .6 }
+.sx-signin .sx-signin-err { margin-top: 8px; color: var(--bad); font-size: 13px }

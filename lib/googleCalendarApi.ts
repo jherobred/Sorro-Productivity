@@ -76,7 +76,7 @@ async function googleTarget(options: TargetOptions, verb: string) {
       if (response.status === 403 && (reason === 'insufficientPermissions' || reason === 'authError')) {
         throw new GoogleAuthorizationError(`Google Calendar permission is needed. Reconnect to ${verb} Google events.`);
       }
-      if (response.status === 403 && reason === 'accessNotConfigured') throw new Error('Google Calendar access is turned off for Basedly. Try again in a few minutes.');
+      if (response.status === 403 && reason === 'accessNotConfigured') throw new Error('Google Calendar access is turned off for Sorro. Try again in a few minutes.');
       if (response.status === 403) throw new GoogleNotHereError(`Google refused to ${verb} this event. Check that you have edit access to this calendar.`);
       if (response.status === 404) throw new GoogleNotHereError('Google could not find this calendar or event. Check the connected Google account, then sync again.');
       throw new Error(response.status === 412 ? `This event changed in Google. Sync again before you ${verb} it.`
@@ -133,7 +133,7 @@ export async function deleteGoogleOccurrence(options: TargetOptions): Promise<vo
 
 export type GoogleEventPatch = { title?: string; location?: string; starts_at?: string; ends_at?: string; all_day?: boolean };
 
-/** Writes an edit made in Basedly back to Google. The next sync then mirrors it. */
+/** Writes an edit made in Sorro back to Google. The next sync then mirrors it. */
 export async function patchGoogleOccurrence(options: TargetOptions & { patch: GoogleEventPatch }): Promise<void> {
   const { patch } = options;
   const body: Record<string, unknown> = {};

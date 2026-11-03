@@ -2,7 +2,7 @@
 
 /**
  * 24×24 stroke paths rendered as a CSS mask on a <span>, so the icon inherits a
- * colour prop. Paths and technique are verbatim from Basedly.dc.html (ICONS +
+ * colour prop. Paths and technique are verbatim from the original prototype (ICONS +
  * icon()). README is explicit: do not swap in a different icon library — the
  * 2px round-cap weight is part of the look.
  */

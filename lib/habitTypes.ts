@@ -197,6 +197,6 @@ export const HABIT_PRESETS: HabitPreset[] = [
     color: '#52C41A',
     icon: 'money',
     time_of_day: 'evening',
-    cue: 'Open Basedly Money tab before dinner and tag any unclassified receipts',
+    cue: 'Open Sorro Money tab before dinner and tag any unclassified receipts',
   },
 ];

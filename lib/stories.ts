@@ -77,7 +77,7 @@ const DEFAULT_STORIES: StorySlide[] = [
     filter: 'normal',
     caption: 'Shipping the 2026 redesign today! 🚀',
     textOverlays: [
-      { id: 't1', text: 'Shipping Basedly v2.0 Today! 🔥', color: '#ffffff', fontSize: 20, bgChip: true, align: 'center', x: 50, y: 25 },
+      { id: 't1', text: 'Shipping Sorro v2.0 Today! 🔥', color: '#ffffff', fontSize: 20, bgChip: true, align: 'center', x: 50, y: 25 },
     ],
     stickers: [
       { id: 's1', type: 'streak', data: { streakCount: 42, habitName: 'Daily Coding' }, x: 50, y: 75 },

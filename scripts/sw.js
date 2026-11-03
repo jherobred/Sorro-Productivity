@@ -1,4 +1,4 @@
-/* Basedly offline service worker. `npm run build` prepends PRECACHE (the build's
+/* Sorro offline service worker. `npm run build` prepends PRECACHE (the build's
    version and file list) and writes the result to out/sw.js.
 
    Pages and RSC payloads are network-first, so an online launch always gets the

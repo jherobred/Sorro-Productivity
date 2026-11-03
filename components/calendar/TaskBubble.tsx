@@ -127,7 +127,7 @@ export function TaskBubble({
           </div>
         )}
 
-        {task.calendar_planned && <p className="cal-plan-info">Study time in Basedly. Canvas deadline: {task.calendar_original_due_at ? new Date(task.calendar_original_due_at).toLocaleString() : 'No time set'}<button type="button" onClick={onClearPlan}>Reset to Canvas deadline</button></p>}
+        {task.calendar_planned && <p className="cal-plan-info">Study time in Sorro. Canvas deadline: {task.calendar_original_due_at ? new Date(task.calendar_original_due_at).toLocaleString() : 'No time set'}<button type="button" onClick={onClearPlan}>Reset to Canvas deadline</button></p>}
         <label className="cal-task-time">{task.source === 'canvas_lms' ? 'Study time' : 'Time'}
           <input type="time" aria-label="Task time" value={task.due_at ? `${String(new Date(task.due_at).getHours()).padStart(2, '0')}:${String(new Date(task.due_at).getMinutes()).padStart(2, '0')}` : ''}
             onChange={e => {

@@ -102,7 +102,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
               </label>
             ))}
             {urls.length < MAX_GOOGLE_ACCOUNTS && <button type="button" className="gcal-ghost gcal-add" onClick={() => setUrls((p) => [...p, ''])}><Icon name="plus" size={15} />Add a calendar from another Google account</button>}
-            <p className="gcal-note">The iCal feed brings events into Basedly. Hide keeps an event out of Basedly after sync. Super Delete asks for separate Google permission and deletes the original event too. The address is kept with your account alone; anyone holding it could read the calendar, so do not share it.</p>
+            <p className="gcal-note">The iCal feed brings events into Sorro. Hide keeps an event out of Sorro after sync. Super Delete asks for separate Google permission and deletes the original event too. The address is kept with your account alone; anyone holding it could read the calendar, so do not share it.</p>
             <div className="gcal-actions">
               {row && <button type="button" className="gcal-ghost" onClick={() => { setEditing(false); setUrls(saved.length ? saved : ['']); }}>Cancel</button>}
               <button type="button" className="studio-button primary" disabled={!ok || A.save.isPending} onClick={connect}><Icon name="plug" size={16} />{row ? 'Save and sync' : 'Connect'}</button>
@@ -128,7 +128,7 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
             <ul className="gcal-facts">
               <li><Icon name="repeat" size={15} />Repeating events come in as every one of their dates.</li>
               <li><Icon name="refresh" size={15} />It checks Google again on its own every little while, and when you come back to the app.</li>
-              <li><Icon name="trash" size={15} />Hide an event in Basedly, or choose Super Delete to remove it from Google too.</li>
+              <li><Icon name="trash" size={15} />Hide an event in Sorro, or choose Super Delete to remove it from Google too.</li>
             </ul>
             <div className="gcal-actions">
               <button type="button" className="gcal-ghost is-danger" onClick={() => A.remove.mutate({ kind: 'gcal_ics' }, { onSuccess: () => { toast('Google Calendar disconnected'); onClose(); } })}>Disconnect</button>

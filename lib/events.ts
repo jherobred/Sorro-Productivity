@@ -419,7 +419,7 @@ export async function scanSeriesIds(ev: Ev, fromStart?: string): Promise<string[
 
 const EVENTS_KEY = ['events'] as const;
 
-/** Last hour the grid draws. The band is 07:00–22:00 (Basedly.dc.html:4455). */
+/** Last hour the grid draws. The band is 07:00–22:00 (the original prototype:4455). */
 /** The grid is the whole day. It used to stop at 07:00 and 22:00, which
   * quietly hid anything early or late — a 6 a.m. gym slot or a midnight
   * deadline simply had nowhere to be drawn. */
@@ -941,7 +941,7 @@ export function useEventActions(ws: Date) {
 
   const hideGoogle = (ev: Ev, offerUndo = true) => {
     setEventMeta(ev.id, { hidden: true });
-    if (offerUndo) toast(`Hidden “${ev.title}” from Basedly`, () => setEventMeta(ev.id, { hidden: false }));
+    if (offerUndo) toast(`Hidden “${ev.title}” from Sorro`, () => setEventMeta(ev.id, { hidden: false }));
   };
 
   /** Hides every occurrence, including ones a later sync brings into the window. */

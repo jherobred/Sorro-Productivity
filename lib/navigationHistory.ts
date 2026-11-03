@@ -24,7 +24,7 @@ function clean(state: NavigationState): NavigationState {
  * A real route push replaces the temporary entry, preserving the actual route
  * sequence without leaving closed dialogs behind in browser history.
  */
-export function createOverlayHistory(port: NavigationPort, session = 'basedly') {
+export function createOverlayHistory(port: NavigationPort, session = 'sorro') {
   const overlays: Overlay[] = [];
   let serial = 0;
   let marker: Marker | null = null;

@@ -23,7 +23,7 @@ export function currentSpot(timeoutMs = 12_000): Promise<Spot> {
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Number.isFinite(p.coords.accuracy) ? p.coords.accuracy : null }),
       (e) => reject(new Error(e.code === e.PERMISSION_DENIED
-        ? 'Location is off for Basedly. Allow it in your settings, or pick the place on the map.'
+        ? 'Location is off for Sorro. Allow it in your settings, or pick the place on the map.'
         : 'Your location could not be found just now. Pick the place on the map instead.')),
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60_000 },
     );
@@ -38,7 +38,7 @@ export function followSpots(onSpot: (spot: Spot) => void, onError: (message: str
   }
   const id = navigator.geolocation.watchPosition(
     (p) => onSpot({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Number.isFinite(p.coords.accuracy) ? p.coords.accuracy : null }),
-    (e) => onError(e.code === e.PERMISSION_DENIED ? 'Location is off for Basedly.' : 'Lost the GPS signal for a moment.'),
+    (e) => onError(e.code === e.PERMISSION_DENIED ? 'Location is off for Sorro.' : 'Lost the GPS signal for a moment.'),
     { enableHighAccuracy: true, maximumAge: 2_000, timeout: 20_000 },
   );
   return () => navigator.geolocation.clearWatch(id);

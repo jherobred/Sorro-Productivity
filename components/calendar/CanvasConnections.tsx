@@ -10,7 +10,7 @@ export function CanvasConnections({ root, layoutKey }: { root: RefObject<HTMLDiv
     if (!body) return;
     const measure = () => {
       const bounds = body.getBoundingClientRect();
-      // Basedly can scale its workspace with CSS zoom. Rects include that scale;
+      // Sorro can scale its workspace with CSS zoom. Rects include that scale;
       // SVG coordinates are in the element's unscaled layout space.
       const tasks = new Map(Array.from(body.querySelectorAll<HTMLElement>('[data-calendar-task-id]')).map(el => [el.dataset.calendarTaskId, el]));
       const next = Array.from(body.querySelectorAll<HTMLElement>('[data-calendar-ghost-id]')).flatMap(ghost => {

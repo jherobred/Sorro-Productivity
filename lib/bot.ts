@@ -1,5 +1,5 @@
 /**
- * Basedly's resident bot, from the client's side.
+ * Sorro's resident bot, from the client's side.
  *
  * Its id is fixed rather than looked up, so recognising a bot post costs no
  * query — it must match BOT_ID in supabase/migrations/0001_gemini_bot.sql and

@@ -1,5 +1,5 @@
 /**
- * Basedly sync — the server side of Settings → Connections.
+ * Sorro sync — the server side of Settings → Connections.
  *
  * Runs with the *caller's* JWT rather than the service role, so row-level
  * security is still the thing protecting the data: this function can only ever

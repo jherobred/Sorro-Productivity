@@ -6,7 +6,7 @@ import { toast } from '@/lib/toast';
 import { queryClient } from '@/lib/offline';
 import { parseAmount } from '@/lib/money';
 
-/** Ported from Basedly.dc.html markup 2652–2687 (capture sheet). */
+/** Ported from the original prototype markup 2652–2687 (capture sheet). */
 
 export type CaptureKind = 'task' | 'note' | 'money';
 const TITLES: Record<CaptureKind, string> = {

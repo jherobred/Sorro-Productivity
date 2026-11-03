@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createOverlayHistory, type NavigationState } from './navigationHistory.ts';
 
 function browser() {
-  const entries = [{ url: 'https://basedly.test/', state: { __NA: true, tree: 'home' } as NavigationState }];
+  const entries = [{ url: 'https://sorro.test/', state: { __NA: true, tree: 'home' } as NavigationState }];
   let index = 0;
   const microtasks: (() => void)[] = [];
   const traversals: (() => void)[] = [];
@@ -42,9 +42,9 @@ test('one side-button traversal closes only the focused nested view, then return
   b.back(); assert.deepEqual(closed, ['camera']);
   b.back(); assert.deepEqual(closed, ['camera', 'page']);
   b.back(); assert.deepEqual(closed, ['camera', 'page', 'notebook']);
-  assert.equal(b.read().url, 'https://basedly.test/notebooks');
-  b.back(); assert.equal(b.read().url, 'https://basedly.test/tasks');
-  b.back(); assert.equal(b.read().url, 'https://basedly.test/');
+  assert.equal(b.read().url, 'https://sorro.test/notebooks');
+  b.back(); assert.equal(b.read().url, 'https://sorro.test/tasks');
+  b.back(); assert.equal(b.read().url, 'https://sorro.test/');
 });
 
 test('closing a child with its own button keeps the parent focused', () => {
@@ -72,8 +72,8 @@ test('navigation from an open dialog removes its temporary entry and retains rea
   b.route('/tasks'); dispose(); b.flush();
   assert.equal(closed, 1);
   assert.deepEqual(b.entries.map(e => new URL(e.url).pathname), ['/', '/calendar', '/tasks']);
-  b.back(); assert.equal(b.read().url, 'https://basedly.test/calendar');
-  b.back(); assert.equal(b.read().url, 'https://basedly.test/');
+  b.back(); assert.equal(b.read().url, 'https://sorro.test/calendar');
+  b.back(); assert.equal(b.read().url, 'https://sorro.test/');
 });
 
 test('Next router tree replacement keeps back protection without clobbering router state', () => {
@@ -96,12 +96,12 @@ test('a new route during a pending close traversal is not accidentally popped', 
   const b = browser(); b.route('/calendar');
   b.nav.register(() => {})(); b.flushMicrotasks();
   b.route('/tasks'); b.flush();
-  assert.equal(b.read().url, 'https://basedly.test/tasks');
+  assert.equal(b.read().url, 'https://sorro.test/tasks');
   assert.deepEqual(b.entries.map(e => new URL(e.url).pathname), ['/', '/calendar', '/tasks']);
 });
 
 test('query and hash routes count as real destinations, with no duplicate dialog entries', () => {
   const b = browser(); b.route('/tasks?list=school');
   b.nav.register(() => {}); b.route('/tasks?list=personal#today'); b.flush();
-  b.back(); assert.equal(b.read().url, 'https://basedly.test/tasks?list=school');
+  b.back(); assert.equal(b.read().url, 'https://sorro.test/tasks?list=school');
 });

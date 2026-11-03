@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 import { PAL } from './pal';
 
 /**
- * The "liquid glass" surface — `LG()` in Basedly.dc.html (renderVals, ~line 4299).
+ * The "liquid glass" surface — `LG()` in the original prototype (renderVals, ~line 4299).
  * Ported verbatim: two tinted radial washes over a vertical scrim, a heavy
  * backdrop blur, a bright inner top edge and a deep drop shadow.
  *

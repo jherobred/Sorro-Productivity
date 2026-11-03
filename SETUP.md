@@ -1,6 +1,6 @@
-# Basedly — setup & state
+# Sorro — setup & state
 
-Frontend for the Basedly v1 design freeze (`design_handoff_basedly_v1`). Next.js static
+Frontend for the Sorro v1 design freeze (`design_handoff_sorro_v1`). Next.js static
 export + Supabase, wrapped in Capacitor for Android. One build feeds both the website and
 the APK, which is what keeps them in sync — same code, same database.
 
@@ -24,10 +24,10 @@ the APK, which is what keeps them in sync — same code, same database.
 
 | | |
 | --- | --- |
-| Web app | https://basedly-web-jhemsini.vercel.app |
-| Repo | https://github.com/jherobred/basedly (private) |
-| Vercel project | `basedly-web` — deploys automatically on push to `master` |
-| Supabase | project `basedly`, ref `jdkbnsjczanvmmpsovhm`, ap-southeast-1 |
+| Web app | https://sorro-web-jhemsini.vercel.app |
+| Repo | https://github.com/jherobred/sorro (private) |
+| Vercel project | `sorro-web` — deploys automatically on push to `master` |
+| Supabase | project `sorro`, ref `jdkbnsjczanvmmpsovhm`, ap-southeast-1 |
 
 ## You have to do this — I can't
 
@@ -40,9 +40,9 @@ OAuth credentials, so it is yours:
 2. **Supabase dashboard** → Authentication → Providers → Google → paste the client ID and
    secret, enable.
 3. **Supabase** → Authentication → URL Configuration → add to *Redirect URLs*:
-   - `https://basedly-web-jhemsini.vercel.app/auth/callback/` (production)
+   - `https://sorro-web-jhemsini.vercel.app/auth/callback/` (production)
    - `http://localhost:3000/auth/callback/` (local dev)
-   - `com.basedly.app://auth` (the Android app)
+   - `com.sorro.app://auth` (the Android app)
 
 Note: `signInWithOAuth` builds the authorize URL client-side without validating it, so while
 Google is disabled the button fails silently rather than showing an error. That is a
@@ -70,11 +70,11 @@ npm run build && npx cap sync android && (cd android && ./gradlew assembleReleas
 That needs a signing key first, and **the key must be yours, not one I
 generate**. It is the app's permanent identity: every future update has to be
 signed with the same key, and if it is lost nobody can ever update an installed
-Basedly again — they would have to uninstall and lose nothing but be annoyed.
+Sorro again — they would have to uninstall and lose nothing but be annoyed.
 It also must never be committed.
 
 ```bash
-keytool -genkey -v -keystore ~/basedly-release.jks -keyalg RSA   -keysize 2048 -validity 10000 -alias basedly
+keytool -genkey -v -keystore ~/sorro-release.jks -keyalg RSA   -keysize 2048 -validity 10000 -alias sorro
 ```
 
 Then add a `signingConfigs` block to `android/app/build.gradle` pointing at it,
@@ -89,7 +89,7 @@ to avoid.
 Once you have a signed APK, upload it and bump the manifest:
 
 ```bash
-supabase storage cp android/app/build/outputs/apk/release/app-release.apk   ss:///bd-releases/basedly-1.1.0.apk
+supabase storage cp android/app/build/outputs/apk/release/app-release.apk   ss:///bd-releases/sorro-1.1.0.apk
 ```
 
 then edit `update.json` in the bucket to the new `version`, `url` and `notes`,
@@ -103,7 +103,7 @@ to look. Publish a small JSON manifest alongside each release and point the app 
 ```json
 {
   "version": "1.1.0",
-  "url": "https://github.com/<you>/basedly/releases/download/v1.1.0/basedly-1.1.0.apk",
+  "url": "https://github.com/<you>/sorro/releases/download/v1.1.0/sorro-1.1.0.apk",
   "notes": "Faster sync, calendar zoom on phone."
 }
 ```
@@ -141,7 +141,7 @@ Kept here for when you need to change or stop it:
    `supabase/functions/gemini-bot/index.ts` — tips every 2 hours, news every 5, one
    challenge each Monday.
 
-To stop it: `select cron.unschedule('basedly-bot-tips');` (and the other two). To remove it
+To stop it: `select cron.unschedule('sorro-bot-tips');` (and the other two). To remove it
 and everything it wrote, delete the auth user — the cascades do the rest.
 
 Everything it posts is labelled **Bot** in Threads and **Gemini** on a challenge. That is
@@ -167,7 +167,7 @@ npm run apk
 
 ## Backend
 
-Supabase project **`basedly`** (`jdkbnsjczanvmmpsovhm`, ap-southeast-1) — a clean database
+Supabase project **`sorro`** (`jdkbnsjczanvmmpsovhm`, ap-southeast-1) — a clean database
 containing only the `bd_*` tables. The schema was replayed from the original `jhems-os`
 project's migrations, so the two are identical in structure; `jhems-os` is now unused by this
 app. RLS is on every table, plus helper RPCs:
@@ -197,14 +197,14 @@ for the pattern.
 ## Fidelity debt — read this first
 
 The design tokens, keyframes, motion system, icon set and interaction constants are ported
-**verbatim** from `Basedly.dc.html`. The **section layouts are not**: Tasks, Calendar, Habits,
+**verbatim** from `Sorro.dc.html`. The **section layouts are not**: Tasks, Calendar, Habits,
 Money, Notebooks, People, Files, Body and Projects were composed from scratch using the right
 tokens, rather than recreating the prototype's actual markup. README.md calls for
 pixel-for-pixel recreation, so each of these needs a second pass against the prototype.
 
 Reference material lives in the `Design feedback needed` Claude Design project
-(`4fd595cf-2503-4674-ac86-b2d873a35fd7`) — same `Basedly.dc.html` byte-for-byte, plus
-`screenshots/` showing the real rendered look and `uploads/BASEDLY-DESIGN-BRIEF.md`.
+(`4fd595cf-2503-4674-ac86-b2d873a35fd7`) — same `Sorro.dc.html` byte-for-byte, plus
+`screenshots/` showing the real rendered look and `uploads/SORRO-DESIGN-BRIEF.md`.
 
 Concrete deltas already spotted from `screenshots/01-ls.png` and `screenshots/phone.png`:
 

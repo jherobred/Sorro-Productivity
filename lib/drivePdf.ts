@@ -45,7 +45,7 @@ export async function fetchDrivePdf(id: string): Promise<File> {
       let message = '';
       try { message = JSON.parse(detail ?? '').message ?? ''; } catch { /* not JSON */ }
       if (message) throw new Error(message);
-      throw new Error('The website could not reach Google Drive. Import the PDF from this computer instead, or use the Basedly app.');
+      throw new Error('The website could not reach Google Drive. Import the PDF from this computer instead, or use the Sorro app.');
     }
     bytes = new Uint8Array(await (data as Blob).arrayBuffer());
     try { name = decodeURIComponent(response?.headers.get('x-file-name') ?? '') || null; } catch { name = null; }

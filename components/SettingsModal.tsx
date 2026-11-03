@@ -17,7 +17,7 @@ import { SaveHealthDetails } from './SyncHealth';
 import { StudyBackup } from './StudyBackup';
 import { APP_VERSION } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
-import { BasedlyLogo } from './BasedlyLogo';
+import { Fox } from './Fox';
 
 
 /** Shared settings for desktop, phone, and tablet. */
@@ -330,7 +330,7 @@ export function SettingsModal({
                 <Face name={fullName} photo={photoUrl} size={42} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {fullName || 'Basedly User'}
+                    {fullName || 'Sorro User'}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     @{handle || 'student'}
@@ -728,7 +728,7 @@ export function SettingsModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={SECTION_TITLE}>Application Information</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--card)', borderRadius: 14, border: '1px solid var(--line)' }}>
-              <BasedlyLogo size={24} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Fox pose="head" size={20} /><span className="sx-word">sorro</span></span>
               <span style={{ fontSize: 11.5, color: 'var(--tx3)', fontWeight: 600 }}>v{APP_VERSION}</span>
             </div>
             <div style={{ background: 'var(--card2)', padding: 14, borderRadius: 14, border: '1px solid var(--line2)', fontSize: 13 }}>
@@ -736,7 +736,7 @@ export function SettingsModal({
                 <span style={{ color: 'var(--tx3)' }}>Version</span>
                 <span style={{ fontWeight: 700 }}>v{APP_VERSION}</span>
               </div>
-              <p style={{ color: 'var(--tx2)', lineHeight: 1.6, margin: 0 }}>Your space for study, plans, and everyday progress.</p>
+              <p style={{ color: 'var(--tx2)', lineHeight: 1.6, margin: 0 }}>Notes, calendar and tasks with an assistant.</p>
             </div>
           </div>
         );

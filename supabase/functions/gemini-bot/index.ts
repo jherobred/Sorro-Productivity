@@ -1,5 +1,5 @@
 /**
- * Basedly's bot, server side.
+ * Sorro's bot, server side.
  *
  * Three jobs on three clocks, invoked by pg_cron (see the schedule at the
  * bottom of this file):
@@ -39,9 +39,9 @@ const JOBS: Record<Mode, { every_minutes: number; tag: string; prompt: string }>
   tips: {
     every_minutes: 120,
     tag: 'Tip',
-    prompt: `Write one short tip for a student using Basedly.
+    prompt: `Write one short tip for a student using Sorro.
 
-What Basedly actually does:
+What Sorro actually does:
 - Notes: block editor (slash command for blocks, double square brackets to link
   a note) and a separate infinite canvas of connected cards.
 - Calendar: month, week and day views. Tasks can sit in a time slot or stay
@@ -226,16 +226,16 @@ Deno.serve(async (req) => {
  *   create extension if not exists pg_net;
  *
  *   -- Replace <PROJECT_REF> and <BOT_CRON_SECRET>.
- *   select cron.schedule('basedly-bot-tips',  '0 star/2 * * *', $$
+ *   select cron.schedule('sorro-bot-tips',  '0 star/2 * * *', $$
  *     select net.http_post(
  *       url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/gemini-bot',
  *       headers := '{"Content-Type":"application/json","x-bot-secret":"<BOT_CRON_SECRET>"}'::jsonb,
  *       body    := '{"mode":"tips"}'::jsonb);
  *   $$);
  *
- *   select cron.schedule('basedly-bot-news', '15 star/5 * * *', $$ … "news" … $$);
- *   select cron.schedule('basedly-bot-chal', '30 9 * * MON',    $$ … "challenge" … $$);
+ *   select cron.schedule('sorro-bot-news', '15 star/5 * * *', $$ … "news" … $$);
+ *   select cron.schedule('sorro-bot-chal', '30 9 * * MON',    $$ … "challenge" … $$);
  *
  * (`star` above stands for the asterisk, which cannot appear inside this
- * comment block.) Unschedule with `select cron.unschedule('basedly-bot-tips');`.
+ * comment block.) Unschedule with `select cron.unschedule('sorro-bot-tips');`.
  */

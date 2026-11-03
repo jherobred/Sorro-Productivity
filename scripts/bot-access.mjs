@@ -1,4 +1,4 @@
-// Prints your Basedly user id (for BOT_API_USER_ID) and, with --password,
+// Prints your Sorro user id (for BOT_API_USER_ID) and, with --password,
 // adds an email/password login to the same account so a bot can sign in
 // without Google. Run it yourself; the password never leaves this terminal.
 //

@@ -1,5 +1,5 @@
 /**
- * Basedly as an MCP server, so Claude (claude.ai, Desktop, Code) can keep
+ * Sorro as an MCP server, so Claude (claude.ai, Desktop, Code) can keep
  * HTML artifacts in a notebook and edit them there.
  *
  * Stateless Streamable HTTP: every POST is one JSON-RPC message answered with
@@ -27,7 +27,7 @@ const readCode = (body: string): { language: string; code: string } | null => {
 const TOOLS = [
   {
     name: 'list_notebooks',
-    description: "List the user's Basedly notebooks.",
+    description: "List the user's Sorro notebooks.",
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -42,7 +42,7 @@ const TOOLS = [
   },
   {
     name: 'save_artifact',
-    description: 'Create an HTML artifact page in a notebook, or with id replace an existing artifact\'s title and HTML. The user sees and edits it in Basedly as a Code page and runs it there. Read the page first when editing, since the user may have changed it.',
+    description: 'Create an HTML artifact page in a notebook, or with id replace an existing artifact\'s title and HTML. The user sees and edits it in Sorro as a Code page and runs it there. Read the page first when editing, since the user may have changed it.',
     inputSchema: {
       type: 'object',
       properties: {

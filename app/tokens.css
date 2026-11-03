@@ -27,7 +27,7 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, .6);
 }
 
-/* Basedly names, removed tab by tab in S4 and S5. */
+/* Sorro names, removed tab by tab in S4 and S5. */
 :root, :root[data-theme='light'], :root[data-theme='dark'] {
   --tx: var(--ink); --tx2: var(--muted); --tx3: var(--muted);
   --panel: var(--surface); --card: var(--surface); --card2: var(--soft);

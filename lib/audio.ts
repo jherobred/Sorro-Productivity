@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Web Audio sound engine for Basedly.
+ * Web Audio sound engine for Sorro.
  *
  * Procedurally synthesised in real time using the Web Audio API — zero audio
  * file downloads, zero latency, runs offline, and works everywhere.

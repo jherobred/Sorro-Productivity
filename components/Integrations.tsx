@@ -47,7 +47,7 @@ const SPECS: Spec[] = [
     fields: [
       { key: 'ics_url', label: 'Secret address in iCal format', placeholder: 'https://calendar.google.com/calendar/ical/…/basic.ics', hint: 'Google Calendar → Settings → your calendar → Integrate calendar.' },
     ],
-    help: 'Read-only by design. Nothing you do in Basedly is written back to Google.',
+    help: 'Read-only by design. Nothing you do in Sorro is written back to Google.',
   },
 ];
 

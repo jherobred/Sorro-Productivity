@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * 2. **Updates.** The APK is not in a store, so nothing checks for a new build
  *    on the user's behalf. NEXT_PUBLIC_UPDATE_URL points at a small JSON
- *    manifest — `{ "version": "1.1.0", "url": "…/basedly-1.1.0.apk", "notes":
+ *    manifest — `{ "version": "1.1.0", "url": "…/sorro-1.1.0.apk", "notes":
  *    "…" }` — which GitHub Releases serves happily. With it unset the section
  *    says so plainly rather than offering a button that goes nowhere.
  */

@@ -119,9 +119,9 @@ function useSection() {
     const native = Capacitor.isNativePlatform();
     if (result === 'on') toast(native
       ? 'Notifications on. New announcements and to-dos alert you, and deadlines remind you a day and an hour before.'
-      : 'Notifications on. New announcements and to-dos alert you while Basedly is open in this browser.', undefined, { tone: 'success', icon: 'bell' });
+      : 'Notifications on. New announcements and to-dos alert you while Sorro is open in this browser.', undefined, { tone: 'success', icon: 'bell' });
     if (result === 'off') toast('Canvas notifications off', undefined, { icon: 'bell' });
-    if (result === 'blocked') toast('Notifications are blocked here. Allow them for Basedly in your settings, then try again.', undefined, { tone: 'danger', icon: 'bell' });
+    if (result === 'blocked') toast('Notifications are blocked here. Allow them for Sorro in your settings, then try again.', undefined, { tone: 'danger', icon: 'bell' });
     if (result === 'unsupported') toast('This browser cannot show notifications. The phone app can.', undefined, { icon: 'bell' });
   };
 
@@ -336,7 +336,7 @@ export function CanvasConnectSheet({ onClose, initialUrl }: { onClose: () => voi
 
         <ol className="lms-steps">
           <li>Open <a href={`${url.replace(/\/+$/, '') || UST_CANVAS_URL}/profile/settings`} target="_blank" rel="noopener noreferrer">Canvas settings</a> (Account, then Settings).</li>
-          <li>Under Approved Integrations, choose <b>New access token</b>. Name it Basedly and generate it.</li>
+          <li>Under Approved Integrations, choose <b>New access token</b>. Name it Sorro and generate it.</li>
           <li>Copy the token. Canvas shows it only once, so paste it here straight away.</li>
         </ol>
 

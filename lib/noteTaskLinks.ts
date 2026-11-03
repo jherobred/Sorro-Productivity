@@ -1,4 +1,4 @@
 /** Use the task's existing named-link format so links remain visible in My Tasks. */
 export function taskLinksNote(notes:string,noteId:string){return notes.split('\n').some(line=>{const raw=line.match(/https?:\/\/[^\s)]+/)?.[0];if(!raw)return false;try{const url=new URL(raw);return url.pathname.replace(/\/$/,'')==='/notebooks'&&(url.searchParams.get('note')||url.searchParams.get('open'))===noteId;}catch{return false;}});}
-export function attachNoteToTask(notes:string,noteId:string,origin:string){if(taskLinksNote(notes,noteId))return notes;return [notes.trimEnd(),`🔗 Basedly note: ${origin}/notebooks/?note=${encodeURIComponent(noteId)}`].filter(Boolean).join('\n');}
+export function attachNoteToTask(notes:string,noteId:string,origin:string){if(taskLinksNote(notes,noteId))return notes;return [notes.trimEnd(),`🔗 Sorro note: ${origin}/notebooks/?note=${encodeURIComponent(noteId)}`].filter(Boolean).join('\n');}
 export function detachNoteFromTask(notes:string,noteId:string){return notes.split('\n').filter(line=>!taskLinksNote(line,noteId)).join('\n');}

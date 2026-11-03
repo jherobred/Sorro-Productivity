@@ -1,7 +1,7 @@
 /**
  * drive-pdf — a PDF shared on Google Drive, fetched for the website.
  *
- * The Basedly app fetches Drive files itself, natively. A browser cannot: Drive
+ * The Sorro app fetches Drive files itself, natively. A browser cannot: Drive
  * answers downloads with no CORS headers, so the website asks this function to
  * fetch the file and hand the bytes back. Nothing is stored here.
  *

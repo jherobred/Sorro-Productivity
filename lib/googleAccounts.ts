@@ -5,7 +5,7 @@ import { NATIVE_REDIRECT, isNative, signInWithGoogle } from './nativeAuth';
 import { Browser } from '@capacitor/browser';
 
 /**
- * Google write access for up to three Google accounts on one Basedly account.
+ * Google write access for up to three Google accounts on one Sorro account.
  *
  * Supabase hands over a Google access token (`provider_token`) only on the
  * sign-in that produced it, and only for that one account. So every token that
@@ -14,8 +14,8 @@ import { Browser } from '@capacitor/browser';
  * dropped and the edit asks to reconnect that account.
  *
  * A second Google account must be *linked* (`linkIdentity`), not signed in with:
- * signing in with an unlinked account opens a different Basedly account. Once
- * linked, signing in with it returns to this Basedly account with a fresh token.
+ * signing in with an unlinked account opens a different Sorro account. Once
+ * linked, signing in with it returns to this Sorro account with a fresh token.
  */
 
 export const MAX_GOOGLE_ACCOUNTS = 3;
@@ -55,7 +55,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-/** Google emails already attached to this Basedly account. */
+/** Google emails already attached to this Sorro account. */
 async function linkedEmails(): Promise<string[]> {
   const { data } = await supabase.auth.getUser();
   return (data.user?.identities ?? [])
@@ -75,7 +75,7 @@ export async function connectGoogleAccount(email?: string, back = '/calendar/'):
   const known = !!email && linked.includes(email.toLowerCase());
   const queryParams: Record<string, string> = { prompt: 'consent select_account', ...(email ? { login_hint: email } : {}) };
   if (known) return signInWithGoogle({ prompt: queryParams.prompt, scopes: CALENDAR_SCOPE, loginHint: email });
-  if (linked.length >= MAX_GOOGLE_ACCOUNTS) return { error: `Basedly connects up to ${MAX_GOOGLE_ACCOUNTS} Google accounts.` };
+  if (linked.length >= MAX_GOOGLE_ACCOUNTS) return { error: `Sorro connects up to ${MAX_GOOGLE_ACCOUNTS} Google accounts.` };
   const { data, error } = await supabase.auth.linkIdentity({
     provider: 'google',
     options: {

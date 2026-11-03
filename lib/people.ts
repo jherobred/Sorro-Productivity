@@ -35,8 +35,8 @@ export type Person = {
 export const COMMUNITY_PROFILES: Record<string, Person> = {
   'sorro-bot': {
     user_id: 'sorro-bot',
-    name: 'Basedly Official',
-    handle: 'basedly',
+    name: 'Sorro Official',
+    handle: 'sorro',
     photo_url: null,
     animal: 'wolf',
     photo_fit: { x: 50, y: 50, zoom: 1 },
