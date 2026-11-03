@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { Fox } from './Fox';
 import { Wordmark } from './Wordmark';
 import { MoreSheet } from './MoreSheet';
+import { SidePanel } from './SidePanel';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { foxDash, foxWork } from '@/lib/foxMood';
 import { ToastHost } from './ToastHost';
@@ -50,6 +51,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // A tablet always gets the rail: the content needs the width more than the labels do.
   const rail = tablet || prefs.sidebar !== 'open';
   const [more, setMore] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const working = useIsFetching() + useIsMutating() > 0;
   useEffect(() => { foxWork(working); }, [working]);
   useEffect(() => { foxDash(); }, [pathname]);
@@ -92,6 +94,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [rail, update]);
 
   const current = DESTINATIONS.find(d => pathname.split('/')[1] === d.id);
+  // The panel lives beside every tab but Home, where the chat has the room.
+  const withPanel = current?.id !== 'home';
+  const docked = withPanel && !phone && !tablet;
   const stored = accounts.find(a => a.user_id === me.id);
   const name = stored?.name || me.name;
   const pinned = (prefs.pinnedNotes || []).map(id => notes.find(n => n.id === id)).filter(n => !!n);
@@ -115,14 +120,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
         <button className="sx-icon" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearch(true)}><Icon name="search" size={18} /></button>
+        {withPanel && !docked && <button className="sx-icon" aria-label="Open side panel" aria-expanded={panelOpen} onClick={() => setPanelOpen(true)}><Icon name="panelLeft" size={18} /></button>}
         {phone && <button className="sx-avatar" aria-label="Account and settings" onClick={() => setAccount(true)}>{name.charAt(0)}</button>}
         {win && <div className="sx-caption"><button aria-label="Minimize" onClick={() => void win.minimize()}><Icon name="minus" size={16} /></button><button aria-label="Maximize" onClick={() => void win.toggleMaximize()}><Icon name="square" size={14} /></button><button className="x" aria-label="Close" onClick={() => void win.close()}><Icon name="close" size={16} /></button></div>}
       </header>
+      <div className="sx-body">
       <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? <div key={pathname} className="sx-page">{children}</div> : null}</main>
+      {docked && <SidePanel mode="dock" context={current?.id} />}
+      </div>
     </div>
     {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.filter(d => d.phoneBar).map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-current={current?.id === d.id ? 'page' : undefined}
       {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /><span>{d.name}</span></Link>)}
       <button type="button" aria-expanded={more} aria-current={current && !current.phoneBar ? 'page' : undefined} onClick={() => setMore(true)}><Icon name="more" size={21} /><span>More</span></button></nav>}
+    {withPanel && !docked && panelOpen && <><div className="sp-scrim" onClick={() => setPanelOpen(false)} /><SidePanel mode={phone ? 'sheet' : 'overlay'} context={current?.id} onClose={() => setPanelOpen(false)} /></>}
     {more && <MoreSheet current={current?.id} onClose={() => setMore(false)} onSettings={() => { setMore(false); setSettings('general'); }} />}
     {search && <Search onClose={() => setSearch(false)} />}
     {settings && <Settings initialTab={settings} onClose={() => setSettings(false)} />}

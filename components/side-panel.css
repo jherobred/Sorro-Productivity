@@ -1,0 +1,72 @@
+/* S.panel and the widgets. Tokens from app/tokens.css; LodiSave gallery's .peek proportions. */
+.sp { width: 336px; flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-left: 1px solid var(--line) }
+.sp-rail { width: 60px; align-items: center; gap: 4px; padding-top: 6px }
+.sp-initial { font: 600 13px/1 var(--font-body) }
+.sp-head { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 8px 0 14px; flex: none }
+.sp-edit { height: 30px; padding: 0 12px; border-radius: var(--r-pill); color: var(--muted); font-size: 12.5px }
+.sp-edit:hover, .sp-edit[aria-pressed='true'] { background: var(--soft); color: var(--ink) }
+.sp-body { flex: 1; min-height: 0; overflow: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px }
+.sp-ask { display: flex; gap: 6px; align-items: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line) }
+.sp-ask input { flex: 1; min-width: 0; height: 38px; padding: 0 14px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit }
+.sp-ask input:focus-visible, .sp-edit:focus-visible, .sp-editor :is(input, button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.sp-context:empty { display: none }
+.sp-editor { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px }
+.sp-editor li { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 0 10px; border-radius: var(--r-row); background: var(--soft) }
+.sp-editor li[data-on='false'] { background: transparent; color: var(--muted) }
+.sp-editor label { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer }
+.sp-move button { width: 30px; height: 30px; border-radius: 8px; color: var(--muted) }
+.sp-move button:hover { background: var(--soft-2); color: var(--ink) }
+.sp-reset { color: var(--muted); font-size: 12.5px; text-decoration: underline }
+
+/* Overlay on a tablet, a pull-up sheet on a phone. */
+.sp[data-mode='overlay'] { position: fixed; top: 0; right: 0; bottom: 0; z-index: 55; box-shadow: var(--shadow); animation: sp-in .38s var(--drift) both }
+.sp[data-mode='sheet'] { position: fixed; left: 0; right: 0; bottom: 0; width: auto; height: min(78dvh, 640px); z-index: 61; border-left: 0; border-radius: var(--r-panel) var(--r-panel) 0 0; box-shadow: var(--shadow); animation: sp-up .38s var(--drift) both }
+.sp-scrim { position: fixed; inset: 0; z-index: 54; background: var(--backdrop) }
+@keyframes sp-in { from { transform: translateX(100%) } }
+@keyframes sp-up { from { transform: translateY(100%) } }
+.nomo .sp { animation: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .sp { animation: none } }
+
+/* A widget: flat on the panel's surface, one tone step for its own field. */
+.wg { padding: 12px; border-radius: var(--r-tile); background: var(--bg); display: flex; flex-direction: column; gap: 8px }
+.wg > header { font: 600 13px/1.2 var(--font-body); color: var(--ink) }
+.wg > header a { color: inherit; text-decoration: none }
+.wg > header a:hover { text-decoration: underline }
+.wg-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px }
+.wg-list li { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px }
+.wg-list strong { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.wg-list time, .wg-list small { color: var(--muted); font-size: 12px; white-space: nowrap }
+.wg-list em { font-style: normal; color: var(--bad); font-size: 12px }
+.wg-list li:has(small) { flex-direction: column; align-items: flex-start; gap: 0 }
+.wg-chip { width: 8px; height: 8px; border-radius: 3px; background: var(--chip); flex: none }
+.wg-tick { width: 20px; height: 20px; flex: none; border-radius: var(--r-pill); border: 1.5px solid var(--muted); display: grid; place-items: center; color: transparent; transition: background-color .15s, color .15s, transform .2s var(--snap) }
+.wg-tick:hover { color: var(--muted) }
+.wg-tick:active { transform: scale(.9); background: var(--ok); border-color: var(--ok); color: var(--accent-ink) }
+.wg-empty { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45 }
+.wg-empty button { color: var(--ink); text-decoration: underline }
+.wg-skel { display: flex; flex-direction: column; gap: 6px }
+.wg-skel span { height: 12px; border-radius: 6px; background: var(--soft) }
+.wg-skel span + span { width: 60% }
+.wg-big { font: 600 28px/1 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink) }
+.wg-focus { display: flex; align-items: center; gap: 8px }
+.wg-focus .wg-big { flex: 1 }
+.wg-btn { height: 32px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap) }
+.wg-btn:active { transform: scale(.96) }
+.wg-weather { display: flex; align-items: center; gap: 12px }
+.wg-weather span:nth-child(2) { display: flex; flex-direction: column; flex: 1; font-size: 13px }
+.wg-weather small { color: var(--muted); font-size: 12px }
+.wg-link { color: var(--muted); font-size: 12px; text-decoration: underline }
+.wg-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden }
+.wg-capture { display: flex; gap: 6px }
+.wg-capture input { flex: 1; min-width: 0; height: 32px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px }
+.wg-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center }
+.wg-dow { font-size: 11px; color: var(--muted); padding-bottom: 2px }
+.wg-day { height: 28px; display: grid; place-items: center; border-radius: 8px; font-size: 12px; color: var(--ink); text-decoration: none; font-variant-numeric: tabular-nums }
+.wg-day[data-out='true'] { color: var(--muted); opacity: .5 }
+.wg-day[data-load='1'] { background: color-mix(in srgb, var(--accent) 10%, transparent) }
+.wg-day[data-load='2'] { background: color-mix(in srgb, var(--accent) 20%, transparent) }
+.wg-day[data-load='3'] { background: color-mix(in srgb, var(--accent) 32%, transparent) }
+.wg-day[data-load='4'] { background: color-mix(in srgb, var(--accent) 46%, transparent) }
+.wg-day[data-today='true'] { outline: 1.5px solid var(--ink); outline-offset: -1.5px; font-weight: 600 }
+.wg-day:hover { background: var(--soft-2) }
+:is(.wg a, .wg button, .wg input):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }

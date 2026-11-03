@@ -28,6 +28,8 @@ export type Prefs = {
   showParts?: boolean;
   /** Notes pinned to the sidebar, newest first, at most 8. */
   pinnedNotes?: string[];
+  /** The right panel: open or folded to its rail, which widgets in which order, and the weather city. */
+  panel?: { open?: boolean; widgets?: string[]; city?: string };
   accent: string;
   motion: boolean;
   navPicks: string[];

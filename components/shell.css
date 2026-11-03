@@ -39,7 +39,8 @@
 .sx-demo { font: 500 11px/1 var(--font-mono); color: var(--muted); padding: 4px 8px; border-radius: var(--r-pill); background: var(--soft) }
 .sx[data-phone='true'] .sx-top { padding-left: 16px; gap: 8px }
 
-.sx .studio-main { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; background: var(--bg) }
+.sx-body { flex: 1; min-height: 0; display: flex }
+.sx .studio-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 4px 18px 18px; background: var(--bg) }
 .sx[data-phone='true'] .studio-main { padding: 4px 16px 14px }
 
 /* S.bar: four destinations and More, each with its label. Solid, never floating or glass. */
