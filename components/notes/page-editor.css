@@ -1,0 +1,60 @@
+/* N.editor (Page, Recall): a quiet sheet. Type does the work: no ribbon, no borders around the text. */
+.pe { position: relative; display: flex; flex-direction: column; min-height: 100%; max-width: 760px; margin: 0 auto; width: 100% }
+.pe-title { width: 100%; border: 0; background: transparent; padding: 8px 0 6px; color: var(--ink); font: 600 30px/1.2 var(--font-body); letter-spacing: -.02em }
+.pe-title:focus { outline: none }
+.pe-title::placeholder { color: var(--muted) }
+.pe-body { flex: 1 }
+.pe-prose { min-height: 50vh; padding: 6px 0 120px; color: var(--ink); font: 400 16px/1.75 var(--font-body); outline: none }
+.pe-prose > * + * { margin-top: .7em }
+.pe-prose h1 { font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -.015em; margin-top: 1.4em }
+.pe-prose h2 { font-size: 21px; line-height: 1.3; font-weight: 600; margin-top: 1.3em }
+.pe-prose h3 { font-size: 17px; line-height: 1.35; font-weight: 600; margin-top: 1.1em }
+.pe-prose ul, .pe-prose ol { padding-left: 1.4em }
+.pe-prose blockquote { margin-left: 0; padding-left: 14px; border-left: 3px solid var(--soft-2); color: var(--muted) }
+.pe-prose pre { padding: 12px 14px; border-radius: var(--r-row); background: var(--soft); font: 13.5px/1.6 var(--font-mono); overflow-x: auto }
+.pe-prose code { font-family: var(--font-mono); font-size: .9em; padding: 1px 4px; border-radius: 4px; background: var(--soft) }
+.pe-prose pre code { padding: 0; background: none }
+.pe-prose mark { background: color-mix(in srgb, var(--pick) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 2px }
+.pe-prose hr { border: 0; border-top: 1px solid var(--line); margin: 1.6em 0 }
+.pe-prose ul[data-type='taskList'] { list-style: none; padding-left: 0 }
+.pe-prose ul[data-type='taskList'] li { display: flex; gap: 10px; align-items: flex-start }
+.pe-prose ul[data-type='taskList'] li > label { margin-top: .35em }
+.pe-prose ul[data-type='taskList'] li[data-checked='true'] > div { color: var(--muted); text-decoration: line-through }
+.pe-prose p.is-editor-empty:first-child::before { content: 'Start writing. Type / for blocks.'; color: var(--muted); float: left; height: 0; pointer-events: none }
+
+.pe-strip { display: inline-flex; gap: 2px }
+.pe-strip .sx-icon:disabled { opacity: .35 }
+.pe-redo svg, .pe-redo [aria-hidden] { transform: scaleX(-1) }
+
+.pe-bar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 2px; padding: 6px; margin: 0 -6px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); overflow-x: auto }
+.pe-bar > button { flex: none; min-width: 34px; height: 34px; padding: 0 8px; border-radius: var(--r-row); color: var(--muted); font: 500 12.5px/1 var(--font-mono) }
+.pe-bar > button:hover, .pe-bar > button[aria-pressed='true'] { background: var(--soft); color: var(--ink) }
+.pe-status { margin-left: auto; display: flex; gap: 12px; padding: 0 8px; color: var(--muted); font-size: 12px; white-space: nowrap }
+
+.pe-slash { position: fixed; z-index: 70; list-style: none; margin: 0; padding: 4px; min-width: 220px; border-radius: var(--r-tile); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); animation: slash-in .18s var(--snap) both }
+@keyframes slash-in { from { opacity: 0; transform: translateY(-4px) } }
+.pe-slash button { width: 100%; display: flex; justify-content: space-between; align-items: center; min-height: 34px; padding: 0 10px; border-radius: var(--r-row); color: var(--ink); font-size: 13.5px }
+.pe-slash [aria-selected='true'] button, .pe-slash button:hover { background: var(--soft) }
+.pe-slash kbd { font: 12px var(--font-mono); color: var(--muted) }
+
+.pe-mode { display: inline-flex; align-self: flex-start; padding: 3px; gap: 2px; margin: 4px 0 10px; border-radius: var(--r-pill); background: var(--soft) }
+.pe-mode button { height: 30px; padding: 0 14px; border-radius: var(--r-pill); color: var(--muted); font-size: 13px }
+.pe-mode [aria-selected='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
+.pe-card { margin: 18px 0; padding: 26px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; animation: card-in .34s var(--float) both }
+@keyframes card-in { from { opacity: 0; transform: translateY(10px) scale(.98) } }
+.pe-card h2 { margin: 0; font: 600 22px/1.3 var(--font-body) }
+.pe-count { margin: 0; color: var(--muted); font-size: 12.5px }
+.pe-answer { font-size: 15.5px; line-height: 1.7; padding-top: 12px; border-top: 1px solid var(--line) }
+.pe-card .sx-pill { align-self: flex-start }
+.pe-grades { display: flex; gap: 8px; flex-wrap: wrap }
+.pe-grades button { min-height: 40px; padding: 0 16px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font-size: 13.5px }
+.pe-grades button:first-child { color: var(--bad) }
+.pe-empty { margin: 30px 0; color: var(--muted); font-size: 14.5px }
+:is(.pe-bar button, .pe-slash button, .pe-mode button, .pe-grades button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.nomo :is(.pe-slash, .pe-card) { animation: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) :is(.pe-slash, .pe-card) { animation: none } }
+@media (max-width: 760px) { .pe-title { font-size: 24px } .pe-prose { font-size: 15.5px } .pe-status span:not(:first-child) { display: none } }
+
+.pe-convert { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 10px 14px; border-radius: var(--r-tile); background: var(--soft); color: var(--ink); font-size: 13.5px }
+.pe-convert span { flex: 1 }
+.pe-convert button { min-height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font-weight: 500 }

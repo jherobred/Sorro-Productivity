@@ -23,7 +23,7 @@ export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:numbe
 export type BoardConnection = {id:string;from:string;to:string};
 /** `drive` is the Google Drive file a PDF was opened from, so a device without a copy can fetch it again. */
 export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number;drive?:string};
-export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource};
+export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource;/** A concept map: a board that opens on its cards and connections. */map?:true};
 export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;text:string;done:boolean}[]};
 export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[];sourceNoteId?:string};
 export type CornellDocument = {version:1;kind:'cornell';cues:string;notes:string;summary:string};
@@ -168,6 +168,8 @@ export function initialBody(kind:PageKind):string {
   return '';
 }
 export function pagePreview(body:string) {
+  // Page and Recall store html (lib/noteTypes.ts): show the words, not the markup.
+  if(body.startsWith('<!-- sorro-text:v1 -->')||body.startsWith('<!-- sorro-recall:v1 -->')){let html=body.slice(body.indexOf('-->')+3);if(body.startsWith('<!-- sorro-recall')){try{html=JSON.parse(html).html||'';}catch{html='';}}return html.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,150);}
   const doc=readDoc(body);if(doc)return docText(doc).replace(/\[\[|\]\]/g,'').replace(/\s+/g,' ').trim().slice(0,150);
   const board=readBoard(body);if(board)return board.kind==='pdf'?`${board.pdf?.pages.length||0} PDF pages · ${board.items.length} annotations`:board.items.length+' objects · board';
   const free=readFreePage(body);
