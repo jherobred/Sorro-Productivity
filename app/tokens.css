@@ -25,6 +25,8 @@
   --drift: linear(0,0.021,0.073,0.146,0.232,0.324,0.417,0.508,0.594,0.672,0.745,0.806,0.859,0.903,0.94,0.969,0.992,1.009,1.022,1.031,1.036,1.038,1.038,1.037,1.035,1.032,1.029,1.025,1.021,1.018,1.015,1.012,1.009,1.007,1.005,1.003,1);
   --snap: linear(0,0.058,0.182,0.32,0.459,0.582,0.681,0.764,0.829,0.876,0.913,0.94,0.959,0.972,0.982,0.988,0.993,1);
   --r-row: 10px; --r-tile: 12px; --r-panel: 18px; --r-pill: 999px;
+  /* Notebook materials (N.shelf): the paper label, the page edges, the shade on a spine. */
+  --paper: #F8F6EF; --page-edge: #ECE7DC; --page-edge-2: #E2DCCF; --book-shade: rgba(15, 15, 16, .28); --stitch: rgba(255, 255, 255, .55); --elastic: #1B1B1D; --paper-ink: #161719;
 }
 :root[data-theme='dark'] {
   color-scheme: dark;

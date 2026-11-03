@@ -1,0 +1,48 @@
+/* N.shelf: notebooks drawn as notebooks. Spine with stitching, page edges, an elastic band,
+   a ribbon and a paper label, on the existing cover markup. Sizes come from prefs.shelfSize. */
+.nb-shelf { --cover: 168px; display: grid; grid-template-columns: repeat(auto-fill, var(--cover)); gap: 34px 26px; justify-content: start }
+.nb-shelf[data-size='s'] { --cover: 132px; gap: 28px 20px }
+.nb-shelf[data-size='l'] { --cover: 216px; gap: 40px 30px }
+
+.nb-shelf .notebook-cover { position: relative; perspective: 1100px }
+/* The page block behind the cover, showing on the right and the bottom. */
+.nb-shelf .notebook-cover::before { content: ''; position: absolute; top: 6px; right: -5px; height: calc(var(--face-h) - 4px); left: 10px; border-radius: 3px 10px 10px 3px; background: var(--page-edge); box-shadow: 3px 3px 0 var(--page-edge-2) }
+.nb-shelf .notebook-cover { --face-h: calc(var(--cover) * 1.33) }
+
+.nb-shelf .notebook-cover-face { position: relative; height: var(--face-h); min-height: 0; padding: 16% 20% 10% 20%; display: flex; flex-direction: column; justify-content: space-between; border-radius: 4px 12px 12px 4px; overflow: hidden; transform-origin: left center; transition: transform .34s var(--drift); box-shadow: none }
+/* The cover art is the whole cover. */
+.nb-shelf .notebook-art-zone { position: absolute; inset: 0; height: auto; z-index: 0 }
+/* The spine: a darker band down the left edge, stitched. */
+.nb-shelf .notebook-cover-face::before { content: ''; display: block; position: absolute; z-index: 2; inset: 0 auto 0 0; width: 11%; background: var(--book-shade); border-right: 1.5px dashed var(--stitch); pointer-events: none }
+/* The elastic band. */
+.nb-shelf .notebook-cover-face::after { content: ''; position: absolute; z-index: 2; top: 0; bottom: 0; right: 13%; width: 7px; border-radius: 2px; background: var(--elastic); opacity: .85; pointer-events: none }
+.nb-shelf .notebook-cover-face:hover { transform: rotateY(-8deg) }
+.nb-shelf .is-opening .notebook-cover-face { transform: rotateY(-72deg) }
+
+/* The ribbon bookmark, hanging below the pages. */
+.nb-shelf .notebook-cover::after { content: ''; position: absolute; z-index: 3; top: calc(var(--face-h) - 10px); left: 34%; width: 9px; height: 24px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%) }
+
+/* The title on a paper label. */
+.nb-shelf .notebook-cover-title { position: relative; z-index: 3; align-self: flex-start; max-width: 100%; padding: 6px 9px; border-radius: 2px; background: var(--paper); color: var(--paper-ink); font: 600 clamp(13px, calc(var(--cover) * .085), 19px)/1.2 var(--font-body); letter-spacing: -.01em }
+.nb-shelf .cover-meta { position: relative; z-index: 3; font-size: 11px; color: var(--paper) }
+.nb-shelf .cover-tags { position: relative; z-index: 3 }
+.nb-shelf .new-notebook { height: var(--face-h); border-radius: 4px 12px 12px 4px }
+
+.nb-size { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
+.nb-size button { height: 30px; padding: 0 12px; border-radius: var(--r-pill); color: var(--muted); font-size: 12.5px }
+.nb-size button[aria-pressed='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
+.nb-size button:focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+
+.nomo .nb-shelf .notebook-cover-face { transition: none }
+.nomo .nb-shelf .notebook-cover-face:hover { transform: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .nb-shelf .notebook-cover-face { transition: none } }
+@media (max-width: 760px) {
+  .nb-shelf { --cover: 132px; gap: 30px 18px }
+  .nb-shelf[data-size='l'] { --cover: 160px }
+  .nb-shelf[data-size='s'] { --cover: 104px }
+}
+.nb-shelf .cover-footer { flex-wrap: wrap; gap: 2px; padding-top: 12px }
+.nb-shelf .cover-footer time { order: -1; flex-basis: 100%; margin-bottom: 2px; font-size: 11.5px; color: var(--muted) }
+.nb-shelf .new-notebook { min-height: 0 }
+/* Colour and Rename live in the notebook's menu (right-click or long-press); the shelf keeps one row of tools. */
+.nb-shelf .cover-footer button:is([aria-label^='Colour of'], [aria-label^='Rename']) { display: none }

@@ -30,6 +30,8 @@ export type Prefs = {
   pinnedNotes?: string[];
   /** The right panel: open or folded to its rail, which widgets in which order, and the weather city. */
   panel?: { open?: boolean; widgets?: string[]; city?: string };
+  /** Notebook cover size on the shelf (N.shelf). */
+  shelfSize?: 's' | 'm' | 'l';
   accent: string;
   motion: boolean;
   navPicks: string[];
