@@ -1,14 +1,24 @@
 {
-  "name": "Basedly",
-  "short_name": "Basedly",
-  "description": "Your whole week, one surface.",
+  "name": "Sorro",
+  "short_name": "Sorro",
+  "description": "Notes, calendar and tasks with an assistant.",
   "start_url": "/home/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0A0912",
-  "theme_color": "#0A0912",
+  "background_color": "#111113",
+  "theme_color": "#111113",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "/brand/app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

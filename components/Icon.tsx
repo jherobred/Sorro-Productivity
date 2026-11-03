@@ -84,6 +84,7 @@ export const ICONS = {
   quote: 'M9 7H5v6h4l-2 4M19 7h-4v6h4l-2 4',
   check: 'M4 12.5 9 18 20 6',
   minus: 'M5 12h14',
+  square: 'M6 6h12v12H6z',
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
   refresh: 'M20.5 11a8.5 8.5 0 1 0-.9 4.6M20.5 5v6h-6',
   plug: 'M9 3v6M15 3v6M6 9h12v2.5a6 6 0 0 1-12 0zM12 17.5V21',

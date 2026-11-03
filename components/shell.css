@@ -55,3 +55,9 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 .sx-empty p { margin: 0; font-size: 14px }
 .sx-pill { height: 34px; padding: 0 16px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap) }
 .sx-pill:active { transform: scale(.96) }
+
+/* Windows app: the window buttons sit at the end of S.top, as in the LodiSave gallery's .caption. */
+.sx-caption { display: flex; align-self: stretch; margin: 0 -10px 0 4px }
+.sx-caption button { width: 46px; display: grid; place-items: center; color: var(--muted); transition: background-color .12s }
+.sx-caption button:hover { background: var(--soft); color: var(--ink) }
+.sx-caption .x:hover { background: var(--close); color: var(--on-media) }

@@ -18,11 +18,15 @@ import { watchAccounts, useAccounts } from '@/lib/accounts';
 import { useNotes } from '@/lib/notes';
 import { DESTINATIONS, activePath } from '@/lib/destinations';
 import { useLayout } from '@/lib/useLayout';
+import { themeIsDark } from '@/lib/theme';
 import './shell.css';
 const Settings = dynamic(() => import('./SettingsModal').then(m => m.SettingsModal), { ssr: false });
 const Search = dynamic(() => import('./SearchPalette').then(m => m.SearchPalette), { ssr: false });
 const Accounts = dynamic(() => import('./AccountSheet').then(m => m.AccountSheet), { ssr: false });
 const Capture = dynamic(() => import('./CaptureSheet').then(m => m.CaptureSheet), { ssr: false });
+
+type TauriWindow = { minimize(): Promise<void>; toggleMaximize(): Promise<void>; close(): Promise<void> };
+const tauriWindow = (): TauriWindow | null => (globalThis as { __TAURI__?: { window: { getCurrentWindow(): TauriWindow } } }).__TAURI__?.window.getCurrentWindow() ?? null;
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -40,6 +44,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [capture, setCapture] = useState(false);
   const press = useRef<number | null>(null);
   const rail = prefs.sidebar !== 'open';
+  const [win, setWin] = useState<TauriWindow | null>(null);
+  useEffect(() => setWin(tauriWindow()), []);
+  const dark = themeIsDark(prefs.theme);
+  useEffect(() => {
+    void (async () => {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor.isNativePlatform()) return;
+      const { StatusBar, Style } = await import('@capacitor/status-bar');
+      await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+    })().catch(() => {});
+  }, [dark]);
   useBackGuard(); useLiveSync(); useAutoSync();
   useEffect(watchAccounts, []);
   useEffect(() => {
@@ -84,14 +99,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
-      <header className="sx-top" data-part="S.top">
+      <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined} onDoubleClick={e => { if (win && e.target === e.currentTarget) void win.toggleMaximize(); }}>
         {phone && <Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /></Link>}
-        <h1>{current?.name}</h1>
+        <h1 data-tauri-drag-region={win ? '' : undefined}>{current?.name}</h1>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
         <button className="sx-icon" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearch(true)}><Icon name="search" size={18} /></button>
         {phone && <button className="sx-avatar" aria-label="Account and settings" onClick={() => setAccount(true)}>{name.charAt(0)}</button>}
+        {win && <div className="sx-caption"><button aria-label="Minimize" onClick={() => void win.minimize()}><Icon name="minus" size={16} /></button><button aria-label="Maximize" onClick={() => void win.toggleMaximize()}><Icon name="square" size={14} /></button><button className="x" aria-label="Close" onClick={() => void win.close()}><Icon name="close" size={16} /></button></div>}
       </header>
       <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
     </div>
