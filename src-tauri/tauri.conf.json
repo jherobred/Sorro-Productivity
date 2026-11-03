@@ -2,10 +2,10 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Sorro",
   "version": "1.0.0",
-  "identifier": "com.basedly.desktop",
+  "identifier": "com.sorro.desktop",
   "build": {
-    "frontendDist": "https://basedly-web-jhemsini.vercel.app",
-    "devUrl": "https://basedly-web-jhemsini.vercel.app"
+    "frontendDist": "https://sorro-jhemsini.vercel.app",
+    "devUrl": "https://sorro-jhemsini.vercel.app"
   },
   "app": {
     "withGlobalTauri": true,

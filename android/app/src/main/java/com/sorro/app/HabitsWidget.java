@@ -1,4 +1,4 @@
-package com.basedly.app;
+package com.sorro.app;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;

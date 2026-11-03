@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.basedly.app',
+  appId: 'com.sorro.app',
   appName: 'Sorro',
   // The static export. One `npm run build` feeds both the website and the APK,
   // which is what keeps the two in sync — same code, same Supabase.
@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   // page for offline launches. `offline.html` from the bundle shows only when
   // the very first launch has no connection and nothing is cached yet.
   server: {
-    url: 'https://basedly-web-jhemsini.vercel.app',
+    url: 'https://sorro-jhemsini.vercel.app',
     errorPath: 'offline.html',
   },
   android: {

@@ -1,4 +1,4 @@
-package com.basedly.app;
+package com.sorro.app;
 
 import android.app.PendingIntent;
 import android.content.Context;
@@ -31,12 +31,12 @@ final class Acts {
     private Acts() {}
 
     /** Broadcast action for the taps that stay on the home screen. */
-    static final String TAP = "com.basedly.app.WIDGET_TAP";
+    static final String TAP = "com.sorro.app.WIDGET_TAP";
     static final String EXTRA_OP = "bd_op";
     static final String EXTRA_ID = "bd_id";
 
     /** Scheme + host registered in AndroidManifest.xml, alongside the auth one. */
-    private static final String LINK = "com.basedly.app://log?do=";
+    private static final String LINK = "com.sorro.app://log?do=";
 
     /**
      * The calendar date, which is what a habit tick is filed under.
@@ -81,7 +81,7 @@ final class Acts {
             : PendingIntent.FLAG_UPDATE_CURRENT;
     }
 
-    /** Open the app at `com.basedly.app://log?do=<what>`. */
+    /** Open the app at `com.sorro.app://log?do=<what>`. */
     static PendingIntent open(Context c, String what) {
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(LINK + what));
         i.setPackage(c.getPackageName());

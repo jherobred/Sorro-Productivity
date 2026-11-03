@@ -70,5 +70,5 @@
         android:textColor="@color/bd_tx3"
         android:textSize="11sp"
         android:visibility="gone"
-        android:text="Open Basedly to sync" />
+        android:text="Open Sorro to sync" />
 </LinearLayout>

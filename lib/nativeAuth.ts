@@ -7,9 +7,14 @@ import { supabase } from './supabase';
 
 export const isNative = () => Capacitor.isNativePlatform();
 
-/** Custom scheme registered in AndroidManifest.xml. Must match the redirect
- *  URI allow-list in both Supabase Auth and the Google Cloud OAuth client. */
-export const NATIVE_REDIRECT = 'com.basedly.app://auth';
+/**
+ * The app's own scheme, registered in AndroidManifest.xml and in the Supabase
+ * redirect allow-list. Read from the installed package, because the APK built
+ * before the rename (com.basedly.app) loads this same live code.
+ */
+let scheme: Promise<string> | undefined;
+export const appScheme = () => scheme ??= App.getInfo().then(i => i.id + '://').catch(() => 'com.sorro.app://');
+export const asUrl = (url: string, s: string) => new URL(url.replace(s, 'https://app/'));
 
 /**
  * Google blocks OAuth inside embedded webviews, so the native shell cannot use
@@ -20,7 +25,7 @@ export async function signInWithGoogle(
   /** `prompt: 'select_account'` forces Google's chooser — see lib/accounts.ts. */
   opts: { prompt?: string; scopes?: string; loginHint?: string } = {},
 ): Promise<{ error?: string }> {
-  const redirectTo = isNative() ? NATIVE_REDIRECT : `${window.location.origin}/auth/callback/`;
+  const redirectTo = isNative() ? (await appScheme()) + 'auth' : `${window.location.origin}/auth/callback/`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -45,10 +50,11 @@ export function listenForNativeAuth(onSignedIn: () => void): () => void {
   if (!isNative()) return () => {};
 
   const handle = App.addListener('appUrlOpen', async ({ url }) => {
-    if (!url.startsWith(NATIVE_REDIRECT)) return;
+    const s = await appScheme();
+    if (!url.startsWith(s + 'auth')) return;
 
     // Supabase returns ?code=... for PKCE; errors come back as ?error=...
-    const params = new URL(url.replace('com.basedly.app://', 'https://basedly.app/')).searchParams;
+    const params = asUrl(url, s).searchParams;
     const code = params.get('code');
 
     if (code) {

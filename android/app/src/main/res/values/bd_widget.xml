@@ -28,9 +28,9 @@
     <color name="bd_water">#38BDF8</color>
     <color name="bd_notes">#B07CFF</color>
 
-    <string name="bd_today_label">Basedly · Today</string>
-    <string name="bd_quick_label">Basedly · Quick log</string>
-    <string name="bd_habits_label">Basedly · Habits</string>
+    <string name="bd_today_label">Sorro · Today</string>
+    <string name="bd_quick_label">Sorro · Quick log</string>
+    <string name="bd_habits_label">Sorro · Habits</string>
     <string name="bd_today_desc">Your day at a glance, with one tap to log.</string>
     <string name="bd_quick_desc">Four buttons: water, task, expense, note.</string>
     <string name="bd_habits_desc">Tick today\'s habits from the home screen.</string>

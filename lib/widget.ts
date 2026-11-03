@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
+import { appScheme, asUrl } from './nativeAuth';
 import { queryClient } from './offline';
 import { logDay } from './logday';
 import { CUP_ML } from './hydration';
@@ -202,10 +203,10 @@ export function useWidgetBridge(onCapture: (kind: 'task' | 'note') => void) {
     };
 
     /** A widget link, opened cold or while the app was already up. */
-    const follow = (url: string | undefined | null) => {
-      if (!url?.startsWith('com.basedly.app://log')) return;
-      const what = new URL(url.replace('com.basedly.app://', 'https://basedly.app/'))
-        .searchParams.get('do');
+    const follow = async (url: string | undefined | null) => {
+      const s = await appScheme();
+      if (!url?.startsWith(s + 'log')) return;
+      const what = asUrl(url, s).searchParams.get('do');
 
       // Task and note land on the sheet the app's own + button opens, keyboard
       // up. Money does not: its page puts the pad on screen precisely because
@@ -231,12 +232,12 @@ export function useWidgetBridge(onCapture: (kind: 'task' | 'note') => void) {
     void drain();
     schedule();
 
-    const links = App.addListener('appUrlOpen', ({ url }) => follow(url));
+    const links = App.addListener('appUrlOpen', ({ url }) => void follow(url));
     // Cold start: the launch intent is not an appUrlOpen event, it is already
     // on the activity by the time any of this runs.
     if (!launchConsumed) {
       launchConsumed = true;
-      void App.getLaunchUrl().then((r) => { if (alive) follow(r?.url); });
+      void App.getLaunchUrl().then((r) => { if (alive) void follow(r?.url); });
     }
     // Coming back from the home screen is the moment the queue is most likely
     // to have something in it, and the moment the snapshot is most likely stale.

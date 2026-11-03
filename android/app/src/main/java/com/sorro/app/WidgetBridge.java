@@ -1,4 +1,4 @@
-package com.basedly.app;
+package com.sorro.app;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;

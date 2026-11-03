@@ -30,7 +30,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.basedly.app" android:host="auth" />
+                <data android:scheme="com.sorro.app" android:host="auth" />
             </intent-filter>
 
             <!-- Home-screen widgets land here. Same scheme, different host, so
@@ -40,7 +40,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.basedly.app" android:host="log" />
+                <data android:scheme="com.sorro.app" android:host="log" />
             </intent-filter>
 
         </activity>
@@ -64,7 +64,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.basedly.app.WIDGET_TAP" />
+                <action android:name="com.sorro.app.WIDGET_TAP" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -77,7 +77,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.basedly.app.WIDGET_TAP" />
+                <action android:name="com.sorro.app.WIDGET_TAP" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -90,7 +90,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.basedly.app.WIDGET_TAP" />
+                <action android:name="com.sorro.app.WIDGET_TAP" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

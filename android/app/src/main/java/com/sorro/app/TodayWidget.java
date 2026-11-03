@@ -1,4 +1,4 @@
-package com.basedly.app;
+package com.sorro.app;
 
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;

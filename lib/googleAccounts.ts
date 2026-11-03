@@ -1,7 +1,7 @@
 'use client';
 
 import { supabase } from './supabase';
-import { NATIVE_REDIRECT, isNative, signInWithGoogle } from './nativeAuth';
+import { appScheme, isNative, signInWithGoogle } from './nativeAuth';
 import { Browser } from '@capacitor/browser';
 
 /**
@@ -79,7 +79,7 @@ export async function connectGoogleAccount(email?: string, back = '/calendar/'):
   const { data, error } = await supabase.auth.linkIdentity({
     provider: 'google',
     options: {
-      redirectTo: isNative() ? NATIVE_REDIRECT : `${window.location.origin}/auth/callback/`,
+      redirectTo: isNative() ? (await appScheme()) + 'auth' : `${window.location.origin}/auth/callback/`,
       scopes: CALENDAR_SCOPE, queryParams, skipBrowserRedirect: isNative(),
     },
   });

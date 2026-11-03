@@ -1,4 +1,4 @@
-package com.basedly.app;
+package com.sorro.app;
 
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
@@ -34,7 +34,7 @@ import org.json.JSONObject;
 final class Snap {
     private Snap() {}
 
-    static final String PREFS = "basedly_widget";
+    static final String PREFS = "sorro_widget";
     private static final String KEY_SNAP = "snapshot";
     private static final String KEY_PENDING = "pending";
 
