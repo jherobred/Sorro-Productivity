@@ -18,6 +18,7 @@ import { StudyBackup } from './StudyBackup';
 import { APP_VERSION } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
 import { Fox } from './Fox';
+import { downloadLocalModel, forgetLocalModel, useLocalModel } from '@/lib/localModel';
 
 
 /** Shared settings for desktop, phone, and tablet. */
@@ -29,6 +30,15 @@ export type SettingsTab =
   | 'integrations'
   | 'app';
 
+
+function OfflineAssistant() {
+  const m = useLocalModel();
+  return <Field label="Offline assistant" hint="A small model that answers on this device when you have no connection. About 350 MB, downloaded once. It can read your cached tasks but cannot change anything.">
+    {m.status === 'ready' ? <button style={INPUT_STYLE} onClick={() => void forgetLocalModel()}>Remove the offline model</button>
+      : m.status === 'downloading' ? <span role="status">Downloading, {Math.round(m.progress * 100)}%</span>
+      : <button style={INPUT_STYLE} onClick={downloadLocalModel}>{m.status === 'error' ? `Try again (${m.message})` : 'Download the offline model'}</button>}
+  </Field>;
+}
 
 export function SettingsModal({
   initialTab = 'general',
@@ -453,6 +463,7 @@ export function SettingsModal({
             <ToggleRow label="Haptic feedback" hint="Gentle taps on supported phones and tablets" on={prefs.haptics} onChange={v => setPref('haptics', v)} />
             <ToggleRow label="Sound effects" hint="Soft confirmation sounds and focus bells" on={prefs.soundEnabled} onChange={v => setPref('soundEnabled', v)} />
             <ToggleRow label="Show part names" hint="Label each region with its code, like N.list or S.top" on={!!prefs.showParts} onChange={v => setPref('showParts', v)} />
+            <OfflineAssistant />
           </div>
         );
 

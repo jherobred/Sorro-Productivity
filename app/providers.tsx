@@ -7,6 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient, persister } from '@/lib/offline';
 import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
 import '@/lib/legacyQueue';
+import '@/lib/assistant';
 import { migrateBrowserStorage } from '@/lib/storageKeys';
 
 // Guards a page served from an old cached HTML whose inline bootstrap predates the rename.

@@ -1,0 +1,40 @@
+/* T1 Home: the assistant. The chat keeps a 760px measure; widgets scroll sideways above it. */
+.hm { display: flex; flex-direction: column; min-height: 100%; max-width: 980px; margin: 0 auto; gap: 14px }
+.hm-widgets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 2px }
+.hm-widgets > .wg { scroll-snap-align: start; background: var(--surface) }
+.hm-bar { display: flex; gap: 6px; justify-content: center }
+.hm-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap), background-color .15s }
+.hm-chip:hover { background: var(--soft-2) }
+.hm-chip:active { transform: scale(.96) }
+.hm-chat { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 10px 0 }
+.hm-start { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; color: var(--muted) }
+.hm-start p { margin: 0; font-size: 15px }
+.hm-ideas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center }
+.hm-msg { display: flex; flex-direction: column; gap: 6px; animation: msg-in .32s var(--drift) backwards }
+@keyframes msg-in { from { opacity: 0; transform: translateY(8px) } }
+.hm-msg[data-role='user'] { align-items: flex-end }
+.hm-msg[data-role='user'] .hm-text { background: var(--soft-2); border-radius: var(--r-panel) var(--r-panel) 4px var(--r-panel); padding: 10px 14px; max-width: 80% }
+.hm-text { font-size: 15px; line-height: 1.6; color: var(--ink) }
+.hm-text p { margin: 0 0 8px } .hm-text p:last-child { margin: 0 }
+.hm-text ul { margin: 0 0 8px; padding-left: 20px }
+.hm-tool { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-tile); background: var(--surface); border: 1px solid var(--line); font-size: 13.5px; animation: tool-in .36s var(--float) backwards }
+@keyframes tool-in { from { opacity: 0; transform: scale(.97) } }
+.hm-tool > :first-child { color: var(--ok) }
+.hm-tool span { flex: 1 }
+.hm-tool a, .hm-tool button { color: var(--ink); font-weight: 500; text-decoration: underline }
+.hm-tool[data-undone='true'] { color: var(--muted) }
+.hm-tool[data-undone='true'] > :first-child { color: var(--muted) }
+.hm-typing { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px }
+.hm-error { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-tile); background: color-mix(in srgb, var(--bad) 10%, var(--surface)); color: var(--ink); font-size: 13.5px }
+.hm-error p { margin: 0; flex: 1 }
+.hm-composer { position: sticky; bottom: 0; width: 100%; max-width: 760px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line) }
+.hm-composer textarea { flex: 1; min-height: 24px; max-height: 180px; padding: 8px 0; border: 0; background: transparent; color: var(--ink); font: 15px/1.5 var(--font-body); resize: none }
+.hm-composer textarea:focus { outline: none }
+.hm-composer:focus-within { border-color: var(--pick) }
+.hm-composer .sx-pill { width: 40px; height: 40px; padding: 0; display: grid; place-items: center }
+.hm-composer .sx-pill:disabled { opacity: .45 }
+.hm-threads span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+:is(.hm-chip, .hm-tool a, .hm-tool button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.nomo :is(.hm-msg, .hm-tool) { animation: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) :is(.hm-msg, .hm-tool) { animation: none } }
+@media (max-width: 760px) { .hm-widgets { grid-auto-columns: 82% } .hm-msg[data-role='user'] .hm-text { max-width: 90% } }
