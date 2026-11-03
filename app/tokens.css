@@ -1,3 +1,6 @@
+/* Hallmark · shape: app screen · scope: app · theme: brand (LodiSave Kape, kept) · redesign: restyle · built: the project */
+/* Hallmark · critique: one ground, one ink, one accent, taken from LodiSave so the apps merge */
+/* Hallmark · waive 37 · a font slot: Space Grotesk draws only the SORRO wordmark · the Grok brand lockup sets the name in it while Geist carries every Sorro screen */
 /* Sorro tokens: LodiSave's Kape kit (LodiSave/app/ui/gallery.css), same names so the apps can merge.
    Imported last in app/layout.tsx, so these win over every older stylesheet. */
 
@@ -34,7 +37,9 @@
 :root, :root[data-theme='light'], :root[data-theme='dark'] {
   --tx: var(--ink); --tx2: var(--muted); --tx3: var(--muted);
   --panel: var(--surface); --card: var(--surface); --card2: var(--soft);
-  --line2: var(--soft-2); --hov: var(--soft); --sh: var(--shadow); --shl: var(--shadow);
+  --line2: var(--soft-2); --hov: var(--soft);
+  /* Old cards sit on the ground, separated by the surface tone step. --shl stays the overlay shadow. */
+  --sh: none; --shl: var(--shadow);
   --acc: var(--accent); --accTx: var(--accent); --gl2: color-mix(in srgb, var(--accent) 55%, transparent);
   --sk1: var(--soft); --sk2: var(--soft-2);
 }

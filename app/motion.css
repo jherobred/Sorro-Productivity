@@ -1,0 +1,33 @@
+/* Hallmark · motion: the in-app Motion setting (.nomo) is the switch; it defaults to the OS reduced-motion preference until the owner chooses (spec W1, W2) */
+/* Sorro's motion layer (spec P2.4). Transform and opacity only, springs from tokens.css.
+   The Motion setting adds .nomo to <html>; everything here stops under it (spec W2). */
+
+/* A tab change: the new page rises in. */
+.sx-page { animation: page-in .42s var(--drift) backwards }
+@keyframes page-in { from { opacity: 0; transform: translateY(12px) } }
+
+/* The first rows of a list arrive one after another, 40ms apart, the first eight only. */
+.task-group, .task-item-wrap, .notebook-cover, .page-row { animation: row-in .36s var(--drift) backwards }
+@keyframes row-in { from { opacity: 0; transform: translateY(8px) } }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(2) { animation-delay: 40ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(3) { animation-delay: 80ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(4) { animation-delay: 120ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(5) { animation-delay: 160ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(6) { animation-delay: 200ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(7) { animation-delay: 240ms }
+:is(.task-group, .task-item-wrap, .notebook-cover, .page-row):nth-child(n+8) { animation-delay: 280ms }
+
+/* Press feedback on every control that does something. */
+:is(.sx-pill, .sx-nav a, .sx-me, .studio-button, .tasks-tool, .sx-sheet a, .sx-sheet button) { transition: transform .2s var(--snap), background-color .15s, color .15s }
+:is(.sx-pill, .sx-nav a, .sx-me, .studio-button, .tasks-tool, .sx-sheet a, .sx-sheet button):active { transform: scale(.96) }
+
+.nomo :is(.sx-page, .task-group, .task-item-wrap, .notebook-cover, .page-row) { animation: none }
+.nomo :is(.sx-pill, .sx-nav a, .sx-me, .studio-button, .tasks-tool):active { transform: none }
+
+/* The page wrapper passes a full-height layout through (Calendar, the note editor). */
+.studio-main[data-page='calendar'] > .sx-page, .studio-main:has(.editor-room) > .sx-page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column }
+
+/* Reduced motion with no choice made (data-motion is only 'on' once Motion is chosen or defaulted on), and with scripting off. */
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='on']) :is(.sx-page, .task-group, .task-item-wrap, .notebook-cover, .page-row, .fox-run, .sx-fox > span, .sx-sheet, .sx-sheet-back) { animation: none }
+}

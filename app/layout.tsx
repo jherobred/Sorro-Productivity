@@ -5,6 +5,7 @@ import './studio.css';
 import './recovery-planning.css';
 import './daily-workspace.css';
 import './tokens.css';
+import './motion.css';
 import { Providers } from './providers';
 
 /* next/font downloads these at build time and emits them as static assets, so

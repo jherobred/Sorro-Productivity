@@ -110,7 +110,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
         {phone && <Link href="/home/" aria-label="Sorro home"><Wordmark size="sm" /></Link>}
-        <h1 data-tauri-drag-region={win ? '' : undefined}>{current?.name}</h1>
+        <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
@@ -118,7 +118,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {phone && <button className="sx-avatar" aria-label="Account and settings" onClick={() => setAccount(true)}>{name.charAt(0)}</button>}
         {win && <div className="sx-caption"><button aria-label="Minimize" onClick={() => void win.minimize()}><Icon name="minus" size={16} /></button><button aria-label="Maximize" onClick={() => void win.toggleMaximize()}><Icon name="square" size={14} /></button><button className="x" aria-label="Close" onClick={() => void win.close()}><Icon name="close" size={16} /></button></div>}
       </header>
-      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
+      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? <div key={pathname} className="sx-page">{children}</div> : null}</main>
     </div>
     {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.filter(d => d.phoneBar).map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-current={current?.id === d.id ? 'page' : undefined}
       {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /><span>{d.name}</span></Link>)}

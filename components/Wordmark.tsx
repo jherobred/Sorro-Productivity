@@ -10,6 +10,6 @@ export function Wordmark({ size = 'md', word = true }: { size?: 'sm' | 'md' | 'l
   const px = size === 'sm' ? 18 : size === 'lg' ? 34 : 22;
   return <span className={'sx-mark sx-mark-' + size} data-mood={mood}>
     <span className="sx-fox" data-part="S.fox" title={mood === 'sleep' ? 'Asleep. Do something to wake it.' : undefined}><Fox pose={POSE[mood]} size={px} /></span>
-    {word && <span className="sx-mark-word">SORRO</span>}
+    {word && <svg className="sx-mark-word" viewBox="0 0 132 20" role="img" aria-label="SORRO"><text x="0" y="16" fontFamily="var(--font-mark)" fontSize="19" fontWeight="500" letterSpacing="7.4">SORRO</text></svg>}
   </span>;
 }
