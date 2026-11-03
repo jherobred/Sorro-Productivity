@@ -15,9 +15,10 @@ Each sub-project gets its own spec, plan and build, in this order:
 | Code | Sub-project | Decided so far |
 |---|---|---|
 | S1 | Shell and design system | This document |
+| S1b | Remove basedly everywhere | `2026-11-03-sorro-s1b-rename-design.md` |
 | S2 | Auth | TOTP authenticator (QR enrolment) plus device biometrics or PIN (WebAuthn on web, native prompt in APK and Windows). Re-check every other day |
 | S3 | T1 Home | AI chat that can act across the app, widget strip above it. Cloud model with a small local model as offline fallback. Focus timer is a widget |
-| S4 | T2 Notes | Rebuilt notebook |
+| S4 | T2 Notes | Rebuilt notebook with Sorro's own note types; drop the Google Docs style page, it must not look like other note apps |
 | S5 | T3 Calendar, T4 Tasks, T5 Vault | Tasks has list and board views, projects become task groups. Vault is a file explorer in the LodiSave Gallery layout: links, files, images, PDFs and clips, attachable to notes, tasks and events, with read-later and AI access |
 | S6 | Tracker app | Later, new repo forked from tag `basedly-final`. Gets habits, focus history, fitness, fuel, money, plates, memories, people, community |
 | S7 | Code comments | `/antislop-code` pass over everything Sorro keeps |
