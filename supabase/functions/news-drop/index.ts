@@ -43,14 +43,19 @@ Deno.serve(async (req) => {
   if (!NEWS_KINDS.includes(kind)) return text(`Unknown kind. Use one of: ${NEWS_KINDS.join(', ')}`, 400);
   const d = q.get('d') ?? '';
   if (!d.trim()) return text('Nothing to save: put the digest in d=', 400);
+  if (d.length > 4000) return text('That part is too long: keep each part under 1500 characters', 400);
   const part = Math.max(1, Number(q.get('part') ?? 1) | 0);
   const of = Math.max(part, Number(q.get('of') ?? 1) | 0);
   if (of > 50) return text('At most 50 parts', 400);
-  const edition = /^\d{4}-\d{2}-\d{2}$/.test(q.get('edition') ?? '') ? q.get('edition')! : manilaDate();
+  const asked = q.get('edition') ?? '';
+  // Only a real date within a week of today; anything else files under today.
+  const edition = /^\d{4}-\d{2}-\d{2}$/.test(asked) && !Number.isNaN(Date.parse(asked)) && Math.abs(Date.parse(asked) - Date.parse(manilaDate())) <= 7 * 86_400_000 && new Date(asked).toISOString().slice(0, 10) === asked ? asked : manilaDate();
   const user_id = owner.user_id;
 
   let body = d;
   if (of > 1) {
+    // A run that failed part-way may have left parts counted for a different total; they would block this one all day.
+    await db.from('sorro_news_parts').delete().eq('user_id', user_id).eq('kind', kind).eq('edition', edition).neq('of', of);
     const { error } = await db.from('sorro_news_parts').upsert({ user_id, kind, edition, part, of, text: d });
     if (error) return text('Could not save that part, try again', 500);
     const { data: parts } = await db.from('sorro_news_parts').select('part, of, text').eq('user_id', user_id).eq('kind', kind).eq('edition', edition);

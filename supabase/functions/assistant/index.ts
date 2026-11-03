@@ -8,7 +8,7 @@
  * POST { chat_id?, message, context? } → { chat_id, text, tools: [{ name, label, undo? }] }
  */
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { TOOLS, WRITES, validateArgs, freeSlots } from './tools.ts';
+import { TOOLS, WRITES, validateArgs, freeSlots, appendTo, zoneOffset } from './tools.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,7 +22,7 @@ const ROUNDS = 6;
 
 type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
 type Content = { role: 'user' | 'model'; parts: Part[] };
-export type Undo = { table: 'sorro_tasks' | 'sorro_events' | 'sorro_notes'; id: string; action: 'delete' | 'uncomplete' | 'restore_body'; body?: string };
+export type Undo = { table: 'sorro_tasks' | 'sorro_events' | 'sorro_notes'; id: string; action: 'delete' | 'uncomplete' | 'restore_body'; body?: string; after?: string };
 type Done = { name: string; label: string; undo?: Undo; link?: string };
 
 function dayIn(tz: string, offsetDays = 0) {
@@ -55,8 +55,8 @@ async function run(db: SupabaseClient, uid: string, tz: string, name: string, ra
       return { result: error ? { error: error.message } : { today, tasks: data } };
     }
     case 'complete_task': {
-      const { data, error } = await db.from('sorro_tasks').update({ done: true, completed_at: new Date().toISOString() }).eq('id', a.id).select('id,title').single();
-      if (error) return { result: { error: 'No such task.' } };
+      const { data, error } = await db.from('sorro_tasks').update({ done: true, completed_at: new Date().toISOString() }).eq('id', a.id).eq('done', false).is('deleted_at', null).select('id,title').maybeSingle();
+      if (error || !data) return { result: { error: 'No open task with that id.' } };
       return { result: data, done: { name, label: `Completed “${data.title}”`, undo: { table: 'sorro_tasks', id: data.id, action: 'uncomplete' }, link: '/tasks/' } };
     }
     case 'create_event': {
@@ -67,20 +67,22 @@ async function run(db: SupabaseClient, uid: string, tz: string, name: string, ra
     }
     case 'list_events': {
       const { data, error } = await db.from('sorro_events').select('id,title,starts_at,ends_at,location,all_day').is('deleted_at', null)
-        .gte('starts_at', `${a.from}T00:00:00`).lte('starts_at', `${a.to}T23:59:59`).order('starts_at').limit(80);
+        .gte('starts_at', `${a.from}T00:00:00${zoneOffset(tz, String(a.from))}`).lte('starts_at', `${a.to}T23:59:59${zoneOffset(tz, String(a.to))}`).order('starts_at').limit(80);
       return { result: error ? { error: error.message } : { events: data } };
     }
     case 'find_free_time': {
       const { data } = await db.from('sorro_events').select('starts_at,ends_at,all_day').is('deleted_at', null)
-        .lte('starts_at', `${a.date}T23:59:59+08:00`).gte('ends_at', `${a.date}T00:00:00+08:00`);
+        .lte('starts_at', `${a.date}T23:59:59${zoneOffset(tz, String(a.date))}`).gte('ends_at', `${a.date}T00:00:00${zoneOffset(tz, String(a.date))}`);
       const mins = (iso: string) => { const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)).split(':').map(Number); return h * 60 + m; };
       const busy = (data ?? []).filter(e => !e.all_day).map(e => [mins(e.starts_at), Math.max(mins(e.starts_at), mins(e.ends_at))] as [number, number]);
       const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       return { result: { date: a.date, free: freeSlots(busy, Number(a.minutes)).map(([s, e]) => `${fmt(s)}-${fmt(e)}`) } };
     }
     case 'search_notes': {
-      const like = `%${String(a.query).replace(/[%_]/g, '')}%`;
-      const { data } = await db.from('sorro_notes').select('id,title,body,updated_at').is('deleted_at', null).or(`title.ilike.${like},body.ilike.${like}`).order('updated_at', { ascending: false }).limit(8);
+      const like = `%${String(a.query).replace(/[%_\\]/g, '')}%`;
+      const pick = (col: string) => db.from('sorro_notes').select('id,title,body,updated_at').is('deleted_at', null).ilike(col, like).order('updated_at', { ascending: false }).limit(8);
+      const [byTitle, byBody] = await Promise.all([pick('title'), pick('body')]);
+      const data = [...(byTitle.data ?? []), ...(byBody.data ?? [])].filter((n, i, all) => all.findIndex(m => m.id === n.id) === i).slice(0, 8);
       // Bodies are cut short: enough to answer from, not the whole notebook.
       return { result: { notes: (data ?? []).map(n => ({ id: n.id, title: n.title, excerpt: n.body.replace(/<!--[\s\S]*?-->/g, '').slice(0, 1200) })) } };
     }
@@ -96,9 +98,11 @@ async function run(db: SupabaseClient, uid: string, tz: string, name: string, ra
     case 'append_note': {
       const { data: note } = await db.from('sorro_notes').select('id,title,body').eq('id', a.id).maybeSingle();
       if (!note) return { result: { error: 'No such note.' } };
-      const { error } = await db.from('sorro_notes').update({ body: `${note.body.trimEnd()}\n\n${a.text}` }).eq('id', note.id);
+      const after = appendTo(note.body, String(a.text));
+      if (after === null) return { result: { error: 'That note is a structured page (Recall, Board, Fieldbook or an old Document); it cannot take appended text. Offer to create a new note instead.' } };
+      const { error } = await db.from('sorro_notes').update({ body: after }).eq('id', note.id);
       if (error) return { result: { error: error.message } };
-      return { result: { id: note.id, title: note.title }, done: { name, label: `Added to “${note.title}”`, undo: { table: 'sorro_notes', id: note.id, action: 'restore_body', body: note.body }, link: `/notebooks/?note=${note.id}` } };
+      return { result: { id: note.id, title: note.title }, done: { name, label: `Added to “${note.title}”`, undo: { table: 'sorro_notes', id: note.id, action: 'restore_body', body: note.body, after }, link: `/notebooks/?note=${note.id}` } };
     }
     case 'read_news': {
       const { data } = await db.from('sorro_news').select('kind,title,items').eq('edition', a.date ?? today).limit(20);
@@ -180,6 +184,12 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     const err = e as Error & { status?: number; retry?: string | null };
+    if (done.length) {
+      await db.from('sorro_chat_messages').insert([
+        { chat_id: chatId, user_id: uid, role: 'user', content: message },
+        { chat_id: chatId, user_id: uid, role: 'assistant', content: 'Done, but the model stopped before it could say so.', tools: done },
+      ]);
+    }
     return json({ error: err.status === 429 ? 'rate_limited' : 'model_failed', retry: err.retry ?? null, chat_id: chatId, tools: done }, err.status ?? 502);
   }
 

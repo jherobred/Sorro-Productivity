@@ -97,3 +97,26 @@ export function freeSlots(busy: [number, number][], minutes: number): [number, n
   if (22 * 60 - cursor >= minutes) out.push([cursor, 22 * 60]);
   return out;
 }
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * The note body with `text` added at the end, or null when the note is a
+ * structured format (Recall, board, study page, journal, old Document) that
+ * appending would break.
+ */
+export function appendTo(body: string, text: string): string | null {
+  if (body.startsWith('<!-- sorro-text:v1 -->')) return body + text.split(/\n{2,}/).map(p => `<p>${esc(p.trim())}</p>`).join('');
+  if (body.startsWith('<!-- ') || body.startsWith('# Journal · ')) return null;
+  return `${body.trimEnd()}\n\n${text}`;
+}
+
+/** The zone's UTC offset on that day, as "+08:00": day bounds sent to Postgres must carry it. */
+export function zoneOffset(tz: string, day: string): string {
+  const at = new Date(`${day}T12:00:00Z`);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(at).map(p => [p.type, p.value]));
+  const local = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+  const mins = Math.round((local - at.getTime()) / 60000);
+  const sign = mins < 0 ? '-' : '+', abs = Math.abs(mins);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}

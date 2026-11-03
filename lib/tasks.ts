@@ -621,7 +621,8 @@ export function useTaskActions() {
     toast(`Deleted “${task.title}”`, () => restore.mutate({ id: task.id }));
   };
 
-  return { create, update, complete, remove, restore, removeWithUndo };
+  // comeBack is also called when the assistant completes a repeating task on the server.
+  return { create, update, complete, remove, restore, removeWithUndo, comeBack };
 }
 
 /* ---- Subtasks and lists ------------------------------------------------ */

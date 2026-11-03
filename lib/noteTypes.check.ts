@@ -50,3 +50,21 @@ test('a Page and a Recall preview as words, not markup', async () => {
   assert.equal(pagePreview(writeText('<h2>Heaps</h2><p>A &amp; B</p>')), 'Heaps A & B');
   assert.equal(pagePreview(writeRecall({ html: '<h2>Q?</h2><p>A</p>', schedule: {} })), 'Q? A');
 });
+test('Page only opens notes it can hold whole', async () => {
+  const { pageCanHold } = await import('./noteTypes.ts');
+  assert.equal(pageCanHold(writeText('<p>x</p>')), true);
+  assert.equal(pageCanHold(writeRecall({ html: '', schedule: {} })), true);
+  assert.equal(pageCanHold('# Notes\n\n- a\n- b'), true);
+  assert.equal(pageCanHold('| a | b |\n|---|---|\n| 1 | 2 |'), false);
+  assert.equal(pageCanHold('$$\nx^2\n$$'), false);
+  assert.equal(pageCanHold('See ![sketch](https://x.test/a.png)'), false);
+  // A structured format that failed to parse never opens blank in Page.
+  assert.equal(pageCanHold('<!-- sorro-board:v1 -->\n{broken'), false);
+});
+test('Convert to Page is offered only when nothing would be lost', async () => {
+  const { documentSafeForPage } = await import('./noteTypes.ts');
+  assert.equal(documentSafeForPage({ tabs: [{ title: 'T', html: '<p>x</p>' }] }), true);
+  assert.equal(documentSafeForPage({ tabs: [{ title: 'T', html: '<table><tr><td>1</td></tr></table>' }] }), false);
+  assert.equal(documentSafeForPage({ tabs: [{ title: 'T', html: '<div data-type="math-block"></div>' }] }), false);
+  assert.equal(documentSafeForPage({ tabs: [{ title: 'T', html: '<p>x</p>' }], comments: [{}] }), false);
+});

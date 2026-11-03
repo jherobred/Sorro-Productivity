@@ -28,7 +28,7 @@ import {addTag,renameTag,removeTag,toggleTag,courseIs,cleanTagName,TAG_COLORS,ty
 import {ContextMenu,type CtxItem} from '@/components/ContextMenu';
 import {saveObjectCover,migrateNotebookCovers,removeObjectCover,hasObjectCover} from '@/lib/objectCovers';
 import {pageKind,pagePreview,scanPage,writeFreePage,writeStudy} from '@/lib/pageKinds';
-import {SORRO_TYPES,TYPE_INFO,TYPE_ART,newBody,sorroType,documentToPage,type SorroType} from '@/lib/noteTypes';
+import {SORRO_TYPES,TYPE_INFO,TYPE_ART,newBody,sorroType,documentToPage,pageCanHold,documentSafeForPage,type SorroType} from '@/lib/noteTypes';
 import {readDoc} from '@/lib/docFormat';
 import {PageEditor} from '@/components/notes/PageEditor';
 import {savePageAsset} from '@/lib/pageAssets';
@@ -129,10 +129,10 @@ export default function NotebooksPage(){
  const shownPages=mine.filter(n=>(n.title+' '+summaries.get(n.id)?.preview).toLowerCase().includes(pageQuery.toLowerCase()));
  const deletePage=(n:Note)=>{A.deleteWithUndo(n);setNoteId(null);};
  const renderNote=(n:Note)=>{const kind=summaries.get(n.id)!.kind;const type=summaries.get(n.id)!.type;const save=(v:{title:string;body:string})=>A.saveNote.mutate({id:n.id,notebook_id:n.notebook_id,...v});
-  if(type==='page'||type==='recall')return <PageEditor key={n.id} note={n} onSave={save} recall={type==='recall'}/>;
+  if((type==='page'||type==='recall')&&pageCanHold(n.body))return <PageEditor key={n.id} note={n} onSave={save} recall={type==='recall'}/>;
   // An old Document keeps its editor (it can hold tabs and comments) until it is converted on purpose.
   const doc=type==='document'?readDoc(n.body):null;
-  const convert=doc?<div className="pe-convert" role="note"><span>This page uses the older Document editor.</span><button onClick={()=>save({title:n.title,body:documentToPage(doc.tabs)})}>Convert to Page</button></div>:null;
+  const convert=doc&&documentSafeForPage(doc)?<div className="pe-convert" role="note"><span>This page uses the older Document editor.</span><button onClick={()=>save({title:n.title,body:documentToPage(doc.tabs)})}>Convert to Page</button></div>:null;
   if(kind==='whiteboard'||kind==='moodboard'||kind==='pdf')return <FreeBoard key={n.id} note={n} onSave={save}/>;
   if(kind==='journal')return <JournalPage key={n.id} note={n} notes={notes} onSave={save} onOpen={id=>{const x=notes.find(m=>m.id===id);if(x)openNote(x);}} onBin={other=>A.deleteWithUndo(other)}/>;
   if(kind==='code')return <CodePage key={n.id} note={n} onSave={save}/>;

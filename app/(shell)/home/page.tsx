@@ -12,7 +12,7 @@ import { Fox } from '@/components/Fox';
 import { WIDGETS, useWidgetOrder } from '@/components/widgets/Widgets';
 import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
 import { suggestions } from '@/lib/assistantLogic';
-import { useTasks } from '@/lib/tasks';
+import { useTasks, useTaskActions } from '@/lib/tasks';
 import { useEvents } from '@/lib/events';
 import { useNotebooks } from '@/lib/notes';
 import { ymd } from '@/lib/days';
@@ -56,6 +56,7 @@ export default function HomePage() {
   const asked = useRef(false);
 
   const tasks = useTasks().data ?? [];
+  const TA = useTaskActions();
   const tomorrow = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d; }, []);
   const eventsTomorrow = (useEvents(tomorrow, 1).data ?? []).filter(e => !e.deleted_at).length;
   const notebooks = (useNotebooks().data ?? []).map(b => b.name);
@@ -81,6 +82,8 @@ export default function HomePage() {
       }
       const r = await sendToAssistant(chatId, t, context);
       if (r.tools.length) foxGlad();
+      // A repeating task the assistant ticked gets its next instance here, as a tick in Tasks would.
+      for (const t of r.tools) if (t.name === 'complete_task' && t.undo) TA.comeBack(t.undo.id);
       setLocal(l => [...l, { id: 'a' + stamp, role: 'assistant', content: r.text, tools: r.tools, created_at: new Date().toISOString() }]);
       if (r.chat_id !== chatId) setChatId(r.chat_id);
       await qc.invalidateQueries({ queryKey: ['chat', r.chat_id] });
@@ -88,7 +91,8 @@ export default function HomePage() {
     } catch (e) {
       const err = e as AssistantError;
       const wait = err.retry ? ` Try again in about ${err.retry} seconds.` : '';
-      setLocal(l => [...l, { id: 'e' + stamp, role: 'assistant', content: '', tools: [], created_at: stamp, error: (err.message || 'Something went wrong.') + wait }]);
+      if (err.chatId && err.chatId !== chatId) setChatId(err.chatId);
+      setLocal(l => [...l, { id: 'e' + stamp, role: 'assistant', content: '', tools: err.tools ?? [], created_at: stamp, error: (err.message || 'Something went wrong.') + wait + (err.tools?.length ? ' What it already did is below.' : '') }]);
     } finally { setBusy(false); foxBusy(-1); }
   }
 
@@ -106,8 +110,9 @@ export default function HomePage() {
   const retry = (m: ChatMessage) => { const i = messages.indexOf(m); const last = [...messages.slice(0, i)].reverse().find(x => x.role === 'user'); setLocal(l => l.filter(x => x !== m && x.id !== last?.id)); if (last) void send(last.content); };
   const doUndo = (m: ChatMessage, t: ToolDone) => {
     if (!t.undo) return;
-    undo.mutate({ undo: t.undo, at: new Date().toISOString() });
-    const mark = (list: ChatMessage[]) => list.map(x => x === m ? { ...x, tools: x.tools.map(y => y === t ? { ...y, undone: true } : y) } : x);
+    const tools = m.tools.map(y => y === t ? { ...y, undone: true } : y);
+    undo.mutate({ undo: t.undo, at: new Date().toISOString(), messageId: local.includes(m) ? undefined : m.id, tools });
+    const mark = (list: ChatMessage[]) => list.map(x => x === m ? { ...x, tools } : x);
     if (local.includes(m)) setLocal(mark); else qc.setQueryData<ChatMessage[]>(['chat', chatId], prev => prev ? mark(prev) : prev);
   };
 
@@ -127,7 +132,7 @@ export default function HomePage() {
         <div className="hm-ideas">{ideas.map(s => <button key={s} className="hm-chip" onClick={() => send(s)}>{s}</button>)}</div>
       </div>}
       {messages.map(m => <div key={m.id} className="hm-msg" data-role={m.role}>
-        {m.error ? <div className="hm-error" role="alert"><p>{m.error}</p><button className="hm-chip" onClick={() => retry(m)}>Try again</button></div>
+        {m.error ? <><div className="hm-error" role="alert"><p>{m.error}</p><button className="hm-chip" onClick={() => retry(m)}>Try again</button></div>{m.tools.map((t, i) => <ToolCard key={i} t={t} onUndo={() => doUndo(m, t)} />)}</>
           : <>{m.content && <div className="hm-text"><Text s={m.content} /></div>}{m.tools.map((t, i) => <ToolCard key={i} t={t} onUndo={() => doUndo(m, t)} />)}</>}
       </div>)}
       {busy && <div className="hm-msg" data-role="assistant"><div className="hm-typing"><Fox pose="run" size={18} tone="muted" /><span>Working on it</span></div></div>}

@@ -14,7 +14,7 @@ import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
 import { usePrefs } from '@/lib/prefs';
-import { useBackGuard } from '@/lib/nav';
+import { useBackGuard, useOverlayBack } from '@/lib/nav';
 import { supabase } from '@/lib/supabase';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useLiveSync } from '@/lib/realtime';
@@ -52,6 +52,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const rail = tablet || prefs.sidebar !== 'open';
   const [more, setMore] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  // The phone sheet and tablet overlay close on Back (Android) and when the tab changes.
+  useOverlayBack(panelOpen, () => setPanelOpen(false));
+  useEffect(() => { setPanelOpen(false); }, [pathname]);
   const working = useIsFetching() + useIsMutating() > 0;
   useEffect(() => { foxWork(working); }, [working]);
   useEffect(() => { foxDash(); }, [pathname]);

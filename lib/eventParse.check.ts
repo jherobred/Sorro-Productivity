@@ -47,3 +47,33 @@ test('days step across a month end', () => {
   const e = parseEvent('call tomorrow 9am', new Date(2026, 10, 30, 10))!;
   assert.equal(local(e.starts_at), '2026-12-01 09:00');
 });
+test('"at" followed by a time is a time, not a place', () => {
+  const e = parseEvent('Dinner at 7pm tomorrow', now)!;
+  assert.equal(e.title, 'Dinner');
+  assert.equal(e.location, undefined);
+  assert.equal(local(e.starts_at), '2026-11-04 19:00');
+});
+test('words that start like a day or month stay in the title', () => {
+  assert.equal(parseEvent('Wedding sat 5pm', now)!.title, 'Wedding');
+  assert.equal(parseEvent('Friends reunion sat 5pm', now)!.title, 'Friends reunion');
+  assert.equal(parseEvent('Decide 3 options fri', now)!.title, 'Decide 3 options');
+});
+test('a number inside the title is not a time', () => {
+  const e = parseEvent('Math 21 exam fri', now)!;
+  assert.equal(e.title, 'Math 21 exam');
+  assert.equal(e.all_day, true);
+});
+test('a repeat starts on the soonest listed day', () => {
+  const e = parseEvent('Gym every Mon and Wed 6pm', now)!;
+  assert.deepEqual(e.repeat, { days: [1, 3] });
+  assert.equal(local(e.starts_at), '2026-11-04 18:00');
+});
+test('a range ending pm can start in the morning', () => {
+  const e = parseEvent('class 9-1pm', now)!;
+  assert.equal(local(e.starts_at), '2026-11-03 09:00');
+  assert.equal(local(e.ends_at), '2026-11-03 13:00');
+});
+test('today\'s weekday later today is today', () => {
+  const friday = new Date(2026, 10, 6, 10, 0);
+  assert.equal(local(parseEvent('dentist fri 3pm', friday)!.starts_at), '2026-11-06 15:00');
+});

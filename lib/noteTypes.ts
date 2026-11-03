@@ -4,6 +4,7 @@
  * was: an old Document stays a Document until the user converts it.
  */
 import { isDocBody, markdownToHtml } from './docFormat.ts';
+import { parse } from './md.ts';
 import { readBoard, readStudy, readFreePage, initialBody, writeBoard, type PageKind } from './pageKinds.ts';
 
 /** Icon names as the Icon component knows them; kept as a string union here so lib stays free of components. */
@@ -108,4 +109,24 @@ export function newBody(type: (typeof SORRO_TYPES)[number]['type']): string {
 /** An old Document as a Page: every tab's text, each under its tab's name when there is more than one. */
 export function documentToPage(tabs: { title: string; html: string }[]): string {
   return writeText(tabs.length === 1 ? tabs[0].html : tabs.map(t => `<h1>${t.title.replace(/</g, '&lt;')}</h1>${t.html}`).join(''));
+}
+
+const RICH_LINES = new Set(['math', 'sketch', 'table', 'columns', 'video']);
+
+/**
+ * True when the Page editor can hold everything in this body. Markdown with
+ * math, sketches, tables, columns, video or images stays in the Document
+ * editor, which keeps them; so does a structured body that failed to parse.
+ */
+export function pageCanHold(body: string): boolean {
+  if (body.startsWith(TEXT) || body.startsWith(RECALL)) return true;
+  if (textHtml(body) === null) return false;
+  if (/!\[[^\]]*\]\([^)]*\)/.test(body)) return false;
+  return !parse(body).some(l => RICH_LINES.has(l.kind));
+}
+
+/** Convert to Page only when no table, math, image, embed or comment would be dropped. */
+export function documentSafeForPage(doc: { tabs: { title?: string; html: string }[]; comments?: unknown[] }): boolean {
+  if (doc.comments?.length) return false;
+  return !doc.tabs.some(t => /<(table|img|iframe|video)\b|data-type="(math|sketch)/i.test(t.html));
 }
