@@ -4,5 +4,6 @@ export const DESTINATIONS = [
   { id: 'calendar', name: 'Calendar', icon: 'cal', part: 'C', phoneBar: true },
   { id: 'tasks', name: 'Tasks', icon: 'task', part: 'T', phoneBar: true },
   { id: 'vault', name: 'Vault', icon: 'folder', part: 'V', phoneBar: false },
+  { id: 'news', name: 'News', icon: 'news', part: 'W', phoneBar: false },
 ] as const;
 export const activePath = (path: string) => DESTINATIONS.some(d => path.split('/')[1] === d.id);

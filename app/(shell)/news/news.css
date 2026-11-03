@@ -1,0 +1,35 @@
+/* W News: an edition read like a paper, a narrow archive beside it. */
+.nw { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px }
+.nw-tabs, .nw-kinds { display: inline-flex; flex-wrap: wrap; align-self: flex-start; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
+.nw-tabs button, .nw-kinds button { min-height: 32px; padding: 0 14px; border-radius: var(--r-pill); color: var(--muted); font-size: 13px }
+.nw-tabs [aria-selected='true'], .nw-kinds [aria-selected='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
+.nw-body { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; align-items: start }
+.nw-today { min-width: 0 }
+.nw-seg { padding: 4px 0 22px; margin-bottom: 18px; border-bottom: 1px solid var(--line); animation: row-in .36s var(--drift) backwards }
+.nw-seg > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px }
+.nw-seg h2 { margin: 0; font: 600 18px/1.3 var(--font-body); color: var(--ink) }
+.nw-seg > header span { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.nw-seg[data-unread='true'] h2 { color: var(--accent) }
+.nw-seg ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px 22px }
+.nw-seg li { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.nw-seg li a, .nw-seg li strong { color: var(--ink); font-weight: 500; font-size: 15px; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere }
+.nw-seg li a:hover { text-decoration: underline }
+.nw-seg li p { margin: 0; color: var(--ink); opacity: .82; font-size: 13.5px; line-height: 1.55 }
+.nw-seg li small { color: var(--muted); font-size: 12px }
+.nw-raw { white-space: pre-wrap; font: 14px/1.6 var(--font-body); margin: 0 }
+.nw-archive { position: sticky; top: 0 }
+.nw-archive h2 { margin: 0 0 8px; font: 600 13px/1.2 var(--font-body); color: var(--muted) }
+.nw-archive ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px }
+.nw-archive button { width: 100%; min-height: 34px; padding: 0 10px; border-radius: var(--r-row); text-align: left; color: var(--ink); font-size: 13px }
+.nw-archive button:hover { background: var(--soft) }
+.nw-archive [aria-current='date'] { background: var(--soft-2); font-weight: 500 }
+.nw-setup { max-width: 720px; display: flex; flex-direction: column; gap: 12px }
+.nw-setup h2 { margin: 0; font: 600 20px/1.3 var(--font-body) }
+.nw-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.55 }
+.nw-steps .sx-pill { margin-left: 10px }
+.nw-hint { margin: 0; color: var(--muted); font-size: 13px }
+.nw-prompt { width: 100%; padding: 12px 14px; border-radius: var(--r-tile); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 13px/1.55 var(--font-mono); resize: vertical }
+.nw-setup > .sx-pill { align-self: flex-start }
+:is(.nw-tabs button, .nw-kinds button, .nw-archive button, .nw-seg a):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.nomo .nw-seg { animation: none }
+@media (max-width: 860px) { .nw-body { grid-template-columns: minmax(0, 1fr) } .nw-archive { position: static; order: -1 } .nw-archive ul { flex-direction: row; overflow-x: auto } .nw-archive button { white-space: nowrap } }
