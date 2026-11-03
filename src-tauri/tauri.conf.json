@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Sorro",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "identifier": "com.sorro.desktop",
   "build": {
     "frontendDist": "https://sorro-jhemsini.vercel.app",

@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *    says so plainly rather than offering a button that goes nowhere.
  */
 
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? '1.0.0';
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? '2.0.0';
 export const UPDATE_URL = process.env.NEXT_PUBLIC_UPDATE_URL ?? '';
 
 export type Release = { version: string; url: string; notes?: string; size_bytes?: number };
