@@ -1,0 +1,8 @@
+/* Sorro's calendar on top of the existing calendar.css: one compact header, flat tiles, the accent marks now. */
+.calendar-page .cal-head { margin-bottom: 8px }
+.calendar-page .cal-head-title h1 { font: 600 22px/1.15 var(--font-body); letter-spacing: -.01em }
+.calendar-page .cal-head-title p { font-size: 12.5px }
+.calendar-page .cal-new { background: var(--accent); color: var(--accent-ink); box-shadow: none }
+.calendar-page .cal-event { border-radius: 6px; border: 0; box-shadow: none }
+.calendar-page .cal-now-line { background: var(--accent) }
+.calendar-page .cal-dayhead.is-today { color: var(--accent) }

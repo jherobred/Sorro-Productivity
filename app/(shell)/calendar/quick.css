@@ -1,0 +1,17 @@
+/* C.quick and the week load bar. */
+.cq-row { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 10px }
+.cq { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 4px 4px 14px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line); color: var(--muted) }
+.cq:focus-within { border-color: var(--pick) }
+.cq input { flex: 1 1 220px; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 14px var(--font-body) }
+.cq input:focus { outline: none }
+.cq-preview { flex: 0 1 auto; display: flex; gap: 10px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12.5px; color: var(--muted) }
+.cq-preview strong { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis }
+.cq .sx-pill { height: 34px }
+.cq .sx-pill:disabled { opacity: .45 }
+.cq-load { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px }
+.cq-load span { display: flex; flex-direction: column; gap: 4px }
+.cq-load i { display: block; height: 4px; border-radius: var(--r-pill); background: var(--accent); transform-origin: left; transition: transform .4s var(--drift) }
+.cq-load span::before { content: ''; display: block; height: 4px; margin-bottom: -8px; border-radius: var(--r-pill); background: var(--soft-2) }
+.cq-load small { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums }
+.nomo .cq-load i { transition: none }
+@media (max-width: 760px) { .cq-preview { display: none } .cq-load small { font-size: 10.5px } }

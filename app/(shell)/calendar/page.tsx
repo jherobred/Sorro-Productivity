@@ -44,6 +44,9 @@ import {
   computeVacantIntervals, formatVacantCountdown, formatDurationHours, displayedWeekNumber, gridRange,
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
+import { QuickAdd, LoadBar, type QuickEvent } from '@/components/calendar/QuickAdd';
+import './quick.css';
+import './calendar-sorro.css';
 
 /**
  * The week/day grid runs midnight to midnight, at a fixed height per hour, and
@@ -212,6 +215,9 @@ export default function CalendarPage() {
   // version re-subscribed on every render, which meant tearing down and
   // re-adding the listener once a second while the clock ticks.
   const shiftRef = useRef<(dir: number) => void>(() => {});
+  const quickRef = useRef<HTMLInputElement>(null);
+  const todayRef = useRef<() => void>(() => {});
+  const viewRef = useRef<(v: View) => void>(() => {});
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -238,6 +244,12 @@ export default function CalendarPage() {
       // guard stops a focused <select> from paging as a side effect — the
       // input guard above catches it first now.)
       if (pop) return;
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'n' || e.key === 'N') { e.preventDefault(); quickRef.current?.focus(); return; }
+        if (e.key === 't' || e.key === 'T') { todayRef.current(); return; }
+        const v = (['month', 'week', 'day', 'agenda', 'countdown'] as View[])[Number(e.key) - 1];
+        if (v) { viewRef.current(v); return; }
+      }
       if (e.key === 'ArrowLeft') shiftRef.current(-1);
       if (e.key === 'ArrowRight') shiftRef.current(1);
     };
@@ -268,6 +280,20 @@ export default function CalendarPage() {
   const shift = (dir: number) => setSelectedDate(date => moveCalendarDate(date, view, dir));
   shiftRef.current = shift;
   const goToday = () => setSelectedDate(new Date());
+  todayRef.current = goToday;
+  viewRef.current = (v: View) => setCalView(v);
+  const quickAdd = (q: QuickEvent) => {
+    A.create.mutate({ id: q.id, title: q.title, starts_at: q.starts_at, ends_at: q.ends_at, color: q.color, location: q.location, all_day: q.all_day, recurrence: q.recurrence ?? undefined });
+    setSelectedDate(new Date(q.starts_at));
+    toast(`Added ${q.title}`, () => A.remove.mutate({ id: q.id }));
+  };
+  const weekLoad = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(ws); d.setDate(d.getDate() + i);
+    const next = new Date(d); next.setDate(next.getDate() + 1);
+    const hours = events.filter(e => !e.all_day && !e.deleted_at && new Date(e.starts_at) < next && new Date(e.ends_at) > d)
+      .reduce((h, e) => h + (Math.min(+new Date(e.ends_at), +next) - Math.max(+new Date(e.starts_at), +d)) / 3_600_000, 0);
+    return { label: d.toLocaleDateString([], { weekday: 'short' }), hours };
+  });
 
   /* The title names the month; the line under it says which days and how much is on them. */
   const weekEnd = new Date(at(ws, 6, 12));
@@ -687,6 +713,7 @@ export default function CalendarPage() {
           </button>
         </div>
       </header>
+      <div className="cq-row" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 29 : 1 }}><QuickAdd ref={quickRef} color={EVENT_COLORS[6][1]} onAdd={quickAdd} />{view === 'week' && <LoadBar days={weekLoad} />}</div>
 
       {layoutOpen && <section className="cal-layout-panel" aria-label="Calendar layout" style={{ order: 1 }}>
         <div><strong>Focus hours</strong><label>From<input aria-label="Focus hours start" type="time" value={focusFrom} onChange={e => setFocusFrom(e.target.value)}/></label><label>To<input aria-label="Focus hours end" type="time" value={focusTo} onChange={e => setFocusTo(e.target.value)}/></label>
@@ -1566,7 +1593,16 @@ function Grid({
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-        <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: GRID_H }}>
+        <div ref={bodyRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${days}, 1fr)`, height: GRID_H }}
+          onDragOver={e => { if (e.dataTransfer.types.includes('text/sorro-task')) e.preventDefault(); }}
+          onDrop={e => {
+            const id = e.dataTransfer.getData('text/sorro-task'); const r = bodyRef.current?.getBoundingClientRect();
+            const task = (queryClient.getQueryData<Task[]>(['tasks']) ?? tasks).find(x => x.id === id);
+            if (!id || !r || !task) return;
+            e.preventDefault();
+            const day = days === 1 ? dayOffset : Math.max(0, Math.min(days - 1, Math.floor((e.clientX - r.left) / r.width * days)));
+            onSchedule(task, day, snapCalendarHour(calendarPointerHour(e.clientY, r.top, r.height)));
+          }}>
           {hours.map((h, i) => (
             <div key={`r${h}`} className="cal-hour-line" aria-hidden style={{
               position: 'absolute', left: 0, right: 0, top: `${(i / SPAN) * 100}%`,

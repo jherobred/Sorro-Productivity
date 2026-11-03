@@ -44,6 +44,8 @@
   --sh: none; --shl: var(--shadow);
   --acc: var(--accent); --accTx: var(--accent); --gl2: color-mix(in srgb, var(--accent) 55%, transparent);
   --sk1: var(--soft); --sk2: var(--soft-2);
+  /* Basedly's poster blue drew every primary button in Calendar and Tasks; Sorro's primary is the accent. */
+  --poster-blue: var(--accent);
 }
 
 html, body { background: var(--bg); color: var(--ink) }
