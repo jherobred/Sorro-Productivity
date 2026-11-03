@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useEffect, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { Icon, type IconName } from '../Icon';
@@ -267,7 +268,7 @@ export function GlobalShelf({
                           flex: 'none', padding: '2px 7px', fontSize: 10.5, fontWeight: 800,
                           letterSpacing: '.02em', maxWidth: 110,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          color: inkFor(b.color, prefs.theme === 'dark'),
+                          color: inkFor(b.color, themeIsDark(prefs.theme)),
                           background: `color-mix(in srgb, ${b.color} 16%, transparent)`,
                           border: `1px solid color-mix(in srgb, ${b.color} 38%, transparent)`,
                         }}>
@@ -422,7 +423,7 @@ export function GlobalShelf({
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y} kind="project" label={menu.label} items={menu.items}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)}
         />
       )}
       {adjusting && (
@@ -617,7 +618,7 @@ function ShelfHero({
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y} kind="global" label="Wallpaper" items={wallMenu}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)}
         />
       )}
       {adjust && (

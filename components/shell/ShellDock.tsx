@@ -40,7 +40,7 @@ export function ShellDock({
               display: 'grid', placeItems: 'center', position: 'relative',
               background: on ? s.hue : 'transparent',
             }}>
-            <Icon name={s.ic} size={18} color={on ? 'var(--ink)' : 'var(--tx2)'} />
+            <Icon name={s.ic} size={18} color={on ? 'var(--accent-ink)' : 'var(--tx2)'} />
             {s.badge && !on && (
               <span aria-hidden style={{
                 position: 'absolute', top: 5, right: 5, width: 6, height: 6,

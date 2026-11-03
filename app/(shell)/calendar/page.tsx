@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
@@ -709,7 +710,7 @@ export default function CalendarPage() {
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="calendar" label="Calendar options"
-          accent={prefs.accent} dark={prefs.theme === 'dark'} items={menuItems} onClose={() => setMenu(null)} />
+          accent={prefs.accent} dark={themeIsDark(prefs.theme)} items={menuItems} onClose={() => setMenu(null)} />
       )}
 
       {importing && <ScheduleImport onClose={() => setImporting(false)} />}
@@ -1004,7 +1005,7 @@ export default function CalendarPage() {
       {ctx && (
         <ContextMenu
           x={ctx.x} y={ctx.y} kind="event" label={chipLabel(ctx.ev)}
-          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          accent={prefs.accent} dark={themeIsDark(prefs.theme)}
           items={contextItems(ctx.ev, ctx.span, A, setEdit, setRecModal, requestDelete)}
           onClose={() => setCtx(null)}
         />
@@ -1118,7 +1119,7 @@ function Grid({
   showVacant?: boolean;
 }) {
   const { prefs } = usePrefs();
-  const dark = prefs.theme === 'dark';
+  const dark = themeIsDark(prefs.theme);
   const { phone } = useLayout();
   const bodyRef = useRef<HTMLDivElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
@@ -2445,7 +2446,7 @@ function RecurrenceChoiceModal({
               borderRadius: 10,
               border: 'none',
               background: action === 'delete' ? 'var(--pal-coral)' : 'var(--acc)',
-              color: action === 'delete' ? '#FFFFFF' : 'var(--ink)',
+              color: action === 'delete' ? '#FFFFFF' : 'var(--accent-ink)',
               fontSize: 12.5,
               fontWeight: 700,
               cursor: 'pointer',
@@ -2478,7 +2479,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   const [titleColor, setTitleColor] = useState(ev.title_color ?? null);
   const [detailColor, setDetailColor] = useState(ev.detail_color ?? null);
   const { prefs } = usePrefs();
-  const dark = prefs.theme === 'dark';
+  const dark = themeIsDark(prefs.theme);
 
   /**
    * Categories, not raw swatches.
@@ -2710,7 +2711,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
                             borderRadius: 15,
                             border: `1px solid ${isSel ? 'var(--acc)' : 'var(--line2)'}`,
                             background: isSel ? 'var(--acc)' : 'var(--card)',
-                            color: isSel ? 'var(--ink)' : 'var(--tx2)',
+                            color: isSel ? 'var(--accent-ink)' : 'var(--tx2)',
                             fontSize: 11,
                             fontWeight: 700,
                             cursor: 'pointer',
@@ -2833,7 +2834,7 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
         <div style={{ display: 'flex', gap: 9 }}>
           <button onClick={onClose} className="hov k-squish" style={{ flex: 1, minHeight: 44, borderRadius: 14, border: '1px solid var(--line2)', fontSize: 13.5, fontWeight: 700, color: 'var(--tx2)' }}>Cancel</button>
           <button onClick={save} className="acc k-squish"
-            style={{ flex: 1, minHeight: 44, borderRadius: 14, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13.5, fontWeight: 700 }}>Save</button>
+            style={{ flex: 1, minHeight: 44, borderRadius: 14, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 13.5, fontWeight: 700 }}>Save</button>
         </div>
       </div>
     </div>

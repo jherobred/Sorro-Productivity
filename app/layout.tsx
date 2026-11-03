@@ -4,6 +4,7 @@ import './globals.css';
 import './studio.css';
 import './recovery-planning.css';
 import './daily-workspace.css';
+import './tokens.css';
 import { Providers } from './providers';
 
 /* next/font downloads these at build time and emits them as static assets, so
@@ -14,13 +15,13 @@ const display = Familjen_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Basedly',
-  description: 'Your whole week, one surface.',
+  title: 'Sorro',
+  description: 'Notes, calendar and tasks with an assistant.',
   // Added to the home screen, the site opens as its own window with no address
   // bar — the web half of "full screen on a phone". iOS reads these two rather
   // than the manifest's `display`.
-  appleWebApp: { capable: true, title: 'Basedly', statusBarStyle: 'black-translucent' },
-  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  appleWebApp: { capable: true, title: 'Sorro', statusBarStyle: 'black-translucent' },
+  icons: { icon: '/brand/app-icon.png', apple: '/brand/app-icon.png' },
   // A plain file in public/ rather than an app/manifest.ts metadata route:
   // under `output: export` that route needs `dynamic = 'force-static'` and then
   // still has to agree with `trailingSlash`. A static file has no opinions.
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
 const SUPABASE_ORIGIN = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 export const viewport: Viewport = {
-  themeColor: '#0B0A13',
+  themeColor: [{ media: '(prefers-color-scheme: light)', color: '#F7F6F4' }, { media: '(prefers-color-scheme: dark)', color: '#111113' }],
   width: 'device-width',
   initialScale: 1,
   // No maximumScale: Android WebView honours it, and this ships as an APK,
@@ -82,17 +83,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
 
-        {/* Paint the stored theme/accent before first frame so there is no flash.
+        {/* Paint the stored theme and motion before first frame so there is no flash.
             The real values are reconciled from bd_profiles.prefs once signed in. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var p=JSON.parse(localStorage.getItem('basedly-prefs')||'{}');
 var r=document.documentElement;
-r.setAttribute('data-theme',p.theme==='dark'?'dark':'light');
-var ac=p.accent==='#7C6CFF'?'#8B7CFF':p.accent;
-if(ac){r.style.setProperty('--acc',ac);
-r.style.setProperty('--accTx','color-mix(in srgb, '+ac+(p.theme==='dark'?' 82%, #FFFFFF)':' 62%, #1C1A26)'));
-r.style.setProperty('--gl2','color-mix(in srgb, '+ac+' 55%, transparent)');}
+var t=p.theme==='dark'||p.theme==='light'?p.theme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+r.setAttribute('data-theme',t);
 var mo=typeof p.motion==='boolean'?p.motion:!matchMedia('(prefers-reduced-motion: reduce)').matches;
 r.setAttribute('data-motion',mo?'on':'off');
 if(!mo){r.style.setProperty('--anim','paused');r.classList.add('nomo');}

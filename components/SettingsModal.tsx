@@ -350,7 +350,7 @@ export function SettingsModal({
                 <PhoneRow
                   icon="moon"
                   label="Color Mode"
-                  sub={prefs.theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                  sub={prefs.theme === 'system' ? 'System' : prefs.theme === 'dark' ? 'Dark' : 'Light'}
                   onClick={() => setPhoneSubPage('appearance')}
                 />
                 <PhoneRow
@@ -546,8 +546,9 @@ export function SettingsModal({
             <Field label="Theme Mode">
               <div style={{ display: 'flex', gap: 8 }}>
                 {[
-                  { v: 'dark', n: 'Dark Mode', ic: 'moon' },
-                  { v: 'light', n: 'Light Mode', ic: 'spark' },
+                  { v: 'system', n: 'System', ic: 'cog' },
+                  { v: 'light', n: 'Light', ic: 'sun' },
+                  { v: 'dark', n: 'Dark', ic: 'moon' },
                 ].map((t) => (
                   <button
                     key={t.v}

@@ -1178,7 +1178,7 @@ export function Java3DVisualizer({
     fontWeight: 700,
     border: 'none',
     background: on ? 'var(--acc)' : 'transparent',
-    color: on ? 'var(--ink)' : 'var(--tx2)',
+    color: on ? 'var(--accent-ink)' : 'var(--tx2)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   });

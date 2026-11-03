@@ -833,7 +833,7 @@ function ProfileItemEdit({
         <button
           onClick={() => onSave(title, body)}
           className="acc k-squish"
-          style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800 }}
+          style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 11.5, fontWeight: 800 }}
         >
           Save Changes
         </button>
@@ -918,7 +918,7 @@ function ProfileCommentDrawer({
             padding: '7px 12px',
             borderRadius: 8,
             background: 'var(--acc)',
-            color: 'var(--ink)',
+            color: 'var(--accent-ink)',
             fontSize: 11.5,
             fontWeight: 800,
             opacity: draft.trim() ? 1 : 0.5,

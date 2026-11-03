@@ -80,7 +80,7 @@ export function MessagesSheet({ onClose }: { onClose: () => void }) {
             </button>
             <button onClick={() => setPicking('dm')} className="k-squish" aria-label="New chat"
               style={{ width: 34, height: 34, flex: 'none', borderRadius: 10, background: 'var(--acc)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="plus" size={15} color="var(--ink)" />
+              <Icon name="plus" size={15} color="var(--accent-ink)" />
             </button>
           </>
         )}

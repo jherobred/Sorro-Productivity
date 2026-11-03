@@ -307,9 +307,9 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
               </div>
               <label className="k-squish" style={{
                 display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11,
-                background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
+                background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
               }}>
-                <Icon name="cal" size={14} color="var(--ink)" />Choose an image or .ics
+                <Icon name="cal" size={14} color="var(--accent-ink)" />Choose an image or .ics
                 <input type="file" accept="image/*,.ics,text/calendar" hidden
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) void scan(f); e.target.value = ''; }} />
               </label>

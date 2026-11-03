@@ -161,9 +161,9 @@ export function Challenges() {
         <button onClick={() => setPicking(true)} className="k-squish"
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px',
-            borderRadius: 11, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, minHeight: 38,
+            borderRadius: 11, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 12, fontWeight: 800, minHeight: 38,
           }}>
-          <Icon name="plus" size={14} color="var(--ink)" />New challenge
+          <Icon name="plus" size={14} color="var(--accent-ink)" />New challenge
         </button>
       </div>
 
@@ -884,7 +884,7 @@ function ChallengeCard({ challenge: c, members, A, accent, profiles, days, stars
             }}
             className="k-squish" aria-label="Log one more"
             style={{ ...STEP, background: accent, border: 0 }}>
-            <Icon name="plus" size={13} color="var(--ink)" />
+            <Icon name="plus" size={13} color="var(--accent-ink)" />
           </button>
         </div>
       )}
@@ -964,7 +964,7 @@ function JoinButton({ phase, joined, color, onJoin, onLeave }: {
       style={{
         ...PILL,
         background: joined ? `color-mix(in srgb, ${color} 20%, transparent)` : color,
-        color: joined ? color : 'var(--ink)',
+        color: joined ? color : 'var(--accent-ink)',
         border: joined ? `1px solid color-mix(in srgb, ${color} 50%, transparent)` : 'none',
       }}>
       {joined ? 'Joined' : 'Join'}
@@ -1171,7 +1171,7 @@ function Composer({ onClose, onCreate, initial, template }: {
           }}>
             <span style={{
               display: 'block', width: 16, height: 16, borderRadius: 8,
-              background: ranked ? 'var(--ink)' : 'var(--tx3)',
+              background: ranked ? 'var(--accent-ink)' : 'var(--tx3)',
               transform: ranked ? 'translateX(18px)' : 'none',
               transition: 'transform .4s var(--k-spring)',
             }} />
@@ -1201,7 +1201,7 @@ function Composer({ onClose, onCreate, initial, template }: {
             Cancel
           </button>
           <button onClick={submit} disabled={!valid} className="k-squish"
-            style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'var(--acc)', color: 'var(--ink)', fontSize: 13, fontWeight: 800, opacity: valid ? 1 : 0.45 }}>
+            style={{ flex: 1, minHeight: 44, borderRadius: 12, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 13, fontWeight: 800, opacity: valid ? 1 : 0.45 }}>
             {initial ? 'Save changes' : 'Create'}
           </button>
         </div>

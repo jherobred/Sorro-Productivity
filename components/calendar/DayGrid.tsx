@@ -10,6 +10,7 @@
  * part of the day they are actually in.
  */
 
+import { themeIsDark } from '@/lib/theme';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { K, SECHUE } from '@/lib/pal';
@@ -65,7 +66,7 @@ export function CalendarGrid({
   onSchedule: (t: Task, day: number, hour: number | null) => void;
 }) {
   const { prefs } = usePrefs();
-  const dark = prefs.theme === 'dark';
+  const dark = themeIsDark(prefs.theme);
   const { phone } = useLayout();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ id: string; day: number; hour: number } | null>(null);

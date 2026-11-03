@@ -357,7 +357,7 @@ export function PersonCard({
               <button onClick={follow.toggle} className="acc k-squish" style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
                 background: follow.on ? 'var(--card2)' : 'var(--acc)',
-                color: follow.on ? 'var(--tx)' : 'var(--ink)',
+                color: follow.on ? 'var(--tx)' : 'var(--accent-ink)',
                 border: follow.on ? '1px solid var(--line2)' : 'none', fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
               }}>{follow.on ? 'Following ✓' : 'Follow +'}</button>
               <button onClick={onMessage} className="hov k-squish" style={{

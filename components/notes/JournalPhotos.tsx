@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useRef, useState } from 'react';
 import { Icon } from '../Icon';
 import { MediaFrame } from '../MediaFrame';
@@ -199,7 +200,7 @@ function PhotoTile({
 
       {press.ctx && (
         <ContextMenu x={press.ctx.x} y={press.ctx.y} kind="scratch" label={photo.name} items={menu()}
-          onClose={press.close} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+          onClose={press.close} accent={prefs.accent} dark={themeIsDark(prefs.theme)} />
       )}
 
       <MediaFrame src={url ?? null} alt={photo.name} ratio={open ? 16 / 10 : 1} maxHeight={open ? 520 : 240} rounded={11}>

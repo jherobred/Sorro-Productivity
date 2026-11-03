@@ -88,7 +88,7 @@ export default function SignIn() {
             padding: '13px 16px',
             borderRadius: 14,
             background: 'var(--acc)',
-            color: 'var(--ink)',
+            color: 'var(--accent-ink)',
             fontSize: 13.5,
             fontWeight: 700,
             display: 'flex',

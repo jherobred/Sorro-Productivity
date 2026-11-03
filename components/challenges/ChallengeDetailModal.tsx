@@ -333,7 +333,7 @@ export function ChallengeDetailModal({
                       padding: '8px 16px',
                       borderRadius: 10,
                       background: 'var(--acc)',
-                      color: 'var(--ink)',
+                      color: 'var(--accent-ink)',
                       fontSize: 12,
                       fontWeight: 800,
                       border: 'none',
@@ -382,7 +382,7 @@ export function ChallengeDetailModal({
                 padding: '9px 18px',
                 borderRadius: 12,
                 background: 'var(--acc)',
-                color: 'var(--ink)',
+                color: 'var(--accent-ink)',
                 fontSize: 12.5,
                 fontWeight: 800,
                 border: 'none',
@@ -392,7 +392,7 @@ export function ChallengeDetailModal({
                 gap: 6,
               }}
             >
-              <Icon name="plus" size={14} color="var(--ink)" />
+              <Icon name="plus" size={14} color="var(--accent-ink)" />
               Join Challenge
             </button>
           )}

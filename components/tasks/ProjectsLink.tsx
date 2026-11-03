@@ -66,7 +66,7 @@ export function ProjectsPanel({ lists, archived, tasks, meta, scope, today, week
     const on = scope === `list:${id}`;
     const note = l ? meta?.[l.id]?.note : 'Tasks that belong to no project';
     return (
-      <li key={id} className={'prj-card' + (on ? ' is-on' : '') + (hidden ? ' is-hidden' : '')} style={{ '--p': color, '--ink': inkOn(color), '--i': i } as React.CSSProperties}>
+      <li key={id} className={'prj-card' + (on ? ' is-on' : '') + (hidden ? ' is-hidden' : '')} style={{ '--p': color, '--accent-ink': inkOn(color), '--i': i } as React.CSSProperties}>
         <button type="button" className="prj-card-main" aria-current={on ? 'true' : undefined} onClick={() => onScope(`list:${id}`)}
           onContextMenu={(e) => { if (!l) return; e.preventDefault(); onMenu(l, e.clientX, e.clientY); }}>
           <i className="prj-card-spine" aria-hidden="true" />

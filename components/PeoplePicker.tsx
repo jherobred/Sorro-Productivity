@@ -222,7 +222,7 @@ export function PeoplePicker({
             <button onClick={() => onPick(chosen, name.trim())} disabled={!canGo} className="k-squish"
               style={{
                 marginLeft: 'auto', minHeight: 38, padding: '0 18px', borderRadius: 11,
-                background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800,
+                background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 12, fontWeight: 800,
                 opacity: canGo ? 1 : 0.45,
               }}>
               {confirmLabel}
@@ -292,7 +292,7 @@ function Row({
           border: `1.5px solid ${on ? 'var(--acc)' : 'var(--line2)'}`,
           background: on ? 'var(--acc)' : 'transparent',
         }}>
-          {on && <Icon name="check" size={11} color="var(--ink)" />}
+          {on && <Icon name="check" size={11} color="var(--accent-ink)" />}
         </span>
       )}
     </button>

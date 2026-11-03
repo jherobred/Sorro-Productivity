@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
@@ -59,7 +60,7 @@ export function MemoryMap({ memories, onOpen, className }: {
   const layer = useRef<L.LayerGroup | null>(null);
   const fitted = useRef('');
   const { prefs } = usePrefs();
-  const dark = prefs.theme === 'dark';
+  const dark = themeIsDark(prefs.theme);
   const photos = useMemoryPhotos(memories);
   const placed = useMemo(() => memories.filter((m) => m.lat !== null && m.lng !== null), [memories]);
   const openRef = useRef(onOpen);
@@ -140,7 +141,7 @@ export function MiniMap({ lat, lng, kind }: { lat: number; lng: number; kind: Me
   const { prefs } = usePrefs();
   useEffect(() => {
     if (!host.current) return;
-    const m = baseMap(host.current, prefs.theme === 'dark', false);
+    const m = baseMap(host.current, themeIsDark(prefs.theme), false);
     m.setView([lat, lng], 16);
     L.circleMarker([lat, lng], { radius: 9, color: '#fff', weight: 3, fillColor: KIND_HUE[kind], fillOpacity: 1 }).addTo(m);
     return () => { m.remove(); };
@@ -169,7 +170,7 @@ export function PlacePicker({ initial, onPick, onClose }: {
 
   useEffect(() => {
     if (!host.current) return;
-    const m = baseMap(host.current, prefs.theme === 'dark');
+    const m = baseMap(host.current, themeIsDark(prefs.theme));
     m.setView(initial ? [initial.lat, initial.lng] : FALLBACK, initial ? 17 : 13);
     map.current = m;
     // A name from search only holds until the map is moved away from it.

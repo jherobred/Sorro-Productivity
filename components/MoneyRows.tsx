@@ -53,7 +53,7 @@ export function InlineForm({
         </label>
       ))}
       <button onClick={() => complete && onSubmit(v)} disabled={!complete} className="k-squish"
-        style={{ minHeight: 40, padding: '0 15px', borderRadius: 9, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12, fontWeight: 800, opacity: complete ? 1 : 0.45 }}>
+        style={{ minHeight: 40, padding: '0 15px', borderRadius: 9, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 12, fontWeight: 800, opacity: complete ? 1 : 0.45 }}>
         {submitLabel}
       </button>
       <button onClick={onCancel} className="hov k-squish"

@@ -447,7 +447,7 @@ export function JavaLab() {
               padding: '0 12px',
               borderRadius: 8,
               background: 'var(--acc)',
-              color: 'var(--ink)',
+              color: 'var(--accent-ink)',
               fontSize: 11.5,
               fontWeight: 800,
               display: 'flex',
@@ -456,7 +456,7 @@ export function JavaLab() {
               cursor: 'pointer',
             }}
           >
-            <Icon name="plus" size={13} color="var(--ink)" />
+            <Icon name="plus" size={13} color="var(--accent-ink)" />
             <span>New File</span>
           </button>
         </div>
@@ -640,7 +640,7 @@ export function JavaLab() {
                     fontWeight: on ? 800 : 600,
                     border: 'none',
                     background: on ? 'var(--acc)' : 'transparent',
-                    color: on ? 'var(--ink)' : 'var(--tx2)',
+                    color: on ? 'var(--accent-ink)' : 'var(--tx2)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -649,7 +649,7 @@ export function JavaLab() {
                     transition: 'background .15s, color .15s',
                   }}
                 >
-                  <Icon name={iconName} size={13} color={on ? 'var(--ink)' : 'var(--tx3)'} />
+                  <Icon name={iconName} size={13} color={on ? 'var(--accent-ink)' : 'var(--tx3)'} />
                   <span>{label}</span>
                 </button>
               );
@@ -724,7 +724,7 @@ export function JavaLab() {
                 padding: '0 14px',
                 borderRadius: 8,
                 background: 'var(--acc)',
-                color: 'var(--ink)',
+                color: 'var(--accent-ink)',
                 fontSize: 12,
                 fontWeight: 800,
                 border: 'none',
@@ -736,7 +736,7 @@ export function JavaLab() {
                 opacity: file ? 1 : 0.4,
               }}
             >
-              <Icon name="play" size={12} color="var(--ink)" />
+              <Icon name="play" size={12} color="var(--accent-ink)" />
               <span>Run (⌘↵)</span>
             </button>
 
@@ -800,7 +800,7 @@ export function JavaLab() {
                       fontWeight: 700,
                       border: 'none',
                       background: layoutMode === mode ? 'var(--acc)' : 'transparent',
-                      color: layoutMode === mode ? 'var(--ink)' : 'var(--tx3)',
+                      color: layoutMode === mode ? 'var(--accent-ink)' : 'var(--tx3)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1156,7 +1156,7 @@ function TerminalConsole({
               padding: '3px 8px',
               borderRadius: 6,
               background: 'var(--acc)',
-              color: 'var(--ink)',
+              color: 'var(--accent-ink)',
               fontSize: 10.5,
               fontWeight: 800,
               border: 'none',
@@ -1166,7 +1166,7 @@ function TerminalConsole({
               gap: 4,
             }}
           >
-            <Icon name="play" size={10} color="var(--ink)" />
+            <Icon name="play" size={10} color="var(--accent-ink)" />
             <span>Run</span>
           </button>
         </div>

@@ -248,7 +248,7 @@ export function MathEquationEditor({
         <button onClick={onClose} className="hov k-squish" style={{ padding: '8px 16px', borderRadius: 9, background: 'transparent', border: '1px solid var(--line2)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
           Cancel
         </button>
-        <button onClick={handleSave} className="acc k-squish" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--acc)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
+        <button onClick={handleSave} className="acc k-squish" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 12.5, fontWeight: 800, border: 'none', cursor: 'pointer' }}>
           Insert Equation
         </button>
       </div>

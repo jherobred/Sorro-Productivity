@@ -170,7 +170,7 @@ export function ShareSheet({ item, me, onClose }: { item: Item; me: string; onCl
                 className="acc k-squish"
                 style={{
                   alignSelf: 'flex-end', padding: '6px 14px', borderRadius: 8,
-                  background: 'var(--acc)', color: 'var(--ink)', fontSize: 11.5, fontWeight: 800,
+                  background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 11.5, fontWeight: 800,
                 }}
               >
                 Post with Quote

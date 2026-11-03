@@ -192,7 +192,7 @@ export function QuickAdd({ onClose, onAdd }: { onClose: () => void; onAdd: (d: D
 
         <button onClick={() => void save()} disabled={centavos <= 0 || busy} className="k-squish"
           style={{
-            width: '100%', minHeight: 46, borderRadius: 13, background: 'var(--acc)', color: 'var(--ink)',
+            width: '100%', minHeight: 46, borderRadius: 13, background: 'var(--acc)', color: 'var(--accent-ink)',
             fontSize: 13.5, fontWeight: 800, opacity: centavos > 0 && !busy ? 1 : 0.45,
           }}>
           {busy ? 'Saving…' : centavos > 0 ? `Add ₱${shown}` : 'Add'}

@@ -88,7 +88,7 @@ export function MessengerDock() {
         {!open && unread > 0 && (
           <span className="k-pulse" style={{
             minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, flex: 'none',
-            background: 'var(--acc)', color: 'var(--ink)', fontSize: 10.5, fontWeight: 800,
+            background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 10.5, fontWeight: 800,
             display: 'grid', placeItems: 'center',
           }}>
             {unread}

@@ -43,7 +43,7 @@
 
 /* Code page: language picker and the sandboxed preview beside the source. */
 .code-language select{background:var(--card2);color:var(--tx);border:1px solid var(--line2);border-radius:8px;padding:4px 8px;font:inherit;font-size:12px}
-.code-run{color:var(--ink);background:var(--poster-blue,#2454ed);border-radius:8px;padding:4px 12px;font-weight:700}
+.code-run{color:var(--accent-ink);background:var(--poster-blue,#2454ed);border-radius:8px;padding:4px 12px;font-weight:700}
 .code-split{display:flex;flex:1;min-height:0;gap:0}
 .code-split>.java-editor{flex:1;min-width:0}
 .code-split.has-preview>.java-editor{flex:1 1 50%}

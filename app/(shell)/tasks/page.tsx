@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
@@ -596,7 +597,7 @@ export default function TasksPage() {
           onDelete={() => deleteMany(selectedTasks)} />
       )}
 
-      {menu && <ContextMenu x={menu.x} y={menu.y} kind="tasks" label={menu.label} items={menu.items} accent={prefs.accent} dark={prefs.theme === 'dark'} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} kind="tasks" label={menu.label} items={menu.items} accent={prefs.accent} dark={themeIsDark(prefs.theme)} onClose={() => setMenu(null)} />}
 
       {picker && (
         <TaskDatePicker

@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useMemo, useState } from 'react';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
@@ -86,7 +87,7 @@ export function BoardShelf({
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="project" label={menu.label} items={menu.items}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)} />
       )}
       {picker && (
         <ColorPicker x={picker.x} y={picker.y} value={picker.value}

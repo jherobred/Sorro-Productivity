@@ -180,7 +180,7 @@ function Card({ spec, row }: { spec: Spec; row?: Integration }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setOpen(false)} className="hov k-squish" style={{ ...BTN, flex: 1, justifyContent: 'center' }}>Cancel</button>
             <button onClick={save} disabled={!complete} className="k-squish"
-              style={{ ...BTN, flex: 1, justifyContent: 'center', background: 'var(--acc)', color: 'var(--ink)', border: 0, opacity: complete ? 1 : 0.45 }}>
+              style={{ ...BTN, flex: 1, justifyContent: 'center', background: 'var(--acc)', color: 'var(--accent-ink)', border: 0, opacity: complete ? 1 : 0.45 }}>
               Save
             </button>
           </div>

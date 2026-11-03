@@ -1,4 +1,5 @@
 'use client';
+import { themeIsDark } from '@/lib/theme';
 import {useEffect,useId,useRef,useState,type CSSProperties,type PointerEvent as PE} from 'react';
 import dynamic from 'next/dynamic';
 import {Icon,type IconName} from '@/components/Icon';
@@ -188,7 +189,7 @@ export function FreeBoard({note,onSave}:{note:Note;onSave:(v:{title:string;body:
   </div>
   <footer className="board-footer"><span>{board.pdf?`${board.pdf.pages.length} PDF pages · `:''}{board.items.length} objects</span><div><button aria-label="Zoom out" disabled={collapsed} onClick={()=>zoom(1/1.2)}><Icon name="minus"/></button><button disabled={collapsed} onClick={fit}>{Math.round(view.scale*100)}%</button><button aria-label="Zoom in" disabled={collapsed} onClick={()=>zoom(1.2)}><Icon name="plus"/></button><button disabled={collapsed} onClick={fit}>Fit</button></div></footer>
   <input ref={imagePicker} hidden type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={e=>{if(e.target.files)void addImages(e.target.files);e.target.value='';}}/><input ref={cardPicker} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{const f=e.target.files?.[0];const id=selected[0];if(f&&id)void setCardPhoto(id,f);e.target.value='';}}/><input ref={pdfPicker} hidden type="file" accept="application/pdf,.pdf" onChange={e=>{if(e.target.files?.[0])void importPdf(e.target.files[0]);e.target.value='';}}/>
-  {menu&&<ContextMenu {...menu} kind="node" onClose={()=>setMenu(null)} accent={prefs.accent} dark={prefs.theme==='dark'}/>}
+  {menu&&<ContextMenu {...menu} kind="node" onClose={()=>setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)}/>}
   {polaroidOpen&&<PhotoCapture heading="Pin a polaroid to the board." invitation={{title:<>A photo,<br/>and a line under it.</>,text:'Take a photo or choose one. It lands on the board as a polaroid you can move, resize and caption.'}} confirmLabel="Add to the board" withCaption onClose={()=>setPolaroidOpen(false)} onKeep={addPolaroid}/>}
  </section>;
 }

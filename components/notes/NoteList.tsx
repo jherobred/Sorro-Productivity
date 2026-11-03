@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useMemo, useState } from 'react';
 import { Icon, type IconName } from '../Icon';
 import { ContextMenu, type CtxGroup } from '../ContextMenu';
@@ -110,7 +111,7 @@ export function NoteList({
     }}>
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="scratch" label={menu.label} items={menu.items}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'} />
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)} />
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

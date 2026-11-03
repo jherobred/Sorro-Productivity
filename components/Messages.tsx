@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -433,10 +434,10 @@ export function Thread({
             style={{
               width: 38, height: 38, flex: 'none', borderRadius: 11,
               background: draft.trim() || attach ? 'var(--acc)' : 'var(--card2)',
-              color: draft.trim() || attach ? 'var(--ink)' : 'var(--tx3)',
+              color: draft.trim() || attach ? 'var(--accent-ink)' : 'var(--tx3)',
               display: 'grid', placeItems: 'center',
             }}>
-            <Icon name="send" size={15} color={draft.trim() || attach ? 'var(--ink)' : 'var(--tx3)'} />
+            <Icon name="send" size={15} color={draft.trim() || attach ? 'var(--accent-ink)' : 'var(--tx3)'} />
           </button>
         </div>
       </div>
@@ -584,7 +585,7 @@ function Bubble({
                 Cancel
               </button>
               <button onClick={() => onEditSave(draft)} className="k-squish"
-                style={{ padding: '5px 12px', borderRadius: 9, background: 'var(--acc)', color: 'var(--ink)', fontSize: 11, fontWeight: 800 }}>
+                style={{ padding: '5px 12px', borderRadius: 9, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 11, fontWeight: 800 }}>
                 Save
               </button>
             </span>
@@ -622,7 +623,7 @@ function Bubble({
         <ContextMenu
           x={menu.x} y={menu.y} kind="message"
           label={msg.body ? msg.body.slice(0, 40) : 'Attachment'}
-          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          accent={prefs.accent} dark={themeIsDark(prefs.theme)}
           onClose={() => setMenu(null)}
           items={mine
             ? [

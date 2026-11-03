@@ -112,14 +112,14 @@ export function TracePlaybackHUD({
             minWidth: 32,
             borderRadius: '50%',
             background: 'var(--acc)',
-            color: 'var(--ink)',
+            color: 'var(--accent-ink)',
             border: 'none',
             display: 'grid',
             placeItems: 'center',
             cursor: 'pointer',
           }}
         >
-          <Icon name={isPlaying ? 'minus' : 'play'} size={12} color="var(--ink)" />
+          <Icon name={isPlaying ? 'minus' : 'play'} size={12} color="var(--accent-ink)" />
         </button>
 
         {/* Step Index Badge */}
@@ -463,7 +463,7 @@ export function TracePlaybackHUD({
             padding: phone ? '0 12px' : '0 20px',
             borderRadius: 9,
             background: 'var(--acc)',
-            color: 'var(--ink)',
+            color: 'var(--accent-ink)',
             fontSize: phone ? 11.5 : 12,
             fontWeight: 800,
             border: 'none',
@@ -475,7 +475,7 @@ export function TracePlaybackHUD({
             boxShadow: '0 4px 14px color-mix(in srgb, var(--acc) 40%, transparent)',
           }}
         >
-          <Icon name={isPlaying ? 'minus' : 'play'} size={13} color="var(--ink)" />
+          <Icon name={isPlaying ? 'minus' : 'play'} size={13} color="var(--accent-ink)" />
           <span>{isPlaying ? 'Pause' : 'Play'}</span>
         </button>
 

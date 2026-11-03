@@ -1,5 +1,6 @@
 'use client';
 
+import { themeIsDark } from '@/lib/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../Icon';
 import { ContextMenu, type CtxItem } from '../ContextMenu';
@@ -122,7 +123,7 @@ export function Canvas({
   if (phone) {
     return board
       ? <Board key={board.id} board={board} notes={notes} boards={boards} A={A} phone
-          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          accent={prefs.accent} dark={themeIsDark(prefs.theme)}
           onOpenNote={onOpenNote} onOpenBoard={setBoardId} onBack={() => setBoardId(null)} />
       : <div className="navsb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{list}</div>;
   }
@@ -132,14 +133,14 @@ export function Canvas({
       <aside className="navsb" style={{ width: 196, flex: 'none', overflowY: 'auto', minHeight: 0 }}>{list}</aside>
       {board ? (
         <Board key={board.id} board={board} notes={notes} boards={boards} A={A} phone={false}
-          accent={prefs.accent} dark={prefs.theme === 'dark'}
+          accent={prefs.accent} dark={themeIsDark(prefs.theme)}
           onOpenNote={onOpenNote} onOpenBoard={setBoardId} />
       ) : (
         <div style={{ ...PANEL, flex: 1, display: 'grid', placeItems: 'center', gap: 12, minHeight: 320 }}>
           <div style={{ display: 'grid', justifyItems: 'center', gap: 10 }}>
             <p style={{ fontSize: 12.5, color: 'var(--tx3)' }}>No canvases yet.</p>
-            <button onClick={newBoard} className="k-squish" style={{ ...BTN, background: 'var(--acc)', color: 'var(--ink)', border: 0 }}>
-              <Icon name="plus" size={13} color="var(--ink)" />New canvas
+            <button onClick={newBoard} className="k-squish" style={{ ...BTN, background: 'var(--acc)', color: 'var(--accent-ink)', border: 0 }}>
+              <Icon name="plus" size={13} color="var(--accent-ink)" />New canvas
             </button>
           </div>
         </div>
@@ -196,7 +197,7 @@ export function BoardList({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} kind="node" label={menu.board.name}
-          onClose={() => setMenu(null)} accent={prefs.accent} dark={prefs.theme === 'dark'}
+          onClose={() => setMenu(null)} accent={prefs.accent} dark={themeIsDark(prefs.theme)}
           items={[
             { label: 'Rename', icon: 'edit', run: () => onRename(menu.board) },
             {
@@ -796,8 +797,8 @@ function Board({
         {/* ------------------------------------------------------ toolbars */}
         <div style={{ position: 'absolute', left: 12, top: 12, display: 'flex', gap: 6, zIndex: 4, flexWrap: 'wrap' }}>
           <button onClick={() => { const c = centreOfView(); addCard(c.x, c.y); }} className="k-squish"
-            style={{ ...BTN, background: 'var(--acc)', color: 'var(--ink)', border: 0 }}>
-            <Icon name="plus" size={13} color="var(--ink)" />Card
+            style={{ ...BTN, background: 'var(--acc)', color: 'var(--accent-ink)', border: 0 }}>
+            <Icon name="plus" size={13} color="var(--accent-ink)" />Card
           </button>
           <button onClick={(e) => { const c = centreOfView(); setMenu({ x: e.clientX, y: e.clientY, label: 'Insert', items: insertItems(c.x, c.y) }); }}
             className="hov k-squish" style={BTN}>

@@ -152,7 +152,7 @@ export function PostPickerModal({
                 fontWeight: 800,
                 border: 'none',
                 background: tab === 'all' ? 'var(--acc)' : 'rgba(255,255,255,0.06)',
-                color: tab === 'all' ? 'var(--ink)' : 'var(--tx2)',
+                color: tab === 'all' ? 'var(--accent-ink)' : 'var(--tx2)',
                 cursor: 'pointer',
               }}
             >
@@ -169,7 +169,7 @@ export function PostPickerModal({
                 fontWeight: 800,
                 border: 'none',
                 background: tab === 'mine' ? 'var(--acc)' : 'rgba(255,255,255,0.06)',
-                color: tab === 'mine' ? 'var(--ink)' : 'var(--tx2)',
+                color: tab === 'mine' ? 'var(--accent-ink)' : 'var(--tx2)',
                 cursor: 'pointer',
               }}
             >

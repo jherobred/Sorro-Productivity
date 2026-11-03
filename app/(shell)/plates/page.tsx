@@ -348,7 +348,7 @@ function Postmark({ year }: { year: number }) {
 /** A place as a postage stamp: perforated paper, the place's ink, its letters, and how many visits. */
 function Stamp({ place, size = 'md', postmark = false }: { place: Place; size?: 'sm' | 'md' | 'lg'; postmark?: boolean }) {
   return (
-    <span className={'pd-stamp is-' + size} style={{ '--ink': stampInk(place.key) } as React.CSSProperties}>
+    <span className={'pd-stamp is-' + size} style={{ '--accent-ink': stampInk(place.key) } as React.CSSProperties}>
       <span className="pd-stamp-paper">
         <span className="pd-stamp-face"><b>{initials(place.name)}</b><small>{place.name}</small></span>
       </span>

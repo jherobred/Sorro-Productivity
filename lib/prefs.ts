@@ -10,6 +10,7 @@ import type { TaskRepeat } from './taskRepeat';
 import type { BoardMap, Col } from './board';
 import type { EventLocalMeta } from './events';
 import { defineMutation, queryClient } from './offline';
+import { themeIsDark, type ThemePref } from './theme';
 import { PreferenceOutbox, preferenceDelta, mergePreferencePatch, type PreferencePatch } from './preferenceSync';
 
 export type Prefs = {
@@ -22,7 +23,7 @@ export type Prefs = {
   calendarPowerSave?: boolean;
   calendarTaskPlans?: Record<string, { date: string; starts_at: string | null }>;
 
-  theme: 'dark' | 'light';
+  theme: ThemePref;
   accent: string;
   motion: boolean;
   navPicks: string[];
@@ -119,9 +120,7 @@ export type Prefs = {
 export type TaskSortKey = 'smart' | 'due' | 'priority' | 'stars' | 'title' | 'created';
 
 export const DEFAULT_PREFS: Prefs = {
-  // New accounts start light. Anyone who already chose a theme keeps it, since
-  // a saved theme always wins over this default.
-  theme: 'light',
+  theme: 'system',
   accent: DEFAULT_ACCENT,
   motion: true,
   navPicks: ['home', 'calendar', 'tasks', 'notebooks', 'more'],
@@ -165,16 +164,16 @@ export const DEFAULT_PREFS: Prefs = {
 
 const LS_KEY = 'basedly-prefs';
 
+let followSystem: Prefs | null = null;
+if (typeof matchMedia === 'function') {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (followSystem) applyPrefs(followSystem); });
+}
+
 /** Push prefs into the CSS custom properties the design system reads. */
 export function applyPrefs(p: Prefs) {
   const r = document.documentElement;
-  r.setAttribute('data-theme', p.theme);
-  r.style.setProperty('--acc', p.accent);
-  r.style.setProperty(
-    '--accTx',
-    `color-mix(in srgb, ${p.accent} ${p.theme === 'light' ? '62%, #1C1A26' : '82%, #FFFFFF'})`
-  );
-  r.style.setProperty('--gl2', `color-mix(in srgb, ${p.accent} 55%, transparent)`);
+  r.setAttribute('data-theme', themeIsDark(p.theme) ? 'dark' : 'light');
+  followSystem = p.theme === 'system' ? p : null;
 
   // Motion is a first-class product setting, so the user's choice wins over the
   // OS hint. `prefers-reduced-motion` only decides the *default* (see

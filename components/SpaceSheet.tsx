@@ -254,7 +254,7 @@ export function SpaceSheet({ space, me, onClose }: {
           <button onClick={onClose} className="acc k-squish"
             style={{
               flex: 1, minHeight: 42, borderRadius: 12, background: 'var(--acc)',
-              color: 'var(--ink)', fontSize: 12.5, fontWeight: 800,
+              color: 'var(--accent-ink)', fontSize: 12.5, fontWeight: 800,
             }}>
             Done
           </button>

@@ -76,7 +76,7 @@ export function AskHost() {
             style={{
               flex: 1, minHeight: 44, borderRadius: 12, fontSize: 13, fontWeight: 800,
               background: req.danger ? 'var(--pal-coral)' : 'var(--acc)',
-              color: req.danger ? '#fff' : 'var(--ink)',
+              color: req.danger ? '#fff' : 'var(--accent-ink)',
               opacity: req.kind === 'prompt' && !value.trim() ? 0.45 : 1,
             }}>
             {req.confirmLabel}

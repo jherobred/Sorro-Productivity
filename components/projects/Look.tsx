@@ -204,7 +204,7 @@ export function LookSheet({
                   className="k-squish"
                   style={{
                     minHeight: 40, padding: '0 14px', borderRadius: 11, background: 'var(--acc)',
-                    color: 'var(--ink)', fontSize: 12, fontWeight: 800, opacity: emoji.trim() ? 1 : 0.4,
+                    color: 'var(--accent-ink)', fontSize: 12, fontWeight: 800, opacity: emoji.trim() ? 1 : 0.4,
                   }}>Use emoji</button>
                 <span style={{ fontSize: 11, color: 'var(--tx3)', flex: 1 }}>Any emoji your keyboard can type.</span>
               </div>
