@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon } from './Icon';
 import { Fox } from './Fox';
+import { Wordmark } from './Wordmark';
+import { useIsFetching, useIsMutating } from '@tanstack/react-query';
+import { foxDash, foxWork } from '@/lib/foxMood';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
@@ -44,6 +47,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [capture, setCapture] = useState(false);
   const press = useRef<number | null>(null);
   const rail = prefs.sidebar !== 'open';
+  const working = useIsFetching() + useIsMutating() > 0;
+  useEffect(() => { foxWork(working); }, [working]);
+  useEffect(() => { foxDash(); }, [pathname]);
   const [win, setWin] = useState<TauriWindow | null>(null);
   useEffect(() => setWin(tauriWindow()), []);
   const dark = themeIsDark(prefs.theme);
@@ -89,18 +95,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const holdStart = () => { press.current = window.setTimeout(() => { press.current = null; setCapture(true); }, 500); };
   const holdEnd = (e: React.PointerEvent) => { if (press.current === null) e.preventDefault(); else { clearTimeout(press.current); press.current = null; } };
 
-  if (!ready) return <div className="sx-loading" role="status"><Fox pose="head" size={28} /><span className="sx-word">sorro</span>{authError ? <div><p>Couldn’t open your session. Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></div> : null}</div>;
+  if (!ready) return <div className="sx-loading" role="status"><Wordmark size="lg" />{authError ? <div><p>Couldn’t open your session. Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></div> : null}</div>;
   return <div className="sx" data-rail={rail} data-phone={phone}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">
-      <div className="sx-brand"><Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /><span className="sx-word">sorro</span></Link><button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button></div>
+      <div className="sx-brand"><Link href="/home/" aria-label="Sorro home"><Wordmark word={!rail} /></Link><button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button></div>
       <nav className="sx-nav" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined}><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>)}</nav>
       {pinned.length > 0 && <><h3>Pinned</h3><nav className="sx-nav sx-pins" aria-label="Pinned notes">{pinned.map(n => <Link key={n.id} href={'/notebooks/?note=' + n.id} title={n.title || 'Untitled'}><Icon name="pin" size={16} /><span>{n.title || 'Untitled'}</span></Link>)}</nav></>}
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
-        {phone && <Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /></Link>}
+        {phone && <Link href="/home/" aria-label="Sorro home"><Wordmark size="sm" /></Link>}
         <h1 data-tauri-drag-region={win ? '' : undefined}>{current?.name}</h1>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}

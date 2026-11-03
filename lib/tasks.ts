@@ -5,7 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
-import { triggerFireworks } from './fireworks';
+import { foxGlad } from './foxMood';
 import { getPrefs, setPrefs } from './prefs';
 import { nextDue, isRepeat } from './taskRepeat';
 import { changeFixture } from './devFixtures';
@@ -579,7 +579,7 @@ export function useTaskActions() {
       const revision = (completionRevisions.get(v.id) ?? 0) + 1;
       completionRevisions.set(v.id, revision);
       if (v.done) {
-        triggerFireworks();
+        foxGlad();
         comeBack(v.id);
       } else {
         stayBack(v.id);

@@ -2,6 +2,7 @@
    Imported last in app/layout.tsx, so these win over every older stylesheet. */
 
 @font-face { font-family: Geist; src: url(/fonts/Geist.woff2) format('woff2'); font-weight: 100 900; font-display: swap }
+@font-face { font-family: 'Space Grotesk'; src: url(/fonts/SpaceGrotesk-500.woff2) format('woff2'); font-weight: 500; font-display: swap }
 @font-face { font-family: 'Geist Mono'; src: url(/fonts/GeistMono.woff2) format('woff2'); font-weight: 100 900; font-display: swap }
 
 :root, :root[data-theme='light'] {
@@ -9,6 +10,8 @@
   --font-body: Geist, 'Segoe UI', system-ui, sans-serif;
   --font-heading: var(--font-body);
   --font-mono: 'Geist Mono', ui-monospace, monospace;
+  /* The SORRO wordmark only (spec W3). */
+  --font-mark: 'Space Grotesk', var(--font-body);
   --font-heading-weight: 600;
   --bg: #F7F6F4; --surface: #FFFFFF; --soft: #EFEEEB; --soft-2: #E5E3DF; --line: #E3E1DD; --ink: #151413; --muted: #66645F;
   --accent: #B84C0C; --accent-ink: #FFFFFF; --pick: #C98E52; --ok: #1A7F4B; --bad: #C2362B;
