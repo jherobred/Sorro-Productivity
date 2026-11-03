@@ -517,17 +517,17 @@ export default function TasksPage() {
               ] as const}
               value={view} onChange={(v) => void update({ taskView: v })} />
           )}
-          <div className="tasks-tools"><button className="tasks-tool" onClick={()=>setPlanning(true)}><Icon name="cal" size={16}/>Plan week</button>
+          <div className="tasks-tools"><button className="tasks-tool" aria-label="Plan week" title="Plan week" onClick={()=>setPlanning(true)}><Icon name="cal" size={16}/><span className="tasks-tool-label">Plan week</span></button>
             {scope !== 'done' && (
               <button type="button" className="tasks-tool" aria-haspopup="menu" aria-label={`Sort: ${SORT_LABELS[sort.key]}${sort.desc ? ', reversed' : ''}`} title={SORT_HINTS[sort.key]} onClick={openSort}>
-                <Icon name="sort" size={15} />{!phone && <span>{SORT_LABELS[sort.key]}</span>}
+                <Icon name="sort" size={15} />{!phone && <span className="tasks-tool-label">{SORT_LABELS[sort.key]}</span>}
               </button>
             )}
             <button type="button" className={'tasks-tool' + (priority ? ' is-on' : '')} aria-haspopup="menu" aria-label={priority ? `Priority: ${PRIORITY_NAMES[priority]}` : 'Show priority'} onClick={openPriority}>
-              <Icon name="flag" size={15} />{!phone && <span>{priority ? PRIORITY_NAMES[priority] : 'Priority'}</span>}
+              <Icon name="flag" size={15} />{!phone && <span className="tasks-tool-label">{priority ? PRIORITY_NAMES[priority] : 'Priority'}</span>}
             </button>
             <button type="button" className={'tasks-tool' + (selecting ? ' is-on' : '')} aria-label={selecting ? 'Done selecting tasks' : 'Select tasks'} aria-pressed={selecting} onClick={() => (selecting ? clearSelection() : setSelectMode(true))}>
-              <Icon name="listCheck" size={15} />{!phone && <span>{selecting ? 'Done selecting' : 'Select'}</span>}
+              <Icon name="listCheck" size={15} />{!phone && <span className="tasks-tool-label">{selecting ? 'Done selecting' : 'Select'}</span>}
             </button>
           </div>
         </div>
