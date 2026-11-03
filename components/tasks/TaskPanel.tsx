@@ -219,7 +219,7 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             <span aria-hidden="true"><Icon name="check" size={12} /></span>
             {task.done ? 'Done' : 'Mark done'}
           </button>
-          <Link className="studio-button" href={'/focus/?task='+task.id}><Icon name="focus" size={16}/>Focus</Link><span className="task-panel-spacer" />
+          <span className="task-panel-spacer" />
           <button type="button" className="task-panel-icon" aria-label="Duplicate" title="Duplicate" onClick={onDuplicate}><Icon name="copy" size={16} /></button>
           <button type="button" className="task-panel-icon is-danger" aria-label="Delete task" title="Delete" onClick={onDelete}><Icon name="trash" size={16} /></button>
           <button type="button" className="task-panel-icon" aria-label="Close" title="Close" onClick={close}><Icon name="close" size={16} /></button>

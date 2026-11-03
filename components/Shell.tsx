@@ -99,7 +99,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
-      <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined} onDoubleClick={e => { if (win && e.target === e.currentTarget) void win.toggleMaximize(); }}>
+      <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
         {phone && <Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /></Link>}
         <h1 data-tauri-drag-region={win ? '' : undefined}>{current?.name}</h1>
         <div id="strip-actions" className="sx-actions" />
@@ -111,7 +111,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </header>
       <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
     </div>
-    {phone && <nav className="sx-bar studio-bottom-nav" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-label={d.name} aria-current={current?.id === d.id ? 'page' : undefined}
+    {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-label={d.name} aria-current={current?.id === d.id ? 'page' : undefined}
       {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /></Link>)}</nav>}
     {search && <Search onClose={() => setSearch(false)} />}
     {settings && <Settings initialTab={settings} onClose={() => setSettings(false)} />}

@@ -105,7 +105,7 @@ export function CaptureSheet({ kind, onClose }: { kind: CaptureKind; onClose: ()
 
         <div style={{ display: 'flex', gap: 9, marginTop: 20 }}>
           <button onClick={save} disabled={busy} className="acc"
-            style={{ padding: '11px 20px', borderRadius: 11, background: 'var(--acc)', color: '#0C0F16', fontSize: 13, fontWeight: 800, opacity: busy ? 0.6 : 1 }}>
+            style={{ padding: '11px 20px', borderRadius: 11, background: 'var(--acc)', color: 'var(--accent-ink)', fontSize: 13, fontWeight: 800, opacity: busy ? 0.6 : 1 }}>
             Save
           </button>
           <button onClick={onClose} className="hov"

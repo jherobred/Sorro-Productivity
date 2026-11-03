@@ -7,4 +7,5 @@ import './habits';
 import './links';
 import './messages';
 import './money';
+import './scratch';
 import './water';

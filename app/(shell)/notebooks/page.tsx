@@ -1,5 +1,6 @@
 'use client';
 import {useState,useEffect,useMemo,useRef} from 'react';
+import {useSearchParams} from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {Capacitor} from '@capacitor/core';
 import {Icon} from '@/components/Icon';
@@ -69,7 +70,8 @@ export default function NotebooksPage(){
  useOverlayBack(fullscreen,()=>setFullscreen(false));
  useOverlayBack(!!nbId,()=>{setNbId(null);setNoteId(null);setCreating(false);});
  useOverlayBack(!!noteId,()=>{setNoteId(null);setMoveOpen(false);});useOverlayBack(creating,()=>setCreating(false));useOverlayBack(inTrash,()=>setTrash(false));useOverlayBack(!!legacy,()=>setLegacy(null));useOverlayBack(moveOpen,()=>setMoveOpen(false));
- useEffect(()=>{if(deepLink.current)return;const params=new URLSearchParams(location.search);const id=params.get('note')||params.get('open');const book=params.get('notebook');if(!id){if(book&&notebooks.some(b=>b.id===book))setNbId(book);if(!book||notebooks.length)deepLink.current=true;return;}const found=notes.find(n=>n.id===id);if(found){deepLink.current=true;setNbId(found.notebook_id);setNoteId(found.id);}},[notes,notebooks]);
+ const linked=useSearchParams().get('note');useEffect(()=>{deepLink.current=false;},[linked]);
+ useEffect(()=>{if(deepLink.current)return;const params=new URLSearchParams(location.search);const id=params.get('note')||params.get('open');const book=params.get('notebook');if(!id){if(book&&notebooks.some(b=>b.id===book))setNbId(book);if(!book||notebooks.length)deepLink.current=true;return;}const found=notes.find(n=>n.id===id);if(found){deepLink.current=true;setNbId(found.notebook_id);setNoteId(found.id);}},[notes,notebooks,linked]);
  const reorderBook=(from:string,to:string)=>{setNotice('Saving notebook order…');A.reorderNotebooks.mutate({ids:moveNotebook(notebooks.map(b=>b.id),from,to)},{onSuccess:()=>setNotice('Notebook order saved.'),onError:()=>setNotice('Notebook order could not be saved. Try again.')});};
  const openBook=(id:string)=>{setPageQuery('');setNbId(id);};
  const openNote=(n:Note)=>{setNbId(n.notebook_id);setNoteId(n.id);};
