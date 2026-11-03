@@ -7,7 +7,7 @@
     "build": "next build && node scripts/sw-manifest.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"lib/*.check.ts\"",
+    "test": "node --test \"lib/*.check.ts\" \"supabase/functions/*/*.check.ts\"",
     "sync": "npm run build && npx cap sync android",
     "apk": "npm run sync && cd android && gradlew.bat assembleDebug",
     "desktop": "tauri build"

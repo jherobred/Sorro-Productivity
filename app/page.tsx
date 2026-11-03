@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { signInWithGoogle, listenForNativeAuth } from '@/lib/nativeAuth';
-import { Fox } from '@/components/Fox';
+import { Wordmark } from '@/components/Wordmark';
 import '@/components/shell.css';
 
 
@@ -34,8 +34,7 @@ export default function SignIn() {
   return (
     <main className="sx-signin">
       <div>
-        <Fox pose="head" size={40} />
-        <span className="sx-word">sorro</span>
+        <Wordmark size="lg" />
         <p>Notes, calendar and tasks with an assistant.</p>
         <button className="sx-pill" onClick={signIn} disabled={busy}>
           <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden>

@@ -185,7 +185,7 @@ progress{appearance:none;border:0;border-radius:3px;overflow:hidden;background:v
 /* Calendar owns the whole workspace height: the grid scrolls inside itself, so
    nothing is left blank under it and the header never scrolls away. */
 .studio-main[data-page='calendar']{display:flex;flex-direction:column;overflow:hidden;padding-top:16px;padding-bottom:14px}
-.studio-main[data-page='calendar']>.calendar-page{flex:1 1 auto;height:auto!important}
+.studio-main[data-page='calendar']>.sx-page>.calendar-page{flex:1 1 auto;height:auto!important}
 @media(max-width:760px){.studio-main[data-page='calendar']{padding-top:12px;padding-bottom:calc(80px + env(safe-area-inset-bottom))}}
 
 /* Focus ring: the Focus page and the top bar draw the same one. */

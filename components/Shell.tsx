@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon } from './Icon';
 import { Fox } from './Fox';
+import { Wordmark } from './Wordmark';
+import { MoreSheet } from './MoreSheet';
+import { useIsFetching, useIsMutating } from '@tanstack/react-query';
+import { foxDash, foxWork } from '@/lib/foxMood';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
@@ -32,7 +36,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { prefs, update } = usePrefs();
-  const { phone } = useLayout();
+  const { phone, tablet } = useLayout();
   const accounts = useAccounts();
   const { data: notes = [] } = useNotes();
   const [me, setMe] = useState({ id: '', name: 'You', photo: null as string | null });
@@ -43,7 +47,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState(false);
   const [capture, setCapture] = useState(false);
   const press = useRef<number | null>(null);
-  const rail = prefs.sidebar !== 'open';
+  // A tablet always gets the rail: the content needs the width more than the labels do.
+  const rail = tablet || prefs.sidebar !== 'open';
+  const [more, setMore] = useState(false);
+  const working = useIsFetching() + useIsMutating() > 0;
+  useEffect(() => { foxWork(working); }, [working]);
+  useEffect(() => { foxDash(); }, [pathname]);
   const [win, setWin] = useState<TauriWindow | null>(null);
   useEffect(() => setWin(tauriWindow()), []);
   const dark = themeIsDark(prefs.theme);
@@ -89,19 +98,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const holdStart = () => { press.current = window.setTimeout(() => { press.current = null; setCapture(true); }, 500); };
   const holdEnd = (e: React.PointerEvent) => { if (press.current === null) e.preventDefault(); else { clearTimeout(press.current); press.current = null; } };
 
-  if (!ready) return <div className="sx-loading" role="status"><Fox pose="head" size={28} /><span className="sx-word">sorro</span>{authError ? <div><p>Couldn’t open your session. Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></div> : null}</div>;
-  return <div className="sx" data-rail={rail} data-phone={phone}>
+  if (!ready) return <div className="sx-loading" role="status"><Wordmark size="lg" />{authError ? <div><p>Couldn’t open your session. Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></div> : null}</div>;
+  return <div className="sx" data-rail={rail} data-phone={phone} data-tablet={tablet}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">
-      <div className="sx-brand"><Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /><span className="sx-word">sorro</span></Link><button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button></div>
+      <div className="sx-brand"><Link href="/home/" aria-label="Sorro home"><Wordmark word={!rail} /></Link>{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
       <nav className="sx-nav" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined}><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>)}</nav>
       {pinned.length > 0 && <><h3>Pinned</h3><nav className="sx-nav sx-pins" aria-label="Pinned notes">{pinned.map(n => <Link key={n.id} href={'/notebooks/?note=' + n.id} title={n.title || 'Untitled'}><Icon name="pin" size={16} /><span>{n.title || 'Untitled'}</span></Link>)}</nav></>}
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
-        {phone && <Link href="/home/" aria-label="Sorro home"><Fox pose="head" size={20} /></Link>}
-        <h1 data-tauri-drag-region={win ? '' : undefined}>{current?.name}</h1>
+        {phone && <Link href="/home/" aria-label="Sorro home"><Wordmark size="sm" /></Link>}
+        <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
@@ -109,10 +118,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {phone && <button className="sx-avatar" aria-label="Account and settings" onClick={() => setAccount(true)}>{name.charAt(0)}</button>}
         {win && <div className="sx-caption"><button aria-label="Minimize" onClick={() => void win.minimize()}><Icon name="minus" size={16} /></button><button aria-label="Maximize" onClick={() => void win.toggleMaximize()}><Icon name="square" size={14} /></button><button className="x" aria-label="Close" onClick={() => void win.close()}><Icon name="close" size={16} /></button></div>}
       </header>
-      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? children : null}</main>
+      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? <div key={pathname} className="sx-page">{children}</div> : null}</main>
     </div>
-    {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-label={d.name} aria-current={current?.id === d.id ? 'page' : undefined}
-      {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /></Link>)}</nav>}
+    {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.filter(d => d.phoneBar).map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-current={current?.id === d.id ? 'page' : undefined}
+      {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /><span>{d.name}</span></Link>)}
+      <button type="button" aria-expanded={more} aria-current={current && !current.phoneBar ? 'page' : undefined} onClick={() => setMore(true)}><Icon name="more" size={21} /><span>More</span></button></nav>}
+    {more && <MoreSheet current={current?.id} onClose={() => setMore(false)} onSettings={() => { setMore(false); setSettings('general'); }} />}
     {search && <Search onClose={() => setSearch(false)} />}
     {settings && <Settings initialTab={settings} onClose={() => setSettings(false)} />}
     {account && <Accounts me={{ id: me.id, name, handle: null, photo: stored?.photo || me.photo }} onClose={() => setAccount(false)} onSettings={() => { setAccount(false); setSettings('general'); }} />}

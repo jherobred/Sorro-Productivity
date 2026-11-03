@@ -1,14 +1,17 @@
+/* Hallmark · shape: app screen · scope: app · theme: brand (LodiSave Kape, kept) · redesign: restyle · built: the project */
+/* Hallmark · critique: the shell recedes; the SORRO lockup and the moving fox are the one thing only Sorro has */
+/* Hallmark · waive 24b · 6, 10, 14 and 18 px steps throughout the Sorro shell · LodiSave's gallery kit is built on these steps and Sorro shares that kit so the apps can merge */
+/* Hallmark · waive 37 · a font slot: Space Grotesk draws only the SORRO wordmark · the Grok brand lockup sets the name in it while Geist carries every Sorro screen */
 /* Sorro shell. LodiSave gallery's sidebar and strip (LodiSave/app/ui/gallery.css), tokens from app/tokens.css. */
-.sx { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100dvh; background: var(--bg); color: var(--ink); transition: grid-template-columns .45s var(--drift) }
+.sx { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100dvh; background: var(--bg); color: var(--ink) }
 .sx[data-rail='true'] { grid-template-columns: 64px minmax(0, 1fr) }
 .sx[data-phone='true'] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto }
-.nomo .sx { transition: none }
 
 .sx-icon { width: 34px; height: 34px; display: grid; place-items: center; flex: none; border-radius: var(--r-row); color: var(--muted); transition: background-color .15s, color .15s, transform .2s var(--snap) }
 .sx-icon:hover { background: var(--soft); color: var(--ink) }
 .sx-icon:active { transform: scale(.96) }
 .sx-word { font: 600 15px/1 var(--font-body); letter-spacing: -.01em; color: var(--ink) }
-.sx-avatar { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink); font: 600 12px/1 var(--font-body); text-transform: uppercase }
+.sx-avatar { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink); font: 600 12px/1 var(--font-body) }
 
 /* S.side: the page's own surface, the current tab a neutral step darker, never the accent. */
 .sx-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 0; padding: 0 10px 10px; background: var(--surface); border-right: 1px solid var(--line); overflow: hidden auto }
@@ -31,19 +34,36 @@
 /* S.top: the same colour as the page and no rule under it, so it reads as the top of the page. */
 .sx-work { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
 .sx-top { display: flex; align-items: center; gap: 6px; height: 44px; flex: none; padding: 0 10px 0 18px; padding-top: env(safe-area-inset-top); box-sizing: content-box; background: var(--bg) }
-.sx-top h1 { margin: 0; font: 600 15px/1 var(--font-body); color: var(--ink); white-space: nowrap }
+.sx-top .sx-title { margin: 0; font: 600 15px/1 var(--font-body); color: var(--ink); white-space: nowrap; text-wrap: balance }
 .sx-actions { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px }
 .sx-demo { font: 500 11px/1 var(--font-mono); color: var(--muted); padding: 4px 8px; border-radius: var(--r-pill); background: var(--soft) }
-.sx[data-phone='true'] .sx-top { padding-left: 14px; gap: 8px }
+.sx[data-phone='true'] .sx-top { padding-left: 16px; gap: 8px }
 
 .sx .studio-main { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; background: var(--bg) }
-.sx[data-phone='true'] .studio-main { padding: 4px 14px 14px }
+.sx[data-phone='true'] .studio-main { padding: 4px 16px 14px }
 
-/* S.bar: five icons, no labels. */
-.sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
-.sx-bar a { display: grid; place-items: center; color: var(--muted); -webkit-touch-callout: none; user-select: none }
-.sx-bar a[aria-current='page'] { color: var(--ink) }
-.sx-bar a[aria-current='page'] svg { background: var(--soft-2); border-radius: var(--r-pill); padding: 5px 14px; box-sizing: content-box }
+/* S.bar: four destinations and More, each with its label. Solid, never floating or glass. */
+.sx { --bar-h: 58px }
+.sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: var(--bar-h); padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
+.sx-bar a, .sx-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 44px; color: var(--muted); font: 500 11px/1 var(--font-body); -webkit-touch-callout: none; user-select: none }
+.sx-bar svg, .sx-bar [aria-hidden] { padding: 4px 16px; border-radius: var(--r-pill); box-sizing: content-box; transition: background-color .2s var(--snap) }
+.sx-bar [aria-current='page'] { color: var(--ink) }
+.sx-bar [aria-current='page'] > :first-child { background: var(--soft-2) }
+.sx-bar a:active > :first-child, .sx-bar button:active > :first-child { transform: scale(.94) }
+
+/* S.more: the phone sheet for Vault, News and Settings. */
+.sx-sheet-back { position: fixed; inset: 0; z-index: 60; background: var(--backdrop); display: flex; align-items: flex-end; animation: sheet-fade .2s ease-out both }
+.sx-sheet { width: 100%; padding: 8px 10px calc(14px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: var(--r-panel) var(--r-panel) 0 0; display: flex; flex-direction: column; gap: 2px; animation: sheet-up .38s var(--drift) both }
+.sx-sheet-grip { align-self: center; width: 36px; height: 4px; margin: 2px 0 8px; border-radius: var(--r-pill); background: var(--soft-2) }
+.sx-sheet a, .sx-sheet button { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 12px; border-radius: var(--r-row); color: var(--ink); font-size: 15px; text-align: left }
+.sx-sheet a:active, .sx-sheet button:active, .sx-sheet [aria-current='page'] { background: var(--soft-2) }
+@keyframes sheet-up { from { transform: translateY(100%) } }
+@keyframes sheet-fade { from { opacity: 0 } }
+.nomo .sx-sheet, .nomo .sx-sheet-back { animation: none }
+
+/* Phone: the strip stays compact, and content clears the bar. */
+.sx[data-phone='true'] .sx-top { height: 48px }
+.sx[data-phone='true'] .studio-main { padding-bottom: 14px }
 
 .sx-loading { height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--bg); color: var(--muted) }
 
@@ -70,3 +90,24 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 .sx-signin .sx-pill { width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px }
 .sx-signin .sx-pill:disabled { opacity: .6 }
 .sx-signin .sx-signin-err { margin-top: 8px; color: var(--bad); font-size: 13px }
+
+/* S.fox and the SORRO lockup. */
+.sx-mark { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); white-space: nowrap }
+.sx-mark-word { height: 12px; width: auto; fill: currentColor; flex: none }
+.sx-mark-sm .sx-mark-word { height: 11px }
+.sx-mark-lg { flex-direction: column; gap: 14px }
+.sx-mark-lg .sx-mark-word { height: 22px }
+.sx-fox { display: inline-grid; place-items: center; min-width: 22px }
+.sx-fox > span { animation: fox-in .32s var(--snap) both }
+@keyframes fox-in { from { opacity: 0; transform: scale(.82) } }
+.fox-run { display: inline-block; flex: none; -webkit-mask: url(/brand/fox-run.png) 0 0 / 700% 100% no-repeat; mask: url(/brand/fox-run.png) 0 0 / 700% 100% no-repeat; animation: fox-run .56s steps(6) infinite }
+@keyframes fox-run { to { -webkit-mask-position: 100% 0; mask-position: 100% 0 } }
+.nomo .fox-run, .nomo .sx-fox > span { animation: none }
+
+/* Focus: instant, on every control in the frame. */
+:is(.sx-nav a, .sx-me, .sx-icon, .sx-bar a, .sx-bar button, .sx-sheet a, .sx-sheet button, .sx-pill, .sx-caption button, .sx-avatar):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px; transition: none }
+
+/* Reduced motion with no choice made in Settings, and with scripting off (see app/motion.css). */
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='on']) :is(.fox-run, .sx-fox > span, .sx-sheet, .sx-sheet-back) { animation: none }
+}
