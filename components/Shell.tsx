@@ -18,7 +18,7 @@ import { useLiveSync } from '@/lib/realtime';
 import { useAutoSync } from '@/lib/integrations';
 import { useCanvasAlerts } from '@/lib/canvasLms';
 import { watchAccounts } from '@/lib/accounts';
-import { DESTINATIONS, activePath, currentId } from '@/lib/destinations';
+import { DESTINATIONS, activePath } from '@/lib/destinations';
 import { useAccounts } from '@/lib/accounts';
 import { useLayout } from '@/lib/useLayout';
 const Settings = dynamic(() => import('./SettingsModal').then(m => m.SettingsModal), { ssr: false });
@@ -78,7 +78,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [prefs.sidebar, update]);
   const current = DESTINATIONS.find(d => pathname.split('/')[1] === d.id);
   // A pick of a tab that has since moved (Projects into Tasks) can name the same place twice; it is shown once.
-  const mobilePicks = prefs.navPicks.map(id => DESTINATIONS.find(d => d.id === currentId(id))).filter((d, i, all): d is typeof DESTINATIONS[number] => !!d && all.indexOf(d) === i).slice(0, 4);
+  const mobilePicks = prefs.navPicks.map(id => DESTINATIONS.find(d => d.id === id)).filter((d, i, all): d is typeof DESTINATIONS[number] => !!d && all.indexOf(d) === i).slice(0, 4);
   const mobileNav = mobilePicks.length ? mobilePicks : DESTINATIONS.slice(0, 4);
   const nav = (items: readonly typeof DESTINATIONS[number][]) => items.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined} className="studio-nav-link"><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>);
   const storedMe = accounts.find(a => a.user_id === me.id);

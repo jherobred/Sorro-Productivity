@@ -25,7 +25,8 @@
       ],
       "destination": "/",
       "permanent": false
-    }
+    },
+    { "source": "/:tab(board|body|community|files|fitness|focus|fuel|gym|habits|links|memories|money|more|people|plates|profile|projects)/:rest*", "destination": "/home/", "permanent": false }
   ],
   "headers": [
     {

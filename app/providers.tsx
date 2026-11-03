@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient, persister } from '@/lib/offline';
 import { devFixturesOn, seedDevFixtures } from '@/lib/devFixtures';
+import '@/lib/legacyQueue';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Seed before anything below can mount and fire a query. Seeding after the

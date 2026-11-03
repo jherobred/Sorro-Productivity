@@ -29,7 +29,6 @@ export type SettingsTab =
   | 'integrations'
   | 'app';
 
-const ACCENTS = ['#2864F0', '#E24C3B', '#F2C438', '#37A06A', '#38A8C4', '#A781C8'];
 
 export function SettingsModal({
   initialTab = 'general',
@@ -576,27 +575,6 @@ export function SettingsModal({
               </div>
             </Field>
 
-            <Field label="Accent Palette">
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {ACCENTS.map((c) => (
-                  <button
-                    key={c}
-                    aria-label={`Accent ${c}`}
-                    aria-pressed={prefs.accent === c}
-                    onClick={() => setPref('accent', c)}
-                    className={`k-swatch${prefs.accent === c ? ' on' : ''}`}
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: c,
-                      boxShadow: prefs.accent === c ? `0 0 0 2px var(--card), 0 0 0 4px ${c}` : 'none',
-                    }}
-                  />
-                ))}
-              </div>
-            </Field>
-
             <div style={{ ...SECTION_TITLE, marginTop: 10 }}>View Mode & Layout</div>
             <Field label="Display View Mode" hint="Auto-detects your device, or forces Dedicated Phone View or Web View.">
               <div style={{ display: 'flex', gap: 8 }}>
@@ -634,49 +612,6 @@ export function SettingsModal({
                         opacity: active ? 0.85 : 0.6,
                       }}>
                         {m.hint}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-
-            <Field label="Navigation Panel Layout (Desktop)">
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[
-                  { v: 'open', n: 'Expanded', hint: 'Full sidebar (236px)' },
-                  { v: 'compact', n: 'Compact Icons', hint: 'Tab logos only (64px)' },
-                  { v: 'hidden', n: 'Hidden', hint: 'Top-bar chevron trigger' },
-                ].map((s) => {
-                  const active = prefs.sidebar === s.v || (s.v === 'hidden' && prefs.sidebar === 'collapsed');
-                  return (
-                    <button
-                      key={s.v}
-                      aria-pressed={active}
-                      onClick={() => setPref('sidebar', s.v as Prefs['sidebar'])}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 3,
-                        padding: '9px 10px',
-                        borderRadius: 10,
-                        background: active ? 'var(--acc)' : 'var(--card2)',
-                        color: active ? accentInk : 'var(--tx)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        border: '1px solid var(--line2)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{s.n}</span>
-                      <span style={{
-                        fontSize: 9.5,
-                        fontWeight: 500,
-                        opacity: active ? 0.85 : 0.6,
-                      }}>
-                        {s.hint}
                       </span>
                     </button>
                   );
