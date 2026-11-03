@@ -226,16 +226,16 @@ Deno.serve(async (req) => {
  *   create extension if not exists pg_net;
  *
  *   -- Replace <PROJECT_REF> and <BOT_CRON_SECRET>.
- *   select cron.schedule('sorro-bot-tips',  '0 star/2 * * *', $$
+ *   select cron.schedule('bot-tips',  '0 star/2 * * *', $$
  *     select net.http_post(
  *       url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/gemini-bot',
  *       headers := '{"Content-Type":"application/json","x-bot-secret":"<BOT_CRON_SECRET>"}'::jsonb,
  *       body    := '{"mode":"tips"}'::jsonb);
  *   $$);
  *
- *   select cron.schedule('sorro-bot-news', '15 star/5 * * *', $$ … "news" … $$);
- *   select cron.schedule('sorro-bot-chal', '30 9 * * MON',    $$ … "challenge" … $$);
+ *   select cron.schedule('bot-news', '15 star/5 * * *', $$ … "news" … $$);
+ *   select cron.schedule('bot-chal', '30 9 * * MON',    $$ … "challenge" … $$);
  *
  * (`star` above stands for the asterisk, which cannot appear inside this
- * comment block.) Unschedule with `select cron.unschedule('sorro-bot-tips');`.
+ * comment block.) Unschedule with `select cron.unschedule('bot-tips');`.
  */

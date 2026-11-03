@@ -11,10 +11,14 @@ export function migrateStorageKeys(store: KeyStore): number {
   const keys: string[] = [];
   for (let i = 0; i < store.length; i++) { const k = store.key(i); if (k && OLD.test(k)) keys.push(k); }
   for (const k of keys) {
-    const next = k.replace(OLD, 'sorro');
-    const value = store.getItem(k);
-    if (store.getItem(next) === null && value !== null) store.setItem(next, value);
-    store.removeItem(k);
+    // The pre-IndexedDB query cache (up to 5MB) is dead weight: dropped, never copied.
+    if (k === 'basedly-cache') { try { store.removeItem(k); } catch { /* ignore */ } continue; }
+    try {
+      const next = k.replace(OLD, 'sorro');
+      const value = store.getItem(k);
+      if (store.getItem(next) === null && value !== null) store.setItem(next, value);
+      store.removeItem(k);
+    } catch { /* full storage: this key stays behind, the rest still move */ }
   }
   return keys.length;
 }

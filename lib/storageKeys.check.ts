@@ -44,3 +44,17 @@ test('dynamic and underscore keys keep their suffix', () => {
   assert.equal(s.getItem('sorro-focus:abc'), '1');
   assert.equal(s.getItem('sorro_deleted_gcal_events'), '2');
 });
+test('the old 5MB local cache is dropped, not copied', () => {
+  const s = fake({ 'basedly-cache': 'x'.repeat(10), 'basedly-prefs': 'p' });
+  migrateStorageKeys(s);
+  assert.equal(s.getItem('sorro-cache'), null);
+  assert.equal(s.getItem('basedly-cache'), null);
+  assert.equal(s.getItem('sorro-prefs'), 'p');
+});
+test('a key that cannot be written does not stop the rest', () => {
+  const s = fake({ 'basedly-big': 'b', 'basedly-prefs': 'p' });
+  const set = s.setItem;
+  s.setItem = (k: string, v: string) => { if (k === 'sorro-big') throw new Error('QuotaExceededError'); set(k, v); };
+  migrateStorageKeys(s);
+  assert.equal(s.getItem('sorro-prefs'), 'p');
+});

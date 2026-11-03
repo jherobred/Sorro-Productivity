@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
-import { createInvalidationQueue } from './liveInvalidation';
+import { createInvalidationQueue, tablePrefix } from './liveInvalidation';
 
 /**
  * One socket for the whole app.
@@ -29,7 +29,7 @@ import { createInvalidationQueue } from './liveInvalidation';
  * **Invalidation is by prefix.** TanStack matches `['events']` against
  * `['events', weekStart, days]`, so one entry per table covers every window a
  * screen has cached — which is the rule fact 3 in HANDOFF.md exists to enforce.
- * Table `bd_x` maps to prefix `['x']`; the handful of screens that cache a table
+ * Table `sorro_x` (or a tracker's `bd_x`) maps to prefix `['x']`; the handful of screens that cache a table
  * under a second name are listed in ALSO.
  *
  * **Your own echo is ignored while you are writing.** Refetching on the echo of
@@ -74,7 +74,7 @@ const ALSO: Record<string, string[]> = {
 };
 
 const prefixesFor = (table: string): string[] => [
-  table.replace(/^bd_/, ''),
+  tablePrefix(table),
   ...(ALSO[table] ?? []),
 ];
 

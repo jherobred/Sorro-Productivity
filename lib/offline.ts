@@ -111,6 +111,19 @@ function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest)
  * persister expensive, and all of what made restoring the cache on launch slow
  * enough to see.
  */
+/**
+ * The cache copied over from the Basedly database sits under its old key. It is
+ * moved to the current key on first restore, so sign-out (which deletes the
+ * current key) can never leave it behind for the next account.
+ */
+async function adoptLegacyCache(): Promise<PersistedClient | undefined> {
+  const old = await tx<PersistedClient | undefined>('readonly', (s) => s.get(LEGACY_DB.cacheKey));
+  if (old === undefined) return undefined;
+  await tx('readwrite', (s) => s.put(old, CACHE_KEY));
+  await tx('readwrite', (s) => s.delete(LEGACY_DB.cacheKey));
+  return old;
+}
+
 function makePersister(): Persister {
   // Still throttled. The write is off the main thread now, but a cache that
   // hits disk on every keystroke is still a phone writing for no reason.
@@ -131,7 +144,7 @@ function makePersister(): Persister {
     },
     restoreClient() {
       return tx<PersistedClient | undefined>('readonly', (s) => s.get(CACHE_KEY))
-        .then((v) => v ?? tx<PersistedClient | undefined>('readonly', (s) => s.get(LEGACY_DB.cacheKey)))
+        .then((v) => v ?? adoptLegacyCache())
         // A corrupt or unreadable store must not stop the app from starting.
         // Losing the offline cache costs a refetch; throwing costs the session.
         .catch(() => undefined);
@@ -139,7 +152,10 @@ function makePersister(): Persister {
     removeClient() {
       if (timer) { clearTimeout(timer); timer = null; }
       pending = null;
-      return tx('readwrite', (s) => s.delete(CACHE_KEY)).then(() => undefined).catch(() => undefined);
+      return Promise.all([
+        tx('readwrite', (s) => s.delete(CACHE_KEY)),
+        tx('readwrite', (s) => s.delete(LEGACY_DB.cacheKey)),
+      ]).then(() => undefined).catch(() => undefined);
     },
   };
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createInvalidationQueue } from './liveInvalidation.ts';
+import { tablePrefix } from './liveInvalidation.ts';
 
 function setup() {
   let busy = false;
@@ -38,4 +39,10 @@ test('unmount cancels retry timers and prevents stale callbacks after account ch
   const stale = [...s.timers.values()][0]; s.queue.dispose();
   s.writing(false); stale(); s.queue.add(['notes']); s.tick();
   assert.deepEqual(s.invalidated, []); assert.equal(s.timers.size, 0);
+});
+
+test('renamed and tracker tables refresh the same screen keys', () => {
+  assert.equal(tablePrefix('sorro_tasks'), 'tasks');
+  assert.equal(tablePrefix('bd_habits'), 'habits');
+  assert.equal(tablePrefix('sorro_journal_entries'), 'journal_entries');
 });

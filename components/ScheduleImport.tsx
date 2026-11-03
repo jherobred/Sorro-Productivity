@@ -234,7 +234,7 @@ export function ScheduleImport({ onClose }: { onClose: () => void }) {
         color: r.color,
         source: 'schedule_scan',
         // The occurrence index is part of the id, not just the batch and the
-        // row. `bd_events_ext` is unique on (user_id, source, external_id), so
+        // row. `sorro_events_ext` is unique on (user_id, source, external_id), so
         // stamping all fifteen Tuesdays of one class with the same id made the
         // fifteenth collide with the first and Postgres refused the *whole*
         // insert — one bad key, nought events.

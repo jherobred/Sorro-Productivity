@@ -37,3 +37,6 @@ export function createInvalidationQueue<TTimer>(port: {
     },
   };
 }
+
+/** Table `sorro_x` (or a tracker's `bd_x`) is cached under the prefix `['x']`. */
+export const tablePrefix = (table: string) => table.replace(/^(sorro|bd)_/, '');

@@ -17,6 +17,8 @@ import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 const PAGE_MARKER = '<!-- sorro-page:v1 -->\n';
 const htmlPage = (code: string) => PAGE_MARKER + JSON.stringify({ version: 1, kind: 'code', language: 'html', code });
 const readCode = (body: string): { language: string; code: string } | null => {
+  // A page saved by a client from before the rename still opens with the old marker.
+  if (body.startsWith('<!-- basedly-page:v1 -->')) body = '<!-- sorro-page:v1 -->' + body.slice('<!-- basedly-page:v1 -->'.length);
   if (!body.startsWith(PAGE_MARKER)) return null;
   try {
     const d = JSON.parse(body.slice(PAGE_MARKER.length));
