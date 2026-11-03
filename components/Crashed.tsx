@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react';
  * stack — plus the two recoveries that actually work.
  *
  * **Clear saved data is the one that matters.** The whole TanStack cache is
- * persisted to localStorage under `basedly-cache` with `maxAge: Infinity`, so
+ * persisted to localStorage under `sorro-cache` with `maxAge: Infinity`, so
  * a row cached in a shape an older build wrote survives every reload and every
  * deploy. That failure is sticky, it is per-device, and it looks exactly like
  * "this page is broken for me and nobody else". Nothing here is the source of
@@ -37,7 +37,7 @@ export function Crashed({ error, reset }: { error: Error & { digest?: string }; 
 
   const wipe = () => {
     try {
-      localStorage.removeItem('basedly-cache');
+      localStorage.removeItem('sorro-cache');
     } catch { /* private mode, nothing to clear */ }
     location.reload();
   };

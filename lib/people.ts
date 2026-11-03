@@ -33,8 +33,8 @@ export type Person = {
 };
 
 export const COMMUNITY_PROFILES: Record<string, Person> = {
-  'basedly-bot': {
-    user_id: 'basedly-bot',
+  'sorro-bot': {
+    user_id: 'sorro-bot',
     name: 'Basedly Official',
     handle: 'basedly',
     photo_url: null,

@@ -14,7 +14,7 @@ export type RepostItem = {
   repostedAt: string;
 };
 
-const LS_KEY = 'basedly-reposts';
+const LS_KEY = 'sorro-reposts';
 const EMPTY_REPOSTS: RepostItem[] = [];
 const listeners = new Set<() => void>();
 

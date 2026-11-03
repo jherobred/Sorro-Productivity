@@ -29,8 +29,8 @@ export default function AuthCallback() {
 
       let back: string | null = null;
       try {
-        back = sessionStorage.getItem('basedly-after-auth');
-        sessionStorage.removeItem('basedly-after-auth');
+        back = sessionStorage.getItem('sorro-after-auth');
+        sessionStorage.removeItem('sorro-after-auth');
       } catch { /* private mode */ }
 
       // Only same-origin app paths, so a stored value can never become an

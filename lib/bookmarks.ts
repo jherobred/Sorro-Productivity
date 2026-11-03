@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { toast } from './toast';
 import { playClick } from './audio';
 
-const LS_KEY = 'basedly-bookmarks';
+const LS_KEY = 'sorro-bookmarks';
 const EMPTY_BOOKMARKS: string[] = [];
 const listeners = new Set<() => void>();
 

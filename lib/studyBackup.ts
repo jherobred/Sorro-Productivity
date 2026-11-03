@@ -22,7 +22,7 @@ export async function createStudyBackup(progress:(text:string)=>void):Promise<St
   const packed:StudyBackup['assets']=[];const unavailableAssets:string[]=[];let bytes=0;
   for(const asset of assets.values()){progress(`Backing up page attachments (${packed.length+unavailableAssets.length+1}/${assets.size})…`);try{const blob=await loadPageAsset(asset);if(bytes+blob.size>100_000_000){unavailableAssets.push(asset.name+' (100 MB limit)');continue;}bytes+=blob.size;packed.push({localId:asset.localId,name:asset.name,type:blob.type||(/\.pdf$/i.test(asset.name)?'application/pdf':'image/png'),data:await base64(blob)});}catch{unavailableAssets.push(asset.name);}}
   const p=getPrefs();
-  return {format:'basedly-study',version:1,createdAt:new Date().toISOString(),tables,assets:packed,metadata:{unavailableAssets,eventMeta:p.eventMeta||{},tags:p.tags||[],notebookTags:p.notebookTags||{},noteColors:p.noteColors||{},taskEventLinks:p.taskEventLinks||{}}};
+  return {format:'sorro-study',version:1,createdAt:new Date().toISOString(),tables,assets:packed,metadata:{unavailableAssets,eventMeta:p.eventMeta||{},tags:p.tags||[],notebookTags:p.notebookTags||{},noteColors:p.noteColors||{},taskEventLinks:p.taskEventLinks||{}}};
 }
 
 export type RestorePlan = ReturnType<typeof prepareRestore> & { assets:Map<string,PageAsset> };
@@ -53,5 +53,5 @@ export async function restoreStudyBackup(backup:StudyBackup,plan:RestorePlan,pro
 }
 
 export function downloadBackup(backup:StudyBackup) {
-  const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='basedly-study-'+backup.createdAt.slice(0,10)+(Array.isArray(backup.metadata.unavailableAssets)&&backup.metadata.unavailableAssets.length?'-missing-attachments':'')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),30_000);
+  const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='sorro-study-'+backup.createdAt.slice(0,10)+(Array.isArray(backup.metadata.unavailableAssets)&&backup.metadata.unavailableAssets.length?'-missing-attachments':'')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),30_000);
 }

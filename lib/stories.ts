@@ -64,8 +64,8 @@ export type Highlight = {
   updatedAt: string;
 };
 
-const STORIES_LS_KEY = 'basedly-stories-v1';
-const HIGHLIGHTS_LS_KEY = 'basedly-highlights-v1';
+const STORIES_LS_KEY = 'sorro-stories-v1';
+const HIGHLIGHTS_LS_KEY = 'sorro-highlights-v1';
 
 // Seed demo stories so the tray looks lively from day 1
 const DEFAULT_STORIES: StorySlide[] = [

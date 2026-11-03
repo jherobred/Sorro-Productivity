@@ -70,7 +70,7 @@ async function linkedEmails(): Promise<string[]> {
  * `back` is where the app returns after Google.
  */
 export async function connectGoogleAccount(email?: string, back = '/calendar/'): Promise<{ error?: string }> {
-  sessionStorage.setItem('basedly-after-auth', back);
+  sessionStorage.setItem('sorro-after-auth', back);
   const linked = await linkedEmails();
   const known = !!email && linked.includes(email.toLowerCase());
   const queryParams: Record<string, string> = { prompt: 'consent select_account', ...(email ? { login_hint: email } : {}) };

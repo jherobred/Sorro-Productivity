@@ -14,7 +14,7 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 
 // Must match PAGE_MARKER and writeStudy in lib/pageKinds.ts.
-const PAGE_MARKER = '<!-- basedly-page:v1 -->\n';
+const PAGE_MARKER = '<!-- sorro-page:v1 -->\n';
 const htmlPage = (code: string) => PAGE_MARKER + JSON.stringify({ version: 1, kind: 'code', language: 'html', code });
 const readCode = (body: string): { language: string; code: string } | null => {
   if (!body.startsWith(PAGE_MARKER)) return null;
@@ -128,7 +128,7 @@ export async function handleMcp(req: Request, db: SupabaseClient, uid: string): 
       return rpc(msg.id, {
         protocolVersion: (msg.params?.protocolVersion as string) ?? '2025-06-18',
         capabilities: { tools: {} },
-        serverInfo: { name: 'basedly', version: '1.0.0' },
+        serverInfo: { name: 'sorro', version: '1.0.0' },
       });
     case 'ping':
       return rpc(msg.id, {});

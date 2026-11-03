@@ -66,7 +66,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
       if (error) { setAuthError(true); return; }
       if (data.session) { setReady(true); const u = data.session.user; setMe({ id: u.id, name: u.user_metadata?.full_name || u.user_metadata?.name || 'You', photo: u.user_metadata?.avatar_url || null }); }
-      else { try { sessionStorage.setItem('basedly-after-auth', location.pathname + location.search); } catch {} router.replace('/'); }
+      else { try { sessionStorage.setItem('sorro-after-auth', location.pathname + location.search); } catch {} router.replace('/'); }
     }).catch(() => { if (live) setAuthError(true); });
     const { data } = supabase.auth.onAuthStateChange((_e, session) => { if (!session) router.replace('/'); });
     return () => { live = false; clearTimeout(timeout); data.subscription.unsubscribe(); };

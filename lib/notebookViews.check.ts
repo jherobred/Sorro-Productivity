@@ -13,7 +13,7 @@ const photo = (id: string) => ({ id, asset: { localId: id, name: id + '.webp' },
 test('a single-day journal is written back byte for byte, with or without photos', () => {
   const plain = '# Journal · 2026-09-14' + NL + 'A quiet day.' + NL;
   assert.equal(writeJournalBook(readJournalBook(note(plain))), plain);
-  const withPhoto = '# Journal · 2026-09-14' + NL + 'Rain.' + NL + '<!-- basedly-journal-photos:v1 -->' + JSON.stringify([photo('p1')]);
+  const withPhoto = '# Journal · 2026-09-14' + NL + 'Rain.' + NL + '<!-- sorro-journal-photos:v1 -->' + JSON.stringify([photo('p1')]);
   const book = readJournalBook(note(withPhoto));
   assert.equal(book.entries['2026-09-14'].photos.length, 1);
   assert.equal(writeJournalBook(book), withPhoto);

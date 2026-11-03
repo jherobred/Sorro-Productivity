@@ -83,7 +83,7 @@ test('a journal keeps its prose and reads polaroids back unchanged',()=>{
  assert.deepEqual(readJournal(writeJournal(withPhoto)),withPhoto);
 });
 test('a damaged photo marker never eats the writing',()=>{
- const broken='# Journal'+NL+'Keep me.'+NL+'<!-- basedly-journal-photos:v1 -->{not json';
+ const broken='# Journal'+NL+'Keep me.'+NL+'<!-- sorro-journal-photos:v1 -->{not json';
  const read=readJournal(broken);
  assert.equal(read.photos.length,0);
  assert.ok(read.prose.startsWith('Keep me.'));

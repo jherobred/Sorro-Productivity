@@ -1,5 +1,6 @@
 import {readDoc,docText} from './docFormat.ts';
 import {readJournalBook,bookDays} from './journalPage.ts';
+import { rebrandBody } from './storageKeys.ts';
 export type PageKind = 'document' | 'whiteboard' | 'moodboard' | 'pdf' | 'journal' | 'code' | 'checklist' | 'flashcards' | 'cornell' | 'freepage';
 export const PAGE_TYPES = [
   {kind:'document',name:'Document',icon:'text',description:'Notes, lists and equations'},
@@ -43,12 +44,13 @@ export type FreeInk = {id:string;x:number;y:number;w:number;h:number;color:strin
 /** `ink` and `paper` came after the first free pages, so both are optional. */
 export type FreePageDocument = {version:1;kind:'freepage';boxes:FreeBox[];ink?:FreeInk[];paper?:'plain'|'lines'|'grid'};
 export type StudyDocument = ChecklistDocument | FlashcardDocument | CornellDocument;
-const BOARD_MARKER = '<!-- basedly-board:v1 -->\n';
-const PAGE_MARKER = '<!-- basedly-page:v1 -->\n';
+const BOARD_MARKER = '<!-- sorro-board:v1 -->\n';
+const PAGE_MARKER = '<!-- sorro-page:v1 -->\n';
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const str = (v: unknown): v is string => typeof v === 'string';
 export function readBoard(body:string):BoardDocument|null {
+  body=rebrandBody(body);
   if(!body.startsWith(BOARD_MARKER))return null;
   try {
     const data: unknown=JSON.parse(body.slice(BOARD_MARKER.length));
@@ -75,6 +77,7 @@ export function readBoard(body:string):BoardDocument|null {
 export const writeBoard=(board:BoardDocument)=>BOARD_MARKER+JSON.stringify(board);
 function validAsset(v:unknown):v is PageAsset{return record(v)&&str(v.localId)&&str(v.name)&&(v.path===undefined||str(v.path));}
 export function readStudy(body:string):StudyDocument|CodeDocument|null {
+  body=rebrandBody(body);
   if(!body.startsWith(PAGE_MARKER))return null;
   try {
     const d: unknown=JSON.parse(body.slice(PAGE_MARKER.length));
@@ -105,6 +108,7 @@ function validNode(v:unknown,depth=0):boolean {
   return true;
 }
 export function readFreePage(body:string):FreePageDocument|null {
+  body=rebrandBody(body);
   if(!body.startsWith(PAGE_MARKER))return null;
   try {
     const d: unknown=JSON.parse(body.slice(PAGE_MARKER.length));

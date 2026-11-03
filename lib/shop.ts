@@ -192,8 +192,8 @@ export const SHOP_ITEMS: ShopItem[] = [
   },
 ];
 
-const INVENTORY_STORAGE_KEY = 'basedly-user-inventory-v1';
-const EQUIPPED_STORAGE_KEY = 'basedly-user-equipped-v1';
+const INVENTORY_STORAGE_KEY = 'sorro-user-inventory-v1';
+const EQUIPPED_STORAGE_KEY = 'sorro-user-equipped-v1';
 
 export interface EquippedState {
   mascotAccessory: Accessory;

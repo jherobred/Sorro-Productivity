@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-const LS_KEY = 'basedly-views';
+const LS_KEY = 'sorro-views';
 const EMPTY_VIEWS: Record<string, number> = {};
 const listeners = new Set<() => void>();
 const sessionSeen = new Set<string>();

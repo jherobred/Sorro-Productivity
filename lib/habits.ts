@@ -54,9 +54,9 @@ export const HABIT_SELECT =
 
 const HABITS_KEY = ['habits'] as const;
 const TICKS_KEY = ['habit_ticks'] as const;
-const HABITS_META_KEY = 'basedly-habits-meta-v2';
-const HABIT_LOGS_KEY = 'basedly-habit-logs-v2';
-const HABIT_FREEZES_KEY = 'basedly-habit-freezes-v2';
+const HABITS_META_KEY = 'sorro-habits-meta-v2';
+const HABIT_LOGS_KEY = 'sorro-habit-logs-v2';
+const HABIT_FREEZES_KEY = 'sorro-habit-freezes-v2';
 
 /** Keeps recently archived habits in memory so Undo restores them optimistically. */
 const recentlyArchived = new Map<string, Habit>();
@@ -232,7 +232,7 @@ const freezeSnapshot = () => freezeCache;
 const freezeServerSnapshot = () => FREEZE_START;
 
 /** Dates a freeze has been spent on, so a gap can be forgiven deliberately. */
-const FROZEN_DAYS_KEY = 'basedly-habit-frozen-days-v1';
+const FROZEN_DAYS_KEY = 'sorro-habit-frozen-days-v1';
 
 export function readFrozenDays(): string[] {
   if (typeof window === 'undefined') return [];

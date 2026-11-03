@@ -51,11 +51,11 @@ export type Stored = {
   at: number;
 };
 
-const KEY = 'basedly-accounts';
+const KEY = 'sorro-accounts';
 /** Who the caches below currently belong to. */
-const CURRENT = 'basedly-account-current';
+const CURRENT = 'sorro-account-current';
 /** localStorage caches wiped on a switch. The query cache is IndexedDB now — see resetPersistedCache(). */
-const SCOPED = ['basedly-prefs'];
+const SCOPED = ['sorro-prefs'];
 
 const listeners = new Set<() => void>();
 let cache: Stored[] | null = null;

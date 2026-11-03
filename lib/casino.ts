@@ -5,9 +5,9 @@ import { supabase, currentUserId } from './supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { RANKED } from './challenges';
 
-export const CASINO_STORAGE_CREDITS = 'basedly_casino_dos_coin_v2';
-export const CASINO_STORAGE_VERIFIED = 'basedly_casino_age_verified_v1';
-export const CASINO_STORAGE_STATS = 'basedly_casino_stats_v2';
+export const CASINO_STORAGE_CREDITS = 'sorro_casino_dos_coin_v2';
+export const CASINO_STORAGE_VERIFIED = 'sorro_casino_age_verified_v1';
+export const CASINO_STORAGE_STATS = 'sorro_casino_stats_v2';
 
 export const RP_EXCHANGE_RATE = 100; // 1 RP = 100 DOS Coins
 
@@ -37,7 +37,7 @@ export function getStoredCredits(): number {
     const raw = localStorage.getItem(CASINO_STORAGE_CREDITS);
     if (raw !== null) return Number(raw);
     // Legacy fallback
-    const legacy = localStorage.getItem('basedly_casino_credits_v1');
+    const legacy = localStorage.getItem('sorro_casino_credits_v1');
     return legacy !== null ? Number(legacy) : 2500;
   } catch {
     return 2500;

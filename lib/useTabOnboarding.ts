@@ -7,7 +7,7 @@ import { queryClient } from './offline';
 import { playCelebration } from './audio';
 import { toast } from './toast';
 
-const LS_SEEN_ONBOARDINGS_KEY = 'basedly-seen-onboardings-v1';
+const LS_SEEN_ONBOARDINGS_KEY = 'sorro-seen-onboardings-v1';
 
 export function getSeenOnboardings(): Set<string> {
   if (typeof window === 'undefined') return new Set();

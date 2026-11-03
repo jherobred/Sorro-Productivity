@@ -1,4 +1,5 @@
 import { parse, spans, inlineMarkup, type Line } from './md.ts';
+import { rebrandBody } from './storageKeys.ts';
 
 /**
  * The Document page format.
@@ -8,7 +9,7 @@ import { parse, spans, inlineMarkup, type Line } from './md.ts';
  * comments. It is now a versioned record behind a marker, the same way boards
  * and study pages are stored, still in the one `bd_notes.body` column:
  *
- *   <!-- basedly-doc:v1 -->
+ *   <!-- sorro-doc:v1 -->
  *   {"version":1,"kind":"document","tabs":[{"id","title","html"}],"page":{…},"comments":[…]}
  *
  * Nothing is migrated in bulk. A Markdown page opens converted in memory and
@@ -22,7 +23,7 @@ import { parse, spans, inlineMarkup, type Line } from './md.ts';
  * without a DOM only ever produce plain text.
  */
 
-export const DOC_MARKER = '<!-- basedly-doc:v1 -->\n';
+export const DOC_MARKER = '<!-- sorro-doc:v1 -->\n';
 
 export type DocTab = { id: string; title: string; html: string };
 export type DocReply = { id: string; text: string; created: string };
@@ -101,6 +102,7 @@ function validComment(v: unknown): v is DocComment {
  * editor must show it read-only rather than open an empty document over it.
  */
 export function readDoc(body: string): DocRecord | null {
+  body = rebrandBody(body);
   if (!body.startsWith(DOC_MARKER)) return null;
   try {
     const data: unknown = JSON.parse(body.slice(DOC_MARKER.length));
@@ -120,7 +122,7 @@ export function readDoc(body: string): DocRecord | null {
 
 export const writeDoc = (doc: DocRecord) => DOC_MARKER + JSON.stringify(doc);
 
-export const isDocBody = (body: string) => body.startsWith(DOC_MARKER);
+export const isDocBody = (body: string) => rebrandBody(body).startsWith(DOC_MARKER);
 
 /* ------------------------------------------------------------ plain text */
 

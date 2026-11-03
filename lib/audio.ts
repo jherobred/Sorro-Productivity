@@ -26,7 +26,7 @@ function getAudioContext(): AudioContext | null {
 function isSoundAllowed(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const raw = localStorage.getItem('basedly-prefs');
+    const raw = localStorage.getItem('sorro-prefs');
     if (!raw) return true;
     const p = JSON.parse(raw) as { soundEnabled?: boolean };
     return p.soundEnabled !== false;
@@ -38,7 +38,7 @@ function isSoundAllowed(): boolean {
 function getEquippedSoundPack(): string {
   if (typeof window === 'undefined') return 'classic';
   try {
-    const raw = localStorage.getItem('basedly-user-equipped-v1');
+    const raw = localStorage.getItem('sorro-user-equipped-v1');
     if (!raw) return 'classic';
     const parsed = JSON.parse(raw) as { soundPack?: string };
     return parsed.soundPack || 'classic';

@@ -1,4 +1,5 @@
 import type { PageAsset } from './pageKinds';
+import { rebrandBody } from './storageKeys.ts';
 
 /**
  * The journal page body.
@@ -16,7 +17,7 @@ import type { PageAsset } from './pageKinds';
 export type Polaroid = { id: string; asset: PageAsset; caption: string; tilt: number };
 export type JournalBody = { prefix: string; prose: string; photos: Polaroid[] };
 
-const MARKER = '<!-- basedly-journal-photos:v1 -->';
+const MARKER = '<!-- sorro-journal-photos:v1 -->';
 
 const str = (v: unknown): v is string => typeof v === 'string';
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -42,6 +43,7 @@ function parsePhotos(json: string): Polaroid[] | null {
 }
 
 export function readJournal(body: string): JournalBody {
+  body = rebrandBody(body);
   const split = body.indexOf('\n');
   const prefix = split < 0 ? body + '\n' : body.slice(0, split + 1);
   const rest = split < 0 ? '' : body.slice(split + 1);
@@ -70,9 +72,9 @@ export function writeJournal(journal: JournalBody): string {
  *
  *   # Journal · 2026-09-14
  *   the 14th
- *   <!-- basedly-journal-day:2026-09-15 -->
+ *   <!-- sorro-journal-day:2026-09-15 -->
  *   the 15th
- *   <!-- basedly-journal-photos:v2 -->{"2026-09-15":[…]}
+ *   <!-- sorro-journal-photos:v2 -->{"2026-09-15":[…]}
  *
  * A page that only has its first day is written in the old single-day format,
  * byte for byte, so existing journals are unchanged until a second day is
@@ -81,8 +83,8 @@ export function writeJournal(journal: JournalBody): string {
 export type JournalEntry = { prose: string; photos: Polaroid[] };
 export type JournalBook = { prefix: string; start: string; entries: Record<string, JournalEntry> };
 
-const MARKER_V2 = '<!-- basedly-journal-photos:v2 -->';
-const DAY_LINE = /\n?<!-- basedly-journal-day:(\d{4}-\d{2}-\d{2}) -->\n?/g;
+const MARKER_V2 = '<!-- sorro-journal-photos:v2 -->';
+const DAY_LINE = /\n?<!-- sorro-journal-day:(\d{4}-\d{2}-\d{2}) -->\n?/g;
 
 function parsePhotoDays(json: string): Record<string, Polaroid[]> | null {
   try {
@@ -104,7 +106,7 @@ export const hasEntry = (entry: JournalEntry | undefined) => !!entry && (!!entry
 
 export function readJournalBook(note: { body: string; created_at: string }): JournalBook {
   const start = journalDay(note);
-  const body = note.body;
+  const body = rebrandBody(note.body);
   const split = body.indexOf('\n');
   const prefix = split < 0 ? body + '\n' : body.slice(0, split + 1);
   let rest = split < 0 ? '' : body.slice(split + 1);
@@ -142,7 +144,7 @@ export function writeJournalBook(book: JournalBook): string {
   const others = Object.keys(book.entries).filter((day) => day !== book.start && hasEntry(book.entries[day])).sort();
   if (!others.length) return writeJournal({ prefix: book.prefix, prose: first.prose, photos: first.photos });
   let text = book.prefix + first.prose;
-  for (const day of others) text += `\n<!-- basedly-journal-day:${day} -->\n` + book.entries[day].prose;
+  for (const day of others) text += `\n<!-- sorro-journal-day:${day} -->\n` + book.entries[day].prose;
   const photos: Record<string, Polaroid[]> = {};
   for (const day of [book.start, ...others]) if (book.entries[day]?.photos.length) photos[day] = book.entries[day].photos;
   return Object.keys(photos).length ? text + '\n' + MARKER_V2 + JSON.stringify(photos) : text;

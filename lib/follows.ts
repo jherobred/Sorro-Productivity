@@ -13,8 +13,8 @@ export type FollowItem = {
   followedAt: string;
 };
 
-const FOLLOWS_STORAGE_KEY = 'basedly-follows-store-v2';
-const FOLLOWERS_STORAGE_KEY = 'basedly-followers-store-v2';
+const FOLLOWS_STORAGE_KEY = 'sorro-follows-store-v2';
+const FOLLOWERS_STORAGE_KEY = 'sorro-followers-store-v2';
 
 /**
  * No seeded accounts. The list used to open with "Alex Chen", "Sarah Miller"

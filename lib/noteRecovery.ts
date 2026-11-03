@@ -1,6 +1,7 @@
 'use client';
 import { useSyncExternalStore } from 'react';
 import { currentUserId, supabase } from './supabase';
+import { LEGACY_DB, moveLegacyDatabase } from './storageKeys';
 
 export type PageVersion = { id: string; notebook_id: string; title: string; body: string; at: string };
 type Record = { key: string; user: string; draft?: PageVersion; versions: PageVersion[] };
@@ -25,9 +26,10 @@ supabase.auth.onAuthStateChange((_event, session) => { const next=session?.user.
 let database: Promise<IDBDatabase> | undefined;
 function db() {
   database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('basedly-page-recovery', 1);
+    const request = indexedDB.open('sorro-page-recovery', 1);
     request.onupgradeneeded = () => request.result.createObjectStore('pages', { keyPath: 'key' });
-    request.onsuccess = () => resolve(request.result);
+    // Unsaved drafts from before the rename move over before anything reads them.
+    request.onsuccess = () => void moveLegacyDatabase(LEGACY_DB.recovery, request.result, 'pages').catch(() => {}).then(() => resolve(request.result));
     request.onerror = () => reject(request.error);
   });
   return database;

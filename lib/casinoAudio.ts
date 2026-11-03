@@ -13,7 +13,7 @@ class CasinoAudioEngine {
   constructor() {
     if (typeof window !== 'undefined') {
       try {
-        const storedMute = localStorage.getItem('basedly_casino_muted');
+        const storedMute = localStorage.getItem('sorro_casino_muted');
         this.isMuted = storedMute === 'true';
       } catch { /* private mode */ }
     }
@@ -34,7 +34,7 @@ class CasinoAudioEngine {
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     try {
-      localStorage.setItem('basedly_casino_muted', this.isMuted ? 'true' : 'false');
+      localStorage.setItem('sorro_casino_muted', this.isMuted ? 'true' : 'false');
     } catch { /* ignore */ }
     return this.isMuted;
   }

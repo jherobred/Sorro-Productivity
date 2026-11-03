@@ -61,7 +61,7 @@ export type Ev = {
 };
 
 const EVENT_META_KEY = 'bd_events_local_meta';
-const GCAL_DELETED_KEY = 'basedly_deleted_gcal_events';
+const GCAL_DELETED_KEY = 'sorro_deleted_gcal_events';
 
 export function getDeletedGcalKeys(): Set<string> {
   if (typeof window === 'undefined') return new Set();
@@ -446,7 +446,7 @@ export function weekStart(d: Date, startsOn: 'mon' | 'sun' = readWeekStart()): D
 function readPref<T>(field: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
-    const v = JSON.parse(localStorage.getItem('basedly-prefs') || '{}')[field];
+    const v = JSON.parse(localStorage.getItem('sorro-prefs') || '{}')[field];
     return v === undefined ? fallback : (v as T);
   } catch {
     return fallback;

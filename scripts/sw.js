@@ -8,8 +8,8 @@
    the connection is back. Supabase and Google calls are never touched here. */
 /* global PRECACHE */
 
-const PRE = `basedly-pre-${PRECACHE.version}`;
-const RUNTIME = 'basedly-runtime';
+const PRE = `sorro-pre-${PRECACHE.version}`;
+const RUNTIME = 'sorro-runtime';
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {

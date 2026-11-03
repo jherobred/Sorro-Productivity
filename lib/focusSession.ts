@@ -14,7 +14,7 @@ import { ymd } from './days';
  * means the clock, the finish and the question that follows it cannot belong to
  * a route. They live here, and the Focus page and the top bar both read it.
  *
- * The saved shape is the one the page already wrote to `basedly-focus:<uid>`,
+ * The saved shape is the one the page already wrote to `sorro-focus:<uid>`,
  * plus `finished`, so a session in progress survives this change.
  */
 
@@ -72,7 +72,7 @@ function persist() {
 
 function load() {
   loading ??= currentUserId()
-    .then((uid) => { key = 'basedly-focus:' + uid; session = readStored() ?? session; })
+    .then((uid) => { key = 'sorro-focus:' + uid; session = readStored() ?? session; })
     .catch(() => { notice = 'Your timer is available on this device. Sign in to keep it with your account.'; })
     .finally(() => { ready = true; tick(true); });
 }

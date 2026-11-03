@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const OUT = join(tmpdir(), 'basedly-shots');
+const OUT = join(tmpdir(), 'sorro-shots');
 mkdirSync(OUT, { recursive: true });
 
 const BASE = 'http://localhost:3001';
@@ -38,21 +38,21 @@ try {
       const k = localStorage.key(i);
       if (/tour/i.test(k)) localStorage.setItem(k, 'done');
     }
-    localStorage.setItem('basedly-seen-onboardings-v1', JSON.stringify(['notebooks']));
+    localStorage.setItem('sorro-seen-onboardings-v1', JSON.stringify(['notebooks']));
   });
 
   for (const s of SHOTS) {
     await page.setViewport({ width: s.viewport.width, height: s.viewport.height });
     await page.evaluate((theme) => {
-      const raw = localStorage.getItem('basedly-prefs');
+      const raw = localStorage.getItem('sorro-prefs');
       const prefs = raw ? JSON.parse(raw) : {};
       prefs.theme = theme;
-      localStorage.setItem('basedly-prefs', JSON.stringify(prefs));
+      localStorage.setItem('sorro-prefs', JSON.stringify(prefs));
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (/tour/i.test(k)) localStorage.setItem(k, 'done');
       }
-      localStorage.setItem('basedly-seen-onboardings-v1', JSON.stringify(['notebooks']));
+      localStorage.setItem('sorro-seen-onboardings-v1', JSON.stringify(['notebooks']));
     }, s.theme);
     await page.goto(`${BASE}${s.url}`, { waitUntil: 'networkidle2', timeout: 60000 });
     await new Promise((r) => setTimeout(r, 2600));

@@ -166,7 +166,7 @@ export const DEFAULT_PREFS: Prefs = {
   taskSort: { key: 'smart', desc: false },
 };
 
-const LS_KEY = 'basedly-prefs';
+const LS_KEY = 'sorro-prefs';
 
 let followSystem: Prefs | null = null;
 if (typeof matchMedia === 'function') {

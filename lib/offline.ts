@@ -1,5 +1,6 @@
 import { QueryClient, type MutationFunction } from '@tanstack/react-query';
 import type { Persister, PersistedClient } from '@tanstack/react-query-persist-client';
+import { LEGACY_DB, moveLegacyDatabase } from './storageKeys';
 
 /**
  * Offline reads + queued writes.
@@ -48,9 +49,9 @@ export const queryClient = new QueryClient({
   },
 });
 
-const DB = 'basedly';
+const DB = 'sorro';
 const STORE = 'cache';
-const CACHE_KEY = 'basedly-cache';
+const CACHE_KEY = 'sorro-cache';
 
 /** One connection for the session; opening a database per write is the slow way. */
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -75,7 +76,7 @@ function openAt(version?: number): Promise<IDBDatabase> {
  * read and write would fail silently for as long as that database lived, and
  * the app would look like it simply had no offline cache. That state is
  * reachable: another build, an interrupted upgrade, or anything else that
- * opened `basedly` first. So the store is checked after opening, and if it is
+ * opened `sorro` first. So the store is checked after opening, and if it is
  * missing the database is reopened one version higher, which is the only way
  * to get an upgrade transaction.
  */
@@ -86,6 +87,10 @@ function open(): Promise<IDBDatabase> {
     const next = db.version + 1;
     db.close();
     return openAt(next);
+  }).then(async (db) => {
+    // The queue of offline writes made under the old name comes along before the first restore.
+    await moveLegacyDatabase(LEGACY_DB.cache, db, STORE).catch(() => {});
+    return db;
   });
   return dbPromise;
 }
@@ -126,6 +131,7 @@ function makePersister(): Persister {
     },
     restoreClient() {
       return tx<PersistedClient | undefined>('readonly', (s) => s.get(CACHE_KEY))
+        .then((v) => v ?? tx<PersistedClient | undefined>('readonly', (s) => s.get(LEGACY_DB.cacheKey)))
         // A corrupt or unreadable store must not stop the app from starting.
         // Losing the offline cache costs a refetch; throwing costs the session.
         .catch(() => undefined);
@@ -153,7 +159,7 @@ export async function resetPersistedCache() {
 // budget the app still shares with prefs and the auth session. Cleared once,
 // on first load after the upgrade.
 if (typeof window !== 'undefined') {
-  try { window.localStorage.removeItem('basedly-cache'); } catch { /* private mode */ }
+  try { window.localStorage.removeItem(LEGACY_DB.cacheKey); } catch { /* private mode */ }
 }
 
 /**

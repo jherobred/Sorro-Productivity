@@ -87,7 +87,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             The real values are reconciled from bd_profiles.prefs once signed in. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=JSON.parse(localStorage.getItem('basedly-prefs')||'{}');
+            __html: `(function(){try{[localStorage,sessionStorage].forEach(function(s){var o=[];for(var i=0;i<s.length;i++){var k=s.key(i);if(/^basedly[-_]/.test(k))o.push(k);}o.forEach(function(k){var n=k.replace(/^basedly/,'sorro');if(s.getItem(n)===null)s.setItem(n,s.getItem(k));s.removeItem(k);});});}catch(e){}
+try{var p=JSON.parse(localStorage.getItem('sorro-prefs')||'{}');
 var r=document.documentElement;
 var t=p.theme==='dark'||p.theme==='light'?p.theme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
 r.setAttribute('data-theme',t);

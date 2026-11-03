@@ -28,7 +28,7 @@ export function isPhoneDevice(): boolean {
   return window.innerWidth <= 760;
 }
 
-const LS_KEY = 'basedly-viewmode';
+const LS_KEY = 'sorro-viewmode';
 
 function readViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'auto';

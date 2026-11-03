@@ -41,9 +41,9 @@ export type PostRpSettings = {
   listing?: PostListing | null;
 };
 
-const POST_RP_STORAGE_KEY = 'basedly_post_rp_settings_v2';
-const RP_REQUESTS_STORAGE_KEY = 'basedly_rp_requests_v1';
-const CLAIMED_RP_KEY_PREFIX = 'basedly_claimed_rp_txs_';
+const POST_RP_STORAGE_KEY = 'sorro_post_rp_settings_v2';
+const RP_REQUESTS_STORAGE_KEY = 'sorro_rp_requests_v1';
+const CLAIMED_RP_KEY_PREFIX = 'sorro_claimed_rp_txs_';
 
 // Read all post RP settings from persistent registry
 function getStoredPostRpSettings(): Record<string, PostRpSettings> {

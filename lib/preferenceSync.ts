@@ -45,7 +45,7 @@ export class PreferenceOutbox {
   private running = new Map<string, Promise<void>>();
   private storage: Pick<Storage, 'getItem' | 'setItem'>;
   private key: string;
-  constructor(storage: Pick<Storage, 'getItem' | 'setItem'>, key = 'basedly-prefs-outbox') {
+  constructor(storage: Pick<Storage, 'getItem' | 'setItem'>, key = 'sorro-prefs-outbox') {
     this.storage = storage; this.key = key;
     try { this.entries = JSON.parse(storage.getItem(key) || '{}'); } catch { this.entries = {}; }
   }
