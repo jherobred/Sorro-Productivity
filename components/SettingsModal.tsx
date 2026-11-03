@@ -438,8 +438,8 @@ export function SettingsModal({
       case 'general':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <Field label="Open Basedly on">
-              <select aria-label="Open Basedly on" style={INPUT_STYLE} value={DESTINATIONS.some(d => d.id === prefs.landing) ? prefs.landing : 'home'} onChange={e => setPref('landing', e.target.value)}>
+            <Field label="Open Sorro on">
+              <select aria-label="Open Sorro on" style={INPUT_STYLE} value={DESTINATIONS.some(d => d.id === prefs.landing) ? prefs.landing : 'home'} onChange={e => setPref('landing', e.target.value)}>
                 {DESTINATIONS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
@@ -452,6 +452,7 @@ export function SettingsModal({
             <ToggleRow label="Motion & animation" hint="Page transitions and small visual feedback" on={prefs.motion} onChange={v => setPref('motion', v)} />
             <ToggleRow label="Haptic feedback" hint="Gentle taps on supported phones and tablets" on={prefs.haptics} onChange={v => setPref('haptics', v)} />
             <ToggleRow label="Sound effects" hint="Soft confirmation sounds and focus bells" on={prefs.soundEnabled} onChange={v => setPref('soundEnabled', v)} />
+            <ToggleRow label="Show part names" hint="Label each region with its code, like N.list or S.top" on={!!prefs.showParts} onChange={v => setPref('showParts', v)} />
           </div>
         );
 

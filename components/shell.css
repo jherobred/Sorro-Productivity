@@ -1,0 +1,57 @@
+/* Sorro shell. LodiSave gallery's sidebar and strip (LodiSave/app/ui/gallery.css), tokens from app/tokens.css. */
+.sx { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100dvh; background: var(--bg); color: var(--ink); transition: grid-template-columns .45s var(--drift) }
+.sx[data-rail='true'] { grid-template-columns: 64px minmax(0, 1fr) }
+.sx[data-phone='true'] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto }
+.nomo .sx { transition: none }
+
+.sx-icon { width: 34px; height: 34px; display: grid; place-items: center; flex: none; border-radius: var(--r-row); color: var(--muted); transition: background-color .15s, color .15s, transform .2s var(--snap) }
+.sx-icon:hover { background: var(--soft); color: var(--ink) }
+.sx-icon:active { transform: scale(.96) }
+.sx-word { font: 600 15px/1 var(--font-body); letter-spacing: -.01em; color: var(--ink) }
+.sx-avatar { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink); font: 600 12px/1 var(--font-body); text-transform: uppercase }
+
+/* S.side: the page's own surface, the current tab a neutral step darker, never the accent. */
+.sx-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 0; padding: 0 10px 10px; background: var(--surface); border-right: 1px solid var(--line); overflow: hidden auto }
+.sx-brand { display: flex; align-items: center; gap: 4px; height: 44px; padding-left: 6px; margin-bottom: 6px; flex: none }
+.sx-brand a { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden }
+.sx-side h3 { height: 28px; margin: 14px 10px 2px; display: flex; align-items: center; font: 500 12.5px/1 var(--font-body); color: var(--muted); white-space: nowrap }
+.sx-nav { display: flex; flex-direction: column; gap: 1px }
+.sx-nav a, .sx-me { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 6px 10px; border-radius: var(--r-row); color: var(--ink); font-size: 13px; text-decoration: none; white-space: nowrap; transition: background-color .15s var(--snap) }
+.sx-nav a:hover, .sx-me:hover { background: var(--soft) }
+.sx-nav a[aria-current='page'] { background: var(--soft-2); font-weight: 500 }
+.sx-nav a svg { color: var(--muted) }
+.sx-nav a[aria-current='page'] svg { color: var(--ink) }
+.sx-nav span, .sx-me > span:last-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis }
+.sx-me { margin-top: auto; text-align: left }
+.sx[data-rail='true'] .sx-brand { flex-direction: column; height: auto; padding: 8px 0 0; gap: 6px }
+.sx[data-rail='true'] .sx-brand a { justify-content: center; flex: none }
+.sx[data-rail='true'] :is(.sx-word, .sx-nav span, .sx-side h3, .sx-me > span:last-child) { display: none }
+.sx[data-rail='true'] :is(.sx-nav a, .sx-me) { justify-content: center; padding: 6px 0 }
+
+/* S.top: the same colour as the page and no rule under it, so it reads as the top of the page. */
+.sx-work { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
+.sx-top { display: flex; align-items: center; gap: 6px; height: 44px; flex: none; padding: 0 10px 0 18px; padding-top: env(safe-area-inset-top); box-sizing: content-box; background: var(--bg) }
+.sx-top h1 { margin: 0; font: 600 15px/1 var(--font-body); color: var(--ink); white-space: nowrap }
+.sx-actions { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px }
+.sx-demo { font: 500 11px/1 var(--font-mono); color: var(--muted); padding: 4px 8px; border-radius: var(--r-pill); background: var(--soft) }
+.sx[data-phone='true'] .sx-top { padding-left: 14px; gap: 8px }
+
+.sx .studio-main { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; background: var(--bg) }
+.sx[data-phone='true'] .studio-main { padding: 4px 14px 14px }
+
+/* S.bar: five icons, no labels. */
+.sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
+.sx-bar a { display: grid; place-items: center; color: var(--muted); -webkit-touch-callout: none; user-select: none }
+.sx-bar a[aria-current='page'] { color: var(--ink) }
+.sx-bar a[aria-current='page'] svg { background: var(--soft-2); border-radius: var(--r-pill); padding: 5px 14px; box-sizing: content-box }
+
+.sx-loading { height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--bg); color: var(--muted) }
+
+/* Settings → Show part names. */
+html.parts [data-part] { position: relative }
+html.parts [data-part]::before { content: attr(data-part); position: absolute; top: 2px; left: 2px; z-index: 50; padding: 1px 5px; border-radius: 6px; background: var(--pick); color: var(--accent-ink); font: 500 10.5px/1.4 var(--font-mono); pointer-events: none }
+
+.sx-empty { min-height: 60%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); text-align: center }
+.sx-empty p { margin: 0; font-size: 14px }
+.sx-pill { height: 34px; padding: 0 16px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap) }
+.sx-pill:active { transform: scale(.96) }

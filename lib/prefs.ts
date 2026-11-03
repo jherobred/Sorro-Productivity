@@ -24,6 +24,10 @@ export type Prefs = {
   calendarTaskPlans?: Record<string, { date: string; starts_at: string | null }>;
 
   theme: ThemePref;
+  /** Labels every region with its part code (lib/parts.ts). */
+  showParts?: boolean;
+  /** Notes pinned to the sidebar, newest first, at most 8. */
+  pinnedNotes?: string[];
   accent: string;
   motion: boolean;
   navPicks: string[];
@@ -195,6 +199,7 @@ export function applyPrefs(p: Prefs) {
   r.classList.toggle('noglass', !!p.reduceTransparency);
 
   r.classList.toggle('railshut', p.sidebar === 'collapsed');
+  r.classList.toggle('parts', !!p.showParts);
   r.setAttribute('data-shell', p.shellLayout ?? 'L3');
 }
 
