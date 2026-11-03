@@ -38,7 +38,7 @@ export function useScratch() {
     queryKey: KEY,
     queryFn: async (): Promise<Scratch[]> => {
       const { data, error } = await supabase
-        .from('bd_scratch')
+        .from('sorro_scratch')
         .select('id,text,tag,color,pinned,position,created_at')
         .is('deleted_at', null)
         // Saved links live in this table too; they have their own page.
@@ -81,7 +81,7 @@ const ADD = defineMutation('scratch.add', async (v: { id: string; text: string; 
       text: v.text,
     });
   }
-  const { error } = await supabase.from('bd_scratch').insert({
+  const { error } = await supabase.from('sorro_scratch').insert({
     id: v.id,
     user_id,
     text: dbText,
@@ -103,17 +103,17 @@ const SAVE = defineMutation('scratch.save', async (v: { id: string; patch: Parti
     delete patch.title;
     delete patch.photo_url;
   }
-  const { error } = await supabase.from('bd_scratch').update(patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_scratch').update(patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL = defineMutation('scratch.del', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_scratch').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_scratch').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE = defineMutation('scratch.restore', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_scratch', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_scratch', p_id: v.id });
   if (error) throw error;
 });
 

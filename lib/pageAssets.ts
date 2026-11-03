@@ -18,7 +18,7 @@ async function assertPdf(file:Blob&{name?:string}){
  const head=new Uint8Array(await file.slice(0,5).arrayBuffer());
  if(String.fromCharCode(...head)!=='%PDF-')throw new Error('That file is not a PDF.');
 }
-const upload=(file:File)=>uploadTo('bd-files',file,{types:PAGE_ASSET_TYPES,maxBytes:PAGE_ASSET_MAX_BYTES});
+const upload=(file:File)=>uploadTo('sorro-files',file,{types:PAGE_ASSET_TYPES,maxBytes:PAGE_ASSET_MAX_BYTES});
 export async function savePageAsset(file:File):Promise<PageAsset>{
  await assertPdf(file);
  const asset:PageAsset={localId:crypto.randomUUID(),name:file.name};
@@ -32,7 +32,7 @@ export async function loadPageAsset(asset:PageAsset):Promise<Blob>{
  const cached=await transact<Blob|undefined>('readonly',store=>store.get(asset.localId)).catch(()=>undefined);
  if(cached)return cached;
  if(!asset.path)throw new Error('This file was saved on another device. Open it there to upload it.');
- const {data,error}=await supabase.storage.from('bd-files').download(asset.path);if(error||!data)throw error||new Error('The file could not be loaded.');
+ const {data,error}=await supabase.storage.from('sorro-files').download(asset.path);if(error||!data)throw error||new Error('The file could not be loaded.');
  void transact('readwrite',store=>store.put(data,asset.localId)).catch(()=>{});return data;
 }
 export async function syncPageAsset(asset:PageAsset):Promise<PageAsset>{

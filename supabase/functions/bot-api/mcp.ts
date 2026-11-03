@@ -59,7 +59,7 @@ const TOOLS = [
 type Args = Record<string, string | undefined>;
 
 async function findNotebook(db: SupabaseClient, uid: string, ref: string) {
-  const { data, error } = await db.from('bd_notebooks').select('id,name').eq('user_id', uid).is('deleted_at', null);
+  const { data, error } = await db.from('sorro_notebooks').select('id,name').eq('user_id', uid).is('deleted_at', null);
   if (error) throw new Error(error.message);
   const hit = (data ?? []).find((n) => n.id === ref) ?? (data ?? []).find((n) => n.name.toLowerCase() === ref.trim().toLowerCase());
   if (!hit) throw new Error(`No notebook "${ref}". Notebooks: ${(data ?? []).map((n) => n.name).join(', ')}`);
@@ -69,19 +69,19 @@ async function findNotebook(db: SupabaseClient, uid: string, ref: string) {
 async function callTool(db: SupabaseClient, uid: string, name: string, a: Args): Promise<unknown> {
   switch (name) {
     case 'list_notebooks': {
-      const { data, error } = await db.from('bd_notebooks').select('id,name').eq('user_id', uid).is('deleted_at', null).order('position');
+      const { data, error } = await db.from('sorro_notebooks').select('id,name').eq('user_id', uid).is('deleted_at', null).order('position');
       if (error) throw new Error(error.message);
       return data;
     }
     case 'list_pages': {
       const nb = await findNotebook(db, uid, a.notebook ?? '');
-      const { data, error } = await db.from('bd_notes').select('id,title,body,updated_at')
+      const { data, error } = await db.from('sorro_notes').select('id,title,body,updated_at')
         .eq('user_id', uid).eq('notebook_id', nb.id).is('deleted_at', null).order('position');
       if (error) throw new Error(error.message);
       return (data ?? []).map((n) => ({ id: n.id, title: n.title, updated_at: n.updated_at, kind: readCode(n.body)?.language === 'html' ? 'artifact' : 'page' }));
     }
     case 'read_page': {
-      const { data, error } = await db.from('bd_notes').select('id,title,body,notebook_id,updated_at')
+      const { data, error } = await db.from('sorro_notes').select('id,title,body,notebook_id,updated_at')
         .eq('user_id', uid).eq('id', a.id ?? '').is('deleted_at', null).maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) throw new Error('No such page');
@@ -95,17 +95,17 @@ async function callTool(db: SupabaseClient, uid: string, name: string, a: Args):
       if (a.html.length > 2_000_000) throw new Error('HTML is over 2 MB');
       if (a.id) {
         // Only an existing HTML artifact. Overwriting a document or board with HTML would lose it.
-        const { data: cur } = await db.from('bd_notes').select('body').eq('user_id', uid).eq('id', a.id).is('deleted_at', null).maybeSingle();
+        const { data: cur } = await db.from('sorro_notes').select('body').eq('user_id', uid).eq('id', a.id).is('deleted_at', null).maybeSingle();
         if (!cur) throw new Error('No such page');
         if (readCode(cur.body)?.language !== 'html') throw new Error('That page is not an HTML artifact; create a new one instead');
-        const { error } = await db.from('bd_notes').update({ title: a.title.trim(), body: htmlPage(a.html), updated_at: new Date().toISOString() })
+        const { error } = await db.from('sorro_notes').update({ title: a.title.trim(), body: htmlPage(a.html), updated_at: new Date().toISOString() })
           .eq('user_id', uid).eq('id', a.id);
         if (error) throw new Error(error.message);
         return { id: a.id, updated: true };
       }
       const nb = await findNotebook(db, uid, a.notebook ?? '');
       const id = crypto.randomUUID();
-      const { error } = await db.from('bd_notes').insert({ id, user_id: uid, notebook_id: nb.id, title: a.title.trim(), body: htmlPage(a.html), position: 0 });
+      const { error } = await db.from('sorro_notes').insert({ id, user_id: uid, notebook_id: nb.id, title: a.title.trim(), body: htmlPage(a.html), position: 0 });
       if (error) throw new Error(error.message);
       return { id, notebook: nb.name, created: true };
     }

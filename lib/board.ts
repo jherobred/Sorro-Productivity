@@ -1,7 +1,7 @@
 /**
  * The Board tab's workflow: five columns a task moves through.
  *
- * bd_tasks has no status column, so where a card sits lives in the synced
+ * sorro_tasks has no status column, so where a card sits lives in the synced
  * prefs map `taskBoard`, by task id, the way calendarTaskPlans does. The map
  * merges per task across devices. Done is the task's own `done` flag, so
  * ticking a task anywhere else moves its card here too.

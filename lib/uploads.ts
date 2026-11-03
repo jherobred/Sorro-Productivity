@@ -12,7 +12,7 @@ import { assertSafeFile, safeFileName, IMAGE_EXT } from './uploadGuard';
  * object goes to `<uid>/<uuid>-<name>` (see the sorro_v1_schema policies).
  */
 
-export type Bucket = 'bd-feed' | 'bd-journal' | 'bd-files' | 'bd-avatars';
+export type Bucket = 'bd-feed' | 'sorro-journal' | 'sorro-files' | 'sorro-avatars';
 
 export async function uploadTo(bucket: Bucket, file: File, rules: { types?: Set<string>; maxBytes?: number } = {}): Promise<string> {
   const type = assertSafeFile(file, rules.types, rules.maxBytes);
@@ -57,13 +57,13 @@ async function uploadProfileImage(file: File, kind: 'avatar' | 'cover'): Promise
   const user_id = await currentUserId();
   const ext = IMAGE_EXT[type] ?? 'jpg';
   const path = `${user_id}/${kind}.${ext}`;
-  const { error } = await supabase.storage.from('bd-avatars').upload(path, file, {
+  const { error } = await supabase.storage.from('sorro-avatars').upload(path, file, {
     cacheControl: '3600',
     contentType: type,
     upsert: true,
   });
   if (error) throw error;
-  const { data } = supabase.storage.from('bd-avatars').getPublicUrl(path);
+  const { data } = supabase.storage.from('sorro-avatars').getPublicUrl(path);
   return `${data.publicUrl}?v=${Date.now()}`;
 }
 

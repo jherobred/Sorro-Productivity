@@ -156,7 +156,7 @@ const EDIT_TXN = defineMutation('money.editTxn', async (v: { id: string; patch: 
 });
 
 const RESTORE_TXN = defineMutation('money.restoreTxn', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_transactions', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'bd_transactions', p_id: v.id });
   if (error) throw error;
 });
 

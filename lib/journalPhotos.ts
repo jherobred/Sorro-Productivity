@@ -53,7 +53,7 @@ export function usePhotos(entryId: string | null) {
       // same escape hatch lib/journal.ts uses for its windowed keys.
       const fx = fixture<Photo[]>('journal_photos');
       if (fx) return fx;
-      const { data, error } = await supabase.from('bd_journal_photos')
+      const { data, error } = await supabase.from('sorro_journal_photos')
         .select(COLS).eq('entry_id', entryId!).order('position').order('created_at');
       if (error) throw error;
       return (data ?? []) as Photo[];
@@ -66,7 +66,7 @@ export function usePins(photoId: string, enabled: boolean) {
     queryKey: pinKey(photoId),
     enabled,
     queryFn: async (): Promise<Pin[]> => {
-      const { data, error } = await supabase.from('bd_photo_annotations')
+      const { data, error } = await supabase.from('sorro_photo_annotations')
         .select('id,x,y,text').eq('photo_id', photoId).order('created_at');
       if (error) throw error;
       return (data ?? []).map((a) => ({ ...a, x: Number(a.x), y: Number(a.y) }));
@@ -78,7 +78,7 @@ export function usePins(photoId: string, enabled: boolean) {
 
 const ADD = defineMutation('jp.add', async (v: Photo & { entry_id: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_journal_photos').insert({
+  const { error } = await supabase.from('sorro_journal_photos').insert({
     id: v.id, user_id, entry_id: v.entry_id, name: v.name,
     storage_path: v.storage_path, position: v.position,
   });
@@ -86,7 +86,7 @@ const ADD = defineMutation('jp.add', async (v: Photo & { entry_id: string }) => 
 });
 
 const PATCH = defineMutation('jp.patch', async (v: { id: string; patch: Partial<Photo> }) => {
-  const { error } = await supabase.from('bd_journal_photos').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_journal_photos').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -98,39 +98,39 @@ const PATCH = defineMutation('jp.patch', async (v: { id: string; patch: Partial<
  * cheaper than a row pointing at a file that is no longer there.
  */
 const REPLACE = defineMutation('jp.replace', async (v: { id: string; storage_path: string; name: string; old_path: string }) => {
-  const { error } = await supabase.from('bd_journal_photos')
+  const { error } = await supabase.from('sorro_journal_photos')
     .update({ storage_path: v.storage_path, name: v.name }).eq('id', v.id);
   if (error) throw error;
   if (v.old_path && v.old_path !== v.storage_path) {
-    await supabase.storage.from('bd-journal').remove([v.old_path]);
+    await supabase.storage.from('sorro-journal').remove([v.old_path]);
   }
 });
 
 const PURGE = defineMutation('jp.purge', async (v: { id: string; storage_path: string }) => {
-  const { error } = await supabase.from('bd_journal_photos').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_journal_photos').delete().eq('id', v.id);
   if (error) throw error;
-  await supabase.storage.from('bd-journal').remove([v.storage_path]);
+  await supabase.storage.from('sorro-journal').remove([v.storage_path]);
 });
 
 const ADD_PIN = defineMutation('jp.addPin', async (v: Pin & { photo_id: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_photo_annotations')
+  const { error } = await supabase.from('sorro_photo_annotations')
     .insert({ id: v.id, user_id, photo_id: v.photo_id, x: v.x, y: v.y, text: v.text });
   if (error) throw error;
 });
 
 const EDIT_PIN = defineMutation('jp.editPin', async (v: { id: string; text: string }) => {
-  const { error } = await supabase.from('bd_photo_annotations').update({ text: v.text }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_photo_annotations').update({ text: v.text }).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL_PIN = defineMutation('jp.delPin', async (v: { id: string; photo_id: string }) => {
-  const { error } = await supabase.from('bd_photo_annotations').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_photo_annotations').delete().eq('id', v.id);
   if (error) throw error;
 });
 
 const CLEAR_PINS = defineMutation('jp.clearPins', async (v: { photo_id: string }) => {
-  const { error } = await supabase.from('bd_photo_annotations').delete().eq('photo_id', v.photo_id);
+  const { error } = await supabase.from('sorro_photo_annotations').delete().eq('photo_id', v.photo_id);
   if (error) throw error;
 });
 
@@ -181,7 +181,7 @@ export function usePhotoActions(entryId: string | null) {
   /** Upload the file, then write the row. Returns false if either half failed. */
   const upload = async (entry_id: string, file: File, position: number): Promise<boolean> => {
     try {
-      const storage_path = await uploadTo('bd-journal', file);
+      const storage_path = await uploadTo('sorro-journal', file);
       add.mutate({
         id: crypto.randomUUID(), entry_id, name: file.name, storage_path,
         position, archived_at: null, deleted_at: null,
@@ -195,7 +195,7 @@ export function usePhotoActions(entryId: string | null) {
 
   const swap = async (photo: Photo, file: File): Promise<boolean> => {
     try {
-      const storage_path = await uploadTo('bd-journal', file);
+      const storage_path = await uploadTo('sorro-journal', file);
       replace.mutate({ id: photo.id, storage_path, name: file.name, old_path: photo.storage_path });
       toast('Photo replaced');
       return true;

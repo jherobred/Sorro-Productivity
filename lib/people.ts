@@ -13,7 +13,7 @@ import { toFit, type Fit } from './photoFit';
  *
  * Every social surface used to label its authors with `id.slice(0, 2)` — the
  * first two characters of a UUID. So a post was by "A4", a reply was by "0F",
- * and the avatar said the same thing. People have handles; `bd_profiles` is
+ * and the avatar said the same thing. People have handles; `sorro_profiles` is
  * readable by everyone (its RLS is `select true`, deliberately, because a
  * feed without names is not a feed).
  *
@@ -140,7 +140,7 @@ export function useProfiles() {
     queryFn: async (): Promise<Record<string, Person>> => {
       const out: Record<string, Person> = { ...COMMUNITY_PROFILES };
       try {
-        const { data } = await supabase.from('bd_profiles').select('user_id,name,handle,photo_url,animal,photo_fit').limit(500);
+        const { data } = await supabase.from('sorro_profiles').select('user_id,name,handle,photo_url,animal,photo_fit').limit(500);
         if (data) {
           for (const p of data as Person[]) {
             if (p && p.user_id) {
@@ -172,7 +172,7 @@ export function useProfiles() {
  * People you already share something with.
  *
  * The messaging picker used to list **every profile in the database**, because
- * `bd_profiles` is world-readable and the list was therefore free. That is the
+ * `sorro_profiles` is world-readable and the list was therefore free. That is the
  * wrong default: it makes a stranger and a groupmate the same single tap, so
  * everyone is effectively already your friend and an inbox is one bored person
  * away from being unusable.
@@ -207,7 +207,7 @@ export function useKnownPeople() {
       const [convo, proj, chal] = await Promise.all([
         // RLS already scopes this to conversations you belong to.
         supabase.from('bd_conversation_members').select('user_id'),
-        supabase.from('bd_project_members').select('user_id'),
+        supabase.from('sorro_project_members').select('user_id'),
         chalIds.length
           ? supabase.from('bd_challenge_members').select('user_id').in('challenge_id', chalIds)
           : Promise.resolve({ data: [] as { user_id: string }[] }),
@@ -243,7 +243,7 @@ export function useMyIdentity(): Identity {
       const { currentUserId } = await import('./supabase');
       const id = await currentUserId().catch(() => '');
       if (!id) return BLANK_ME;
-      const { data: p } = await supabase.from('bd_profiles')
+      const { data: p } = await supabase.from('sorro_profiles')
         .select('name,handle,photo_url').eq('user_id', id).maybeSingle();
       return { id, name: p?.name ?? '', handle: p?.handle ?? null, photo: p?.photo_url ?? null };
     },

@@ -49,7 +49,7 @@ async function refreshRemote(uid: string) {
   const prefix = `${uid}/object-covers`;
   const remote: Record<string, CoverRef> = {};
   for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase.storage.from('bd-files').list(prefix, { limit: 1000, offset });
+    const { data, error } = await supabase.storage.from('sorro-files').list(prefix, { limit: 1000, offset });
     if (error || !data) return false;
     for (const row of data) {
       const match = /^(notebook|task)__(.+)__(\d+)\.png$/.exec(row.name);
@@ -80,11 +80,11 @@ async function deleteRemote(uid: string, key: string) {
   const split = key.indexOf(':');
   const stem = `${key.slice(0, split)}__${encodeURIComponent(key.slice(split + 1))}__`;
   const prefix = `${uid}/object-covers`;
-  const { data, error } = await supabase.storage.from('bd-files').list(prefix, { limit: 1000, search: stem });
+  const { data, error } = await supabase.storage.from('sorro-files').list(prefix, { limit: 1000, search: stem });
   if (error || !data) return false;
   const paths = data.filter((row) => row.name.startsWith(stem)).map((row) => `${prefix}/${row.name}`);
   if (paths.length) {
-    const { error: removeError } = await supabase.storage.from('bd-files').remove(paths);
+    const { error: removeError } = await supabase.storage.from('sorro-files').remove(paths);
     if (removeError) return false;
   }
   if (state.owner === uid && state.covers[key]?.removed) persist(uid, { ...state.covers, [key]: { ...state.covers[key], pending: false } });
@@ -100,12 +100,12 @@ async function uploadPending(uid: string, key: string, ref: CoverRef) {
   const kind = key.slice(0, split);
   const id = encodeURIComponent(key.slice(split + 1));
   const path = `${uid}/object-covers/${kind}__${id}__${ref.updatedAt}.png`;
-  const { error } = await supabase.storage.from('bd-files').upload(path, blob, { contentType: 'image/png', cacheControl: '3600', upsert: true });
+  const { error } = await supabase.storage.from('sorro-files').upload(path, blob, { contentType: 'image/png', cacheControl: '3600', upsert: true });
   if (error) return false;
   // An earlier upload finishing must never replace a more recent selection.
   if (state.owner === uid && state.covers[key]?.updatedAt === ref.updatedAt) {
     persist(uid, { ...state.covers, [key]: { ...ref, path, pending: false } });
-    if (ref.path && ref.path !== path) await supabase.storage.from('bd-files').remove([ref.path]);
+    if (ref.path && ref.path !== path) await supabase.storage.from('sorro-files').remove([ref.path]);
   }
   return true;
 }
@@ -160,7 +160,7 @@ export function useObjectCover(kind: CoverKind, id: string) {
   const found = snapshot.covers[keyOf(kind, id)];
   const ref = found?.removed ? undefined : found;
   const local = useImageUrls([ref?.localId]);
-  const remote = useSignedUrl('bd-files', ref?.path);
+  const remote = useSignedUrl('sorro-files', ref?.path);
   return { url: (ref?.localId ? local[ref.localId] : undefined) || remote, pending: !!ref?.pending, exists: !!ref };
 }
 

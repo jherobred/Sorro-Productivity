@@ -20,8 +20,8 @@ import { settler } from './settle';
  * renamed into nonsense, and could be deleted out from under its own data.
  *
  * **Three roles, and they mean something now.** Membership used to grant
- * visibility of the workspace row and nothing else: `bd_projects` and
- * `bd_files` carry a `workspace_id` but their policies only ever asked
+ * visibility of the workspace row and nothing else: `sorro_projects` and
+ * `sorro_files` carry a `workspace_id` but their policies only ever asked
  * `user_id = auth.uid()`, so inviting somebody showed them the name of a space
  * and none of the work in it. Migration 0013 adds the policies that make it
  * real — a **viewer** reads everything in the space, an **editor** also
@@ -53,17 +53,17 @@ export function useWorkspaces() {
     queryKey: KEY,
     queryFn: async (): Promise<Workspace[]> => {
       const { data, error } = await supabase
-        .from('bd_workspaces')
-        .select('id,name,color,owner_id,bd_workspace_members(role)')
+        .from('sorro_workspaces')
+        .select('id,name,color,owner_id,sorro_workspace_members(role)')
         .is('deleted_at', null)
         .order('created_at');
       if (error) throw error;
       const me = await currentUserId().catch(() => null);
       return (data ?? []).map((w) => {
-        const row = w as typeof w & { bd_workspace_members?: { role: Role }[] };
+        const row = w as typeof w & { sorro_workspace_members?: { role: Role }[] };
         return {
           id: w.id, name: w.name, color: w.color, owner_id: w.owner_id,
-          role: (w.owner_id === me ? 'owner' : row.bd_workspace_members?.[0]?.role ?? 'editor') as Role,
+          role: (w.owner_id === me ? 'owner' : row.sorro_workspace_members?.[0]?.role ?? 'editor') as Role,
         };
       });
     },
@@ -75,8 +75,8 @@ export function useWorkspaces() {
  *
  * Enabled only while the managing sheet is open: this is the one screen that
  * needs it, and every other surface would be paying for a query it never
- * reads. The owner is included from `bd_workspaces.owner_id` rather than
- * trusted from a membership row, which is the same rule `bd_ws_role` follows
+ * reads. The owner is included from `sorro_workspaces.owner_id` rather than
+ * trusted from a membership row, which is the same rule `sorro_ws_role` follows
  * in the database.
  */
 export function useMembers(workspaceId: string | null) {
@@ -84,7 +84,7 @@ export function useMembers(workspaceId: string | null) {
     queryKey: [...MEMBERS, workspaceId],
     enabled: !!workspaceId,
     queryFn: async (): Promise<Member[]> => {
-      const { data, error } = await supabase.from('bd_workspace_members')
+      const { data, error } = await supabase.from('sorro_workspace_members')
         .select('user_id,role').eq('workspace_id', workspaceId as string).order('joined_at');
       if (error) throw error;
       return (data ?? []) as Member[];
@@ -94,15 +94,15 @@ export function useMembers(workspaceId: string | null) {
 
 const CREATE = defineMutation('ws.create', async (v: { id: string; name: string; color: string }) => {
   const owner_id = await currentUserId();
-  const { error } = await supabase.from('bd_workspaces').insert({ ...v, owner_id });
+  const { error } = await supabase.from('sorro_workspaces').insert({ ...v, owner_id });
   if (error) throw error;
   // The owner is a member too, or every membership check would exclude them.
-  const { error: memberError } = await supabase.from('bd_workspace_members').insert({ workspace_id: v.id, user_id: owner_id, role: 'owner' });
+  const { error: memberError } = await supabase.from('sorro_workspace_members').insert({ workspace_id: v.id, user_id: owner_id, role: 'owner' });
   if (memberError) throw memberError;
 });
 
 const EDIT = defineMutation('ws.edit', async (v: { id: string; patch: { name?: string; color?: string } }) => {
-  const { error } = await supabase.from('bd_workspaces').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_workspaces').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -115,13 +115,13 @@ const EDIT = defineMutation('ws.edit', async (v: { id: string; patch: { name?: s
  * strand everybody else's access with no way to give it back.
  */
 const DELETE = defineMutation('ws.delete', async (v: { id: string; at: string | null }) => {
-  const { error } = await supabase.from('bd_workspaces').update({ deleted_at: v.at }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_workspaces').update({ deleted_at: v.at }).eq('id', v.id);
   if (error) throw error;
 });
 
 const LEAVE = defineMutation('ws.leave', async (v: { id: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_workspace_members')
+  const { error } = await supabase.from('sorro_workspace_members')
     .delete().eq('workspace_id', v.id).eq('user_id', user_id);
   if (error) throw error;
 });
@@ -131,12 +131,12 @@ const LEAVE = defineMutation('ws.leave', async (v: { id: string }) => {
 // somebody at a different role changes their role instead of failing on the
 // primary key.
 const INVITE = defineMutation('ws.invite', async (v: { id: string; user_id: string; role: Exclude<Role, 'owner'> }) => {
-  const { error } = await supabase.rpc('bd_ws_invite', { p_ws: v.id, p_user: v.user_id, p_role: v.role });
+  const { error } = await supabase.rpc('sorro_ws_invite', { p_ws: v.id, p_user: v.user_id, p_role: v.role });
   if (error) throw error;
 });
 
 const REMOVE_MEMBER = defineMutation('ws.removeMember', async (v: { id: string; user_id: string }) => {
-  const { error } = await supabase.from('bd_workspace_members')
+  const { error } = await supabase.from('sorro_workspace_members')
     .delete().eq('workspace_id', v.id).eq('user_id', v.user_id);
   if (error) throw error;
 });

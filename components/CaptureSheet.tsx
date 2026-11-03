@@ -33,8 +33,8 @@ export function CaptureSheet({ kind, onClose }: { kind: CaptureKind; onClose: ()
       // Postgrest resolves with `{ error }` instead of throwing. Unread, a
       // refused insert toasted success and closed the sheet on the typing.
       if (kind === 'task') {
-        const { data: list } = await supabase.from('bd_lists').select('id').order('position').limit(1).maybeSingle();
-        const { error } = await supabase.from('bd_tasks').insert({ user_id, title: v, list_id: list?.id ?? null });
+        const { data: list } = await supabase.from('sorro_lists').select('id').order('position').limit(1).maybeSingle();
+        const { error } = await supabase.from('sorro_tasks').insert({ user_id, title: v, list_id: list?.id ?? null });
         if (error) throw error;
         toast(`Task added${list ? '' : ''}`);
         void queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -46,7 +46,7 @@ export function CaptureSheet({ kind, onClose }: { kind: CaptureKind; onClose: ()
         toast('Expense logged');
         void queryClient.invalidateQueries({ queryKey: ['transactions'] });
       } else {
-        const { error } = await supabase.from('bd_scratch').insert({ user_id, text: v, tag: 'Note', color: '#38D6F2' });
+        const { error } = await supabase.from('sorro_scratch').insert({ user_id, text: v, tag: 'Note', color: '#38D6F2' });
         if (error) throw error;
         toast('Note kept');
         void queryClient.invalidateQueries({ queryKey: ['scratch'] });

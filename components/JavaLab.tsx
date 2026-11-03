@@ -62,16 +62,16 @@ type LayoutMode = 'split' | 'code-full' | '3d-full';
 const JAVA = ['java_files'] as const;
 
 const SAVE = defineMutation('java.save', async (v: { id: string; src: string }) => {
-  const { error } = await supabase.from('bd_java_files').update({ src: v.src, updated_at: new Date().toISOString() }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_java_files').update({ src: v.src, updated_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 const ADD = defineMutation('java.add', async (v: { id: string; name: string; src: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_java_files').insert({ ...v, user_id });
+  const { error } = await supabase.from('sorro_java_files').insert({ ...v, user_id });
   if (error) throw error;
 });
 const DEL = defineMutation('java.del', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_java_files').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_java_files').delete().eq('id', v.id);
   if (error) throw error;
 });
 
@@ -104,7 +104,7 @@ export function JavaLab() {
   const { data: files = [] } = useQuery({
     queryKey: JAVA,
     queryFn: async (): Promise<JFile[]> => {
-      const { data, error } = await supabase.from('bd_java_files').select('id,name,src,updated_at').order('name');
+      const { data, error } = await supabase.from('sorro_java_files').select('id,name,src,updated_at').order('name');
       if (error) throw error;
       return data ?? [];
     },

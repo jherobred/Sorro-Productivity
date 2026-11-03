@@ -410,7 +410,7 @@ export async function scanSeriesIds(ev: Ev, fromStart?: string): Promise<string[
   if (!prefix) return [ev.id];
   const fx = fixture<Ev[]>('events');
   if (fx) return fx.filter((e) => e.external_id?.startsWith(prefix) && (!fromStart || e.starts_at >= fromStart)).map((e) => e.id);
-  let q = supabase.from('bd_events').select('id,external_id').eq('source', 'schedule_scan').is('deleted_at', null);
+  let q = supabase.from('sorro_events').select('id,external_id').eq('source', 'schedule_scan').is('deleted_at', null);
   if (fromStart) q = q.gte('starts_at', fromStart);
   const { data, error } = await q;
   if (error) throw error;
@@ -545,7 +545,7 @@ export function useEvents(ws: Date, days = 7) {
       if (fx) return expandRecurringEvents(fx, from, to);
 
       const { data, error } = await supabase
-        .from('bd_events')
+        .from('sorro_events')
         .select('id,title,starts_at,ends_at,all_day,location,color,text_color,source,external_id,remind_minutes,snoozed_until,deleted_at')
         .is('deleted_at', null)
         .order('starts_at');
@@ -649,7 +649,7 @@ const CREATE = defineMutation(
         recurrence: recurrence ?? undefined,
       });
     }
-    const { error } = await supabase.from('bd_events').insert({ ...payload, user_id });
+    const { error } = await supabase.from('sorro_events').insert({ ...payload, user_id });
     if (error) throw error;
   }
 );
@@ -669,7 +669,7 @@ const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Par
     });
   }
   if (Object.keys(patch).length > 0) {
-    const { error } = await supabase.from('bd_events').update(patch).eq('id', v.id);
+    const { error } = await supabase.from('sorro_events').update(patch).eq('id', v.id);
     if (error) throw error;
   }
 });
@@ -677,14 +677,14 @@ const UPDATE = defineMutation('event.update', async (v: { id: string; patch: Par
 const DELETE = defineMutation('event.delete', async (v: { id: string }) => {
   if (changeFixture<Ev>('events', rows => rows.filter(e => e.id !== v.id))) return;
   const { error } = await supabase
-    .from('bd_events')
+    .from('sorro_events')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE = defineMutation('event.restore', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_events', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_events', p_id: v.id });
   if (error) throw error;
 });
 
@@ -698,7 +698,7 @@ const RESTORE = defineMutation('event.restore', async (v: { id: string }) => {
  * single event gets, so nothing is actually gone.
  */
 const CLEAR_ALL = defineMutation('event.clearAll', async () => {
-  const { error } = await supabase.from('bd_events')
+  const { error } = await supabase.from('sorro_events')
     .update({ deleted_at: new Date().toISOString() }).is('deleted_at', null);
   if (error) throw error;
 });
@@ -707,7 +707,7 @@ const CLEAR_ALL = defineMutation('event.clearAll', async () => {
 const DELETE_MANY = defineMutation('event.deleteMany', async (v: { ids: string[] }) => {
   if (changeFixture<Ev>('events', rows => rows.filter(e => !v.ids.includes(e.id)))) return;
   for (let i = 0; i < v.ids.length; i += 200) {
-    const { error } = await supabase.from('bd_events')
+    const { error } = await supabase.from('sorro_events')
       .update({ deleted_at: new Date().toISOString() }).in('id', v.ids.slice(i, i + 200));
     if (error) throw error;
   }
@@ -717,7 +717,7 @@ const RESTORE_MANY = defineMutation('event.restoreMany', async (v: { ids: string
   // Chunked: a thousand uuids in an `in.(...)` filter is a request no proxy
   // will forward.
   for (let i = 0; i < v.ids.length; i += 200) {
-    const { error } = await supabase.from('bd_events')
+    const { error } = await supabase.from('sorro_events')
       .update({ deleted_at: null }).in('id', v.ids.slice(i, i + 200));
     if (error) throw error;
   }
@@ -727,7 +727,7 @@ const RESTORE_MANY = defineMutation('event.restoreMany', async (v: { ids: string
 export async function liveEventIds(): Promise<string[]> {
   const fx = fixture<Ev[]>('events');
   if (fx) return fx.map((e) => e.id);
-  const { data, error } = await supabase.from('bd_events').select('id').is('deleted_at', null);
+  const { data, error } = await supabase.from('sorro_events').select('id').is('deleted_at', null);
   if (error) throw error;
   return (data ?? []).map((r) => r.id as string);
 }
@@ -735,7 +735,7 @@ export async function liveEventIds(): Promise<string[]> {
 // Snooze pushes the *reminder* 10 minutes, not the event.
 const SNOOZE = defineMutation('event.snooze', async (v: { id: string }) => {
   const until = new Date(Date.now() + 10 * 60_000).toISOString();
-  const { error } = await supabase.from('bd_events').update({ snoozed_until: until }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_events').update({ snoozed_until: until }).eq('id', v.id);
   if (error) throw error;
 });
 

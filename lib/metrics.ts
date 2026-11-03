@@ -55,7 +55,7 @@ export const metricDef = (id: string): MetricDef =>
 /** Old rows carry ids from before this list; keep them meaning something. */
 export function normaliseMetric(id: string | null | undefined): MetricId {
   if (!id) return 'manual';
-  if (id === 'project') return 'manual';   // bd_cards has no "moved on" date to count
+  if (id === 'project') return 'manual';   // sorro_cards has no "moved on" date to count
   return (METRICS.some((m) => m.id === id) ? id : 'manual') as MetricId;
 }
 
@@ -87,7 +87,7 @@ export function useMyMetric(
 
       switch (metric) {
         case 'task': {
-          const { data } = await supabase.from('bd_tasks')
+          const { data } = await supabase.from('sorro_tasks')
             .select('completed_at,updated_at').eq('done', true).is('deleted_at', null);
           const valid = (data ?? []).filter((r) => {
             const ts = r.completed_at || r.updated_at;
@@ -117,7 +117,7 @@ export function useMyMetric(
           })), from, to);
         }
         case 'study': {
-          const { data } = await supabase.from('bd_events').select('title,starts_at,ends_at')
+          const { data } = await supabase.from('sorro_events').select('title,starts_at,ends_at')
             .is('deleted_at', null).eq('all_day', false)
             .gte('starts_at', startISO).lte('starts_at', endISO);
           const rows = (data ?? [])
@@ -141,9 +141,9 @@ export function useMyMetric(
         }
         case 'written': {
           const [j, n] = await Promise.all([
-            supabase.from('bd_journal_entries').select('entry_date')
+            supabase.from('sorro_journal_entries').select('entry_date')
               .is('deleted_at', null).gte('entry_date', from).lte('entry_date', to),
-            supabase.from('bd_notes').select('updated_at')
+            supabase.from('sorro_notes').select('updated_at')
               .is('deleted_at', null).gte('updated_at', startISO).lte('updated_at', endISO),
           ]);
           const days = [

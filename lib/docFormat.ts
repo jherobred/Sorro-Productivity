@@ -7,7 +7,7 @@ import { rebrandBody } from './storageKeys.ts';
  * A document used to be one Markdown string, which cannot hold what a word
  * processor needs: fonts, sizes, colours, alignment, spacing, page setup,
  * comments. It is now a versioned record behind a marker, the same way boards
- * and study pages are stored, still in the one `bd_notes.body` column:
+ * and study pages are stored, still in the one `sorro_notes.body` column:
  *
  *   <!-- sorro-doc:v1 -->
  *   {"version":1,"kind":"document","tabs":[{"id","title","html"}],"page":{…},"comments":[…]}

@@ -9,7 +9,7 @@ import type { IconName } from '@/components/Icon';
  * A colour on the grid meant nothing until this: "the indigo one" is how people
  * actually talk about a block on a calendar, so the swatches became categories
  * with names. The ids are stored nowhere; the *colour* stays the source of
- * truth (bd_events.color is a hex), and `resolveCategory` reads a category back
+ * truth (sorro_events.color is a hex), and `resolveCategory` reads a category back
  * off any stored hex. That keeps old rows rendering correctly with no
  * migration, and a custom colour from the picker still works — it just falls
  * back to "Custom" when it is too far from every candy hue.

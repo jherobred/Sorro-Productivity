@@ -70,7 +70,7 @@ export function useNotebooks() {
   return useQuery({
     queryKey: NB_KEY,
     queryFn: async (): Promise<Notebook[]> => {
-      const { data, error } = await supabase.from('bd_notebooks')
+      const { data, error } = await supabase.from('sorro_notebooks')
         .select('id,name,color,position,created_at,deleted_at').is('deleted_at', null).order('position').order('created_at');
       if (error) throw error;
       return data ?? [];
@@ -80,7 +80,7 @@ export function useNotebooks() {
 
 export function useNotebookTrash() {
   return useQuery({ queryKey: NB_TRASH_KEY, queryFn: async (): Promise<Notebook[]> => {
-    const { data, error } = await supabase.from('bd_notebooks').select('id,name,color,position,created_at,deleted_at')
+    const { data, error } = await supabase.from('sorro_notebooks').select('id,name,color,position,created_at,deleted_at')
       .not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -99,8 +99,8 @@ export function useNotes() {
   return useQuery({
     queryKey: NOTE_KEY,
     queryFn: async (): Promise<Note[]> => {
-      const { data, error } = await supabase.from('bd_notes')
-        .select(NOTE_COLS + ',bd_notebooks!inner(deleted_at)').is('deleted_at', null).is('bd_notebooks.deleted_at', null).order('updated_at', { ascending: false }).limit(500);
+      const { data, error } = await supabase.from('sorro_notes')
+        .select(NOTE_COLS + ',sorro_notebooks!inner(deleted_at)').is('deleted_at', null).is('sorro_notebooks.deleted_at', null).order('updated_at', { ascending: false }).limit(500);
       if (error) throw error;
       const rows = (data ?? []) as unknown as Note[];
       const recovered = await pageRecovery().catch(() => []);
@@ -116,8 +116,8 @@ export function useNotes() {
         // A failed first insert has no server row. Recover that draft only if
         // its notebook is live; never resurrect a page or notebook in the bin.
         const [{ data: existing }, { data: books }] = await Promise.all([
-          supabase.from('bd_notes').select('id').in('id', missing.map(d => d.id)),
-          supabase.from('bd_notebooks').select('id').is('deleted_at', null).in('id', [...new Set(missing.map(d => d.notebook_id))]),
+          supabase.from('sorro_notes').select('id').in('id', missing.map(d => d.id)),
+          supabase.from('sorro_notebooks').select('id').is('deleted_at', null).in('id', [...new Set(missing.map(d => d.notebook_id))]),
         ]);
         if (existing && books) for (const d of missing) if (!existing.some(n => n.id === d.id) && books.some(b => b.id === d.notebook_id)) {
           pending.set(d.id, d); setPageState(d.id, 'error');
@@ -134,7 +134,7 @@ export function useTrash() {
   return useQuery({
     queryKey: TRASH_KEY,
     queryFn: async (): Promise<Note[]> => {
-      const { data, error } = await supabase.from('bd_notes')
+      const { data, error } = await supabase.from('sorro_notes')
         .select(NOTE_COLS).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(200);
       if (error) throw error;
       return (data ?? []) as Note[];
@@ -147,7 +147,7 @@ export function useTags() {
   return useQuery({
     queryKey: TAG_KEY,
     queryFn: async (): Promise<Record<string, string[]>> => {
-      const { data, error } = await supabase.from('bd_note_tags').select('note_id,tag').order('tag').limit(10000);
+      const { data, error } = await supabase.from('sorro_note_tags').select('note_id,tag').order('tag').limit(10000);
       if (error) throw error;
       const out: Record<string, string[]> = {};
       for (const r of data ?? []) (out[r.note_id] ??= []).push(r.tag);
@@ -164,11 +164,11 @@ export function useMe() {
     queryFn: async (): Promise<string> => {
       const uid = await currentUserId();
       if (uid) {
-        // `user_id`, not `id` — bd_profiles is keyed on the auth uid under that
+        // `user_id`, not `id` — sorro_profiles is keyed on the auth uid under that
         // name everywhere else in the app. Filtering on `id` matched nothing,
         // the error went into the discarded half of the result, and the
         // notebook table's "Created by" column said "you" for every account.
-        const { data } = await supabase.from('bd_profiles').select('handle,name').eq('user_id', uid).maybeSingle();
+        const { data } = await supabase.from('sorro_profiles').select('handle,name').eq('user_id', uid).maybeSingle();
         if (data?.handle && data.handle.toLowerCase() !== 'gemini') return data.handle;
         if (data?.name && data.name.toLowerCase() !== 'gemini') return data.name;
       }
@@ -181,17 +181,17 @@ export function useMe() {
 
 const NEW_NB = defineMutation('nb2.newNotebook', async (v: { id: string; name: string; color: string; position: number }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_notebooks').insert({ ...v, user_id });
+  const { error } = await supabase.from('sorro_notebooks').insert({ ...v, user_id });
   if (error) throw error;
 });
 
 const EDIT_NB = defineMutation('nb2.editNotebook', async (v: { id: string; patch: Partial<Notebook> }) => {
-  const { error } = await supabase.from('bd_notebooks').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_notebooks').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL_NB = defineMutation('nb2.delNotebook', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notebooks').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_notebooks').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
@@ -202,18 +202,18 @@ const REORDER_NB = defineMutation('nb2.reorderNotebooks', async (v: { ids: strin
 let notebookOrderVersion = 0;
 
 const RESTORE_NB = defineMutation('nb2.restoreNotebook', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notebooks').update({ deleted_at: null }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_notebooks').update({ deleted_at: null }).eq('id', v.id);
   if (error) throw error;
 });
 
 const PURGE_NB = defineMutation('nb2.purgeNotebook', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notebooks').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_notebooks').delete().eq('id', v.id);
   if (error) throw error;
 });
 
 const NEW_NOTE = defineMutation('nb2.newNote', async (v: { id: string; notebook_id: string; title: string; body: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_notes').upsert({ ...v, user_id, position: 0 }, { onConflict: 'id', ignoreDuplicates: true });
+  const { error } = await supabase.from('sorro_notes').upsert({ ...v, user_id, position: 0 }, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw error;
   acknowledgePage(v);
   const draft = pending.get(v.id);
@@ -223,7 +223,7 @@ const NEW_NOTE = defineMutation('nb2.newNote', async (v: { id: string; notebook_
 /** Rule 1: upsert, so a save can never lose a race with its own insert. */
 const SAVE_NOTE = defineMutation('nb2.saveNote', async (v: { id: string; notebook_id: string; title: string; body: string }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_notes').upsert({ ...v, user_id }, { onConflict: 'id' });
+  const { error } = await supabase.from('sorro_notes').upsert({ ...v, user_id }, { onConflict: 'id' });
   if (error) throw error;
   acknowledgePage(v);
   // Drop the overlay only if nothing newer replaced it while this was in flight.
@@ -232,31 +232,31 @@ const SAVE_NOTE = defineMutation('nb2.saveNote', async (v: { id: string; noteboo
 });
 
 const MOVE_NOTE = defineMutation('nb2.moveNote', async (v: { id: string; notebook_id: string }) => {
-  const { error } = await supabase.from('bd_notes').update({ notebook_id: v.notebook_id }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_notes').update({ notebook_id: v.notebook_id }).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL_NOTE = defineMutation('nb2.delNote', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notes').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_notes').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE_NOTE = defineMutation('nb2.restoreNote', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_notes', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_notes', p_id: v.id });
   if (error) throw error;
 });
 
 const PURGE = defineMutation('nb2.purge', async (v: { ids: string[] }) => {
-  const { error } = await supabase.from('bd_notes').delete().in('id', v.ids);
+  const { error } = await supabase.from('sorro_notes').delete().in('id', v.ids);
   if (error) throw error;
 });
 
 const SET_TAGS = defineMutation('nb2.setTags', async (v: { note_id: string; tags: string[] }) => {
   const user_id = await currentUserId();
-  const { error: delError } = await supabase.from('bd_note_tags').delete().eq('note_id', v.note_id);
+  const { error: delError } = await supabase.from('sorro_note_tags').delete().eq('note_id', v.note_id);
   if (delError) throw delError;   // else a failed clear plus a successful insert unions old and new tags
   if (!v.tags.length) return;
-  const { error } = await supabase.from('bd_note_tags')
+  const { error } = await supabase.from('sorro_note_tags')
     .insert(v.tags.map((tag) => ({ user_id, note_id: v.note_id, tag })));
   if (error) throw error;
 });
@@ -411,7 +411,7 @@ export function useNoteActions() {
 /**
  * Every `[[wiki link]]` in the notebook, resolved to note ids by title.
  *
- * There is a `bd_note_links` table for this, written on every save. Nothing
+ * There is a `sorro_note_links` table for this, written on every save. Nothing
  * reads it any more: the bodies are already loaded for the list's snippets, so
  * the edges are one pass over text that is in memory — no write path to keep in
  * step, and no way for the table to disagree with the notes it describes.

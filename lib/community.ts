@@ -314,7 +314,7 @@ const DEL = defineMutation('cm2.del', async (v: { kind: Kind; id: string }) => {
 });
 
 const RESTORE = defineMutation('cm2.restore', async (v: { kind: Kind; id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', {
+  const { error } = await supabase.rpc('sorro_restore', {
     p_table: v.kind === 'photo' ? 'bd_posts' : 'bd_threads', p_id: v.id,
   });
   if (error) throw error;

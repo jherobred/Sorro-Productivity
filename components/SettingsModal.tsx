@@ -61,7 +61,7 @@ export function SettingsModal({
         const uid = await currentUserId();
         if (!uid) return;
         setUserId(uid);
-        const { data } = await supabase.from('bd_profiles').select('name,handle,photo_url').eq('user_id', uid).maybeSingle();
+        const { data } = await supabase.from('sorro_profiles').select('name,handle,photo_url').eq('user_id', uid).maybeSingle();
         if (data) {
           setFullName(data.name || '');
           setHandle(data.handle || '');

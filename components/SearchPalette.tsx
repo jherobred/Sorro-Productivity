@@ -23,9 +23,9 @@ export function SearchPalette({onClose}:{onClose:()=>void}){
   const timer=setTimeout(async()=>{
    try{const like='%'+term.replace(/[%_]/g,'')+'%';
     const results=await Promise.all([
-     supabase.from('bd_tasks').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
-     supabase.from('bd_notes').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
-     supabase.from('bd_events').select('id,title').is('deleted_at',null).ilike('title',like).limit(5).abortSignal(abort.signal)
+     supabase.from('sorro_tasks').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
+     supabase.from('sorro_notes').select('id,title').is('deleted_at',null).ilike('title',like).limit(7).abortSignal(abort.signal),
+     supabase.from('sorro_events').select('id,title').is('deleted_at',null).ilike('title',like).limit(5).abortSignal(abort.signal)
     ]);if(abort.signal.aborted)return;
     const remote:Hit[]=[];results.forEach((r,i)=>{for(const row of r.data||[])remote.push({id:row.id,title:row.title,group:['Tasks','Pages','Calendar'][i],icon:(['task','book','cal'] as const)[i],path:['/tasks/?detail=','/notebooks/?open=','/calendar/?event='][i]+row.id});});
     setHits([...new Map([...cached,...remote].map(r=>[r.group+r.id,r])).values()].slice(0,20));setError(results.some(r=>r.error));setBusy(false);

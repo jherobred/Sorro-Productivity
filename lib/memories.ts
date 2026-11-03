@@ -32,7 +32,7 @@ export type Memory = MemoryInfo & {
 
 export type { MemoryKind } from './memoryName';
 
-const BUCKET = 'bd-files';
+const BUCKET = 'sorro-files';
 const UNDO_MS = 6_500;
 const storageKey = (uid: string) => `bd_memories:${uid}`;
 export const memoryPhotoPath = (uid: string, id: string) => `${uid}/memories/img/${id}.webp`;

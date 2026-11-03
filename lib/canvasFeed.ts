@@ -1,9 +1,9 @@
 /**
  * Canvas, read back out of the rows the sync function writes.
  *
- * The `sync` Edge Function stores Canvas assignments in bd_tasks, with the
+ * The `sync` Edge Function stores Canvas assignments in sorro_tasks, with the
  * course and the assignment link in `notes` as "CS 191 — https://…", and
- * announcements in bd_notifications, with the course at the front of `body` as
+ * announcements in sorro_notifications, with the course at the front of `body` as
  * "CS 191 · …". These turn those rows back into what the Canvas sections show,
  * and decide what is new enough to notify about. Pure, so node --test holds it.
  */

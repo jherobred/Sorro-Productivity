@@ -3,7 +3,7 @@
  *
  * Runs with the *caller's* JWT rather than the service role, so row-level
  * security is still the thing protecting the data: this function can only ever
- * read the bd_integrations row belonging to whoever invoked it, and can only
+ * read the sorro_integrations row belonging to whoever invoked it, and can only
  * write rows it stamps with that same user_id.
  *
  * Two reasons this exists at all instead of fetching from the browser:
@@ -13,7 +13,7 @@
  *     alternative needs a refresh token Supabase does not keep.
  *
  * Everything written carries `source` + `external_id`, and the unique indexes on
- * bd_events / bd_tasks / bd_notifications make a re-sync idempotent.
+ * sorro_events / sorro_tasks / sorro_notifications make a re-sync idempotent.
  */
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   // is, so an invalid token returns nothing and the check below still refuses.
   const [{ data: userData }, { data: row }] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from('bd_integrations').select('config,enabled').eq('kind', kind).maybeSingle(),
+    supabase.from('sorro_integrations').select('config,enabled').eq('kind', kind).maybeSingle(),
   ]);
 
   const user = userData?.user;
@@ -68,14 +68,14 @@ Deno.serve(async (req) => {
       ? await syncCanvas(supabase, user.id, config)
       : await syncIcs(supabase, user.id, config);
 
-    await supabase.from('bd_integrations')
+    await supabase.from('sorro_integrations')
       .update({ last_sync_at: new Date().toISOString(), last_error: null })
       .eq('kind', kind);
 
     return json({ ok: true, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    await supabase.from('bd_integrations').update({ last_error: message.slice(0, 300) }).eq('kind', kind);
+    await supabase.from('sorro_integrations').update({ last_error: message.slice(0, 300) }).eq('kind', kind);
     return fail(message, 200); // 200 so the client reads the message rather than a generic edge error
   }
 });
@@ -245,14 +245,14 @@ async function syncCanvas(db: SupabaseClient, user_id: string, config: Record<st
 
   let imported = 0;
   if (notifs.length) {
-    const { error } = await db.from('bd_notifications')
+    const { error } = await db.from('sorro_notifications')
       .upsert(notifs, { onConflict: 'user_id,source,external_id', ignoreDuplicates: true });
     if (error) throw new Error(error.message);
     imported += notifs.length;
   }
   if (tasks.length) {
     // Not ignoreDuplicates: a moved deadline should update the existing task.
-    const { error } = await db.from('bd_tasks').upsert(tasks, { onConflict: 'user_id,source,external_id' });
+    const { error } = await db.from('sorro_tasks').upsert(tasks, { onConflict: 'user_id,source,external_id' });
     if (error) throw new Error(error.message);
     imported += tasks.length;
   }
@@ -321,7 +321,7 @@ async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<
   const rows = all.slice(0, 2000);
 
   if (rows.length) {
-    const { error } = await db.from('bd_events').upsert(rows, { onConflict: 'user_id,source,external_id' });
+    const { error } = await db.from('sorro_events').upsert(rows, { onConflict: 'user_id,source,external_id' });
     if (error) throw new Error(error.message);
   }
 
@@ -329,7 +329,7 @@ async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<
   // delete like any other. Before repeating events were read, a weekly class
   // was one row keyed by its UID; those rows are among what this clears.
   const keep = new Set(all.map((r) => r.external_id));
-  const { data: mine, error: readError } = await db.from('bd_events')
+  const { data: mine, error: readError } = await db.from('sorro_events')
     .select('id,external_id')
     .eq('source', 'gcal_ics')
     .is('deleted_at', null)
@@ -338,7 +338,7 @@ async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<
   if (readError) throw new Error(readError.message);
   const gone = (mine ?? []).filter((r) => !keep.has(r.external_id)).map((r) => r.id);
   for (let i = 0; i < gone.length; i += 100) {
-    const { error } = await db.from('bd_events').update({ deleted_at: new Date().toISOString() }).in('id', gone.slice(i, i + 100));
+    const { error } = await db.from('sorro_events').update({ deleted_at: new Date().toISOString() }).in('id', gone.slice(i, i + 100));
     if (error) throw new Error(error.message);
   }
 

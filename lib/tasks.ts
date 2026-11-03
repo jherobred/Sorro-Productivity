@@ -294,7 +294,7 @@ export function useLists() {
     queryKey: LISTS_KEY,
     queryFn: async (): Promise<List[]> => {
       const { data, error } = await supabase
-        .from('bd_lists')
+        .from('sorro_lists')
         .select('id,name,color,position')
         .order('position');
       if (error) throw error;
@@ -308,7 +308,7 @@ export function useTasks() {
     queryKey: TASKS_KEY,
     queryFn: async (): Promise<Task[]> => {
       const { data, error } = await supabase
-        .from('bd_tasks')
+        .from('sorro_tasks')
         .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at,source')
         .is('deleted_at', null)
         .order('position')
@@ -359,7 +359,7 @@ const CREATE = defineMutation('task.create', async (v: NewTask) => {
     parsed.customLinks,
     course
   );
-  const { error } = await supabase.from('bd_tasks').insert({
+  const { error } = await supabase.from('sorro_tasks').insert({
     id: v.id,
     user_id,
     title: v.title.trim(),
@@ -425,13 +425,13 @@ const UPDATE = defineMutation('task.update', async (v: { id: string; patch: Part
 
   if (Object.keys(sanitizedPatch).length === 0) return;
 
-  const { error } = await supabase.from('bd_tasks').update(sanitizedPatch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_tasks').update(sanitizedPatch).eq('id', v.id);
   if (error) throw error;
 });
 
 const COMPLETE = defineMutation('task.complete', async (v: { id: string; done: boolean }) => {
   const { error } = await supabase
-    .from('bd_tasks')
+    .from('sorro_tasks')
     .update({ done: v.done, completed_at: v.done ? new Date().toISOString() : null })
     .eq('id', v.id);
   if (error) throw error;
@@ -440,14 +440,14 @@ const COMPLETE = defineMutation('task.complete', async (v: { id: string; done: b
 const DELETE = defineMutation('task.delete', async (v: { id: string }) => {
   // Soft delete — undo has to survive a refresh, so it is a column, not memory.
   const { error } = await supabase
-    .from('bd_tasks')
+    .from('sorro_tasks')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE = defineMutation('task.restore', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_tasks', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_tasks', p_id: v.id });
   if (error) throw error;
 });
 
@@ -624,7 +624,7 @@ export function useTaskActions() {
 
 /* ---- Subtasks and lists ------------------------------------------------ */
 
-/** A step inside a task. bd_subtasks has no timestamps, so order is `position`. */
+/** A step inside a task. sorro_subtasks has no timestamps, so order is `position`. */
 export type Subtask = { id: string; task_id: string; title: string; done: boolean; position: number };
 
 const SUBTASKS_KEY = ['subtasks'] as const;
@@ -635,7 +635,7 @@ export function useSubtasks() {
     queryKey: SUBTASKS_KEY,
     queryFn: async (): Promise<Subtask[]> => {
       const { data, error } = await supabase
-        .from('bd_subtasks')
+        .from('sorro_subtasks')
         .select('id,task_id,title,done,position')
         .order('position')
         .limit(2000);
@@ -647,17 +647,17 @@ export function useSubtasks() {
 
 const SUB_CREATE = defineMutation('subtask.create', async (v: Subtask) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_subtasks').insert({ ...v, user_id });
+  const { error } = await supabase.from('sorro_subtasks').insert({ ...v, user_id });
   if (error) throw error;
 });
 
 const SUB_UPDATE = defineMutation('subtask.update', async (v: { id: string; patch: Partial<Pick<Subtask, 'title' | 'done' | 'position'>> }) => {
-  const { error } = await supabase.from('bd_subtasks').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_subtasks').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const SUB_DELETE = defineMutation('subtask.delete', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_subtasks').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_subtasks').delete().eq('id', v.id);
   if (error) throw error;
 });
 
@@ -705,12 +705,12 @@ export function useSubtaskActions() {
 
 const LIST_CREATE = defineMutation('list.create', async (v: List) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_lists').insert({ ...v, user_id });
+  const { error } = await supabase.from('sorro_lists').insert({ ...v, user_id });
   if (error) throw error;
 });
 
 const LIST_UPDATE = defineMutation('list.update', async (v: { id: string; patch: Partial<Pick<List, 'name' | 'color'>> }) => {
-  const { error } = await supabase.from('bd_lists').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_lists').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 

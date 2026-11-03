@@ -17,7 +17,7 @@ import { dueKinds, AUTO_SYNC_MS } from './syncDue';
  *     and never refreshes, so an OAuth path would break an hour after login.
  *
  * So both go through one Edge Function (`sync`) that runs with the caller's JWT.
- * RLS on bd_integrations means the function can only ever read the row belonging
+ * RLS on sorro_integrations means the function can only ever read the row belonging
  * to whoever called it. Google Calendar is read-only, via the private ICS URL
  * that Calendar itself publishes under Settings → Integrate calendar.
  */
@@ -36,7 +36,7 @@ export function useIntegrations() {
   return useQuery({
     queryKey: KEY,
     queryFn: async (): Promise<Integration[]> => {
-      const { data, error } = await supabase.from('bd_integrations')
+      const { data, error } = await supabase.from('sorro_integrations')
         .select('kind,config,enabled,last_sync_at,last_error');
       if (error) throw error;
       return (data ?? []) as Integration[];
@@ -46,13 +46,13 @@ export function useIntegrations() {
 
 const SAVE = defineMutation('integration.save', async (v: { kind: string; config: Record<string, string>; enabled: boolean }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_integrations')
+  const { error } = await supabase.from('sorro_integrations')
     .upsert({ user_id, kind: v.kind, config: v.config, enabled: v.enabled }, { onConflict: 'user_id,kind' });
   if (error) throw error;
 });
 
 const REMOVE = defineMutation('integration.remove', async (v: { kind: string }) => {
-  const { error } = await supabase.from('bd_integrations').delete().eq('kind', v.kind);
+  const { error } = await supabase.from('sorro_integrations').delete().eq('kind', v.kind);
   if (error) throw error;
 });
 

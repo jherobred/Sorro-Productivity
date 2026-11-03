@@ -48,7 +48,7 @@ export function useJournalDates() {
   return useQuery({
     queryKey: DATES_KEY,
     queryFn: async (): Promise<string[]> => {
-      const { data, error } = await supabase.from('bd_journal_entries')
+      const { data, error } = await supabase.from('sorro_journal_entries')
         .select('entry_date').is('deleted_at', null).order('entry_date').limit(5000);
       if (error) throw error;
       return (data ?? []).map((r) => r.entry_date as string);
@@ -68,7 +68,7 @@ export function useJournalMonth(ym: string) {
       const [y, m] = ym.split('-').map(Number);
       const from = `${ym}-01`;
       const to = ymd(new Date(y, m, 0));
-      const { data, error } = await supabase.from('bd_journal_entries')
+      const { data, error } = await supabase.from('sorro_journal_entries')
         .select('id,entry_date,text,mood').is('deleted_at', null)
         .gte('entry_date', from).lte('entry_date', to).order('entry_date');
       if (error) throw error;
@@ -92,7 +92,7 @@ export function useOnThisDay(date: string, allDates: string[]) {
     queryFn: async (): Promise<Entry[]> => {
       const fx = fixture<Entry[]>('journal_on_this_day');
       if (fx) return fx;
-      const { data, error } = await supabase.from('bd_journal_entries')
+      const { data, error } = await supabase.from('sorro_journal_entries')
         .select('id,entry_date,text,mood').in('entry_date', want).order('entry_date', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Entry[];
@@ -104,7 +104,7 @@ export function useOnThisDay(date: string, allDates: string[]) {
 
 const SAVE = defineMutation('journal.save2', async (v: { entry_date: string; text: string; mood: string | null }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_journal_entries')
+  const { error } = await supabase.from('sorro_journal_entries')
     .upsert({ user_id, entry_date: v.entry_date, text: v.text, mood: v.mood }, { onConflict: 'user_id,entry_date' });
   if (error) throw error;
   if (pending.get(v.entry_date) === v.text) pending.delete(v.entry_date);

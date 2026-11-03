@@ -16,8 +16,8 @@ import { alertPermission, askAlertPermission, replaceScheduled, showAlerts, type
  * announcements, a sync on demand, and the notifications for anything new.
  *
  * Nothing here talks to Canvas. The `sync` Edge Function does, with the token
- * saved in Settings, and writes assignments into bd_tasks and announcements
- * into bd_notifications. These hooks read those rows back.
+ * saved in Settings, and writes assignments into sorro_tasks and announcements
+ * into sorro_notifications. These hooks read those rows back.
  */
 
 export type CanvasStatus = { connected: boolean; enabled: boolean; lastSync: string | null; error: string | null; baseUrl: string | null };
@@ -36,7 +36,7 @@ export function useCanvasStatus() {
       const fx = fixture<Integration[]>('integrations');
       const row = fx
         ? fx.map((r) => ({ enabled: r.enabled, last_sync_at: r.last_sync_at, last_error: r.last_error, base_url: r.config.base_url ?? null, kind: r.kind })).find((r) => r.kind === 'canvas_lms') ?? null
-        : await supabase.from('bd_integrations')
+        : await supabase.from('sorro_integrations')
           .select('enabled,last_sync_at,last_error,base_url:config->>base_url')
           .eq('kind', 'canvas_lms').maybeSingle()
           .then(({ data, error }) => { if (error) throw error; return data as { enabled: boolean; last_sync_at: string | null; last_error: string | null; base_url: string | null } | null; });
@@ -54,7 +54,7 @@ export function useCanvasNews(enabled: boolean) {
     queryFn: async (): Promise<Notif[]> => {
       const fx = fixture<Notif[]>('notifications');
       if (fx) return fx.filter((n) => n.source === 'canvas_lms');
-      const { data, error } = await supabase.from('bd_notifications')
+      const { data, error } = await supabase.from('sorro_notifications')
         .select('id,kind,title,body,href,source,read_at,created_at')
         .eq('source', 'canvas_lms')
         .order('created_at', { ascending: false })

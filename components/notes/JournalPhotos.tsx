@@ -127,7 +127,7 @@ export function JournalPhotos({
 function PhotoTile({
   photo, open, onOpen, A,
 }: { photo: Photo; open: boolean; onOpen: () => void; A: ReturnType<typeof usePhotoActions> }) {
-  const url = useSignedUrl('bd-journal', photo.storage_path);
+  const url = useSignedUrl('sorro-journal', photo.storage_path);
   const { prefs } = usePrefs();
   const { data: pins = [] } = usePins(photo.id, open);
   const P = usePinActions(photo.id);

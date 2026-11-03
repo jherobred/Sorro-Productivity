@@ -28,7 +28,7 @@ export function useLinks() {
       const fx = fixture<LinkItem[]>('links');
       if (fx) return fx;
       const { data, error } = await supabase
-        .from('bd_scratch')
+        .from('sorro_scratch')
         .select('id,text,pinned,position,created_at')
         .is('deleted_at', null)
         .like('text', `${LINK_PREFIX}%`)
@@ -44,7 +44,7 @@ export type NewLink = Pick<LinkItem, 'id' | 'url' | 'label' | 'note' | 'category
 
 const ADD = defineMutation('links.add', async (v: NewLink) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_scratch').insert({
+  const { error } = await supabase.from('sorro_scratch').insert({
     id: v.id, user_id, text: encodeLink(v), tag: 'Link', color: v.color, position: v.position,
   });
   if (error) throw error;
@@ -53,17 +53,17 @@ const ADD = defineMutation('links.add', async (v: NewLink) => {
 const SAVE = defineMutation('links.save', async (v: { id: string; link: LinkItem; color?: string }) => {
   const patch: Record<string, unknown> = { text: encodeLink(v.link), pinned: v.link.pinned, position: v.link.position };
   if (v.color) patch.color = v.color;
-  const { error } = await supabase.from('bd_scratch').update(patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_scratch').update(patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL = defineMutation('links.del', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_scratch').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
+  const { error } = await supabase.from('sorro_scratch').update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE = defineMutation('links.restore', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_scratch', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_scratch', p_id: v.id });
   if (error) throw error;
 });
 

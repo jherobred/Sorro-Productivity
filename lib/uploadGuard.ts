@@ -32,7 +32,7 @@ export const MAX_BYTES = 25 * 1024 * 1024;
  * Files a notebook page keeps: its photos, and the PDF under a PDF annotation.
  * Without PDF here every PDF upload was refused, the refusal was swallowed, and
  * the file stayed on the device that imported it; every other device showed
- * "saved on another device". They go to `bd-files`, which is private to its
+ * "saved on another device". They go to `sorro-files`, which is private to its
  * owner, and are only ever read back as bytes for pdf.js, never served as a page.
  */
 export const PAGE_ASSET_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);

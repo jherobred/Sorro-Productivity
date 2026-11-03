@@ -23,7 +23,7 @@ import type { Box, Side } from './canvasGeom';
  *    'muted'`, left over from a scratch-board that no longer exists. Every card
  *    insert failed, so production held two canvases and zero cards — a board
  *    where everything you drop vanishes on the next refetch. `KINDS` below is
- *    now the same list as `bd_canvas_nodes_kind_check` (0003_canvas_v2.sql).
+ *    now the same list as `sorro_canvas_nodes_kind_check` (0003_canvas_v2.sql).
  *    If you add a kind here, add it there in the same commit.
  *
  * 2. **Card text was only ever saved on blur.** A card is a note in miniature
@@ -37,7 +37,7 @@ import type { Box, Side } from './canvasGeom';
  *    says which it is; `settings` carries what the graph draws.
  */
 
-/** Must match bd_canvas_nodes_kind_check. See rule 1 above. */
+/** Must match sorro_canvas_nodes_kind_check. See rule 1 above. */
 export const KINDS = ['text', 'note', 'canvas', 'group'] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -115,7 +115,7 @@ export function useBoards() {
   return useQuery({
     queryKey: BOARDS,
     queryFn: async (): Promise<Board[]> => {
-      const { data, error } = await supabase.from('bd_canvases')
+      const { data, error } = await supabase.from('sorro_canvases')
         .select(BOARD_COLS).is('deleted_at', null).order('position').order('created_at').limit(500);
       if (error) throw error;
       return (data ?? []).map((b) => ({ ...b, settings: b.settings ?? {} })) as Board[];
@@ -128,7 +128,7 @@ export function useNodes(canvasId: string | null) {
     queryKey: nodesKey(canvasId),
     enabled: !!canvasId,
     queryFn: async (): Promise<CNode[]> => {
-      const { data, error } = await supabase.from('bd_canvas_nodes').select(NODE_COLS).eq('canvas_id', canvasId!);
+      const { data, error } = await supabase.from('sorro_canvas_nodes').select(NODE_COLS).eq('canvas_id', canvasId!);
       if (error) throw error;
       return overlay((data ?? []) as CNode[]);
     },
@@ -140,7 +140,7 @@ export function useEdges(canvasId: string | null) {
     queryKey: edgesKey(canvasId),
     enabled: !!canvasId,
     queryFn: async (): Promise<CEdge[]> => {
-      const { data, error } = await supabase.from('bd_canvas_edges').select(EDGE_COLS).eq('canvas_id', canvasId!);
+      const { data, error } = await supabase.from('sorro_canvas_edges').select(EDGE_COLS).eq('canvas_id', canvasId!);
       if (error) throw error;
       return (data ?? []) as CEdge[];
     },
@@ -159,7 +159,7 @@ export function useAllNodes() {
   return useQuery({
     queryKey: ALL_NODES,
     queryFn: async (): Promise<CNode[]> => {
-      const { data, error } = await supabase.from('bd_canvas_nodes').select(NODE_COLS);
+      const { data, error } = await supabase.from('sorro_canvas_nodes').select(NODE_COLS);
       if (error) throw error;
       return overlay((data ?? []) as CNode[]);
     },
@@ -170,7 +170,7 @@ export function useAllEdges() {
   return useQuery({
     queryKey: ALL_EDGES,
     queryFn: async (): Promise<CEdge[]> => {
-      const { data, error } = await supabase.from('bd_canvas_edges').select(EDGE_COLS);
+      const { data, error } = await supabase.from('sorro_canvas_edges').select(EDGE_COLS);
       if (error) throw error;
       return (data ?? []) as CEdge[];
     },
@@ -181,7 +181,7 @@ export function useAllEdges() {
 
 const NEW_BOARD = defineMutation('cv2.newBoard', async (v: Omit<Board, 'updated_at'>) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_canvases').insert({
+  const { error } = await supabase.from('sorro_canvases').insert({
     id: v.id, user_id, name: v.name, kind: v.kind, color: v.color,
     position: v.position, viewport: v.viewport, settings: v.settings,
   });
@@ -189,31 +189,31 @@ const NEW_BOARD = defineMutation('cv2.newBoard', async (v: Omit<Board, 'updated_
 });
 
 const SAVE_BOARD = defineMutation('cv2.saveBoard', async (v: { id: string; patch: Partial<Board> }) => {
-  const { error } = await supabase.from('bd_canvases').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_canvases').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL_BOARD = defineMutation('cv2.delBoard', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_canvases')
+  const { error } = await supabase.from('sorro_canvases')
     .update({ deleted_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
 const RESTORE_BOARD = defineMutation('cv2.restoreBoard', async (v: { id: string }) => {
-  const { error } = await supabase.rpc('bd_restore', { p_table: 'bd_canvases', p_id: v.id });
+  const { error } = await supabase.rpc('sorro_restore', { p_table: 'sorro_canvases', p_id: v.id });
   if (error) throw error;
 });
 
 /** Insert, not upsert-on-conflict-do-nothing: undo re-adds the same id. */
 const ADD_NODES = defineMutation('cv2.addNodes', async (v: { nodes: CNode[] }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_canvas_nodes')
+  const { error } = await supabase.from('sorro_canvas_nodes')
     .upsert(v.nodes.map((n) => ({ ...n, user_id })), { onConflict: 'id' });
   if (error) throw error;
 });
 
 const SAVE_NODE = defineMutation('cv2.saveNode', async (v: { id: string; patch: Partial<CNode> }) => {
-  const { error } = await supabase.from('bd_canvas_nodes').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_canvas_nodes').update(v.patch).eq('id', v.id);
   if (error) throw error;
   if (v.patch.text !== undefined && pending.get(v.id) === v.patch.text) pending.delete(v.id);
 });
@@ -228,30 +228,30 @@ const MOVE_NODES = defineMutation('cv2.moveNodes', async (v: { moves: { id: stri
     const patch: Record<string, number> = { x: m.x, y: m.y };
     if (m.w !== undefined) patch.w = m.w;
     if (m.h !== undefined) patch.h = m.h;
-    const { error } = await supabase.from('bd_canvas_nodes').update(patch).eq('id', m.id);
+    const { error } = await supabase.from('sorro_canvas_nodes').update(patch).eq('id', m.id);
     if (error) throw error;
   }));
 });
 
 const DEL_NODES = defineMutation('cv2.delNodes', async (v: { ids: string[] }) => {
-  const { error } = await supabase.from('bd_canvas_nodes').delete().in('id', v.ids);
+  const { error } = await supabase.from('sorro_canvas_nodes').delete().in('id', v.ids);
   if (error) throw error;
 });
 
 const ADD_EDGES = defineMutation('cv2.addEdges', async (v: { edges: CEdge[] }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_canvas_edges')
+  const { error } = await supabase.from('sorro_canvas_edges')
     .upsert(v.edges.map((e) => ({ ...e, user_id })), { onConflict: 'id' });
   if (error) throw error;
 });
 
 const SAVE_EDGE = defineMutation('cv2.saveEdge', async (v: { id: string; patch: Partial<CEdge> }) => {
-  const { error } = await supabase.from('bd_canvas_edges').update(v.patch).eq('id', v.id);
+  const { error } = await supabase.from('sorro_canvas_edges').update(v.patch).eq('id', v.id);
   if (error) throw error;
 });
 
 const DEL_EDGES = defineMutation('cv2.delEdges', async (v: { ids: string[] }) => {
-  const { error } = await supabase.from('bd_canvas_edges').delete().in('id', v.ids);
+  const { error } = await supabase.from('sorro_canvas_edges').delete().in('id', v.ids);
   if (error) throw error;
 });
 

@@ -20,7 +20,7 @@ const PhotoZoom = dynamic(() => import('@/components/PhotoZoom').then((m) => m.P
 export function TaskPhotos({ taskId }: { taskId: string }) {
   const { data: photos = [], isError } = useTaskPhotos(taskId);
   const actions = useTaskPhotoActions(taskId);
-  const urls = useSignedUrls('bd-files', photos.map((p) => p.path));
+  const urls = useSignedUrls('sorro-files', photos.map((p) => p.path));
   const cover = useObjectCover('task', taskId);
   const [zoom, setZoom] = useState<number | null>(null);
   const [busy, setBusy] = useState('');

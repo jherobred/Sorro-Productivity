@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 /**
  * OAuth landing. detectSessionInUrl exchanges the PKCE code automatically, so
  * this page only has to wait for the session and decide where to send the user:
- * onboarding runs once (bd_profiles.onboarded_at), then Home.
+ * onboarding runs once (sorro_profiles.onboarded_at), then Home.
  */
 export default function AuthCallback() {
   const router = useRouter();

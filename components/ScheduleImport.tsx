@@ -42,7 +42,7 @@ import {
 /** Written as one insert: a term of classes is one act, not ninety. */
 const IMPORT = defineMutation('cal.importSchedule', async (v: { rows: Record<string, unknown>[] }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_events').insert(v.rows.map((r) => ({ ...r, user_id })));
+  const { error } = await supabase.from('sorro_events').insert(v.rows.map((r) => ({ ...r, user_id })));
   if (error) throw error;
 });
 

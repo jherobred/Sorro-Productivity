@@ -262,11 +262,11 @@ let hydrationEdits: PreferencePatch = {};
 const SAVE_PREFS = defineMutation('prefs.save', async ({ uid }: { uid: string }) => {
   if (!outbox || preview || await currentUserId() !== uid) return;
   await outbox.flush(uid, async () => {
-    const { data, error } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+    const { data, error } = await supabase.from('sorro_profiles').select('prefs').eq('user_id', uid).single();
     if (error) throw error;
     return data?.prefs ?? {};
   }, async prefs => {
-    const { error } = await supabase.from('bd_profiles').update({ prefs }).eq('user_id', uid).select('user_id').single();
+    const { error } = await supabase.from('sorro_profiles').update({ prefs }).eq('user_id', uid).select('user_id').single();
     if (error) throw error;
   });
 });
@@ -298,7 +298,7 @@ async function hydrateFromServer() {
   if (!uid) return;
   owner = uid;
   if (preview) { loadedFromServer = true; return; }
-  const { data, error } = await supabase.from('bd_profiles').select('prefs').eq('user_id', uid).single();
+  const { data, error } = await supabase.from('sorro_profiles').select('prefs').eq('user_id', uid).single();
   if (await currentUserId().catch(() => null) !== uid) return;
   const remote = data?.prefs as Partial<Prefs> | undefined;
   if (!error) {

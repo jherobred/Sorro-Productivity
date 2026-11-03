@@ -101,12 +101,12 @@ export async function notifyFollowedUser(params: {
   const href = followerHandle ? `/profile/?u=${followerHandle}` : '/profile/';
 
   try {
-    // 1. If target user has a UUID in Supabase, insert into bd_notifications.
+    // 1. If target user has a UUID in Supabase, insert into sorro_notifications.
     //    This writes a row owned by *another* user, which RLS refuses — and
     //    PostgREST reports that in `error`, not by throwing, so the catch below
     //    never saw it and the failure was completely invisible.
     if (targetUserId && targetUserId.length > 10 && targetUserId.includes('-')) {
-      const { error } = await supabase.from('bd_notifications').insert({
+      const { error } = await supabase.from('sorro_notifications').insert({
         user_id: targetUserId,
         kind: 'social',
         title,
@@ -194,7 +194,7 @@ export function useFollows() {
         let myHandle: string | null = null;
         if (myUid) {
           const { data: p } = await supabase
-            .from('bd_profiles')
+            .from('sorro_profiles')
             .select('name,handle')
             .eq('user_id', myUid)
             .maybeSingle();

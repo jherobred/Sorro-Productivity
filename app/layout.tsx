@@ -84,7 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
 
         {/* Paint the stored theme and motion before first frame so there is no flash.
-            The real values are reconciled from bd_profiles.prefs once signed in. */}
+            The real values are reconciled from sorro_profiles.prefs once signed in. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{[localStorage,sessionStorage].forEach(function(s){var o=[];for(var i=0;i<s.length;i++){var k=s.key(i);if(/^basedly[-_]/.test(k))o.push(k);}o.forEach(function(k){var n=k.replace(/^basedly/,'sorro');if(s.getItem(n)===null)s.setItem(n,s.getItem(k));s.removeItem(k);});});}catch(e){}

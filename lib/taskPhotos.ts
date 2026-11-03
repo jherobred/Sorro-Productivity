@@ -7,7 +7,7 @@
  * They live in storage under the task, `<uid>/task-photos/<task id>/`, and the
  * folder listing is the list of photos, so no table has to change for a task
  * to hold any number of them. The folder is private to its owner like the rest
- * of `bd-files`, and a photo is shown through a signed link.
+ * of `sorro-files`, and a photo is shown through a signed link.
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ const folder = (uid: string, taskId: string) => `${uid}/task-photos/${taskId}`;
 async function listPhotos(taskId: string): Promise<TaskPhoto[]> {
   const uid = await currentUserId();
   if (uid === 'me') return [];                               // preview data has no storage
-  const { data, error } = await supabase.storage.from('bd-files').list(folder(uid, taskId), { limit: 200, sortBy: { column: 'name', order: 'asc' } });
+  const { data, error } = await supabase.storage.from('sorro-files').list(folder(uid, taskId), { limit: 200, sortBy: { column: 'name', order: 'asc' } });
   if (error) throw error;
   return (data ?? [])
     .filter((f) => /\.webp$/.test(f.name))
@@ -45,13 +45,13 @@ export function useTaskPhotoActions(taskId: string) {
       for (const file of files) {
         const webp = await webpOf(file, 2000);
         const path = `${folder(uid, taskId)}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
-        const { error } = await supabase.storage.from('bd-files').upload(path, webp, { contentType: 'image/webp', cacheControl: '3600' });
+        const { error } = await supabase.storage.from('sorro-files').upload(path, webp, { contentType: 'image/webp', cacheControl: '3600' });
         if (error) throw error;
       }
       await refresh();
     },
     remove: async (photo: TaskPhoto) => {
-      const { error } = await supabase.storage.from('bd-files').remove([photo.path]);
+      const { error } = await supabase.storage.from('sorro-files').remove([photo.path]);
       if (error) throw error;
       await refresh();
     },

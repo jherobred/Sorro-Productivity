@@ -41,31 +41,31 @@ import { createInvalidationQueue } from './liveInvalidation';
 /** Tables worth a socket. Personal ones included — that is the whole point. */
 const TABLES = [
   // planning
-  'bd_tasks', 'bd_subtasks', 'bd_lists', 'bd_events', 'bd_goals', 'bd_milestones', 'bd_terms',
+  'sorro_tasks', 'sorro_subtasks', 'sorro_lists', 'sorro_events', 'bd_goals', 'sorro_milestones', 'sorro_terms',
   // habits
   'bd_habits', 'bd_habit_ticks',
   // notes and canvases
-  'bd_notes', 'bd_notebooks', 'bd_note_tags', 'bd_canvases', 'bd_canvas_nodes', 'bd_canvas_edges',
-  'bd_journal_entries', 'bd_journal_photos', 'bd_scratch',
+  'sorro_notes', 'sorro_notebooks', 'sorro_note_tags', 'sorro_canvases', 'sorro_canvas_nodes', 'sorro_canvas_edges',
+  'sorro_journal_entries', 'sorro_journal_photos', 'sorro_scratch',
   // money
   'bd_transactions', 'bd_accounts', 'bd_budgets', 'bd_to_buy', 'bd_subscriptions',
   // body
   'bd_body_days', 'bd_meals', 'bd_workouts', 'bd_workout_sets', 'bd_gym_days',
-  'bd_java_files', 'bd_profiles', 'bd_notifications',
+  'sorro_java_files', 'sorro_profiles', 'sorro_notifications',
 ] as const;
 
 /** Screens that cache a table under a name other than its own. */
 const ALSO: Record<string, string[]> = {
-  bd_notebooks: ['notebooks_trash', 'notes'],
-  bd_notes: ['notes_trash', 'home_recent_notes'],
-  bd_projects: ['home_projects'],
-  bd_profiles: ['me_handle'],
+  sorro_notebooks: ['notebooks_trash', 'notes'],
+  sorro_notes: ['notes_trash', 'home_recent_notes'],
+  sorro_projects: ['home_projects'],
+  sorro_profiles: ['me_handle'],
   bd_post_comments: ['comments', 'comment_counts'],
   bd_thread_replies: ['comments', 'comment_counts'],
-  bd_journal_entries: ['journal_dates', 'journal_month', 'journal_on_this_day'],
+  sorro_journal_entries: ['journal_dates', 'journal_month', 'journal_on_this_day'],
   // Every auto-sourced challenge metric reads one of these, so a tick anywhere
   // has to reach the standings as well as the screen it happened on.
-  bd_tasks: ['metric'],
+  sorro_tasks: ['metric'],
   bd_habit_ticks: ['metric'],
   bd_workouts: ['metric'],
   bd_body_days: ['metric'],

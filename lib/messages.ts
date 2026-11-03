@@ -329,7 +329,7 @@ export function titleOf(
 /** Anything bigger than this is a link to share, not a message to send. */
 export const ATTACH_MAX = 25 * 1024 * 1024;
 
-/** What bd_files.kind calls things, from a MIME type or a file name. */
+/** What sorro_files.kind calls things, from a MIME type or a file name. */
 export function kindOfFile(name: string, mime = ''): string {
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
@@ -349,7 +349,7 @@ export function kindOfFile(name: string, mime = ''): string {
 /**
  * Put a file where the people in the conversation can read it.
  *
- * `bd-feed` rather than `bd-files`, because storage RLS on `bd-files` is
+ * `bd-feed` rather than `sorro-files`, because storage RLS on `sorro-files` is
  * owner-only for every command — an attachment left there opens for the sender
  * and 400s for everybody else, which is the worst kind of bug because the
  * person who can test it is the one person it works for. 0008 has the rest.
@@ -367,7 +367,7 @@ export async function putAttachment(file: File): Promise<Attachment> {
 /**
  * Send something out of your Drive.
  *
- * Copied, not referenced. `bd-files` is yours alone at the storage layer, and
+ * Copied, not referenced. `sorro-files` is yours alone at the storage layer, and
  * the alternative — widening its read policy so a recipient can sign a URL —
  * would hand every signed-in account the keys to everyone's private documents
  * to save one round trip.
@@ -376,7 +376,7 @@ export async function attachFromDrive(
   f: { name: string; kind: string; size_bytes: number; storage_path: string },
 ): Promise<Attachment> {
   if (f.size_bytes > ATTACH_MAX) throw new Error('That file is over 25 MB');
-  const { data, error } = await supabase.storage.from('bd-files').download(f.storage_path);
+  const { data, error } = await supabase.storage.from('sorro-files').download(f.storage_path);
   if (error || !data) throw error ?? new Error('Could not read that file');
   const user_id = await currentUserId();
   const path = `${user_id}/msg/${crypto.randomUUID()}-${f.name}`;
@@ -392,7 +392,7 @@ export type DriveFile = { id: string; name: string; kind: string; size_bytes: nu
 export async function driveFiles(): Promise<DriveFile[]> {
   const fx = fixture<DriveFile[]>('files');
   if (fx) return fx;
-  const { data, error } = await supabase.from('bd_files')
+  const { data, error } = await supabase.from('sorro_files')
     .select('id,name,kind,size_bytes,storage_path')
     .is('deleted_at', null).order('created_at', { ascending: false }).limit(200);
   if (error) throw error;

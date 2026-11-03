@@ -5,7 +5,7 @@ import type { List, Task } from './tasks';
 /**
  * Projects are task lists given a shelf of their own.
  *
- * The rows stay in bd_lists and a task still points at one through list_id,
+ * The rows stay in sorro_lists and a task still points at one through list_id,
  * so My Tasks and Projects always agree. What a list row cannot hold (a line
  * of description, being put away) rides the synced profile prefs, keyed by
  * the list's id, the way notebook colours and tags already do.

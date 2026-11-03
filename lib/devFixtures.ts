@@ -372,7 +372,7 @@ export function seedDevFixtures() {
   seed(['post_saves'], []);
 
   // Everybody in the feed has a handle now, so the preview needs profiles to
-  // read one out of. bd_profiles is world-readable by design.
+  // read one out of. sorro_profiles is world-readable by design.
   seed(['profiles'], {
     me: { user_id: 'me', name: 'Jhems Reduta', handle: 'jhemsreduta07', photo_url: null },
     // One profile carries a picture so the avatar's photo path is exercised in

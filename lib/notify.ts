@@ -45,7 +45,7 @@ export function useNotifications() {
     queryKey: KEY,
     queryFn: async (): Promise<Notif[]> => {
       const { data, error } = await supabase
-        .from('bd_notifications')
+        .from('sorro_notifications')
         .select('id,kind,title,body,href,source,read_at,created_at')
         .order('created_at', { ascending: false })
         .limit(60);
@@ -64,7 +64,7 @@ const ADD = defineMutation('notif.add', async (v: {
   kind: Notif['kind']; title: string; body?: string; href?: string; source?: string; external_id?: string;
 }) => {
   const user_id = await currentUserId();
-  const { error } = await supabase.from('bd_notifications').insert({
+  const { error } = await supabase.from('sorro_notifications').insert({
     user_id, kind: v.kind, title: v.title, body: v.body ?? '',
     href: v.href ?? null, source: v.source ?? 'app', external_id: v.external_id ?? null,
   });
@@ -74,19 +74,19 @@ const ADD = defineMutation('notif.add', async (v: {
 });
 
 const READ = defineMutation('notif.read', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notifications')
+  const { error } = await supabase.from('sorro_notifications')
     .update({ read_at: new Date().toISOString() }).eq('id', v.id);
   if (error) throw error;
 });
 
 const READ_ALL = defineMutation('notif.readAll', async () => {
-  const { error } = await supabase.from('bd_notifications')
+  const { error } = await supabase.from('sorro_notifications')
     .update({ read_at: new Date().toISOString() }).is('read_at', null);
   if (error) throw error;
 });
 
 const CLEAR = defineMutation('notif.clear', async (v: { id: string }) => {
-  const { error } = await supabase.from('bd_notifications').delete().eq('id', v.id);
+  const { error } = await supabase.from('sorro_notifications').delete().eq('id', v.id);
   if (error) throw error;
 });
 

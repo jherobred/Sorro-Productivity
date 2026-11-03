@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
   const run = async () => {
     switch (action) {
       case 'list_tasks': {
-        let q = db.from('bd_tasks')
+        let q = db.from('sorro_tasks')
           .select('id,title,notes,done,due_on,due_at,priority,stars,list_id,completed_at,source')
           .eq('user_id', uid).is('deleted_at', null).order('due_on', { nullsFirst: false });
         if (!body.include_done) q = q.eq('done', false);
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       case 'create_task': {
         const row = pick(body.task, TASK_FIELDS);
         if (typeof row.title !== 'string' || !row.title.trim()) return { data: null, error: { message: 'task.title is required' } };
-        return db.from('bd_tasks')
+        return db.from('sorro_tasks')
           .insert({ ...row, id: crypto.randomUUID(), user_id: uid, position: Date.now() % 2_000_000_000 })
           .select().single();
       }
@@ -98,11 +98,11 @@ Deno.serve(async (req) => {
         const patch = pick(body.patch, TASK_FIELDS);
         // Keep completed_at in step with done, the way COMPLETE in lib/tasks.ts does.
         if ('done' in patch) patch.completed_at = patch.done ? new Date().toISOString() : null;
-        return db.from('bd_tasks').update(patch).eq('id', id).eq('user_id', uid).select().single();
+        return db.from('sorro_tasks').update(patch).eq('id', id).eq('user_id', uid).select().single();
       }
       case 'list_events': {
         if (!from || !to) return { data: null, error: { message: 'from and to are required (ISO timestamps)' } };
-        return db.from('bd_events')
+        return db.from('sorro_events')
           .select('id,title,starts_at,ends_at,all_day,location,color,remind_minutes,source')
           .eq('user_id', uid).is('deleted_at', null)
           .lt('starts_at', to).gt('ends_at', from).order('starts_at').limit(500);
@@ -112,13 +112,13 @@ Deno.serve(async (req) => {
         if (!row.title || !row.starts_at || !row.ends_at) {
           return { data: null, error: { message: 'event.title, starts_at and ends_at are required' } };
         }
-        return db.from('bd_events')
+        return db.from('sorro_events')
           .insert({ color: '#38D6F2', ...row, id: crypto.randomUUID(), user_id: uid, source: 'app' })
           .select().single();
       }
       case 'update_event': {
         // Google Calendar rows are a mirror the next sync overwrites; only edit our own.
-        return db.from('bd_events').update(pick(body.patch, EVENT_FIELDS))
+        return db.from('sorro_events').update(pick(body.patch, EVENT_FIELDS))
           .eq('id', id).eq('user_id', uid).or('source.is.null,source.eq.app')
           .select().single();
       }

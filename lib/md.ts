@@ -1,14 +1,14 @@
 /**
  * A note is one markdown document.
  *
- * The old editor stored every paragraph as its own row in `bd_note_blocks`, and
+ * The old editor stored every paragraph as its own row in `sorro_note_blocks`, and
  * that model is why notes lost text: a block written before its note's row had
  * landed failed the foreign key, the rollback took the characters with it, and
  * production ended up with eight notes and zero blocks. Positions, reorders,
  * per-block debounces and a pending-text overlay all existed to hold that model
  * together.
  *
- * One string in `bd_notes.body` removes the whole class of bug — one row, one
+ * One string in `sorro_notes.body` removes the whole class of bug — one row, one
  * debounced write, last write wins — and it is also what both of the apps being
  * copied actually do: an Evernote note is a document, an Obsidian note is a
  * markdown file.

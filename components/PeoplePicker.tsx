@@ -14,7 +14,7 @@ import { toast } from '@/lib/toast';
  * Two wrong answers, in order. First it was `ask('Message who?')` — a text box
  * that wanted a handle typed exactly and said "No one called “jaz”" when you
  * got it wrong; nobody knows their friends' handles. Then it was **every
- * profile in the database**, in one scrolling list, because `bd_profiles` is
+ * profile in the database**, in one scrolling list, because `sorro_profiles` is
  * world-readable and so the list was free.
  *
  * That second one is the bug being fixed here. A list of everybody makes a
