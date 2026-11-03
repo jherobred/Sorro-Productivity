@@ -98,7 +98,7 @@
 .tasks-tool{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line2);background:var(--card);color:var(--tx2);font-size:12.5px;font-weight:650;white-space:nowrap}
 .tasks-tool:hover{color:var(--tx);border-color:var(--tx3)}
 .tasks-tool.is-on{border-color:var(--tx);background:var(--tx);color:var(--card)}
-@media(min-width:1001px) and (max-width:1500px){.tasks-tool{width:40px;padding:0;justify-content:center}.tasks-tool span{display:none}.tasks-search{flex-basis:160px}}
+@media(min-width:1001px) and (max-width:1500px){.tasks-tool{width:40px;padding:0;justify-content:center}.tasks-tool .tasks-tool-label{display:none}.tasks-search{flex-basis:160px}}
 
 /* ---- groups and board */
 .task-groups{display:flex;flex-direction:column;gap:14px}
@@ -286,6 +286,7 @@
   .tasks-search{flex:1 1 0}
   .tasks-tools{order:1;gap:4px}
   .tasks-tool{width:40px;padding:0;justify-content:center}
+  .tasks-tool .tasks-tool-label{display:none}
   .tasks-toolbar .hbar{order:2;flex:1 1 100%}
   .task-group{border-radius:16px}
   .task-group>header span{display:none}
