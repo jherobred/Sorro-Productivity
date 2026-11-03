@@ -13,6 +13,8 @@ export type ViewMode = 'auto' | 'phone' | 'web';
 
 export type Layout = {
   phone: boolean;
+  /** 761-1024px wide and not forced to phone: an icon rail, and the side panel as an overlay. */
+  tablet: boolean;
   viewMode: ViewMode;
   isPhoneDevice: boolean;
   landscape: boolean;
@@ -57,6 +59,7 @@ const emit = () => { for (const l of listeners) l(); };
  */
 const SERVER_LAYOUT: Layout = {
   phone: false,
+  tablet: false,
   viewMode: 'auto',
   isPhoneDevice: false,
   landscape: false,
@@ -76,6 +79,7 @@ function computeLayout(): Layout {
 
   return {
     phone,
+    tablet: !phone && w <= 1024,
     viewMode: currentViewMode,
     isPhoneDevice: deviceIsPhone,
     landscape,

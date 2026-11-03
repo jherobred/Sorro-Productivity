@@ -39,11 +39,28 @@
 .sx .studio-main { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; background: var(--bg) }
 .sx[data-phone='true'] .studio-main { padding: 4px 14px 14px }
 
-/* S.bar: five icons, no labels. */
-.sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
-.sx-bar a { display: grid; place-items: center; color: var(--muted); -webkit-touch-callout: none; user-select: none }
-.sx-bar a[aria-current='page'] { color: var(--ink) }
-.sx-bar a[aria-current='page'] svg { background: var(--soft-2); border-radius: var(--r-pill); padding: 5px 14px; box-sizing: content-box }
+/* S.bar: four destinations and More, each with its label. Solid, never floating or glass. */
+.sx { --bar-h: 58px }
+.sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: var(--bar-h); padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
+.sx-bar a, .sx-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 44px; color: var(--muted); font: 500 11px/1 var(--font-body); -webkit-touch-callout: none; user-select: none }
+.sx-bar svg, .sx-bar [aria-hidden] { padding: 4px 16px; border-radius: var(--r-pill); box-sizing: content-box; transition: background-color .2s var(--snap) }
+.sx-bar [aria-current='page'] { color: var(--ink) }
+.sx-bar [aria-current='page'] > :first-child { background: var(--soft-2) }
+.sx-bar a:active > :first-child, .sx-bar button:active > :first-child { transform: scale(.94) }
+
+/* S.more: the phone sheet for Vault, News and Settings. */
+.sx-sheet-back { position: fixed; inset: 0; z-index: 60; background: var(--backdrop); display: flex; align-items: flex-end; animation: sheet-fade .2s ease-out both }
+.sx-sheet { width: 100%; padding: 8px 10px calc(14px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: var(--r-panel) var(--r-panel) 0 0; display: flex; flex-direction: column; gap: 2px; animation: sheet-up .38s var(--drift) both }
+.sx-sheet-grip { align-self: center; width: 36px; height: 4px; margin: 2px 0 8px; border-radius: var(--r-pill); background: var(--soft-2) }
+.sx-sheet a, .sx-sheet button { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 12px; border-radius: var(--r-row); color: var(--ink); font-size: 15px; text-align: left }
+.sx-sheet a:active, .sx-sheet button:active, .sx-sheet [aria-current='page'] { background: var(--soft-2) }
+@keyframes sheet-up { from { transform: translateY(100%) } }
+@keyframes sheet-fade { from { opacity: 0 } }
+.nomo .sx-sheet, .nomo .sx-sheet-back { animation: none }
+
+/* Phone: the strip stays compact, and content clears the bar. */
+.sx[data-phone='true'] .sx-top { height: 48px }
+.sx[data-phone='true'] .studio-main { padding-bottom: 14px }
 
 .sx-loading { height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--bg); color: var(--muted) }
 
