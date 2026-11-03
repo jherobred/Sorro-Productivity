@@ -13,6 +13,9 @@ import { useNotes } from '@/lib/notes';
 import { usePrefs } from '@/lib/prefs';
 import { useEdition, manilaDay, KIND_NAMES } from '@/lib/news';
 import { fetchWeather, weatherCode } from '@/lib/weather';
+import { focusState, startFocus, stopFocus, takeFinished } from '@/lib/focusTimer';
+import { toast } from '@/lib/toast';
+import { foxGlad } from '@/lib/foxMood';
 import { ymd } from '@/lib/days';
 
 export type WidgetId = 'agenda' | 'due' | 'focus' | 'month' | 'pinned' | 'news' | 'weather' | 'capture';
@@ -57,17 +60,32 @@ function Due() {
   </Frame>;
 }
 
-const FOCUS_KEY = 'sorro-focus-end';
 function Focus() {
-  const [end, setEnd] = useState<number | null>(() => { try { const v = Number(localStorage.getItem(FOCUS_KEY)); return v > Date.now() ? v : null; } catch { return null; } });
+  const [st, setSt] = useState(focusState);
   const [, tick] = useState(0);
-  useEffect(() => { if (!end) return; const t = setInterval(() => { if (Date.now() >= end) { setEnd(null); try { localStorage.removeItem(FOCUS_KEY); } catch {} } tick(n => n + 1); }, 1000); return () => clearInterval(t); }, [end]);
-  const start = (min: number) => { const v = Date.now() + min * 60_000; setEnd(v); try { localStorage.setItem(FOCUS_KEY, String(v)); } catch {} };
-  const left = end ? Math.max(0, end - Date.now()) : 0;
+  const tasks = useTasks().data ?? [];
+  const { update } = useTaskActions();
+  useEffect(() => {
+    const sync = () => setSt(focusState());
+    window.addEventListener('sorro-focus', sync); window.addEventListener('storage', sync);
+    const t = setInterval(() => {
+      const done = takeFinished();
+      if (done) {
+        const task = done.taskId ? tasks.find(x => x.id === done.taskId) : null;
+        if (task) update.mutate({ id: task.id, patch: { focus_minutes: (task.focus_minutes ?? 0) + done.minutes } });
+        toast(task ? `${done.minutes} minutes of focus logged on ${task.title}` : `${done.minutes} minutes of focus done`);
+        foxGlad();
+      }
+      tick(n => n + 1);
+    }, 1000);
+    return () => { window.removeEventListener('sorro-focus', sync); window.removeEventListener('storage', sync); clearInterval(t); };
+  }, [tasks, update]);
+  const left = st.end ? Math.max(0, st.end - Date.now()) : 0;
   const mm = String(Math.floor(left / 60_000)).padStart(2, '0'), ss = String(Math.floor(left / 1000) % 60).padStart(2, '0');
+  const task = st.taskId ? tasks.find(x => x.id === st.taskId) : null;
   return <Frame id="focus" title="Focus">
-    {end ? <div className="wg-focus"><span className="wg-big" aria-live="off">{mm}:{ss}</span><button className="wg-btn" onClick={() => { setEnd(null); try { localStorage.removeItem(FOCUS_KEY); } catch {} }}>Stop</button></div>
-      : <div className="wg-focus"><button className="wg-btn" onClick={() => start(25)}>25 min</button><button className="wg-btn" onClick={() => start(50)}>50 min</button></div>}
+    {st.end ? <><div className="wg-focus"><span className="wg-big" aria-live="off">{mm}:{ss}</span><button className="wg-btn" onClick={stopFocus}>Stop</button></div>{task && <p className="wg-empty">On {task.title}</p>}</>
+      : <div className="wg-focus"><button className="wg-btn" onClick={() => startFocus(25)}>25 min</button><button className="wg-btn" onClick={() => startFocus(50)}>50 min</button></div>}
   </Frame>;
 }
 

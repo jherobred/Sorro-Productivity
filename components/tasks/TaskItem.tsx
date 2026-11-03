@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { TaskCoverThumb } from './TaskPhotos';
@@ -10,6 +10,8 @@ import { deadlineClock, deadlineOf } from '@/lib/todayCycle';
 import { readCanvasNotes } from '@/lib/canvasFeed';
 import { usePrefs } from '@/lib/prefs';
 import { isRepeat, repeatLabel } from '@/lib/taskRepeat';
+import { streak } from '@/lib/taskStreak';
+import { useTasks } from '@/lib/tasks';
 
 export type DueTone = 'late' | 'today' | 'soon' | 'later';
 
@@ -95,6 +97,9 @@ export function TaskItem(props: TaskItemProps) {
   const [title, setTitle] = useState(task.title);
   const renaming = editing || !!props.renaming;
   const repeat = usePrefs().prefs.taskRepeat?.[task.id];
+  // The series is every task with this title; finishing a repeat makes the next one under a new id.
+  const all = useTasks().data;
+  const inARow = useMemo(() => repeat && all ? streak(all.filter(t => t.title.trim().toLowerCase() === task.title.trim().toLowerCase())) : 0, [repeat, all, task.title]);
   const repeats = isRepeat(repeat) ? repeat : null;
 
   useEffect(() => { if (!renaming) setTitle(task.title); }, [task.title, renaming]);
@@ -172,6 +177,7 @@ export function TaskItem(props: TaskItemProps) {
                   </a>
                 )}
                 {repeats && <span className="task-chip is-plain" title={repeatLabel(repeats, task.due_on)}><Icon name="repeat" size={12} />{repeatLabel({ ...repeats, until: null }, task.due_on).replace(/ on .*/, '')}</span>}
+                {inARow >= 2 && <span className="task-chip is-plain" title={`Finished on time ${inARow} times in a row`}>{inARow} in a row</span>}
                 {showList && list && <span className="task-chip" style={{ '--tag': list.color } as React.CSSProperties}><i aria-hidden="true" />{list.name}</span>}
                 {course && <span className="task-chip is-course" style={{ '--tag': tag?.color ?? 'var(--tx3)' } as React.CSSProperties}><Icon name="tag" size={11} />{course}</span>}
                 {steps && steps.total > 0 && (

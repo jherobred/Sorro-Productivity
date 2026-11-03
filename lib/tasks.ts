@@ -24,6 +24,8 @@ export type Task = {
   // med→amber, low/null→tx3.
   priority: 'low' | 'med' | 'high' | null;
   stars: number;
+  /** Minutes of focus logged from the Focus widget. */
+  focus_minutes?: number;
   position: number;
   deleted_at: string | null;
   /** When it was ticked. Written by COMPLETE below; read so a screen can tell
@@ -309,7 +311,7 @@ export function useTasks() {
     queryFn: async (): Promise<Task[]> => {
       const { data, error } = await supabase
         .from('sorro_tasks')
-        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at,source')
+        .select('id,list_id,title,notes,done,due_on,due_at,priority,stars,position,deleted_at,completed_at,source,focus_minutes')
         .is('deleted_at', null)
         .order('position')
         .limit(500);

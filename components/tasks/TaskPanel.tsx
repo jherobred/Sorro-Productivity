@@ -1,4 +1,6 @@
 'use client';
+import { startFocus } from '@/lib/focusTimer';
+import { toast } from '@/lib/toast';
 import Link from 'next/link';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,7 +16,6 @@ import { usePrefs } from '@/lib/prefs';
 import { useRegisterSidePanel } from '@/lib/sidePanel';
 import { courseIs, TAG_COLORS } from '@/lib/tagList';
 import { deadlineClock, deadlineOf } from '@/lib/todayCycle';
-import { toast } from '@/lib/toast';
 import {
   parseTaskLinks, serializeTaskWithLinks, useListActions, useSubtaskActions, useSubtasks,
   type CustomTaskLink, type List, type Task,
@@ -219,7 +220,7 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             <span aria-hidden="true"><Icon name="check" size={12} /></span>
             {task.done ? 'Done' : 'Mark done'}
           </button>
-          <span className="task-panel-spacer" />
+          <button type="button" className="studio-button" onClick={() => { startFocus(25, task.id); toast(`Focusing on ${task.title} for 25 minutes. The timer is in the side panel.`); }}><Icon name="clock" size={16}/>Focus 25 min</button>{!!task.focus_minutes && <span className="task-panel-focus">{task.focus_minutes} min focused</span>}<span className="task-panel-spacer" />
           <button type="button" className="task-panel-icon" aria-label="Duplicate" title="Duplicate" onClick={onDuplicate}><Icon name="copy" size={16} /></button>
           <button type="button" className="task-panel-icon is-danger" aria-label="Delete task" title="Delete" onClick={onDelete}><Icon name="trash" size={16} /></button>
           <button type="button" className="task-panel-icon" aria-label="Close" title="Close" onClick={close}><Icon name="close" size={16} /></button>

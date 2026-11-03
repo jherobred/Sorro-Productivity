@@ -34,6 +34,7 @@ import {
   INBOX, NONE, NO_FILTER, SORT_LABELS, type BoardBy, type TaskScope, type TaskSort,
 } from '@/lib/taskViews';
 import './tasks.css';
+import './tasks-sorro.css';
 import {WeeklyPlanner} from '@/components/tasks/WeeklyPlanner';
 
 /* Only drawn once a date is being picked. */
@@ -114,7 +115,10 @@ export default function TasksPage() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, []);
 
-  const view = prefs.taskView === 'list' ? 'agenda' : prefs.taskView ?? 'groups';
+  // ?view= wins, so a link to the board opens the board; the saved choice covers the rest.
+  const [picked, setPicked] = useState<'groups' | 'agenda' | 'board' | 'table' | null>(() => { const v = searchParams?.get('view'); return v === 'groups' || v === 'agenda' || v === 'board' || v === 'table' ? v : null; });
+  const view = picked ?? (prefs.taskView === 'list' ? 'agenda' : prefs.taskView ?? 'groups');
+  const pickView = (v: typeof view) => { setPicked(v); void update({ taskView: v }); const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(history.state, '', u); };
   const sort: TaskSort = prefs.taskSort ?? { key: 'smart', desc: false };
   const boardBy: BoardBy = prefs.taskBoardBy ?? 'list';
   const tags = prefs.tags ?? [];
@@ -515,7 +519,7 @@ export default function TasksPage() {
                 { id: 'board', label: 'Board', icon: 'proj' },
                 { id: 'table', label: 'Table', icon: 'grid' },
               ] as const}
-              value={view} onChange={(v) => void update({ taskView: v })} />
+              value={view} onChange={(v) => pickView(v)} />
           )}
           <div className="tasks-tools"><button className="tasks-tool" aria-label="Plan week" title="Plan week" onClick={()=>setPlanning(true)}><Icon name="cal" size={16}/><span className="tasks-tool-label">Plan week</span></button>
             {scope !== 'done' && (

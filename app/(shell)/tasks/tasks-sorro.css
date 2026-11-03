@@ -1,0 +1,6 @@
+/* Sorro on top of tasks.css: labels in sentence case at a readable size, a calmer title, and readable meta. */
+:is(.lms-section > h3, .task-rail-group h2, .task-panel-section h3) { font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted) }
+.lms-section > h3 b.is-new { background: var(--bad); color: var(--accent-ink) }
+.tasks-page .section-title { font: 600 28px/1.15 var(--font-body); letter-spacing: -.015em }
+.tasks-page :is(.task-chip, .task-meta, .task-notes, small) { font-size: 12.5px }
+.task-panel-focus { color: var(--muted); font-size: 12.5px; align-self: center }
