@@ -21,6 +21,8 @@ Each sub-project gets its own spec, plan and build, in this order:
 | S5 | T3 Calendar, T4 Tasks, T5 Vault | Tasks has list and board views, projects become task groups. Vault is a file explorer in the LodiSave Gallery layout: links, files, images, PDFs and clips, attachable to notes, tasks and events, with read-later and AI access |
 | S6 | Tracker app | Later, new repo forked from tag `basedly-final`. Gets habits, focus history, fitness, fuel, money, plates, memories, people, community |
 | S7 | Code comments | `/antislop-code` pass over everything Sorro keeps |
+| S8 | Phone home-screen widgets | Rebuilt from scratch, useful ones only (old Basedly widgets dropped). Designed after S3 so they share the Home widget set |
+| S9 | Notifications | Agenda and upcoming tasks, events and other items, each with a visual (image or rich layout). Targets: Android phone, Xiaomi tablet, Windows PC, and Redmi Watch 6 Lite (receives phone notifications through Mi Fitness, so phone notifications must read well as text-first on a small screen) |
 
 Tabs that leave Sorro: Habits, Focus (tab), People, Community, Money, Fitness, Gym,
 Fuel, Plates, Memories, Projects, Board, Links, Files, Body, More, Profile (moves
