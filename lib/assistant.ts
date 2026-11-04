@@ -1,8 +1,10 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from './supabase';
+import { useSyncExternalStore } from 'react';
+import { supabase, SUPABASE_URL, SUPABASE_KEY } from './supabase';
 import { defineMutation, queryClient } from './offline';
-import { undoChange, type Undo, type ToolDone } from './assistantLogic';
+import { undoChange, foldStream, type Undo, type ToolDone, type StreamState } from './assistantLogic';
+import { splitSse } from '@/supabase/functions/assistant/sse';
 import { toast } from './toast';
 
 export type { ToolDone };
@@ -42,18 +44,57 @@ const MESSAGES: Record<string, string> = {
   signed_out: 'You are signed out. Sign in again to use the assistant.',
 };
 
-export async function sendToAssistant(chatId: string | null, message: string, context?: string): Promise<SendResult> {
-  const { data, error } = await supabase.functions.invoke('assistant', { body: { chat_id: chatId ?? undefined, message, context } });
-  if (error) {
-    let body: { error?: string; retry?: string | null; tools?: ToolDone[]; chat_id?: string } = {};
-    try { body = await (error as { context?: Response }).context?.json(); } catch { /* not JSON */ }
-    const code = body.error ?? (navigator.onLine ? 'model_failed' : 'offline');
-    if (body.tools?.length) for (const k of ['tasks', 'events', 'notes', 'chats']) void queryClient.invalidateQueries({ queryKey: [k] });
-    throw new AssistantError(code, MESSAGES[code] ?? 'You are offline. The assistant answers once you are back online.', body.retry, body.tools ?? [], body.chat_id);
+const failure = (code: string, b: { retry?: string | null; tools?: ToolDone[]; chat_id?: string } = {}) =>
+  new AssistantError(code, MESSAGES[code] ?? 'You are offline. The assistant answers once you are back online.', b.retry, b.tools ?? [], b.chat_id);
+
+/** Streams the reply: `onText` gets the whole text so far after each piece arrives. */
+export async function sendToAssistant(chatId: string | null, message: string, context?: string, onText?: (full: string) => void): Promise<SendResult> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw failure('signed_out');
+    let res: Response;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/assistant`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({ chat_id: chatId ?? undefined, message, context }),
+      });
+    } catch { throw failure(navigator.onLine ? 'model_failed' : 'offline'); }
+    if (!res.ok || !res.body) {
+      let b: { error?: string; retry?: string | null; tools?: ToolDone[]; chat_id?: string } = {};
+      try { b = await res.json(); } catch { /* not JSON */ }
+      throw failure(b.error ?? 'model_failed', b);
+    }
+    let s: StreamState = { text: '' };
+    let buf = '';
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const { events, rest } = splitSse(buf + value);
+        buf = rest;
+        for (const ev of events) { const before = s.text; s = foldStream(s, ev); if (s.text !== before) onText?.(s.text); }
+      }
+    } catch { /* connection dropped: handled below as a stream with no ending */ }
+    if (s.error) throw failure(s.error.error, s.error);
+    // No ending: the server may still have saved what it did, so the chat refetch below shows it.
+    if (!s.done) throw failure(navigator.onLine ? 'model_failed' : 'offline');
+    return { chat_id: s.done.chat_id, text: s.text.trim(), tools: s.done.tools };
+  } finally {
+    // Whatever the assistant wrote shows up in Tasks, Calendar and Notes without a reload, even after a failure.
+    for (const k of ['tasks', 'events', 'notes', 'chats', 'chat']) void queryClient.invalidateQueries({ queryKey: [k] });
   }
-  // Whatever the assistant wrote shows up in Tasks, Calendar and Notes without a reload.
-  for (const k of ['tasks', 'events', 'notes', 'chats']) void queryClient.invalidateQueries({ queryKey: [k] });
-  return data as SendResult;
+}
+
+let currentChat: string | null = null;
+const chatListeners = new Set<() => void>();
+const setCurrentChat = (id: string | null) => { if (id !== currentChat) { currentChat = id; chatListeners.forEach(f => f()); } };
+
+/** The open chat, shared by Home and the fox sheet so one conversation follows you across tabs. */
+export function useCurrentChat(): [string | null, (id: string | null) => void] {
+  const id = useSyncExternalStore(f => { chatListeners.add(f); return () => { chatListeners.delete(f); }; }, () => currentChat, () => null);
+  return [id, setCurrentChat];
 }
 
 /** Thrown when the row changed after the assistant touched it: the undo is skipped rather than overwrite that. */

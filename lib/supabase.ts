@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL =
+export const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdkbnsjczanvmmpsovhm.supabase.co';
-const SUPABASE_KEY =
+export const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_dFRyCNdg39_7Ee3OiObwHw_5CQK5szk';
 
 // Publishable key is safe in the client — RLS is what protects the data.
