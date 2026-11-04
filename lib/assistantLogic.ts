@@ -3,6 +3,22 @@
 /** `after` is the body the assistant left; a restore only applies while the note still holds exactly that. */
 export type Undo = { table: 'sorro_tasks' | 'sorro_events' | 'sorro_notes'; id: string; action: 'delete' | 'uncomplete' | 'restore_body'; body?: string; after?: string };
 
+export type ToolDone = { name: string; label: string; undo?: Undo; link?: string; undone?: boolean };
+
+export type StreamState = {
+  text: string;
+  done?: { chat_id: string; tools: ToolDone[] };
+  error?: { error: string; retry: string | null; chat_id?: string; tools: ToolDone[] };
+};
+
+/** One event of the assistant's stream applied to what has arrived so far. */
+export function foldStream(s: StreamState, ev: { event: string; data: string }): StreamState {
+  if (ev.event === 'text') return { ...s, text: s.text + JSON.parse(ev.data) };
+  if (ev.event === 'done') return { ...s, done: JSON.parse(ev.data) };
+  if (ev.event === 'error') { const e = JSON.parse(ev.data); return { ...s, error: { error: e.error, retry: e.retry ?? null, chat_id: e.chat_id, tools: e.tools ?? [] } }; }
+  return s;
+}
+
 const REACH = new Set(['sorro_tasks', 'sorro_events', 'sorro_notes']);
 
 /** The change to make, and `only`: what the row must still hold, so an undo never overwrites later edits. */

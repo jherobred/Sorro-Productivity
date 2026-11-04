@@ -2,10 +2,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import { defineMutation, queryClient } from './offline';
-import { undoChange, type Undo } from './assistantLogic';
+import { undoChange, type Undo, type ToolDone } from './assistantLogic';
 import { toast } from './toast';
 
-export type ToolDone = { name: string; label: string; undo?: Undo; link?: string; undone?: boolean };
+export type { ToolDone };
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; tools: ToolDone[]; created_at: string; pending?: boolean; error?: string };
 export type Chat = { id: string; title: string; updated_at: string };
 

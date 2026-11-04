@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { undoChange, suggestions } from './assistantLogic.ts';
+import { undoChange, suggestions, foldStream, type StreamState } from './assistantLogic.ts';
 
 test('undoing a created row soft-deletes it', () => {
   const c = undoChange({ table: 'sorro_tasks', id: 't1', action: 'delete' }, '2026-11-03T10:00:00.000Z');
@@ -28,4 +28,22 @@ test('an undo only applies to the row as the assistant left it', () => {
   assert.deepEqual(undoChange({ table: 'sorro_tasks', id: 't', action: 'delete' }, 'now').only, { deleted_at: null });
   assert.deepEqual(undoChange({ table: 'sorro_tasks', id: 't', action: 'uncomplete' }, 'now').only, { done: true });
   assert.deepEqual(undoChange({ table: 'sorro_notes', id: 'n', action: 'restore_body', body: 'old', after: 'old\n\nnew' }, 'now').only, { body: 'old\n\nnew' });
+});
+
+test('text chunks append, done ends the stream', () => {
+  let s: StreamState = { text: '' };
+  s = foldStream(s, { event: 'text', data: '"Added "' });
+  s = foldStream(s, { event: 'text', data: '"it."' });
+  s = foldStream(s, { event: 'done', data: '{"chat_id":"c1","tools":[]}' });
+  assert.equal(s.text, 'Added it.');
+  assert.deepEqual(s.done, { chat_id: 'c1', tools: [] });
+});
+test('an error event keeps the text and the tools that already ran', () => {
+  const s = foldStream({ text: 'Part' }, { event: 'error', data: '{"error":"model_failed","retry":null,"chat_id":"c1","tools":[{"name":"create_task","label":"Added"}]}' });
+  assert.equal(s.text, 'Part');
+  assert.equal(s.error?.tools.length, 1);
+});
+test('an unknown event changes nothing', () => {
+  const s: StreamState = { text: 'x' };
+  assert.equal(foldStream(s, { event: 'ping', data: '' }), s);
 });
