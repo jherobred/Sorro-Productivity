@@ -110,5 +110,16 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 
 /* Reduced motion with no choice made in Settings, and with scripting off (see app/motion.css). */
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-motion='on']) :is(.fox-run, .sx-fox > span, .sx-sheet, .sx-sheet-back) { animation: none }
+  html:not([data-motion='on']) :is(.fox-run, .sx-fox > span, .sx-sheet, .sx-sheet-back, .fx-sheet) { animation: none }
 }
+
+/* S.fox as a button, and S.foxsheet: the fox's chat on every tab but Home. */
+.sx-fox-btn { padding: 0; border: 0; background: none; color: inherit; border-radius: var(--r-row); cursor: pointer }
+.sx-fox-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.fx-sheet { width: 100%; height: min(82dvh, 760px); padding: 8px 14px calc(14px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: var(--r-panel) var(--r-panel) 0 0; display: flex; flex-direction: column; gap: 10px; animation: sheet-up .38s var(--drift) both }
+.fx-sheet .hm-chat { min-height: 0; overflow-y: auto; padding: 4px 0 }
+.fx-sheet .hm-composer { position: static }
+.sx:not([data-phone='true']) .fx-back { justify-content: flex-end; align-items: stretch }
+.sx:not([data-phone='true']) .fx-sheet { width: min(440px, 100%); height: 100%; border-radius: var(--r-panel) 0 0 var(--r-panel); animation: none }
+.sx:not([data-phone='true']) .fx-sheet .sx-sheet-grip { display: none }
+.nomo .fx-sheet { animation: none }

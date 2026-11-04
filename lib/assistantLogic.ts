@@ -19,6 +19,15 @@ export function foldStream(s: StreamState, ev: { event: string; data: string }):
   return s;
 }
 
+const OPEN_ITEM: [param: string, kind: string][] = [['note', 'note'], ['open', 'note'], ['detail', 'task'], ['project', 'project']];
+
+/** Where the user is when they talk to the fox from the sheet, so "move this to Friday" has a "this". */
+export function chatContext(tab: string, search: string): string {
+  const p = new URLSearchParams(search);
+  const hit = OPEN_ITEM.find(([k]) => p.get(k));
+  return hit ? `The user is on the ${tab} tab with ${hit[1]} ${p.get(hit[0])} open.` : `The user is on the ${tab} tab.`;
+}
+
 const REACH = new Set(['sorro_tasks', 'sorro_events', 'sorro_notes']);
 
 /** The change to make, and `only`: what the row must still hold, so an undo never overwrites later edits. */

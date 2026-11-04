@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { undoChange, suggestions, foldStream, type StreamState } from './assistantLogic.ts';
+import { undoChange, suggestions, foldStream, chatContext, type StreamState } from './assistantLogic.ts';
 
 test('undoing a created row soft-deletes it', () => {
   const c = undoChange({ table: 'sorro_tasks', id: 't1', action: 'delete' }, '2026-11-03T10:00:00.000Z');
@@ -46,4 +46,9 @@ test('an error event keeps the text and the tools that already ran', () => {
 test('an unknown event changes nothing', () => {
   const s: StreamState = { text: 'x' };
   assert.equal(foldStream(s, { event: 'ping', data: '' }), s);
+});
+test('context names the tab and the open item', () => {
+  assert.equal(chatContext('Notes', '?note=n1'), 'The user is on the Notes tab with note n1 open.');
+  assert.equal(chatContext('Tasks', ''), 'The user is on the Tasks tab.');
+  assert.equal(chatContext('Tasks', '?detail=t9'), 'The user is on the Tasks tab with task t9 open.');
 });

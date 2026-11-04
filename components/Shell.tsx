@@ -9,7 +9,9 @@ import { Wordmark } from './Wordmark';
 import { MoreSheet } from './MoreSheet';
 import { SidePanel } from './SidePanel';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
-import { foxDash, foxWork } from '@/lib/foxMood';
+import { foxDash, foxWork, foxTalk } from '@/lib/foxMood';
+import { FoxSheet } from './FoxSheet';
+import { focusFoxComposer } from './FoxChat';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
@@ -55,6 +57,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // The phone sheet and tablet overlay close on Back (Android) and when the tab changes.
   useOverlayBack(panelOpen, () => setPanelOpen(false));
   useEffect(() => { setPanelOpen(false); }, [pathname]);
+  // The fox's chat: open on any tab but Home, where the chat is the page. A reply that lands while it is shut makes the fox look up.
+  const [foxOpen, setFoxOpen] = useState(false);
+  const foxOpenRef = useRef(false);
+  foxOpenRef.current = foxOpen;
+  useOverlayBack(foxOpen, () => setFoxOpen(false));
+  useEffect(() => { setFoxOpen(false); if (pathname.startsWith('/home')) foxTalk(false); }, [pathname]);
   const working = useIsFetching() + useIsMutating() > 0;
   useEffect(() => { foxWork(working); }, [working]);
   useEffect(() => { foxDash(); }, [pathname]);
@@ -103,6 +111,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const stored = accounts.find(a => a.user_id === me.id);
   const name = stored?.name || me.name;
   const pinned = (prefs.pinnedNotes || []).map(id => notes.find(n => n.id === id)).filter(n => !!n);
+  const tapFox = () => { foxTalk(false); if (current?.id === 'home') focusFoxComposer(); else setFoxOpen(true); };
+  const foxReplied = () => { if (!foxOpenRef.current) foxTalk(true); };
   const holdStart = () => { press.current = window.setTimeout(() => { press.current = null; setCapture(true); }, 500); };
   const holdEnd = (e: React.PointerEvent) => { if (press.current === null) e.preventDefault(); else { clearTimeout(press.current); press.current = null; } };
 
@@ -110,14 +120,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return <div className="sx" data-rail={rail} data-phone={phone} data-tablet={tablet}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">
-      <div className="sx-brand"><Link href="/home/" aria-label="Sorro home"><Wordmark word={!rail} /></Link>{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
+      <div className="sx-brand"><Wordmark word={!rail} onFox={tapFox} />{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
       <nav className="sx-nav" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined}><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>)}</nav>
       {pinned.length > 0 && <><h3>Pinned</h3><nav className="sx-nav sx-pins" aria-label="Pinned notes">{pinned.map(n => <Link key={n.id} href={'/notebooks/?note=' + n.id} title={n.title || 'Untitled'}><Icon name="pin" size={16} /><span>{n.title || 'Untitled'}</span></Link>)}</nav></>}
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
-        {phone && <Link href="/home/" aria-label="Sorro home"><Wordmark size="sm" /></Link>}
+        {phone && <Wordmark size="sm" onFox={tapFox} />}
         <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
@@ -141,6 +151,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     {settings && <Settings initialTab={settings} onClose={() => setSettings(false)} />}
     {account && <Accounts me={{ id: me.id, name, handle: null, photo: stored?.photo || me.photo }} onClose={() => setAccount(false)} onSettings={() => { setAccount(false); setSettings('general'); }} />}
     {capture && <Capture kind="task" onClose={() => setCapture(false)} />}
+    {foxOpen && current && <FoxSheet tab={current.name} onClose={() => setFoxOpen(false)} onReply={foxReplied} />}
     <ToastHost /><AskHost />
   </div>;
 }

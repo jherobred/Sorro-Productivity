@@ -41,7 +41,7 @@ let composer: HTMLTextAreaElement | null = null;
 /** Puts the cursor in the chat's message box, if a chat is on screen. */
 export function focusFoxComposer() { composer?.focus(); }
 
-export function FoxChat({ variant, context, initial }: { variant: 'page' | 'sheet'; context?: string; initial?: { text: string; context?: string } }) {
+export function FoxChat({ variant, context, initial, onReply }: { variant: 'page' | 'sheet'; context?: string; initial?: { text: string; context?: string }; onReply?: () => void }) {
   const qc = useQueryClient();
   const chats = useChats();
   const [chatId, setChatId] = useCurrentChat();
@@ -83,6 +83,7 @@ export function FoxChat({ variant, context, initial }: { variant: 'page' | 'shee
       }
       const r = await sendToAssistant(chatId, t, ctx, setStream);
       if (r.tools.length) foxGlad();
+      onReply?.();
       // A repeating task the assistant ticked gets its next instance here, as a tick in Tasks would.
       for (const x of r.tools) if (x.name === 'complete_task' && x.undo) TA.comeBack(x.undo.id);
       setLocal(l => [...l, { id: 'a' + stamp, role: 'assistant', content: r.text, tools: r.tools, created_at: new Date().toISOString() }]);
