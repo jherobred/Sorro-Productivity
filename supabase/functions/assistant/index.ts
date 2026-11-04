@@ -9,6 +9,7 @@
  */
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { TOOLS, WRITES, validateArgs, freeSlots, appendTo, zoneOffset } from './tools.ts';
+import { systemPrompt } from './voice.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -161,9 +162,7 @@ Deno.serve(async (req) => {
   contents.push({ role: 'user', parts: [{ text: body.context ? `${message}\n\n(Context: ${body.context})` : message }] });
 
   const now = new Intl.DateTimeFormat('en-PH', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date());
-  const system = `You are Sorro, the assistant inside ${profile?.name ? profile.name + "'s" : "the user's"} notes, calendar and tasks app. It is ${now} (${tz}). ` +
-    'Use the tools to read and change their data; never invent tasks, events or notes. Confirm what you changed in one short sentence. ' +
-    'Prefer doing over asking when the request is clear; ask one question when a date or title is missing. Answer in plain sentences, no emoji.';
+  const system = systemPrompt({ name: profile?.name, now, tz });
 
   const done: Done[] = [];
   let text = '';
