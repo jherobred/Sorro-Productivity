@@ -10,6 +10,7 @@
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { TOOLS, WRITES, validateArgs, freeSlots, appendTo, zoneOffset } from './tools.ts';
 import { systemPrompt } from './voice.ts';
+import { splitSse } from './sse.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +22,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.6-flash';
 const ROUNDS = 6;
 
-type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
+type Part = { text?: string; thought?: boolean;functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
 type Content = { role: 'user' | 'model'; parts: Part[] };
 export type Undo = { table: 'sorro_tasks' | 'sorro_events' | 'sorro_notes'; id: string; action: 'delete' | 'uncomplete' | 'restore_body'; body?: string; after?: string };
 type Done = { name: string; label: string; undo?: Undo; link?: string };
@@ -131,6 +132,39 @@ async function gemini(key: string, system: string, contents: Content[]) {
   return (data?.candidates?.[0]?.content?.parts ?? []) as Part[];
 }
 
+/** Same call as `gemini`, streamed: `onText` gets each piece of text as it arrives; the turn's parts come back whole. */
+async function geminiStream(key: string, system: string, contents: Content[], onText: (t: string) => void) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
+      tools: [{ functionDeclarations: TOOLS }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (res.status === 429) throw Object.assign(new Error('rate_limited'), { status: 429, retry: res.headers.get('retry-after') });
+  if (!res.ok || !res.body) throw Object.assign(new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: 502 });
+  const parts: Part[] = [];
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const { events, rest } = splitSse(buf + value);
+    buf = rest;
+    for (const ev of events) {
+      for (const p of (JSON.parse(ev.data)?.candidates?.[0]?.content?.parts ?? []) as Part[]) {
+        parts.push(p);
+        if (p.text && !p.thought) onText(p.text);
+      }
+    }
+  }
+  return parts;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -165,13 +199,20 @@ Deno.serve(async (req) => {
   const system = systemPrompt({ name: profile?.name, now, tz });
 
   const done: Done[] = [];
-  let text = '';
-  try {
+  const save = (content: string) => db.from('sorro_chat_messages').insert([
+    { chat_id: chatId, user_id: uid, role: 'user', content: message },
+    { chat_id: chatId, user_id: uid, role: 'assistant', content, tools: done },
+  ]);
+
+  /** The tool rounds. With `emit`, text goes out as Gemini writes it and the saved reply is all of it. */
+  async function answer(emit?: (t: string) => void): Promise<string> {
+    let text = '';
     for (let round = 0; round < ROUNDS; round++) {
-      const parts = await gemini(key, system, contents);
+      const parts = emit ? await geminiStream(key!, system, contents, t => { text += t; emit(t); }) : await gemini(key!, system, contents);
       const calls = parts.filter(p => p.functionCall);
-      text = parts.map(p => p.text ?? '').join('').trim();
+      if (!emit) text = parts.map(p => p.text ?? '').join('');
       if (!calls.length) break;
+      // Echoed back exactly as received: Gemini needs its thought signatures on the next round.
       contents.push({ role: 'model', parts });
       const responses: Part[] = [];
       for (const c of calls) {
@@ -181,21 +222,41 @@ Deno.serve(async (req) => {
       }
       contents.push({ role: 'user', parts: responses });
     }
-  } catch (e) {
-    const err = e as Error & { status?: number; retry?: string | null };
-    if (done.length) {
-      await db.from('sorro_chat_messages').insert([
-        { chat_id: chatId, user_id: uid, role: 'user', content: message },
-        { chat_id: chatId, user_id: uid, role: 'assistant', content: 'Done, but the model stopped before it could say so.', tools: done },
-      ]);
-    }
-    return json({ error: err.status === 429 ? 'rate_limited' : 'model_failed', retry: err.retry ?? null, chat_id: chatId, tools: done }, err.status ?? 502);
+    return text.trim();
   }
 
-  await db.from('sorro_chat_messages').insert([
-    { chat_id: chatId, user_id: uid, role: 'user', content: message },
-    { chat_id: chatId, user_id: uid, role: 'assistant', content: text, tools: done },
-  ]);
-  await db.from('sorro_chats').update({ updated_at: new Date().toISOString() }).eq('id', chatId);
-  return json({ chat_id: chatId, text, tools: done });
+  async function failed(e: unknown) {
+    const err = e as Error & { status?: number; retry?: string | null };
+    if (done.length) await save('Done, but the model stopped before it could say so.');
+    return { body: { error: err.status === 429 ? 'rate_limited' : 'model_failed', retry: err.retry ?? null, chat_id: chatId, tools: done }, status: err.status ?? 502 };
+  }
+
+  async function finish(text: string) {
+    await save(text);
+    await db.from('sorro_chats').update({ updated_at: new Date().toISOString() }).eq('id', chatId);
+  }
+
+  if (!(req.headers.get('Accept') ?? '').includes('text/event-stream')) {
+    let text: string;
+    try { text = await answer(); } catch (e) { const f = await failed(e); return json(f.body, f.status); }
+    await finish(text);
+    return json({ chat_id: chatId, text, tools: done });
+  }
+
+  const enc = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(ctrl) {
+      // A closed tab makes enqueue throw; the work carries on so every write's message is saved.
+      const send = (event: string, data: unknown) => { try { ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); } catch { /* client gone */ } };
+      try {
+        const text = await answer(t => send('text', t));
+        await finish(text);
+        send('done', { chat_id: chatId, tools: done });
+      } catch (e) {
+        send('error', (await failed(e)).body);
+      }
+      try { ctrl.close(); } catch { /* already closed */ }
+    },
+  });
+  return new Response(stream, { headers: { ...CORS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } });
 });
