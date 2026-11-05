@@ -43,4 +43,17 @@ assert len(actor) >= 3500, len(actor)
 assert {r['expect']['name'] for r in actor} == {t['name'] for t in TOOLS}
 assert all(re.fullmatch(r'[0-9a-f-]{36}', r['expect']['arguments']['id']) for r in actor if r['expect']['name'] == 'complete_task')
 
+chk = load('checker.train')
+wrong = [r for r in chk if r['expect']['verdict'] == 'wrong']
+assert 0.36 < len(wrong) / len(chk) < 0.44, len(wrong) / len(chk)
+assert {r['expect']['kind'] for r in wrong} == {'date', 'id', 'list', 'tz'}
+assert all(r['messages'][-1]['content'].startswith('wrong: ') for r in wrong)
+assert all(r['messages'][-1]['content'] == 'ok' for r in chk if r['expect']['verdict'] == 'ok')
+for name in ('router', 'actor', 'checker'):
+    train_users = {m['content'] for r in load(f'{name}.train') for m in r['messages'] if m['role'] == 'user'}
+    ev = load(f'{name}.eval')
+    assert 150 <= len(ev) <= 300, (name, len(ev))
+    clash = [m['content'] for r in ev for m in r['messages'] if m['role'] == 'user' and m['content'] in train_users]
+    assert not clash, (name, clash[:3])
+
 print('ok')

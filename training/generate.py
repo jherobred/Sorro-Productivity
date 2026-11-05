@@ -331,6 +331,87 @@ def actor_rows(rng, use_eval, n):
     return rows
 
 
+# ---------------------------------------------------------------- checker
+# Built from actor write traces: 60% the right call, 40% wrong in one of four ways.
+
+CAN_BREAK = {
+    'date': ('create_task', 'create_event'),
+    'id': ('complete_task', 'append_note'),
+    'list': ('create_task', 'create_note'),
+    'tz': ('create_event',),
+}
+WRITE_TOOLS = sorted({t for ts in CAN_BREAK.values() for t in ts})
+
+
+def known_ids(row):
+    for m in row['messages']:
+        if m['role'] == 'tool' and m['name'] in ('list_tasks', 'search_notes'):
+            body = json.loads(m['content'])
+            return [(x['id'], x['title']) for x in body.get('tasks', body.get('notes', []))]
+    return []
+
+
+def shift_iso(value: str, days: int) -> str:
+    day = date.fromisoformat(value[:10]) + timedelta(days=days)
+    return day.isoformat() + value[10:]
+
+
+def break_call(kind, name, args, row, rng):
+    a = dict(args)
+    tz = row['meta']['tz']
+    if kind == 'date':
+        d = rng.choice([-1, 1])
+        if name == 'create_task':
+            right, a['due_on'] = a['due_on'], (date.fromisoformat(a['due_on']) + timedelta(days=d)).isoformat()
+            return a, f'Due {a["due_on"]}, but they asked for {right}.'
+        right = a['starts_at'][:10]
+        a['starts_at'], a['ends_at'] = shift_iso(a['starts_at'], d), shift_iso(a['ends_at'], d)
+        return a, f'It starts on {a["starts_at"][:10]}, but they asked for {right}.'
+    if kind == 'id':
+        others = [i for i, _ in known_ids(row) if i != a['id']]
+        a['id'] = rng.choice(others) if others and rng.random() < 0.5 else new_id(rng)
+        what = 'task' if name == 'complete_task' else 'note'
+        return a, f'That id is not the {what} they named.'
+    if kind == 'list':
+        key, pool = ('list', LISTS) if name == 'create_task' else ('notebook', NOTEBOOKS)
+        a[key] = rng.choice([x for x in pool if x != a.get(key)])
+        return a, f'They never mentioned the {a[key]} {"list" if key == "list" else "notebook"}.'
+    if kind == 'tz':
+        if rng.random() < 0.5:
+            a['starts_at'], a['ends_at'] = a['starts_at'][:19], a['ends_at'][:19]
+            return a, f'The times have no offset for {tz}.'
+        right = a['starts_at'][19:]
+        bad = '-05:00' if right == '+08:00' else '+08:00'
+        a['starts_at'], a['ends_at'] = a['starts_at'][:19] + bad, a['ends_at'][:19] + bad
+        return a, f'The offset {bad} is wrong for {tz}.'
+    raise ValueError(kind)
+
+
+def checker_rows(rng, actor, n):
+    by_tool = {t: [r for r in actor if r['expect']['name'] == t] for t in WRITE_TOOLS}
+    kinds = list(CAN_BREAK)
+    rows = []
+    for i in range(n):
+        wrong = i % 5 in (1, 3)  # 40%
+        kind = kinds[(i // 5) % len(kinds)] if wrong else None
+        name = rng.choice(CAN_BREAK[kind] if wrong else WRITE_TOOLS)
+        row = rng.choice(by_tool[name])
+        args = row['expect']['arguments']
+        reason = ''
+        if wrong:
+            args, reason = break_call(kind, name, args, row, rng)
+        user = next(m['content'] for m in row['messages'] if m['role'] == 'user')
+        ids = ', '.join(f'{i}: {t}' for i, t in known_ids(row)) or 'none'
+        prompt = (f'Today: {row["meta"]["today"]} ({row["meta"]["tz"]})\n'
+                  f'Request: {user}\n'
+                  f'Known ids: {ids}\n'
+                  f'Call: {name} {json.dumps(args, ensure_ascii=False)}')
+        rows.append({'messages': [{'role': 'system', 'content': PROMPTS['CHECKER_SYSTEM']}, {'role': 'user', 'content': prompt},
+                                  {'role': 'assistant', 'content': f'wrong: {reason}' if wrong else 'ok'}],
+                     'expect': {'verdict': 'wrong' if wrong else 'ok', 'kind': kind}})
+    return rows
+
+
 # ---------------------------------------------------------------- paraphrase (optional)
 
 def paraphrase(rows, rng, share=0.3):
@@ -380,8 +461,7 @@ def main(argv=None):
             router, actor = paraphrase(router, rng), paraphrase(actor, rng)
         write(a.out, f'router.{split_name}', router)
         write(a.out, f'actor.{split_name}', actor)
-        if 'checker_rows' in globals():
-            write(a.out, f'checker.{split_name}', checker_rows(random.Random(seed + 1), actor, 3000 if not use_eval else 210))
+        write(a.out, f'checker.{split_name}', checker_rows(random.Random(seed + 1), actor, 210 if use_eval else 3000))
     with open(os.path.join(a.out, 'prompts.json'), 'w', encoding='utf-8') as f:
         json.dump(PROMPTS, f, indent=2)
     print(f'wrote data to {a.out}')
