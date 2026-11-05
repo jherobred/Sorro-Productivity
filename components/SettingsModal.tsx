@@ -19,6 +19,8 @@ import { APP_VERSION } from '@/lib/appUpdate';
 import { playClick, playTick, playCelebration, playFocusBell } from '@/lib/audio';
 import { Fox } from './Fox';
 import { downloadLocalModel, forgetLocalModel, useLocalModel } from '@/lib/localModel';
+import { askAlertPermission } from '@/lib/deviceNotify';
+import { DEFAULT_FOX_TIMES } from '@/lib/foxNudges';
 
 
 /** Shared settings for desktop, phone, and tablet. */
@@ -38,6 +40,21 @@ function OfflineAssistant() {
       : m.status === 'downloading' ? <span role="status">Downloading, {Math.round(m.progress * 100)}%</span>
       : <button style={INPUT_STYLE} onClick={downloadLocalModel}>{m.status === 'error' ? `Try again (${m.message})` : 'Download the offline model'}</button>}
   </Field>;
+}
+
+/** The fox speaking first: on or off, notifications, and when the morning plan and wrap-up come. */
+function FoxSettings({ fox, set }: { fox: Prefs['fox']; set: (f: NonNullable<Prefs['fox']>) => void }) {
+  const f = fox ?? {};
+  const on = f.proactive !== false;
+  return <>
+    <ToggleRow label="Fox speaks first" hint="A morning plan, overdue nudges, reactions when you finish things, and an evening wrap-up" on={on} onChange={v => set({ ...f, proactive: v })} />
+    {on && <>
+      <ToggleRow label="Fox notifications" hint="On the phone app they arrive with Sorro closed; on the web and PC only while it is open" on={!!f.notify}
+        onChange={v => { if (!v) { set({ ...f, notify: false }); return; } void askAlertPermission().then(ok => set({ ...f, notify: ok })); }} />
+      <Field label="Morning plan"><input type="time" aria-label="Morning plan time" style={INPUT_STYLE} value={f.morning || DEFAULT_FOX_TIMES.morning} onChange={e => set({ ...f, morning: e.target.value })} /></Field>
+      <Field label="Evening wrap-up"><input type="time" aria-label="Evening wrap-up time" style={INPUT_STYLE} value={f.evening || DEFAULT_FOX_TIMES.evening} onChange={e => set({ ...f, evening: e.target.value })} /></Field>
+    </>}
+  </>;
 }
 
 export function SettingsModal({
@@ -463,6 +480,7 @@ export function SettingsModal({
             <ToggleRow label="Haptic feedback" hint="Gentle taps on supported phones and tablets" on={prefs.haptics} onChange={v => setPref('haptics', v)} />
             <ToggleRow label="Sound effects" hint="Soft confirmation sounds and focus bells" on={prefs.soundEnabled} onChange={v => setPref('soundEnabled', v)} />
             <ToggleRow label="Show part names" hint="Label each region with its code, like N.list or S.top" on={!!prefs.showParts} onChange={v => setPref('showParts', v)} />
+            <FoxSettings fox={prefs.fox} set={v => setPref('fox', v)} />
             <OfflineAssistant />
           </div>
         );

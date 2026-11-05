@@ -140,3 +140,21 @@ export function buildFacts(tasks: TaskLike[], events: EventLike[], now: Date): F
       .map(e => { const d = new Date(e.starts_at); return { title: e.title, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }; }),
   };
 }
+
+/** Same FNV-1a hash as lib/canvasFeed.ts notificationId, copied so this file stays import-free for node tests. */
+export function foxAlertId(key: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) { hash ^= key.charCodeAt(i); hash = Math.imul(hash, 0x01000193); }
+  return (hash >>> 1) || 1;
+}
+export const FOX_ALERT_IDS = [foxAlertId('fox:morning'), foxAlertId('fox:evening')];
+
+/** The phone's next morning and evening notifications, rescheduled each time the app opens. */
+export function foxSchedule(now: Date, f: { dueTomorrow: number }, times: FoxTimes): { id: number; title: string; body: string; at: Date }[] {
+  const atTime = (hhmm: string, plusDays: number) => { const [h, m] = hhmm.split(':').map(Number); const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + plusDays, h, m || 0); return d; };
+  const evening = atTime(times.evening, 0) > now ? atTime(times.evening, 0) : atTime(times.evening, 1);
+  return [
+    { id: FOX_ALERT_IDS[0], title: 'Sorro', body: f.dueTomorrow ? `${f.dueTomorrow} due today. Open me for the plan.` : 'Nothing due. Rare.', at: atTime(times.morning, 1) },
+    { id: FOX_ALERT_IDS[1], title: 'Sorro', body: 'Time to wrap up the day.', at: evening },
+  ];
+}

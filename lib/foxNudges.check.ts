@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, buildFacts, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
+import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, buildFacts, foxSchedule, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
 
 const at = (h: number, m = 0) => new Date(2026, 10, 5, h, m);
 const none: Facts = { dueToday: [], overdue: [], events: [], doneToday: 0, unfinishedToday: [] };
@@ -80,4 +80,15 @@ test('facts come from open tasks and today\'s timed events, deleted ones left ou
   assert.deepEqual(f.unfinishedToday, [{ id: 'a', title: 'Essay' }]);
   assert.equal(f.doneToday, 1);
   assert.deepEqual(f.events, [{ title: 'Standup', time: '10:30' }]);
+});
+
+test('the phone gets tomorrow morning and the next evening', () => {
+  const a = foxSchedule(new Date(2026, 10, 5, 22, 0), { dueTomorrow: 3 }, DEFAULT_FOX_TIMES);
+  assert.equal(a.length, 2);
+  assert.deepEqual(a.map(x => x.at!.getDate()), [6, 6]);
+  assert.equal(a[0].at!.getHours(), 8);
+  assert.match(a[0].body, /3 due today/);
+  const b = foxSchedule(new Date(2026, 10, 5, 9, 0), { dueTomorrow: 0 }, DEFAULT_FOX_TIMES);
+  assert.equal(b[1].at!.getDate(), 5);
+  assert.equal(b[1].at!.getHours(), 21);
 });
