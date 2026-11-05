@@ -12,6 +12,11 @@ import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { foxDash, foxWork, foxTalk } from '@/lib/foxMood';
 import { FoxSheet } from './FoxSheet';
 import { focusFoxComposer } from './FoxChat';
+import { FoxBubble } from './FoxBubble';
+import { useFoxNudges } from '@/lib/useFoxNudges';
+import { setFoxOpener } from '@/lib/assistant';
+import { useTaskActions } from '@/lib/tasks';
+import { toast } from '@/lib/toast';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
@@ -113,6 +118,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pinned = (prefs.pinnedNotes || []).map(id => notes.find(n => n.id === id)).filter(n => !!n);
   const tapFox = () => { foxTalk(false); if (current?.id === 'home') focusFoxComposer(); else setFoxOpen(true); };
   const foxReplied = () => { if (!foxOpenRef.current) foxTalk(true); };
+  const fox = useFoxNudges();
+  const TA = useTaskActions();
+  const moveToTomorrow = (ids: string[]) => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    const due = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    for (const id of ids) TA.update.mutate({ id, patch: { due_on: due } });
+    toast(`Moved ${ids.length} to tomorrow`);
+    fox.dismiss();
+  };
+  const bubble = fox.nudge && <FoxBubble nudge={fox.nudge} onDismiss={fox.dismiss}
+    onOpen={() => { setFoxOpener(fox.nudge!.line); tapFox(); fox.dismiss(); }}
+    onMove={fox.nudge.moveIds ? () => moveToTomorrow(fox.nudge!.moveIds!) : undefined} />;
   const holdStart = () => { press.current = window.setTimeout(() => { press.current = null; setCapture(true); }, 500); };
   const holdEnd = (e: React.PointerEvent) => { if (press.current === null) e.preventDefault(); else { clearTimeout(press.current); press.current = null; } };
 
@@ -120,14 +137,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return <div className="sx" data-rail={rail} data-phone={phone} data-tablet={tablet}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">
-      <div className="sx-brand"><Wordmark word={!rail} onFox={tapFox} />{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
+      <div className="sx-brand"><Wordmark word={!rail} onFox={tapFox} bubble={bubble} />{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
       <nav className="sx-nav" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined}><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>)}</nav>
       {pinned.length > 0 && <><h3>Pinned</h3><nav className="sx-nav sx-pins" aria-label="Pinned notes">{pinned.map(n => <Link key={n.id} href={'/notebooks/?note=' + n.id} title={n.title || 'Untitled'}><Icon name="pin" size={16} /><span>{n.title || 'Untitled'}</span></Link>)}</nav></>}
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
-        {phone && <Wordmark size="sm" onFox={tapFox} />}
+        {phone && <Wordmark size="sm" onFox={tapFox} bubble={bubble} />}
         <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}

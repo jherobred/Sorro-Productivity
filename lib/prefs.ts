@@ -26,6 +26,8 @@ export type Prefs = {
   theme: ThemePref;
   /** Labels every region with its part code (lib/parts.ts). */
   showParts?: boolean;
+  /** The fox speaking first. Missing means proactive on, notifications off, 08:00 and 21:00. */
+  fox?: { proactive?: boolean; notify?: boolean; morning?: string; evening?: string };
   /** Notes pinned to the sidebar, newest first, at most 8. */
   pinnedNotes?: string[];
   /** The right panel: open or folded to its rail, which widgets in which order, and the weather city. */

@@ -129,3 +129,11 @@ export async function fetchNudgeLine(n: Nudge): Promise<string> {
   if (error) throw error;
   return String((data as { text?: string })?.text ?? '');
 }
+
+let opener: string | null = null;
+const openerListeners = new Set<() => void>();
+/** A line the fox said first (a nudge): the next chat on screen opens with it. */
+export function setFoxOpener(text: string | null) { if (text !== opener) { opener = text; openerListeners.forEach(f => f()); } }
+export function useFoxOpener(): string | null {
+  return useSyncExternalStore(f => { openerListeners.add(f); return () => { openerListeners.delete(f); }; }, () => opener, () => null);
+}

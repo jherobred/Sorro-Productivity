@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
+import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, buildFacts, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
 
 const at = (h: number, m = 0) => new Date(2026, 10, 5, h, m);
 const none: Facts = { dueToday: [], overdue: [], events: [], doneToday: 0, unfinishedToday: [] };
@@ -63,3 +63,21 @@ test('the Gemini line wins when it comes in time', async () => assert.equal(awai
 test('a failure falls back to the template', async () => assert.equal(await nudgeLine(tn, async () => { throw new Error('no_key'); }), 'Template'));
 test('a slow answer falls back to the template', async () => assert.equal(await nudgeLine(tn, () => new Promise(r => setTimeout(() => r('Late'), 50)), 10), 'Template'));
 test('an empty answer falls back to the template', async () => assert.equal(await nudgeLine(tn, async () => '  '), 'Template'));
+
+test('facts come from open tasks and today\'s timed events, deleted ones left out', () => {
+  const now = at(9);
+  const f = buildFacts([
+    { id: 'a', title: 'Essay', done: false, due_on: '2026-11-05', deleted_at: null },
+    { id: 'b', title: 'Lab', done: false, due_on: '2026-11-03', deleted_at: null },
+    { id: 'c', title: 'Done one', done: true, due_on: '2026-11-05', deleted_at: null, completed_at: new Date(2026, 10, 5, 8).toISOString() },
+    { id: 'd', title: 'Gone', done: false, due_on: '2026-11-05', deleted_at: '2026-11-04T00:00:00Z' },
+  ], [
+    { title: 'Standup', starts_at: new Date(2026, 10, 5, 10, 30).toISOString(), all_day: false, deleted_at: null },
+    { title: 'Holiday', starts_at: new Date(2026, 10, 5).toISOString(), all_day: true, deleted_at: null },
+  ], now);
+  assert.deepEqual(f.dueToday, ['Essay']);
+  assert.deepEqual(f.overdue, ['Lab']);
+  assert.deepEqual(f.unfinishedToday, [{ id: 'a', title: 'Essay' }]);
+  assert.equal(f.doneToday, 1);
+  assert.deepEqual(f.events, [{ title: 'Standup', time: '10:30' }]);
+});

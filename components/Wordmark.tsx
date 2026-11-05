@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Fox, type FoxPose } from './Fox';
 import { useFoxMood, type FoxMood } from '@/lib/foxMood';
 
@@ -9,7 +10,7 @@ const POSE: Record<FoxMood, FoxPose> = { sit: 'sit', run: 'run', sleep: 'sleep',
  * The SORRO lockup: the fox, alive, beside the tracked wordmark from the Grok brand.
  * With `onFox` the fox is a button that opens its chat and the word links home, so no button sits inside a link.
  */
-export function Wordmark({ size = 'md', word = true, onFox }: { size?: 'sm' | 'md' | 'lg'; word?: boolean; onFox?: () => void }) {
+export function Wordmark({ size = 'md', word = true, onFox, bubble }: { size?: 'sm' | 'md' | 'lg'; word?: boolean; onFox?: () => void; bubble?: ReactNode }) {
   const mood = useFoxMood();
   const px = size === 'sm' ? 18 : size === 'lg' ? 34 : 22;
   const fox = <Fox pose={POSE[mood]} size={px} />;
@@ -20,5 +21,6 @@ export function Wordmark({ size = 'md', word = true, onFox }: { size?: 'sm' | 'm
       ? <button type="button" className="sx-fox sx-fox-btn" data-part="S.fox" aria-label="Talk to Sorro" title={title ?? 'Talk to Sorro'} onClick={onFox}>{fox}</button>
       : <span className="sx-fox" data-part="S.fox" title={title}>{fox}</span>}
     {svg && (onFox ? <Link href="/home/" aria-label="Sorro home">{svg}</Link> : svg)}
+    {bubble}
   </span>;
 }

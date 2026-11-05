@@ -120,3 +120,23 @@ export function onFoxReact(f: (e: FoxEvent) => void): () => void {
   window.addEventListener(REACT_EVENT, h);
   return () => window.removeEventListener(REACT_EVENT, h);
 }
+
+type TaskLike = { id: string; title: string; done: boolean; due_on: string | null; deleted_at?: string | null; completed_at?: string | null };
+type EventLike = { title: string; starts_at: string; all_day?: boolean | null; deleted_at?: string | null };
+
+/** What the fox knows about today, from the tasks and events already on this device. */
+export function buildFacts(tasks: TaskLike[], events: EventLike[], now: Date): Facts {
+  const today = dayKey(now);
+  const live = tasks.filter(t => !t.deleted_at);
+  const open = live.filter(t => !t.done && t.due_on);
+  const dueToday = open.filter(t => t.due_on === today);
+  return {
+    dueToday: dueToday.map(t => t.title),
+    overdue: open.filter(t => t.due_on! < today).map(t => t.title),
+    unfinishedToday: dueToday.map(t => ({ id: t.id, title: t.title })),
+    doneToday: live.filter(t => t.done && t.completed_at && dayKey(new Date(t.completed_at)) === today).length,
+    events: events.filter(e => !e.deleted_at && !e.all_day && dayKey(new Date(e.starts_at)) === today)
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      .map(e => { const d = new Date(e.starts_at); return { title: e.title, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }; }),
+  };
+}

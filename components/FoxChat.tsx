@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { Fox } from '@/components/Fox';
-import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
+import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, useFoxOpener, setFoxOpener, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
 import { suggestions } from '@/lib/assistantLogic';
 import { useTasks, useTaskActions } from '@/lib/tasks';
 import { useEvents } from '@/lib/events';
@@ -55,6 +55,16 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
   const local_ = useLocalModel();
   const end = useRef<HTMLDivElement>(null);
   const sentInitial = useRef(false);
+  // A nudge the user tapped: a fresh chat that opens with the fox's line, which rides along as context.
+  const opener = useFoxOpener();
+  const [openerMsg, setOpenerMsg] = useState<ChatMessage | null>(null);
+  useEffect(() => {
+    if (!opener) return;
+    setChatId(null); setLocal([]);
+    setOpenerMsg({ id: 'o' + Date.now(), role: 'assistant', content: opener, tools: [], created_at: new Date().toISOString() });
+    setFoxOpener(null);
+  }, [opener, setChatId]);
+  const pickChat = (id: string | null) => { setChatId(id); setLocal([]); setOpenerMsg(null); };
 
   const tasks = useTasks().data ?? [];
   const TA = useTaskActions();
@@ -64,7 +74,7 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
   const today = ymd(new Date());
   const ideas = suggestions({ dueToday: tasks.filter(t => !t.done && t.due_on === today).length, overdue: tasks.filter(t => !t.done && t.due_on && t.due_on < today).length, eventsTomorrow, notebooks });
 
-  const messages = [...(saved.data ?? []), ...local];
+  const messages = [...(openerMsg ? [openerMsg] : []), ...(saved.data ?? []), ...local];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [messages.length, busy, stream]);
 
   async function send(text: string, ctx = context) {
@@ -81,7 +91,8 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
         setLocal(l => [...l, { id: 'a' + stamp, role: 'assistant', content: answer + '\n\n(Answered offline on this device.)', tools: [], created_at: new Date().toISOString() }]);
         return;
       }
-      const r = await sendToAssistant(chatId, t, ctx, setStream);
+      const said = openerMsg ? `Sorro just said: "${openerMsg.content}".` : '';
+      const r = await sendToAssistant(chatId, t, [said, ctx].filter(Boolean).join(' ') || undefined, setStream);
       if (r.tools.length) foxGlad();
       onReply?.();
       // A repeating task the assistant ticked gets its next instance here, as a tick in Tasks would.
@@ -117,7 +128,7 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
   return <>
     <div className="hm-bar">
       <button className="hm-chip" onClick={() => setThreads(true)}><Icon name="clock" size={14} />Past chats</button>
-      {chatId && <button className="hm-chip" onClick={() => { setChatId(null); setLocal([]); }}><Icon name="plus" size={14} />New chat</button>}
+      {(chatId || openerMsg) && <button className="hm-chip" onClick={() => pickChat(null)}><Icon name="plus" size={14} />New chat</button>}
     </div>
 
     <section className="hm-chat" data-part={page ? 'H.chat' : 'F.chat'} aria-live="polite">
@@ -147,7 +158,7 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
       <div className="sx-sheet hm-threads" role="dialog" aria-modal="true" aria-label="Past chats" data-part="H.threads" onClick={e => e.stopPropagation()}>
         <span className="sx-sheet-grip" aria-hidden="true" />
         {chats.isPending ? <p className="wg-empty">Loading your chats.</p> : chats.data?.length
-          ? chats.data.map(c => <button key={c.id} aria-current={c.id === chatId ? 'page' : undefined} onClick={() => { setChatId(c.id); setLocal([]); setThreads(false); }}><Icon name="clock" size={18} /><span>{c.title}</span></button>)
+          ? chats.data.map(c => <button key={c.id} aria-current={c.id === chatId ? 'page' : undefined} onClick={() => { pickChat(c.id); setThreads(false); }}><Icon name="clock" size={18} /><span>{c.title}</span></button>)
           : <p className="wg-empty">No chats yet. Your first one shows here.</p>}
       </div>
     </div>}

@@ -6,6 +6,7 @@ export const PARTS = {
   'S.more': 'More sheet (phone)',
   'S.fox': 'Moving fox',
   'S.foxsheet': 'Fox chat sheet',
+  'S.foxbubble': 'Fox speech bubble',
   'S.panel': 'Right panel',
   H: 'Home',
   'H.widgets': 'Home widgets',
