@@ -10,13 +10,14 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import urllib.request
 import uuid
 from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dates import PHRASES, WEEKDAYS, render  # noqa: E402
+from dates import MONTHS, PHRASES, WEEKDAYS, render  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = json.load(open(os.path.join(HERE, 'tools.json'), encoding='utf-8'))
@@ -64,6 +65,15 @@ EVENTS = ['Standup', 'Thesis meeting', 'Dentist', 'Gym session', 'Study group', 
 PLACES = ['the library', 'Room 304', 'Starbucks', 'Zoom', 'the gym', 'the clinic']
 SNIPPETS = ['remember the base case', 'ask about the deadline', 'buy eggs too', 'BCNF needs every determinant to be a key',
             'use /26 for 64 hosts', 'flight leaves 6am', 'cite the 2024 paper', 'redo question 4']
+
+# Every fifth free-text slot value is held out for eval, so eval scores are not memorised strings.
+SLOT_POOLS = {'TITLES': TITLES, 'EVENTS': EVENTS, 'TOPICS': TOPICS, 'SNIPPETS': SNIPPETS}
+
+
+def use_slots(eval_split: bool):
+    for name, pool in SLOT_POOLS.items():
+        globals()[name] = [v for i, v in enumerate(pool) if (i % 5 == 0) == eval_split]
+
 
 QUIPS = [
     'Hey yourself. Want me to pull up today?', 'Always here. Mostly awake.', 'You are welcome. Put it on my tab.',
@@ -230,7 +240,7 @@ def a_list_events(rng, today, tz, phr):
     else:
         when, a = render(rng.choice(PHRASES), today, rng)
         user, b = phr.format(when=when), a
-    evs = [{'id': new_id(rng), 'title': e, 'starts_at': iso(a, 9 + i * 2, 0, tz)} for i, e in enumerate(rng.sample(EVENTS, rng.randint(0, 3)))]
+    evs = [{'id': new_id(rng), 'title': e, 'starts_at': iso(a, 9 + i * 2, 0, tz)} for i, e in enumerate(rng.sample(EVENTS, min(len(EVENTS), rng.randint(0, 3))))]
     reply = f'{len(evs)} thing(s): ' + ', '.join(e['title'] for e in evs) + '.' if evs else 'Nothing booked. Suspiciously free.'
     return user, [call('list_events', {'from': a.isoformat(), 'to': b.isoformat()}), tool('list_events', {'events': evs}),
                   {'role': 'assistant', 'content': reply}], 0
@@ -402,7 +412,8 @@ def checker_rows(rng, actor, n):
             args, reason = break_call(kind, name, args, row, rng)
         user = next(m['content'] for m in row['messages'] if m['role'] == 'user')
         ids = ', '.join(f'{i}: {t}' for i, t in known_ids(row)) or 'none'
-        prompt = (f'Today: {row["meta"]["today"]} ({row["meta"]["tz"]})\n'
+        weekday = WEEKDAYS[date.fromisoformat(row['meta']['today']).weekday()].title()
+        prompt = (f'Today: {row["meta"]["today"]} {weekday} ({row["meta"]["tz"]})\n'
                   f'Request: {user}\n'
                   f'Known ids: {ids}\n'
                   f'Call: {name} {json.dumps(args, ensure_ascii=False)}')
@@ -413,6 +424,19 @@ def checker_rows(rng, actor, n):
 
 
 # ---------------------------------------------------------------- paraphrase (optional)
+
+DATE_WORDS = re.compile(r'\b(today|tomorrow|yesterday|in \d+ days?|(?:next|on|this) \w+day|on the \d+(?:st|nd|rd|th)|(?:'
+                        + '|'.join(MONTHS) + r') \d+)\b', re.I)
+
+
+def keeps_slots(orig: str, new: str, args: dict) -> bool:
+    """A rewrite is kept only if every slot value the user typed, and every day phrase, is still there word for word."""
+    for v in args.values():
+        if isinstance(v, str) and v in orig and v not in new:
+            return False
+    found = [m.group(0) for m in DATE_WORDS.finditer(orig)]
+    return all(p in new for p in found) and len(DATE_WORDS.findall(new)) == len(found)
+
 
 def paraphrase(rows, rng, share=0.3):
     key = os.environ.get('GEMINI_API_KEY')
@@ -429,7 +453,7 @@ def paraphrase(rows, rng, share=0.3):
         try:
             req = urllib.request.Request(url, body, {'Content-Type': 'application/json', 'x-goog-api-key': key})
             text = json.load(urllib.request.urlopen(req, timeout=20))['candidates'][0]['content']['parts'][0]['text'].strip()
-            if text:
+            if text and keeps_slots(user['content'], text, r['expect'].get('arguments', {})):
                 user['content'] = text
         except Exception as e:  # keep the template line on any failure
             print('paraphrase failed once:', e)
@@ -455,6 +479,7 @@ def main(argv=None):
     for split_name, seed, n_router, n_actor in (('train', a.seed, 3000, 4000), ('eval', a.seed + 1000, 210, 210)):
         rng = random.Random(seed)
         use_eval = split_name == 'eval'
+        use_slots(use_eval)
         router = router_rows(rng, {k: v[1 if use_eval else 0] for k, v in pools.items()}, n_router)
         actor = actor_rows(rng, use_eval, n_actor)
         if a.paraphrase and not use_eval:

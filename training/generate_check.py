@@ -56,4 +56,16 @@ for name in ('router', 'actor', 'checker'):
     clash = [m['content'] for r in ev for m in r['messages'] if m['role'] == 'user' and m['content'] in train_users]
     assert not clash, (name, clash[:3])
 
+# I3: the checker sees today's weekday, so "on thursday" can be checked.
+assert all(re.match(r'Today: \d{4}-\d\d-\d\d [A-Z][a-z]+day \(', r['messages'][1]['content']) for r in chk)
+# I5: eval titles, events, topics and snippets are never trained on.
+def slot_values(rows):
+    # Free-text slots only; list, notebook and place names are the user's fixed names and stay shared.
+    return {v for r in rows for k, v in r['expect']['arguments'].items() if k in ('title', 'query', 'body', 'text')}
+assert not (slot_values(load('actor.eval')) & slot_values(actor)), sorted(slot_values(load('actor.eval')) & slot_values(actor))[:5]
+# I6: a paraphrase that drops a slot or changes the date phrase is thrown away.
+assert generate.keeps_slots('remind me to Fix bike tire next friday', 'pls remind me to Fix bike tire next friday', {'title': 'Fix bike tire'})
+assert not generate.keeps_slots('remind me to Fix bike tire next friday', 'remind me to fix the bike next friday', {'title': 'Fix bike tire'})
+assert not generate.keeps_slots('remind me to Fix bike tire next friday', 'remind me to Fix bike tire this friday', {'title': 'Fix bike tire'})
+
 print('ok')
