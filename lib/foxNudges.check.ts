@@ -1,0 +1,59 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { nextNudge, reactionNudge, claimNudge, freshLog, DEFAULT_FOX_TIMES, type Facts, type FoxEvent } from './foxNudges.ts';
+
+const at = (h: number, m = 0) => new Date(2026, 10, 5, h, m);
+const none: Facts = { dueToday: [], overdue: [], events: [], doneToday: 0, unfinishedToday: [] };
+const log0 = freshLog(null, '2026-11-05');
+
+test('the first check of the day is the morning plan, once', () => {
+  const n = nextNudge(at(9), none, log0, DEFAULT_FOX_TIMES);
+  assert.equal(n?.kind, 'morning');
+  assert.match(n!.text, /clear/i);
+  assert.equal(nextNudge(at(9), none, { ...log0, morning: true }, DEFAULT_FOX_TIMES), null);
+});
+test('no morning plan after the evening time; the wrap-up comes instead', () => {
+  const n = nextNudge(at(21, 5), { ...none, unfinishedToday: [{ id: 't1', title: 'Essay' }] }, log0, DEFAULT_FOX_TIMES);
+  assert.equal(n?.kind, 'evening');
+  assert.deepEqual(n?.moveIds, ['t1']);
+});
+test('an evening with nothing unfinished has no move', () => {
+  assert.equal(nextNudge(at(21, 5), none, log0, DEFAULT_FOX_TIMES)?.moveIds, undefined);
+});
+test('overdue: at most 3 a day, 3 hours apart, never 22:00 to 07:00', () => {
+  const f = { ...none, overdue: ['Lab report'] };
+  const day = { ...log0, morning: true };
+  assert.equal(nextNudge(at(10), f, day, DEFAULT_FOX_TIMES)?.kind, 'overdue');
+  assert.equal(nextNudge(at(10), f, { ...day, overdue: 3 }, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(12), f, { ...day, overdue: 1, lastOverdueAt: at(10).getTime() }, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(6, 30), f, day, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(22, 30), f, { ...day, evening: true }, DEFAULT_FOX_TIMES), null);
+});
+test('nothing overdue means no overdue nudge', () => {
+  assert.equal(nextNudge(at(10), none, { ...log0, morning: true }, DEFAULT_FOX_TIMES), null);
+});
+test('a new day starts a fresh log', () => {
+  const old = { ...log0, morning: true, overdue: 3 };
+  assert.equal(freshLog(old, '2026-11-05'), old);
+  assert.deepEqual(freshLog(old, '2026-11-06'), freshLog(null, '2026-11-06'));
+});
+test('reactions: once per event, one per 10 minutes', () => {
+  const e: FoxEvent = { kind: 'task_done', id: 't1', title: 'Essay' };
+  const n = reactionNudge(e, log0, 1_000_000);
+  assert.equal(n?.kind, 'reaction');
+  assert.equal(reactionNudge(e, { ...log0, seen: [n!.key] }, 2_000_000), null);
+  assert.equal(reactionNudge({ ...e, id: 't2' }, { ...log0, lastReactionAt: 1_000_000 }, 1_000_000 + 599_999), null);
+});
+test('a claim is refused the second time, as from another window', () => {
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); } };
+  const n = nextNudge(at(9), none, log0, DEFAULT_FOX_TIMES)!;
+  assert.equal(claimNudge(store, n, at(9)), true);
+  assert.equal(claimNudge(store, n, at(9)), false);
+});
+test('templates name three titles, then the rest as a count', () => {
+  const n = nextNudge(at(9), { ...none, dueToday: ['A', 'B', 'C', 'D', 'E'] }, log0, DEFAULT_FOX_TIMES)!;
+  assert.match(n.text, /A.*B.*C/);
+  assert.match(n.text, /2 more/);
+  assert.doesNotMatch(n.text, /\bD\b/);
+});
