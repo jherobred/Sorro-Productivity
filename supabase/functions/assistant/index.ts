@@ -9,7 +9,7 @@
  */
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { TOOLS, WRITES, validateArgs, freeSlots, appendTo, zoneOffset } from './tools.ts';
-import { systemPrompt } from './voice.ts';
+import { systemPrompt, nudgePrompt, type NudgeKind } from './voice.ts';
 import { splitSse } from './sse.ts';
 
 const CORS = {
@@ -114,15 +114,15 @@ async function run(db: SupabaseClient, uid: string, tz: string, name: string, ra
   return { result: { error: 'Unknown tool' } };
 }
 
-async function gemini(key: string, system: string, contents: Content[]) {
+async function gemini(key: string, system: string, contents: Content[], withTools = true, maxOutputTokens = 1200) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents,
-      tools: [{ functionDeclarations: TOOLS }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+      ...(withTools ? { tools: [{ functionDeclarations: TOOLS }] } : {}),
+      generationConfig: { temperature: 0.4, maxOutputTokens },
     }),
     signal: AbortSignal.timeout(45_000),
   });
@@ -177,8 +177,21 @@ Deno.serve(async (req) => {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) return json({ error: 'no_key', message: 'The assistant needs a Gemini key. Set GEMINI_API_KEY in Supabase secrets.' }, 503);
 
-  let body: { chat_id?: string; message?: string; context?: string };
+  let body: { chat_id?: string; message?: string; context?: string; mode?: string; kind?: string; facts?: string };
   try { body = await req.json(); } catch { return json({ error: 'bad_request' }, 400); }
+
+  // The fox speaking first: one line, no tools, nothing saved.
+  if (body.mode === 'nudge') {
+    const kind = body.kind as NudgeKind;
+    if (!['morning', 'overdue', 'reaction', 'evening'].includes(kind) || typeof body.facts !== 'string') return json({ error: 'bad_request' }, 400);
+    try {
+      const parts = await gemini(key, nudgePrompt(kind, body.facts.slice(0, 2000)), [{ role: 'user', parts: [{ text: 'Say it.' }] }], false, 120);
+      return json({ text: parts.map(p => (p.thought ? '' : p.text ?? '')).join('').trim() });
+    } catch (e) {
+      const err = e as Error & { status?: number };
+      return json({ error: err.status === 429 ? 'rate_limited' : 'model_failed' }, err.status ?? 502);
+    }
+  }
   const message = (body.message ?? '').trim();
   if (!message || message.length > 8000) return json({ error: 'bad_request', message: 'Say something, under 8000 characters.' }, 400);
 

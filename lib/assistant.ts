@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { undoChange, foldStream, type Undo, type ToolDone, type StreamState } from './assistantLogic';
+import type { Nudge } from './foxNudges';
 import { splitSse } from '@/supabase/functions/assistant/sse';
 import { toast } from './toast';
 
@@ -119,4 +120,12 @@ export function useAssistantUndo() {
     onError: (e) => { if (e instanceof UndoStale) toast(e.message); },
     onSettled: () => { for (const k of ['tasks', 'events', 'notes', 'chat']) void qc.invalidateQueries({ queryKey: [k] }); },
   });
+}
+
+/** Gemini's wording for a nudge. Throws on any failure; nudgeLine falls back to the template. */
+export async function fetchNudgeLine(n: Nudge): Promise<string> {
+  const facts = n.text;
+  const { data, error } = await supabase.functions.invoke('assistant', { body: { mode: 'nudge', kind: n.kind, facts } });
+  if (error) throw error;
+  return String((data as { text?: string })?.text ?? '');
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextNudge, reactionNudge, claimNudge, freshLog, DEFAULT_FOX_TIMES, type Facts, type FoxEvent } from './foxNudges.ts';
+import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
 
 const at = (h: number, m = 0) => new Date(2026, 10, 5, h, m);
 const none: Facts = { dueToday: [], overdue: [], events: [], doneToday: 0, unfinishedToday: [] };
@@ -57,3 +57,9 @@ test('templates name three titles, then the rest as a count', () => {
   assert.match(n.text, /2 more/);
   assert.doesNotMatch(n.text, /\bD\b/);
 });
+
+const tn: Nudge = { key: 'k', kind: 'morning', text: 'Template' };
+test('the Gemini line wins when it comes in time', async () => assert.equal(await nudgeLine(tn, async () => 'Fresh'), 'Fresh'));
+test('a failure falls back to the template', async () => assert.equal(await nudgeLine(tn, async () => { throw new Error('no_key'); }), 'Template'));
+test('a slow answer falls back to the template', async () => assert.equal(await nudgeLine(tn, () => new Promise(r => setTimeout(() => r('Late'), 50)), 10), 'Template'));
+test('an empty answer falls back to the template', async () => assert.equal(await nudgeLine(tn, async () => '  '), 'Template'));

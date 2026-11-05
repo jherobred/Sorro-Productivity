@@ -97,3 +97,13 @@ export function claimNudge(store: Pick<Storage, 'getItem' | 'setItem'>, n: Nudge
 export function readLog(store: Pick<Storage, 'getItem'>, now: Date): NudgeLog {
   try { return freshLog(JSON.parse(store.getItem(LOG_KEY) ?? 'null'), dayKey(now)); } catch { return freshLog(null, dayKey(now)); }
 }
+
+/** Gemini's wording if it comes back in time and non-empty, else the template. */
+export async function nudgeLine(n: Nudge, fetchLine: (n: Nudge) => Promise<string>, ms = 6000): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<string>(r => { timer = setTimeout(() => r(''), ms); });
+  try {
+    const line = (await Promise.race([fetchLine(n), late])).trim();
+    return line || n.text;
+  } catch { return n.text; } finally { clearTimeout(timer); }
+}
