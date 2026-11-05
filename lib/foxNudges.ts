@@ -38,7 +38,7 @@ export function freshLog(log: NudgeLog | null, day: string): NudgeLog {
 }
 
 function morningText(f: Facts): string {
-  if (!f.dueToday.length && !f.events.length) return 'Clear day. Nothing due, nothing booked. Suspicious, but I will allow it.';
+  if (!f.dueToday.length && !f.events.length && !f.overdue.length) return 'Clear day. Nothing due, nothing booked. Suspicious, but I will allow it.';
   const parts: string[] = [];
   if (f.dueToday.length) parts.push(`due today: ${list(f.dueToday)}`);
   if (f.events.length) parts.push(`on the calendar: ${list(f.events.map(e => `${e.title} at ${e.time}`))}`);
@@ -46,8 +46,12 @@ function morningText(f: Facts): string {
   return `Morning. ${parts.join('; ')}. Start with the first one?`.replace(/^Morning\. d/, 'Morning. D');
 }
 
-/** The one thing the fox should say now, if any. Evening first, then the morning plan, then overdue. */
-export function nextNudge(now: Date, f: Facts, log: NudgeLog, times: FoxTimes): Nudge | null {
+/**
+ * The one thing the fox should say now, if any. Evening first, then the morning plan, then overdue.
+ * `opened` is a real open (first check, or the window coming back): the morning plan may come early then,
+ * but an app left running past midnight waits for the morning time.
+ */
+export function nextNudge(now: Date, f: Facts, log: NudgeLog, times: FoxTimes, opened = false): Nudge | null {
   const t = nowMinutes(now);
   const day = dayKey(now);
   if (!log.evening && t >= minutes(times.evening)) {
@@ -57,7 +61,7 @@ export function nextNudge(now: Date, f: Facts, log: NudgeLog, times: FoxTimes): 
       : `Wrap-up time. ${f.doneToday} done today and nothing left hanging. Show-off.`;
     return { key: `evening:${day}`, kind: 'evening', text, ...(left.length ? { moveIds: left.map(x => x.id) } : {}) };
   }
-  if (!log.morning && t < minutes(times.evening)) return { key: `morning:${day}`, kind: 'morning', text: morningText(f) };
+  if (!log.morning && t < minutes(times.evening) && (opened || t >= minutes(times.morning))) return { key: `morning:${day}`, kind: 'morning', text: morningText(f) };
   const quiet = now.getHours() >= 22 || now.getHours() < 7;
   if (f.overdue.length && log.overdue < OVERDUE_MAX && !quiet && now.getTime() - log.lastOverdueAt >= OVERDUE_GAP) {
     return { key: `overdue:${day}:${log.overdue + 1}`, kind: 'overdue', text: `${list(f.overdue)} ${f.overdue.length > 1 ? 'are' : 'is'} overdue and getting comfortable. Ten minutes on one?` };
@@ -85,7 +89,8 @@ export function claimNudge(store: Pick<Storage, 'getItem' | 'setItem'>, n: Nudge
   const log = freshLog(saved, dayKey(now));
   if (log.seen.includes(n.key)) return false;
   const next: NudgeLog = { ...log, seen: [...log.seen, n.key].slice(-50) };
-  if (n.kind === 'morning') { if (log.morning) return false; next.morning = true; }
+  // The morning plan already lists what is overdue, so the overdue nudge waits its 3 hours from it.
+  if (n.kind === 'morning') { if (log.morning) return false; next.morning = true; next.lastOverdueAt = now.getTime(); }
   if (n.kind === 'evening') { if (log.evening) return false; next.evening = true; }
   if (n.kind === 'overdue') { if (log.overdue >= OVERDUE_MAX) return false; next.overdue = log.overdue + 1; next.lastOverdueAt = now.getTime(); }
   if (n.kind === 'reaction') { if (now.getTime() - log.lastReactionAt < REACTION_GAP) return false; next.lastReactionAt = now.getTime(); }
@@ -157,4 +162,14 @@ export function foxSchedule(now: Date, f: { dueTomorrow: number }, times: FoxTim
     { id: FOX_ALERT_IDS[0], title: 'Sorro', body: f.dueTomorrow ? `${f.dueTomorrow} due today. Open me for the plan.` : 'Nothing due. Rare.', at: atTime(times.morning, 1) },
     { id: FOX_ALERT_IDS[1], title: 'Sorro', body: 'Time to wrap up the day.', at: evening },
   ];
+}
+
+/**
+ * Whether this window may claim and show a nudge. Online it waits for the account's prefs; offline the
+ * device's own are enough. A hidden window only claims when it can notify, so the window in use gets the bubble.
+ */
+export function mayShow(s: { loaded: boolean; online: boolean; proactive: boolean | undefined; visible: boolean; notify: boolean }): boolean {
+  if (s.proactive === false) return false;
+  if (!s.loaded && s.online) return false;
+  return s.visible || s.notify;
 }

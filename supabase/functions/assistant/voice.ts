@@ -23,3 +23,9 @@ export function nudgePrompt(kind: NudgeKind, facts: string): string {
   return `You are Sorro, speaking first without being asked. ${FOX_VOICE} ${NUDGE_JOB[kind]} ` +
     `Write one short line, at most 30 words, using only these facts and inventing nothing:\n${facts}`;
 }
+
+/** The nudge line from a Gemini candidate, or '' when it stopped early (token cap, safety), so the template shows. */
+export function nudgeText(c: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string } | undefined): string {
+  if (!c || c.finishReason !== 'STOP') return '';
+  return (c.content?.parts ?? []).map(p => (p.thought ? '' : p.text ?? '')).join('').trim();
+}

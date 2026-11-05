@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, buildFacts, foxSchedule, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
+import { nextNudge, reactionNudge, claimNudge, freshLog, nudgeLine, buildFacts, foxSchedule, mayShow, DEFAULT_FOX_TIMES, type Facts, type FoxEvent, type Nudge } from './foxNudges.ts';
 
 const at = (h: number, m = 0) => new Date(2026, 10, 5, h, m);
 const none: Facts = { dueToday: [], overdue: [], events: [], doneToday: 0, unfinishedToday: [] };
@@ -91,4 +91,32 @@ test('the phone gets tomorrow morning and the next evening', () => {
   const b = foxSchedule(new Date(2026, 10, 5, 9, 0), { dueTomorrow: 0 }, DEFAULT_FOX_TIMES);
   assert.equal(b[1].at!.getDate(), 5);
   assert.equal(b[1].at!.getHours(), 21);
+});
+
+test('F2: an app left open past midnight waits for the morning time; an open does not', () => {
+  assert.equal(nextNudge(at(0, 1), none, log0, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(7, 59), none, log0, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(8), none, log0, DEFAULT_FOX_TIMES)?.kind, 'morning');
+  assert.equal(nextNudge(at(6), none, log0, DEFAULT_FOX_TIMES, true)?.kind, 'morning');
+});
+test('F3: the morning plan holds off the overdue nudge for its 3 hours', () => {
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); } };
+  const f = { ...none, overdue: ['Lab'] };
+  assert.equal(claimNudge(store, nextNudge(at(9), f, log0, DEFAULT_FOX_TIMES)!, at(9)), true);
+  const log = JSON.parse(mem.get('sorro-fox-nudges')!);
+  assert.equal(nextNudge(at(9, 1), f, log, DEFAULT_FOX_TIMES), null);
+  assert.equal(nextNudge(at(12), f, log, DEFAULT_FOX_TIMES)?.kind, 'overdue');
+});
+test('F4: overdue tasks mean the day is not clear', () => {
+  assert.doesNotMatch(nextNudge(at(9), { ...none, overdue: ['Lab'] }, log0, DEFAULT_FOX_TIMES)!.text, /clear/i);
+});
+test('F5: offline, device prefs are enough; online, wait for the account', () => {
+  assert.equal(mayShow({ loaded: false, online: false, proactive: undefined, visible: true, notify: false }), true);
+  assert.equal(mayShow({ loaded: false, online: true, proactive: undefined, visible: true, notify: false }), false);
+  assert.equal(mayShow({ loaded: true, online: true, proactive: false, visible: true, notify: false }), false);
+});
+test('F1: a hidden window claims nothing unless notifications are on', () => {
+  assert.equal(mayShow({ loaded: true, online: true, proactive: true, visible: false, notify: false }), false);
+  assert.equal(mayShow({ loaded: true, online: true, proactive: true, visible: false, notify: true }), true);
 });

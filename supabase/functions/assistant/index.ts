@@ -9,7 +9,7 @@
  */
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { TOOLS, WRITES, validateArgs, freeSlots, appendTo, zoneOffset } from './tools.ts';
-import { systemPrompt, nudgePrompt, type NudgeKind } from './voice.ts';
+import { systemPrompt, nudgePrompt, nudgeText, type NudgeKind } from './voice.ts';
 import { splitSse } from './sse.ts';
 
 const CORS = {
@@ -129,7 +129,9 @@ async function gemini(key: string, system: string, contents: Content[], withTool
   if (res.status === 429) throw Object.assign(new Error('rate_limited'), { status: 429, retry: res.headers.get('retry-after') });
   if (!res.ok) throw Object.assign(new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: 502 });
   const data = await res.json();
-  return (data?.candidates?.[0]?.content?.parts ?? []) as Part[];
+  const cand = data?.candidates?.[0];
+  // finishReason rides along for the nudge, which drops a line cut short.
+  return Object.assign((cand?.content?.parts ?? []) as Part[], { finishReason: cand?.finishReason as string | undefined });
 }
 
 /** Same call as `gemini`, streamed: `onText` gets each piece of text as it arrives; the turn's parts come back whole. */
@@ -186,7 +188,7 @@ Deno.serve(async (req) => {
     if (!['morning', 'overdue', 'reaction', 'evening'].includes(kind) || typeof body.facts !== 'string') return json({ error: 'bad_request' }, 400);
     try {
       const parts = await gemini(key, nudgePrompt(kind, body.facts.slice(0, 2000)), [{ role: 'user', parts: [{ text: 'Say it.' }] }], false, 120);
-      return json({ text: parts.map(p => (p.thought ? '' : p.text ?? '')).join('').trim() });
+      return json({ text: nudgeText({ content: { parts }, finishReason: parts.finishReason }) });
     } catch (e) {
       const err = e as Error & { status?: number };
       return json({ error: err.status === 429 ? 'rate_limited' : 'model_failed' }, err.status ?? 502);
