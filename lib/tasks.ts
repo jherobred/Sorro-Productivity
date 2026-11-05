@@ -6,6 +6,8 @@ import { defineMutation, queryClient } from './offline';
 import { toast } from './toast';
 import { settler } from './settle';
 import { foxGlad } from './foxMood';
+import { foxReact, STREAK_MILESTONES } from './foxNudges';
+import { streak } from './taskStreak';
 import { getPrefs, setPrefs } from './prefs';
 import { nextDue, isRepeat } from './taskRepeat';
 import { changeFixture } from './devFixtures';
@@ -582,6 +584,15 @@ export function useTaskActions() {
       completionRevisions.set(v.id, revision);
       if (v.done) {
         foxGlad();
+        if (previous) {
+          // Read before comeBack, which moves a repeat's rule to the next instance.
+          const repeats = isRepeat(getPrefs().taskRepeat?.[v.id]);
+          const title = previous.title.trim().toLowerCase();
+          const series = (queryClient.getQueryData<Task[]>(TASKS_KEY) ?? []).filter(t => t.title.trim().toLowerCase() === title)
+            .map(t => t.id === v.id ? { ...t, done: true, completed_at: new Date().toISOString() } : t);
+          const days = repeats ? streak(series) : 0;
+          foxReact(STREAK_MILESTONES.includes(days) ? { kind: 'streak', id: v.id, title: previous.title, days } : { kind: 'task_done', id: v.id, title: previous.title });
+        }
         comeBack(v.id);
       } else {
         stayBack(v.id);

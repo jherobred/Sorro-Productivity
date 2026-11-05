@@ -14,6 +14,7 @@ import { usePrefs } from '@/lib/prefs';
 import { useEdition, manilaDay, KIND_NAMES } from '@/lib/news';
 import { fetchWeather, weatherCode } from '@/lib/weather';
 import { focusState, startFocus, stopFocus, takeFinished } from '@/lib/focusTimer';
+import { foxReact } from '@/lib/foxNudges';
 import { toast } from '@/lib/toast';
 import { foxGlad } from '@/lib/foxMood';
 import { ymd } from '@/lib/days';
@@ -75,6 +76,7 @@ function Focus() {
         if (task) update.mutate({ id: task.id, patch: { focus_minutes: (task.focus_minutes ?? 0) + done.minutes } });
         toast(task ? `${done.minutes} minutes of focus logged on ${task.title}` : `${done.minutes} minutes of focus done`);
         foxGlad();
+        foxReact({ kind: 'focus_end', minutes: done.minutes, title: task?.title ?? null, at: Date.now() });
       }
       tick(n => n + 1);
     }, 1000);

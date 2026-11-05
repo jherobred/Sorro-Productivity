@@ -107,3 +107,16 @@ export async function nudgeLine(n: Nudge, fetchLine: (n: Nudge) => Promise<strin
     return line || n.text;
   } catch { return n.text; } finally { clearTimeout(timer); }
 }
+
+const REACT_EVENT = 'sorro-fox-react';
+
+/** Tells the fox you just finished something. Safe to call anywhere; a no-op outside the browser. */
+export function foxReact(e: FoxEvent) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(REACT_EVENT, { detail: e }));
+}
+
+export function onFoxReact(f: (e: FoxEvent) => void): () => void {
+  const h = (ev: Event) => f((ev as CustomEvent<FoxEvent>).detail);
+  window.addEventListener(REACT_EVENT, h);
+  return () => window.removeEventListener(REACT_EVENT, h);
+}
