@@ -15,4 +15,32 @@ assert resolve_day('on the 3rd', date(2026, 11, 20)) == date(2026, 12, 3)
 assert resolve_day('on the 25th', date(2026, 11, 20)) == date(2026, 11, 25)
 assert resolve_day('november 30', date(2026, 12, 1)) == date(2027, 11, 30)   # a past date means next year
 
+# Generate once into a temp dir and check what came out.
+import json
+import re
+import tempfile
+from collections import Counter
+
+import generate
+
+OUT = tempfile.mkdtemp()
+generate.main(['--seed', '7', '--out', OUT])
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOOLS = json.load(open(os.path.join(HERE, 'tools.json'), encoding='utf-8'))
+
+
+def load(name):
+    with open(os.path.join(OUT, f'{name}.jsonl'), encoding='utf-8') as f:
+        return [json.loads(line) for line in f]
+
+
+rows = load('router.train')
+routes = Counter(r['expect']['route'] for r in rows)
+assert min(routes.values()) / len(rows) > 0.28, routes
+assert all(r['messages'][-1]['content'].startswith('chat: ') for r in rows if r['expect']['route'] == 'chat')
+actor = load('actor.train')
+assert len(actor) >= 3500, len(actor)
+assert {r['expect']['name'] for r in actor} == {t['name'] for t in TOOLS}
+assert all(re.fullmatch(r'[0-9a-f-]{36}', r['expect']['arguments']['id']) for r in actor if r['expect']['name'] == 'complete_task')
+
 print('ok')
