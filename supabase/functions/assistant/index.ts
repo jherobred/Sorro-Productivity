@@ -208,7 +208,9 @@ Deno.serve(async (req) => {
   async function answer(emit?: (t: string) => void): Promise<string> {
     let text = '';
     for (let round = 0; round < ROUNDS; round++) {
-      const parts = emit ? await geminiStream(key!, system, contents, t => { text += t; emit(t); }) : await gemini(key!, system, contents);
+      // A later round starts a new paragraph, so "Let me check." and "Added it." do not run together.
+      let gap = round > 0 && text.length > 0;
+      const parts = emit ? await geminiStream(key!, system, contents, t => { if (gap) { t = '\n\n' + t; gap = false; } text += t; emit(t); }) : await gemini(key!, system, contents);
       const calls = parts.filter(p => p.functionCall);
       if (!emit) text = parts.map(p => p.text ?? '').join('');
       if (!calls.length) break;
@@ -244,19 +246,22 @@ Deno.serve(async (req) => {
   }
 
   const enc = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(ctrl) {
-      // A closed tab makes enqueue throw; the work carries on so every write's message is saved.
-      const send = (event: string, data: unknown) => { try { ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); } catch { /* client gone */ } };
-      try {
-        const text = await answer(t => send('text', t));
-        await finish(text);
-        send('done', { chat_id: chatId, tools: done });
-      } catch (e) {
-        send('error', (await failed(e)).body);
-      }
-      try { ctrl.close(); } catch { /* already closed */ }
-    },
-  });
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({ start(c) { ctrl = c; } });
+  // A closed tab makes enqueue throw; the work carries on so every write's message is saved.
+  const send = (event: string, data: unknown) => { try { ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); } catch { /* client gone */ } };
+  const work = (async () => {
+    send('start', { chat_id: chatId });
+    try {
+      const text = await answer(t => send('text', t));
+      await finish(text);
+      send('done', { chat_id: chatId, tools: done });
+    } catch (e) {
+      send('error', (await failed(e)).body);
+    }
+    try { ctrl.close(); } catch { /* already closed */ }
+  })();
+  // Keeps the worker alive after the client disconnects, until the reply and its writes are saved.
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(work);
   return new Response(stream, { headers: { ...CORS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } });
 });

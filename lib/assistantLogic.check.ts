@@ -48,7 +48,12 @@ test('an unknown event changes nothing', () => {
   assert.equal(foldStream(s, { event: 'ping', data: '' }), s);
 });
 test('context names the tab and the open item', () => {
-  assert.equal(chatContext('Notes', '?note=n1'), 'The user is on the Notes tab with note n1 open.');
-  assert.equal(chatContext('Tasks', ''), 'The user is on the Tasks tab.');
-  assert.equal(chatContext('Tasks', '?detail=t9'), 'The user is on the Tasks tab with task t9 open.');
+  assert.equal(chatContext('Notes', { kind: 'note', id: 'n1' }), 'The user is on the Notes tab with note n1 open.');
+  assert.equal(chatContext('Tasks', null), 'The user is on the Tasks tab.');
+  assert.equal(chatContext('Calendar', { kind: 'event', id: 'e9' }), 'The user is on the Calendar tab with event e9 open.');
+});
+test('the start event gives the chat id before any text', () => {
+  const s = foldStream({ text: '' }, { event: 'start', data: '{"chat_id":"c7"}' });
+  assert.equal(s.chat_id, 'c7');
+  assert.equal(s.text, '');
 });

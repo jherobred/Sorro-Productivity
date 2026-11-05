@@ -42,6 +42,7 @@ const MESSAGES: Record<string, string> = {
   rate_limited: 'The free Gemini quota is used up for now.',
   model_failed: 'Gemini did not answer. Your message is kept; try again.',
   signed_out: 'You are signed out. Sign in again to use the assistant.',
+  dropped: 'The connection dropped before Sorro finished. Anything he already did is saved in this chat, so check it before trying again.',
 };
 
 const failure = (code: string, b: { retry?: string | null; tools?: ToolDone[]; chat_id?: string } = {}) =>
@@ -79,7 +80,7 @@ export async function sendToAssistant(chatId: string | null, message: string, co
     } catch { /* connection dropped: handled below as a stream with no ending */ }
     if (s.error) throw failure(s.error.error, s.error);
     // No ending: the server may still have saved what it did, so the chat refetch below shows it.
-    if (!s.done) throw failure(navigator.onLine ? 'model_failed' : 'offline');
+    if (!s.done) throw failure('dropped', { chat_id: s.chat_id });
     return { chat_id: s.done.chat_id, text: s.text.trim(), tools: s.done.tools };
   } finally {
     // Whatever the assistant wrote shows up in Tasks, Calendar and Notes without a reload, even after a failure.

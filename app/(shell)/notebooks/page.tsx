@@ -9,6 +9,7 @@ import {moveNotebook} from '@/lib/notebookOrder';
 import {NotebookCover,CoverPhotoButton} from '@/components/notes/NotebookCover';
 import {useLayout} from '@/lib/useLayout';
 import {useOverlayBack} from '@/lib/nav';
+import {useOpenItem} from '@/lib/openItem';
 import {useNotebooks,useNotebookTrash,useNotes,useTrash,useTags,useNoteActions,whenLabel,type Note} from '@/lib/notes';
 import {useBoards,type Board} from '@/lib/canvas';
 import {useShelfPrefs,setBookPrefs} from '@/lib/shelfPrefs';
@@ -59,7 +60,7 @@ export default function NotebooksPage(){
  const [legacy,setLegacy]=useState<Board|'journal'|'code'|null>(null);const [moveOpen,setMoveOpen]=useState(false);const deepLink=useRef(false);const [binHidden,setBinHidden]=useState<string[]>([]);
  const shelf=useShelfPrefs();const urls=useImageUrls(Object.values(shelf.books).map(b=>b.image));
  useEffect(()=>{if(N.data)void migrateNotebookCovers(N.data,shelf.books);},[N.data,shelf.books]);
- const notebook=notebooks.find(b=>b.id===nbId);const note=notes.find(n=>n.id===noteId);
+ const notebook=notebooks.find(b=>b.id===nbId);const note=notes.find(n=>n.id===noteId);useOpenItem('note',noteId);
  // Full screen hides the app's own bars for any page, and asks the browser for real full screen where it allows it.
  const [fullscreen,setFullscreen]=useState(false);const noteOpen=!!note;
  useEffect(()=>{if(!noteOpen)setFullscreen(false);},[noteOpen]);

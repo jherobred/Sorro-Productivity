@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { FoxChat } from './FoxChat';
 import { chatContext } from '@/lib/assistantLogic';
+import { openItem } from '@/lib/openItem';
 
 /** The fox's chat on any tab but Home: a bottom sheet on the phone, a panel on the right elsewhere. */
 export function FoxSheet({ tab, onClose, onReply }: { tab: string; onClose: () => void; onReply: () => void }) {
@@ -13,7 +14,7 @@ export function FoxSheet({ tab, onClose, onReply }: { tab: string; onClose: () =
   return <div className="sx-sheet-back fx-back" onClick={onClose}>
     <div className="fx-sheet" role="dialog" aria-modal="true" aria-label="Talk to Sorro" data-part="S.foxsheet" onClick={e => e.stopPropagation()}>
       <span className="sx-sheet-grip" aria-hidden="true" />
-      <FoxChat variant="sheet" context={chatContext(tab, location.search)} onReply={onReply} />
+      <FoxChat variant="sheet" context={chatContext(tab, openItem())} onReply={onReply} />
     </div>
   </div>;
 }

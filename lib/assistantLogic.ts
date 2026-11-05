@@ -7,25 +7,26 @@ export type ToolDone = { name: string; label: string; undo?: Undo; link?: string
 
 export type StreamState = {
   text: string;
+  /** Sent first, so a stream that drops still knows which chat the server saved into. */
+  chat_id?: string;
   done?: { chat_id: string; tools: ToolDone[] };
   error?: { error: string; retry: string | null; chat_id?: string; tools: ToolDone[] };
 };
 
 /** One event of the assistant's stream applied to what has arrived so far. */
 export function foldStream(s: StreamState, ev: { event: string; data: string }): StreamState {
+  if (ev.event === 'start') return { ...s, chat_id: JSON.parse(ev.data).chat_id };
   if (ev.event === 'text') return { ...s, text: s.text + JSON.parse(ev.data) };
   if (ev.event === 'done') return { ...s, done: JSON.parse(ev.data) };
   if (ev.event === 'error') { const e = JSON.parse(ev.data); return { ...s, error: { error: e.error, retry: e.retry ?? null, chat_id: e.chat_id, tools: e.tools ?? [] } }; }
   return s;
 }
 
-const OPEN_ITEM: [param: string, kind: string][] = [['note', 'note'], ['open', 'note'], ['detail', 'task'], ['project', 'project']];
+export type OpenItem = { kind: 'note' | 'task' | 'event'; id: string };
 
 /** Where the user is when they talk to the fox from the sheet, so "move this to Friday" has a "this". */
-export function chatContext(tab: string, search: string): string {
-  const p = new URLSearchParams(search);
-  const hit = OPEN_ITEM.find(([k]) => p.get(k));
-  return hit ? `The user is on the ${tab} tab with ${hit[1]} ${p.get(hit[0])} open.` : `The user is on the ${tab} tab.`;
+export function chatContext(tab: string, item: OpenItem | null): string {
+  return item ? `The user is on the ${tab} tab with ${item.kind} ${item.id} open.` : `The user is on the ${tab} tab.`;
 }
 
 const REACH = new Set(['sorro_tasks', 'sorro_events', 'sorro_notes']);

@@ -36,6 +36,7 @@ import {
 import './tasks.css';
 import './tasks-sorro.css';
 import {WeeklyPlanner} from '@/components/tasks/WeeklyPlanner';
+import { useOpenItem } from '@/lib/openItem';
 
 /* Only drawn once a date is being picked. */
 const TaskDatePicker = dynamic(() => import('@/components/TaskDatePicker').then((m) => m.TaskDatePicker), { ssr: false });
@@ -85,6 +86,7 @@ export default function TasksPage() {
   const searchParams = useSearchParams();
 
   const [detail, setDetail] = useState<string | null>(() => searchParams?.get('detail') ?? null);
+  useOpenItem('task', detail);
   /** Projects slid into the side column. Old links to /projects/ arrive here asking for it. */
   const [projectsOpen, setProjectsOpen] = useState(() => !!(searchParams?.get('projects') || searchParams?.get('project')));
   useEffect(() => {

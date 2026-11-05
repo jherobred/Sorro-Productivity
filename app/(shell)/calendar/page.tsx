@@ -38,6 +38,7 @@ import { useOverlayBack } from '@/lib/nav';
 import { toast } from '@/lib/toast';
 import { ask, confirmAsk } from '@/lib/ask';
 import { useTasks, useTaskActions, useLists, getTaskAlert, type Task } from '@/lib/tasks';
+import { useOpenItem } from '@/lib/openItem';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
   isReadOnly, importedSeriesKey, scanSeriesIds, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
@@ -106,6 +107,7 @@ export default function CalendarPage() {
   const ws = useMemo(() => weekStart(selectedDate, prefs.weekStart), [selectedDate, prefs.weekStart]);
   const focusDay = dayIndex(selectedDate.toISOString(), ws);
   const [sel, setSel] = useState<string | null>(null);
+  useOpenItem('event', sel);
   /**
    * One bubble at a time: `event` when you click something, `slot` when you
    * click empty space. Both carry the click point so the bubble opens there.
