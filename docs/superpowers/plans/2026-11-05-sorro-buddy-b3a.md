@@ -33,7 +33,7 @@
 
 - **L1 Router.** System: `ROUTER_SYSTEM`. User: the message. Output: `read`, `write`, or `chat: <quip>`. Nothing else.
 - **L2 Actor.** Qwen2.5's own chat template with `tools=` (the 10 schemas). System: `ACTOR_SYSTEM` with today's date and time zone filled in. A tool call is Qwen's `<tool_call>{"name": ..., "arguments": {...}}</tool_call>`. Tool results go back as role `tool`. The final turn is a short reply in the fox voice.
-- **L3 Checker.** System: `CHECKER_SYSTEM`. User: `Today: <YYYY-MM-DD> (<tz>)\nRequest: <message>\nKnown ids: <id: title, ...>\nCall: <name> <json args>`. Output: `ok` or `wrong: <reason>`.
+- **L3 Checker.** System: `CHECKER_SYSTEM`. User: `Today: <YYYY-MM-DD> <Weekday> (<tz>)\nRequest: <message>\nKnown ids: <id: title, ...>\nCall: <name> <json args>`. Output: `ok` or `wrong: <reason>`.
 - All three system prompts live in `training/prompts.json`, written by the generator. B3b loads the same file's strings.
 
 ## Review Focus
