@@ -334,6 +334,18 @@ export function seedDevFixtures() {
   ]);
   seed(['project_comments'], []);
 
+  // News: one Coffee News edition for today (Manila), in the five-field shape Grok now sends.
+  const newsDay = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+  seed(['news', 'days'], [newsDay]);
+  seed(['news', newsDay], [{
+    id: 'nw1', kind: 'ai-digest', edition: newsDay, title: 'Small models, big week', body: '', created_at: new Date().toISOString(), read_at: null,
+    items: [
+      { headline: 'A 1B model now runs on a mid-range phone', summary: 'The release runs fully offline at chat speed (no internet needed; your words never leave the phone).', why: 'Private assistants like Sorro’s offline fox get faster and smarter without a cloud bill.', image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=1200&q=70', link: 'https://example.com/small-model' },
+      { headline: 'EU sets the first rules for general-purpose AI', summary: 'Large model makers must publish training summaries and test for risks (a public report card on what went into the model).', why: 'Apps built on these models will start getting clearer documentation about limits and data.', image: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=1200&q=70', link: 'https://example.com/eu-ai-rules' },
+      { headline: 'A lab raises $400M for open research tools', summary: 'The round funds shared datasets and evaluation suites (common tests anyone can run to compare models).', why: 'Better shared tests make it easier to tell real progress from marketing.', image: '', link: 'https://example.com/funding' },
+    ],
+  }]);
+
   seed(['people'], [
     { id: 'pe1', name: 'Jules Lopez', category: 'Groupmate', color: '#7C6CFF', email: 'jules@up.edu.ph', note: 'Handles the GTFS import. Answers fastest on Messenger.' },
     { id: 'pe2', name: 'Rain Tolentino', category: 'Classmate', color: '#34D9A0', email: '', note: 'Sits front row in CS 191. Has every handout.' },

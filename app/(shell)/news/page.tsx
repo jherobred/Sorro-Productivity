@@ -1,26 +1,40 @@
 'use client';
 /**
- * W News: where Grok's scheduled automations drop their digests. Today's
- * edition by segment (W.segments), past days (W.archive), and Setup (W.setup)
- * with the drop key and a ready-to-paste Grok task per kind.
+ * W News, read like a morning paper: The Coffee News. One calm column (W.segments) with
+ * each item's image above it, an indented summary whose plain-word notes in parentheses
+ * are set apart, and a "Why it matters" line. Past days (W.archive) run as a strip under
+ * the masthead. Setup (W.setup) has the drop key and a ready-to-paste Grok task per kind.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Fox } from '@/components/Fox';
-import { useEdition, useEditionDays, useKeyDate, markRead, rotateKey, fillWeekly, manilaDay, KIND_NAMES, NEWS_KINDS, type Edition, type NewsKind } from '@/lib/news';
+import { useEdition, useEditionDays, useKeyDate, markRead, rotateKey, fillWeekly, manilaDay, KIND_NAMES, NEWS_KINDS, type Edition, type NewsItem, type NewsKind } from '@/lib/news';
 import { grokPrompt, dropUrl, scheduleHint, type PromptKind } from '@/lib/newsPrompts';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 import './news.css';
 
+/** "(…)" in a summary is a plain-word note from the prompt: set apart so the main sentence still reads first. */
+function Plain({ text }: { text: string }) {
+  return <>{text.split(/(\([^()]+\))/).map((part, i) => /^\(.*\)$/.test(part) ? <span key={i} className="nw-plain">{part}</span> : part)}</>;
+}
+
+function Story({ it }: { it: NewsItem }) {
+  const [img, setImg] = useState(!!it.image);
+  const host = it.link ? new URL(it.link).hostname.replace(/^www\./, '') : '';
+  return <article className="nw-story">
+    {img && <figure className="nw-fig"><img src={it.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setImg(false)} /></figure>}
+    <h3>{it.link ? <a href={it.link} target="_blank" rel="noreferrer">{it.headline}</a> : it.headline}</h3>
+    {it.summary && <p className="nw-sum"><Plain text={it.summary} /></p>}
+    {it.why && <p className="nw-why"><strong>Why it matters</strong> {it.why}</p>}
+    {host && <small className="nw-src">{host}</small>}
+  </article>;
+}
+
 function Segment({ e }: { e: Edition }) {
-  return <section className="nw-seg" data-unread={!e.read_at}>
-    <header><h2>{KIND_NAMES[e.kind]}</h2><span>{e.title}</span></header>
-    {e.items.length ? <ol>{e.items.map((it, i) => <li key={i}>
-      {it.link ? <a href={it.link} target="_blank" rel="noreferrer">{it.headline}</a> : <strong>{it.headline}</strong>}
-      {it.summary && <p>{it.summary}</p>}
-      {it.link && <small>{new URL(it.link).hostname.replace(/^www\./, '')}</small>}
-    </li>)}</ol> : <pre className="nw-raw">{e.body}</pre>}
+  return <section className="nw-seg" data-unread={!e.read_at} aria-label={KIND_NAMES[e.kind]}>
+    <header><span className="nw-kicker">{KIND_NAMES[e.kind]}</span>{e.title && <h2>{e.title}</h2>}</header>
+    {e.items.length ? e.items.map((it, i) => <Story key={i} it={it} />) : <pre className="nw-raw">{e.body}</pre>}
   </section>;
 }
 
@@ -84,17 +98,19 @@ export default function NewsPage() {
       <button role="tab" aria-selected={tab === 'setup'} onClick={() => setTab('setup')}>Setup</button>
     </div>
     {tab === 'setup' ? <Setup /> : <div className="nw-body">
+      <header className="nw-mast">
+        <p className="nw-mast-name">The Coffee News</p>
+        <p className="nw-mast-date">{new Date(day + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}{editions.length ? ` · ${editions.length} ${editions.length === 1 ? 'section' : 'sections'}` : ''}</p>
+      </header>
+      <nav className="nw-archive" aria-label="Past editions" data-part="W.archive">
+        {(days.data ?? []).length > 0 && <ul>{(days.data ?? []).slice(0, 30).map(d => <li key={d}><button aria-current={d === day ? 'date' : undefined} onClick={() => setDay(d)}>{d === today ? 'Today' : new Date(d + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button></li>)}</ul>}
+      </nav>
       <div className="nw-today" data-part="W.today">
         {q.isPending ? <div className="wg-skel" aria-label="Loading"><span /><span /></div>
           : q.isError ? <p className="wg-empty">Couldn’t load the news. <button onClick={() => q.refetch()}>Try again</button></p>
           : editions.length ? <div data-part="W.segments">{editions.map(e => <Segment key={e.id} e={e} />)}</div>
-          : <div className="sx-empty"><Fox pose="sleep" size={52} tone="muted" /><p>{day === today ? 'No digest yet today.' : 'Nothing was filed that day.'}</p>{day === today && <button className="sx-pill" onClick={() => setTab('setup')}>Connect Grok</button>}</div>}
+          : <div className="sx-empty"><Fox pose="sleep" size={52} tone="muted" /><p>{day === today ? 'No digest yet today. The coffee is still brewing.' : 'Nothing was filed that day.'}</p>{day === today && <button className="sx-pill" onClick={() => setTab('setup')}>Connect Grok</button>}</div>}
       </div>
-      <nav className="nw-archive" aria-label="Past editions" data-part="W.archive">
-        <h2>Past days</h2>
-        {(days.data ?? []).length ? <ul>{(days.data ?? []).slice(0, 30).map(d => <li key={d}><button aria-current={d === day ? 'date' : undefined} onClick={() => setDay(d)}>{d === today ? 'Today' : new Date(d + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button></li>)}</ul>
-          : <p className="wg-empty">Past editions collect here.</p>}
-      </nav>
     </div>}
   </div>;
 }

@@ -20,18 +20,23 @@ export function assemble(parts: Part[]): string | null {
   return out;
 }
 
+export type Item = { headline: string; summary: string; why: string; image: string; link: string };
+const url = (s: string | undefined) => (/^https?:\/\/\S+$/.test(s ?? '') ? s! : '');
+
 /**
- * Grok writes one item per line as `headline | summary | link`. The first line
- * that has no pipes is the edition title.
+ * Grok writes one item per line as `headline | summary | why it matters | image | link`.
+ * Older tasks still send `headline | summary | link`. The first line with no pipes is the edition title.
+ * Only http(s) addresses are kept for the image and the link.
  */
-export function parseItems(text: string): { title: string; items: { headline: string; summary: string; link: string }[] } {
+export function parseItems(text: string): { title: string; items: Item[] } {
   let title = '';
-  const items: { headline: string; summary: string; link: string }[] = [];
+  const items: Item[] = [];
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim().replace(/^[-*•]\s*/, '');
     if (!line) continue;
-    const cells = line.split('|').map(c => c.trim());
-    if (cells.length >= 2) items.push({ headline: cells[0], summary: cells[1] ?? '', link: /^https?:\/\//.test(cells[2] ?? '') ? cells[2] : '' });
+    const c = line.split('|').map(x => x.trim());
+    if (c.length >= 5) items.push({ headline: c[0], summary: c[1], why: c[2], image: url(c[3]), link: url(c[4]) });
+    else if (c.length >= 2) items.push({ headline: c[0], summary: c[1] ?? '', why: '', image: '', link: url(c[2]) });
     else if (!title) title = line;
   }
   return { title, items };

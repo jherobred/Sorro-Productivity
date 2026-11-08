@@ -9,7 +9,8 @@ export const KIND_NAMES: Record<NewsKind, string> = {
   jobs: 'Internships and jobs', research: 'Research', gaming: 'Unreal and games', 'ph-brief': 'Metro Manila brief', weekly: 'Your week',
 };
 
-export type NewsItem = { headline: string; summary: string; link: string };
+/** `why` and `image` come from the five-field lines; older editions and Sorro's own weekly have them empty or missing. */
+export type NewsItem = { headline: string; summary: string; link: string; why?: string; image?: string };
 export type Edition = { id: string; kind: NewsKind; edition: string; title: string; body: string; items: NewsItem[]; created_at: string; read_at: string | null };
 
 /** Today in Manila, the day Grok's editions are filed under. */

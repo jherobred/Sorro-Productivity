@@ -25,3 +25,13 @@ test('items are read from pipe lines and the first plain line is the title', () 
   assert.equal(r.items[0].link, 'https://x.ai/news');
   assert.equal(r.items[1].link, '');
 });
+test('a five-field line carries why it matters and an image, and old three-field lines still read', () => {
+  const r = parseItems('The Coffee News\nModel X ships | Faster (it answers in half the time) | Cheaper AI for apps like Sorro | https://img.x.ai/a.jpg | https://x.ai/news\nOld | three fields | https://old.example/a\n');
+  assert.deepEqual(r.items[0], { headline: 'Model X ships', summary: 'Faster (it answers in half the time)', why: 'Cheaper AI for apps like Sorro', image: 'https://img.x.ai/a.jpg', link: 'https://x.ai/news' });
+  assert.deepEqual(r.items[1], { headline: 'Old', summary: 'three fields', why: '', image: '', link: 'https://old.example/a' });
+});
+test('a non-link in the image or link slot is dropped, not trusted', () => {
+  const r = parseItems('T\nA | b | c | javascript:alert(1) | not a url\n');
+  assert.equal(r.items[0].image, '');
+  assert.equal(r.items[0].link, '');
+});

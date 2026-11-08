@@ -1,28 +1,41 @@
-/* W News: an edition read like a paper, a narrow archive beside it. */
-.nw { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px }
+/* W News, The Coffee News: one calm reading column, an image above every story, room to breathe. */
+.nw { --read: Charter, 'Iowan Old Style', 'Source Serif 4', Georgia, 'Times New Roman', serif; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px }
 .nw-tabs, .nw-kinds { display: inline-flex; flex-wrap: wrap; align-self: flex-start; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
 .nw-tabs button, .nw-kinds button { min-height: 32px; padding: 0 14px; border-radius: var(--r-pill); color: var(--muted); font-size: 13px }
 .nw-tabs [aria-selected='true'], .nw-kinds [aria-selected='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
-.nw-body { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; align-items: start }
+
+.nw-body { display: flex; flex-direction: column; gap: 14px; min-width: 0 }
+.nw-mast { padding: 18px 0 14px; border-top: 3px double var(--line); border-bottom: 1px solid var(--line); text-align: center }
+.nw-mast-name { margin: 0; font: 600 clamp(30px, 6vw, 44px)/1.05 var(--read); letter-spacing: -.01em; color: var(--ink) }
+.nw-mast-date { margin: 8px 0 0; color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase }
+
+.nw-archive ul { list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin }
+.nw-archive button { min-height: 32px; padding: 0 12px; border-radius: var(--r-pill); white-space: nowrap; color: var(--muted); font-size: 13px }
+.nw-archive button:hover { background: var(--soft); color: var(--ink) }
+.nw-archive [aria-current='date'] { background: var(--soft-2); color: var(--ink); font-weight: 500 }
+
 .nw-today { min-width: 0 }
-.nw-seg { padding: 4px 0 22px; margin-bottom: 18px; border-bottom: 1px solid var(--line); animation: row-in .36s var(--drift) backwards }
-.nw-seg > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px }
-.nw-seg h2 { margin: 0; font: 600 18px/1.3 var(--font-body); color: var(--ink) }
-.nw-seg > header span { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.nw-seg[data-unread='true'] h2 { color: var(--accent) }
-.nw-seg ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px 22px }
-.nw-seg li { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
-.nw-seg li a, .nw-seg li strong { color: var(--ink); font-weight: 500; font-size: 15px; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere }
-.nw-seg li a:hover { text-decoration: underline }
-.nw-seg li p { margin: 0; color: var(--ink); opacity: .82; font-size: 13.5px; line-height: 1.55 }
-.nw-seg li small { color: var(--muted); font-size: 12px }
-.nw-raw { white-space: pre-wrap; font: 14px/1.6 var(--font-body); margin: 0 }
-.nw-archive { position: sticky; top: 0 }
-.nw-archive h2 { margin: 0 0 8px; font: 600 13px/1.2 var(--font-body); color: var(--muted) }
-.nw-archive ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px }
-.nw-archive button { width: 100%; min-height: 34px; padding: 0 10px; border-radius: var(--r-row); text-align: left; color: var(--ink); font-size: 13px }
-.nw-archive button:hover { background: var(--soft) }
-.nw-archive [aria-current='date'] { background: var(--soft-2); font-weight: 500 }
+.nw-seg { padding: 8px 0 10px; animation: row-in .36s var(--drift) backwards }
+.nw-seg + .nw-seg { margin-top: 18px; padding-top: 26px; border-top: 1px solid var(--line) }
+.nw-seg > header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px }
+.nw-kicker { color: var(--accent); font: 600 12px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase }
+.nw-seg[data-unread='true'] .nw-kicker::after { content: ' · New'; color: var(--muted); letter-spacing: .04em }
+.nw-seg h2 { margin: 0; font: 600 24px/1.25 var(--read); color: var(--ink) }
+
+.nw-story { display: flex; flex-direction: column; gap: 10px; padding-bottom: 26px; margin-bottom: 26px; border-bottom: 1px dashed var(--line) }
+.nw-story:last-child { border-bottom: 0; margin-bottom: 0 }
+.nw-fig { margin: 0 0 4px; aspect-ratio: 16 / 9; border-radius: var(--r-tile); overflow: hidden; background: var(--soft) }
+.nw-fig img { width: 100%; height: 100%; object-fit: cover; display: block }
+.nw-story h3 { margin: 0; font: 600 21px/1.3 var(--read); color: var(--ink); text-wrap: balance }
+.nw-story h3 a { color: inherit; text-decoration: none }
+.nw-story h3 a:hover { text-decoration: underline; text-underline-offset: 3px }
+.nw-sum { margin: 0; padding-left: 16px; border-left: 2px solid var(--soft-2); font: 17px/1.75 var(--read); color: var(--ink); max-width: 66ch }
+.nw-plain { color: var(--muted); font-style: italic }
+.nw-why { margin: 0; padding: 10px 14px 10px 16px; border-radius: var(--r-row); background: color-mix(in oklab, var(--accent) 7%, var(--surface)); font: 15.5px/1.6 var(--read); color: var(--ink); max-width: 66ch }
+.nw-why strong { display: block; margin-bottom: 2px; color: var(--accent); font: 600 11.5px/1.4 var(--font-body); letter-spacing: .08em; text-transform: uppercase }
+.nw-src { color: var(--muted); font-size: 12.5px; letter-spacing: .02em }
+.nw-raw { white-space: pre-wrap; font: 16px/1.7 var(--read); margin: 0 }
+
 .nw-setup { max-width: 720px; display: flex; flex-direction: column; gap: 12px }
 .nw-setup h2 { margin: 0; font: 600 20px/1.3 var(--font-body) }
 .nw-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.55 }
@@ -30,6 +43,11 @@
 .nw-hint { margin: 0; color: var(--muted); font-size: 13px }
 .nw-prompt { width: 100%; padding: 12px 14px; border-radius: var(--r-tile); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 13px/1.55 var(--font-mono); resize: vertical }
 .nw-setup > .sx-pill { align-self: flex-start }
-:is(.nw-tabs button, .nw-kinds button, .nw-archive button, .nw-seg a):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+:is(.nw-tabs button, .nw-kinds button, .nw-archive button, .nw-story a):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px; border-radius: 4px }
 .nomo .nw-seg { animation: none }
-@media (max-width: 860px) { .nw-body { grid-template-columns: minmax(0, 1fr) } .nw-archive { position: static; order: -1 } .nw-archive ul { flex-direction: row; overflow-x: auto } .nw-archive button { white-space: nowrap } }
+@media (max-width: 760px) {
+  .nw { gap: 14px }
+  .nw-story h3 { font-size: 19px }
+  .nw-sum { font-size: 16px; padding-left: 12px }
+  .nw-why { font-size: 15px }
+}

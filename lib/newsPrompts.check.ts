@@ -12,11 +12,18 @@ test('every kind has a prompt that carries its own url and the part rule', () =>
     const p = grokPrompt(kind, dropUrl('KEY', kind));
     assert.ok(p.includes(`kind=${kind}`), kind);
     assert.ok(p.includes('&part=') && p.includes('&of='), kind);
-    assert.ok(p.includes('headline | summary | link'), kind);
-    assert.ok(p.length < 2600, `${kind} prompt is ${p.length} chars`);
+    assert.ok(p.includes('headline | summary | why it matters | image | link'), kind);
+    assert.match(p, /why it matters/i, kind);
+    assert.match(p, /parentheses/i, kind);
+    assert.match(p, /Gentleman’s Coffee News/, kind);
+    assert.ok(p.length < 3200, `${kind} prompt is ${p.length} chars`);
   }
 });
 test('the key appears only inside the url', () => {
   const p = grokPrompt('jobs', dropUrl('SECRETKEY', 'jobs'));
   assert.equal(p.split('SECRETKEY').length - 1, 1);
+});
+test('the AI digest asks for what the old automation asked for', () => {
+  const p = grokPrompt('ai-digest', dropUrl('K', 'ai-digest'));
+  for (const w of ['model releases', 'research papers', 'funding rounds', 'policy changes', 'Skip minor product updates and rumors']) assert.ok(p.includes(w), w);
 });
