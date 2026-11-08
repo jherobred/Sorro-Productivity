@@ -8,6 +8,7 @@ export const PARTS = {
   'S.foxsheet': 'Fox chat sheet',
   'S.foxbubble': 'Fox speech bubble',
   'S.panel': 'Right panel',
+  'S.widgets': 'Panel widgets',
   H: 'Home',
   'H.widgets': 'Home widgets',
   'H.chat': 'Conversation',

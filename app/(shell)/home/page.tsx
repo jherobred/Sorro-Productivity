@@ -4,7 +4,7 @@
  * chat (components/FoxChat.tsx) with the room to itself. No side panel here.
  */
 import { useEffect, useState } from 'react';
-import { WIDGETS, useWidgetOrder } from '@/components/widgets/Widgets';
+import { WidgetBoard } from '@/components/widgets/WidgetBoard';
 import { FoxChat } from '@/components/FoxChat';
 import './home.css';
 
@@ -20,13 +20,12 @@ function takeAsk(): { text: string; context?: string } | undefined {
 }
 
 export default function HomePage() {
-  const widgets = useWidgetOrder();
   const [initial] = useState(takeAsk);
   useEffect(() => { if (initial) history.replaceState(null, '', '/home/'); }, [initial]);
 
   return <div className="hm" data-part="H">
     <h1 className="sr-only">Home</h1>
-    {widgets.length > 0 && <div className="hm-widgets" data-part="H.widgets">{widgets.map(id => { const W = WIDGETS[id].Component; return <W key={id} />; })}</div>}
+    <WidgetBoard axis="x" className="hm-board" part="H.widgets" />
     <FoxChat variant="page" initial={initial} />
   </div>;
 }

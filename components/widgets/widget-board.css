@@ -1,0 +1,50 @@
+/* The widget board: reorder by the grip, remove with ×, add with +. Home lays it out in a row, the panel in a column. */
+.wb { display: flex; gap: 10px; min-width: 0 }
+.wb[data-axis='y'] { flex-direction: column }
+.wb[data-axis='x'] { align-items: stretch }
+.wb-list { display: flex; gap: 10px; min-width: 0; flex: 1 }
+.wb[data-axis='y'] .wb-list { flex-direction: column }
+.wb[data-axis='x'] .wb-list { overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; scrollbar-width: thin }
+.wb[data-axis='x'] .wb-item { flex: 0 0 clamp(220px, 26%, 300px); scroll-snap-align: start }
+.wb-item { position: relative; border-radius: var(--r-tile); background: transparent }
+.wb-item > .wg { height: 100% }
+.wb[data-axis='x'] .wb-item > .wg { background: var(--surface) }
+
+/* The grip and × sit in the widget's top right, shown on hover or focus, always on touch screens. */
+.wb-tools { position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; gap: 2px; opacity: 0; transition: opacity .15s var(--snap) }
+.wb-item:hover .wb-tools, .wb-item:focus-within .wb-tools { opacity: 1 }
+@media (pointer: coarse) { .wb-tools { opacity: .75 } }
+.wb-tools button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--muted); background: color-mix(in oklab, var(--surface) 85%, transparent) }
+.wb-tools button:hover { background: var(--soft-2); color: var(--ink) }
+.wb-grip { cursor: grab; touch-action: none }
+.wb-grip:active { cursor: grabbing }
+.wb-tools button:focus-visible, .wb-add:focus-visible, .wb-opt:focus-visible, .wb-reset:focus-visible { outline: 3px solid var(--pick); outline-offset: 2px; opacity: 1 }
+.wb-item .wg > header { padding-right: 64px }
+
+/* + and its menu. */
+.wb-addwrap { position: relative; flex: none; display: flex; align-items: flex-start }
+.wb[data-axis='y'] .wb-addwrap { justify-content: center }
+.wb-add { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-pill); border: 1px dashed var(--line); color: var(--muted); background: transparent }
+.wb[data-axis='y'] .wb-add { width: 100%; height: 36px; border-radius: var(--r-tile) }
+.wb[data-axis='x'] .wb-add { height: 100%; min-height: 96px; width: 44px; border-radius: var(--r-tile) }
+.wb-add:hover, .wb-add[aria-expanded='true'] { border-style: solid; color: var(--accent); background: var(--soft) }
+.wb-menu { position: absolute; top: calc(100% + 8px); z-index: 40; width: min(300px, calc(100vw - 32px)); max-height: min(60dvh, 420px); overflow: auto;
+  padding: 6px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 16px 40px rgb(0 0 0 / .16); transform-origin: top }
+.wb-addwrap[data-align='start'] .wb-menu { left: 0 }
+.wb-addwrap[data-align='end'] .wb-menu { right: 0; transform-origin: top right }
+.wb[data-axis='x'] .wb-menu { top: 8px; right: calc(100% + 8px) }
+.wb-menu-h { margin: 6px 10px 6px; color: var(--muted); font: 600 12px/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em }
+.wb-opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-row); text-align: left; color: var(--ink) }
+.wb-opt:hover { background: var(--soft) }
+.wb-opt-ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--soft); color: var(--accent) }
+.wb-opt strong { display: block; font: 500 14px/1.3 var(--font-body) }
+.wb-opt small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35 }
+.wb-menu-empty { margin: 8px 10px; color: var(--muted); font-size: 13px }
+.wb-reset { width: 100%; margin-top: 4px; padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; color: var(--muted); font-size: 12.5px }
+.wb-reset:hover { color: var(--ink) }
+.wb-none { align-self: center; margin: 0 }
+
+@media (max-width: 760px) {
+  .wb[data-axis='x'] .wb-item { flex-basis: 82% }
+  .wb[data-axis='x'] .wb-menu { top: calc(100% + 8px); right: 0 }
+}

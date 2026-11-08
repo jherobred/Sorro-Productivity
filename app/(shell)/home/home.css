@@ -1,7 +1,5 @@
 /* T1 Home: the assistant. The chat keeps a 760px measure; widgets scroll sideways above it. */
 .hm { display: flex; flex-direction: column; min-height: 100%; max-width: 980px; margin: 0 auto; gap: 14px }
-.hm-widgets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 2px }
-.hm-widgets > .wg { scroll-snap-align: start; background: var(--surface) }
 .hm-bar { display: flex; gap: 6px; justify-content: center }
 .hm-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap), background-color .15s }
 .hm-chip:hover { background: var(--soft-2) }
@@ -37,4 +35,4 @@
 :is(.hm-chip, .hm-tool a, .hm-tool button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
 .nomo :is(.hm-msg, .hm-tool) { animation: none }
 @media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) :is(.hm-msg, .hm-tool) { animation: none } }
-@media (max-width: 760px) { .hm-widgets { grid-auto-columns: 82% } .hm-msg[data-role='user'] .hm-text { max-width: 90% } }
+@media (max-width: 760px) { .hm-msg[data-role='user'] .hm-text { max-width: 90% } }
