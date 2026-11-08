@@ -26,3 +26,10 @@ training/upload.zip
 training/tools.json
 training/voice.json
 training/__pycache__/
+
+# Local AI and editor tooling, kept out of the public repo
+.agents/
+.claude/
+.impeccable/
+.vscode/
+skills-lock.json
