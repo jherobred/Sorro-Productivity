@@ -1,0 +1,57 @@
+/* The split welcome (sign-in and boot): brand on the left, the moment on the right. Stacks on phones. */
+.wl { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--bg); color: var(--ink) }
+.wl-brand { position: relative; display: grid; place-items: center; padding: 48px 40px; overflow: hidden;
+  background: radial-gradient(120% 90% at 30% 20%, color-mix(in oklab, var(--accent) 16%, var(--surface)) 0%, color-mix(in oklab, var(--accent) 6%, var(--bg)) 60%, var(--bg) 100%);
+  border-right: 1px solid var(--line) }
+.wl-brand-in { width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: flex-start; gap: 18px }
+.wl-fox { display: grid; place-items: center; width: 120px; height: 120px; border-radius: 32px; background: color-mix(in oklab, var(--accent) 12%, var(--surface)); box-shadow: 0 1px 0 var(--line) inset }
+.wl-brand .sx-mark-lg { align-items: flex-start }
+.wl-brand .sx-mark-lg .sx-mark-word { height: 26px }
+.wl-tag { margin: 0; max-width: 30ch; font: 500 20px/1.4 var(--font-body); color: var(--ink); text-wrap: balance }
+.wl-feats { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px }
+.wl-feats li { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14.5px; line-height: 1.4 }
+.wl-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface); color: var(--accent); border: 1px solid var(--line) }
+
+.wl-side { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px 20px; gap: 24px }
+.wl-side-in { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 14px; margin-top: auto }
+.wl-side h1 { margin: 0; font: 600 26px/1.2 var(--font-body); letter-spacing: -.02em }
+.wl-side .wl-sub { margin: 0 0 8px; color: var(--muted); font-size: 14.5px; line-height: 1.5 }
+.wl-google { width: 100%; height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: 500 15px/1 var(--font-body); transition: transform .15s var(--snap), filter .15s }
+.wl-google:hover { filter: brightness(1.06) }
+.wl-google:active { transform: scale(.98) }
+.wl-google:disabled { opacity: .6; cursor: progress }
+.wl-google:focus-visible { outline: 3px solid var(--pick); outline-offset: 3px }
+.wl-note { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; text-align: center }
+.wl-err { margin: 0; padding: 10px 12px; border-radius: var(--r-row); background: color-mix(in oklab, var(--bad) 10%, var(--surface)); color: var(--bad); font-size: 13px; line-height: 1.45 }
+.wl-ver { margin: auto 0 0; color: var(--muted); font-size: 12px; opacity: .8 }
+
+/* Boot: an unhurried progress line under the heading. */
+.wl-bar { position: relative; height: 3px; border-radius: 3px; background: var(--soft-2); overflow: hidden }
+.wl-bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--accent); animation: wl-slide 1.3s var(--drift, ease-in-out) infinite }
+@keyframes wl-slide { from { transform: translateX(-100%) } to { transform: translateX(250%) } }
+.wl-retry { align-self: flex-start; height: 38px; padding: 0 16px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 14px }
+
+/* Entrance: the brand settles, then the side. */
+.wl-brand-in > *, .wl-side-in > * { animation: wl-in .5s var(--drift, cubic-bezier(.2, .8, .2, 1)) backwards }
+.wl-brand-in > :nth-child(2) { animation-delay: .05s }
+.wl-brand-in > :nth-child(3) { animation-delay: .1s }
+.wl-brand-in > :nth-child(4) { animation-delay: .15s }
+.wl-side-in > * { animation-delay: .18s }
+@keyframes wl-in { from { opacity: 0; transform: translateY(8px) } }
+@media (prefers-reduced-motion: reduce) { .wl *, .wl *::after { animation: none !important; transition: none !important } }
+html:not([data-motion='on']) .wl *, .nomo .wl * { animation: none !important }
+html:not([data-motion='on']) .wl-bar::after, .nomo .wl-bar::after { animation: none !important; width: 100%; opacity: .5 }
+
+@media (max-width: 760px) {
+  .wl { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr }
+  .wl-brand { padding: 40px 16px 28px; border-right: 0; border-bottom: 1px solid var(--line) }
+  .wl-brand-in { align-items: center; text-align: center; gap: 14px }
+  .wl-brand .sx-mark-lg { align-items: center }
+  .wl-fox { width: 88px; height: 88px; border-radius: 26px }
+  .wl-fox > span { transform: scale(.8) }
+  .wl-tag { font-size: 17px }
+  .wl-feats { display: none }
+  .wl-side { padding: 28px 16px 16px; justify-content: flex-start }
+  .wl-side-in { margin-top: 0; text-align: center }
+  .wl-retry { align-self: center }
+}

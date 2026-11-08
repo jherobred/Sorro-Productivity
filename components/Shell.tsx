@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Icon } from './Icon';
 import { Fox } from './Fox';
 import { Wordmark } from './Wordmark';
+import { Welcome } from './Welcome';
 import { MoreSheet } from './MoreSheet';
 import { SidePanel } from './SidePanel';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
@@ -136,7 +137,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const holdStart = () => { press.current = window.setTimeout(() => { press.current = null; setCapture(true); }, 500); };
   const holdEnd = (e: React.PointerEvent) => { if (press.current === null) e.preventDefault(); else { clearTimeout(press.current); press.current = null; } };
 
-  if (!ready) return <div className="sx-loading" role="status"><Wordmark size="lg" />{authError ? <div><p>Couldn’t open your session. Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></div> : null}</div>;
+  if (!ready) return <Welcome label="Opening Sorro">
+    {authError ? <>
+      <h1>Can’t open your session</h1>
+      <p className="wl-sub">Check your connection, then try again.</p>
+      <button className="wl-retry" onClick={() => location.reload()}>Try again</button>
+    </> : <div role="status" style={{ display: 'contents' }}>
+      <h1>Opening your workspace</h1>
+      <p className="wl-sub">Getting your notes, calendar and tasks ready.</p>
+      <div className="wl-bar" aria-hidden="true" />
+    </div>}
+  </Welcome>;
   return <div className="sx" data-rail={rail} data-phone={phone} data-tablet={tablet}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">

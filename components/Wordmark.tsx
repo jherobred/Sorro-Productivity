@@ -10,14 +10,14 @@ const POSE: Record<FoxMood, FoxPose> = { sit: 'sit', run: 'run', sleep: 'sleep',
  * The SORRO lockup: the fox, alive, beside the tracked wordmark from the Grok brand.
  * With `onFox` the fox is a button that opens its chat and the word links home, so no button sits inside a link.
  */
-export function Wordmark({ size = 'md', word = true, onFox, bubble }: { size?: 'sm' | 'md' | 'lg'; word?: boolean; onFox?: () => void; bubble?: ReactNode }) {
+export function Wordmark({ size = 'md', word = true, fox: withFox = true, onFox, bubble }: { size?: 'sm' | 'md' | 'lg'; word?: boolean; fox?: boolean; onFox?: () => void; bubble?: ReactNode }) {
   const mood = useFoxMood();
   const px = size === 'sm' ? 18 : size === 'lg' ? 34 : 22;
   const fox = <Fox pose={POSE[mood]} size={px} />;
   const title = mood === 'sleep' ? 'Asleep. Do something to wake it.' : mood === 'talk' ? 'Sorro has a reply for you.' : undefined;
-  const svg = word && <svg className="sx-mark-word" viewBox="0 0 132 20" role="img" aria-label="SORRO"><text x="0" y="16" fontFamily="var(--font-mark)" fontSize="19" fontWeight="500" letterSpacing="7.4">SORRO</text></svg>;
+  const svg = word && <svg className="sx-mark-word" viewBox="0 0 125 20" role="img" aria-label="SORRO"><text x="0" y="16" fontFamily="var(--font-mark)" fontSize="19" fontWeight="500" textLength="125" lengthAdjust="spacing">SORRO</text></svg>;
   return <span className={'sx-mark sx-mark-' + size} data-mood={mood}>
-    {onFox
+    {!withFox ? null : onFox
       ? <button type="button" className="sx-fox sx-fox-btn" data-part="S.fox" aria-label="Talk to Sorro" title={title ?? 'Talk to Sorro'} onClick={onFox}>{fox}</button>
       : <span className="sx-fox" data-part="S.fox" title={title}>{fox}</span>}
     {svg && (onFox ? <Link href="/home/" aria-label="Sorro home">{svg}</Link> : svg)}
