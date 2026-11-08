@@ -21,7 +21,8 @@ export function FoxBubble({ nudge, onOpen, onDismiss, onMove }: { nudge: ShownNu
   // Leaving the bubble from inside it puts the keyboard back on the fox, not on the page body.
   const leave = (f: () => void) => () => { const inside = ref.current?.contains(document.activeElement); f(); if (inside) document.querySelector<HTMLElement>('.sx-fox-btn')?.focus(); };
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') leave(onDismiss)(); };
+    // Only when the bubble has focus: Escape closing a menu or sheet elsewhere must not throw away the day's wrap-up.
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) leave(onDismiss)(); };
     addEventListener('keydown', esc);
     return () => removeEventListener('keydown', esc);
   });

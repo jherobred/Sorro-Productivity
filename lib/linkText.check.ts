@@ -32,3 +32,7 @@ test('a site reads as host and path', () => {
   assert.deepEqual(siteOf('https://www.youtube.com/watch?v=1'), { host: 'youtube.com', path: '/watch' });
   assert.deepEqual(siteOf('https://ust.edu.ph/'), { host: 'ust.edu.ph', path: '' });
 });
+test('a malformed stored link gives a host, never a throw (News reads every stored link)', () => {
+  assert.doesNotThrow(() => siteOf('https://'));
+  assert.equal(typeof siteOf('https://').host, 'string');
+});

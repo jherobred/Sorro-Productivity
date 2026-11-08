@@ -12,6 +12,7 @@ import { useEdition, useEditionDays, useKeyDate, markRead, rotateKey, fillWeekly
 import { grokPrompt, dropUrl, scheduleHint, type PromptKind } from '@/lib/newsPrompts';
 import { useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
+import { siteOf } from '@/lib/linkText';
 import './news.css';
 
 /** "(…)" in a summary is a plain-word note from the prompt: set apart so the main sentence still reads first. */
@@ -21,7 +22,8 @@ function Plain({ text }: { text: string }) {
 
 function Story({ it }: { it: NewsItem }) {
   const [img, setImg] = useState(!!it.image);
-  const host = it.link ? new URL(it.link).hostname.replace(/^www\./, '') : '';
+  // siteOf never throws: one bad stored link must not take the whole page down.
+  const host = it.link ? siteOf(it.link).host : '';
   return <article className="nw-story">
     {img && <figure className="nw-fig"><img src={it.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setImg(false)} /></figure>}
     <h3>{it.link ? <a href={it.link} target="_blank" rel="noreferrer">{it.headline}</a> : it.headline}</h3>

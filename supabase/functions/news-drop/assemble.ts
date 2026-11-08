@@ -15,7 +15,8 @@ export function assemble(parts: Part[]): string | null {
   for (let i = 1; i <= of; i++) {
     const t = byPart.get(i);
     if (t === undefined) return null;
-    out += t;
+    // Grok splits only between lines, so each part is whole lines: keep a line break between parts.
+    out += out && !out.endsWith('\n') ? '\n' + t : t;
   }
   return out;
 }
@@ -35,9 +36,17 @@ export function parseItems(text: string): { title: string; items: Item[] } {
     const line = raw.trim().replace(/^[-*•]\s*/, '');
     if (!line) continue;
     const c = line.split('|').map(x => x.trim());
-    if (c.length >= 5) items.push({ headline: c[0], summary: c[1], why: c[2], image: url(c[3]), link: url(c[4]) });
-    else if (c.length >= 2) items.push({ headline: c[0], summary: c[1] ?? '', why: '', image: '', link: url(c[2]) });
-    else if (!title) title = line;
+    if (c.length < 2) { if (!title) title = line; continue; }
+    // The link is the last cell; the image is any other web address; what is left is the summary and, last, why it matters.
+    // Reading by content, not position, keeps a missing image cell or a stray | in the text from losing the link.
+    const link = url(c[c.length - 1]);
+    const rest = c.slice(1, link ? -1 : undefined);
+    let imgAt = -1;
+    rest.forEach((x, k) => { if (url(x)) imgAt = k; });
+    const image = imgAt >= 0 ? rest[imgAt] : '';
+    const text = rest.filter((x, k) => k !== imgAt && x);
+    const why = text.length >= 2 ? text[text.length - 1] : '';
+    items.push({ headline: c[0], summary: (text.length >= 2 ? text.slice(0, -1) : text).join(' | '), why, image, link });
   }
   return { title, items };
 }
