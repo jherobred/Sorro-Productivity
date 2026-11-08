@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { Fox } from '@/components/Fox';
-import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, useFoxOpener, setFoxOpener, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
+import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, useFoxOpener, setFoxOpener, useInflight, setInflight, getInflight, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
 import { suggestions } from '@/lib/assistantLogic';
 import { useTasks, useTaskActions } from '@/lib/tasks';
 import { useEvents } from '@/lib/events';
@@ -17,6 +17,7 @@ import { useNotebooks } from '@/lib/notes';
 import { ymd } from '@/lib/days';
 import { foxBusy, foxGlad } from '@/lib/foxMood';
 import { askLocalModel, useLocalModel } from '@/lib/localModel';
+import { toast } from '@/lib/toast';
 import '@/components/side-panel.css';
 import '@/app/(shell)/home/home.css';
 
@@ -41,6 +42,7 @@ let composer: HTMLTextAreaElement | null = null;
 /** Puts the cursor in the chat's message box, if a chat is on screen. */
 export function focusFoxComposer() { composer?.focus(); }
 
+
 export function FoxChat({ variant, context, initial, onReply }: { variant: 'page' | 'sheet'; context?: string; initial?: { text: string; context?: string }; onReply?: () => void }) {
   const qc = useQueryClient();
   const chats = useChats();
@@ -48,8 +50,11 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
   const saved = useChatMessages(chatId);
   const [local, setLocal] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [stream, setStream] = useState('');
+  const flight = useInflight();
+  const busy = !!flight;
+  const stream = flight?.stream ?? '';
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [threads, setThreads] = useState(false);
   const undo = useAssistantUndo();
   const local_ = useLocalModel();
@@ -74,15 +79,16 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
   const today = ymd(new Date());
   const ideas = suggestions({ dueToday: tasks.filter(t => !t.done && t.due_on === today).length, overdue: tasks.filter(t => !t.done && t.due_on && t.due_on < today).length, eventsTomorrow, notebooks });
 
-  const messages = [...(openerMsg ? [openerMsg] : []), ...(saved.data ?? []), ...local];
+  const asking: ChatMessage[] = flight && !local.some(m => m.id === 'u' + flight.at) ? [{ id: 'u' + flight.at, role: 'user', content: flight.user, tools: [], created_at: flight.at }] : [];
+  const messages = [...(openerMsg ? [openerMsg] : []), ...(saved.data ?? []), ...local, ...asking];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [messages.length, busy, stream]);
 
   async function send(text: string, ctx = context) {
     const t = text.trim();
-    if (!t || busy) return;
+    if (!t || getInflight()) return;
     const stamp = new Date().toISOString();
     setLocal(l => [...l, { id: 'u' + stamp, role: 'user', content: t, tools: [], created_at: stamp }]);
-    setDraft(''); setBusy(true); setStream(''); foxBusy(1);
+    setDraft(''); setInflight({ user: t, stream: '', at: stamp }); foxBusy(1);
     try {
       // Offline with the small model downloaded: answer from what this device has cached, change nothing.
       if (!navigator.onLine && local_.status === 'ready') {
@@ -92,7 +98,7 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
         return;
       }
       const said = openerMsg ? `Sorro just said: "${openerMsg.content}".` : '';
-      const r = await sendToAssistant(chatId, t, [said, ctx].filter(Boolean).join(' ') || undefined, setStream);
+      const r = await sendToAssistant(chatId, t, [said, ctx].filter(Boolean).join(' ') || undefined, s => setInflight({ user: t, stream: s, at: stamp }));
       if (r.tools.length) foxGlad();
       onReply?.();
       // A repeating task the assistant ticked gets its next instance here, as a tick in Tasks would.
@@ -105,8 +111,12 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
       const err = e as AssistantError;
       const wait = err.retry ? ` Try again in about ${err.retry} seconds.` : '';
       if (err.chatId && err.chatId !== chatId) setChatId(err.chatId);
+      // The sheet was shut while it failed: say so, since its error card died with it.
+      if (!alive.current) { toast((err.message || 'Sorro could not answer.') + wait); onReply?.(); return; }
+      // The server saved this turn with what it did; the chat refetch shows it, so no second copy here.
+      if (err.tools?.length) { setLocal([]); return; }
       setLocal(l => [...l, { id: 'e' + stamp, role: 'assistant', content: '', tools: err.tools ?? [], created_at: stamp, error: (err.message || 'Something went wrong.') + wait + (err.tools?.length ? ' What it already did is below.' : '') }]);
-    } finally { setBusy(false); setStream(''); foxBusy(-1); }
+    } finally { setInflight(null); foxBusy(-1); }
   }
 
   useEffect(() => {
@@ -147,8 +157,8 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
       <div ref={end} />
     </section>
 
-    <form className="hm-composer" data-part="H.composer" onSubmit={e => { e.preventDefault(); void send(draft); }}>
-      <textarea ref={el => { if (el) composer = el; else if (composer && !composer.isConnected) composer = null; }} value={draft} rows={1} placeholder="Ask Sorro or tell it what to add" aria-label="Message Sorro"
+    <form className="hm-composer" data-part={page ? 'H.composer' : 'F.composer'} onSubmit={e => { e.preventDefault(); void send(draft); }}>
+      <textarea ref={el => { composer = el; }} value={draft} rows={1} placeholder="Ask Sorro or tell it what to add" aria-label="Message Sorro"
         onChange={e => { setDraft(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 180) + 'px'; }}
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(draft); } }} />
       <button className="sx-pill" disabled={!draft.trim() || busy} aria-label="Send"><Icon name="send" size={16} /></button>

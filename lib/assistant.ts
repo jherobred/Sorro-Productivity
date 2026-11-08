@@ -130,6 +130,15 @@ export async function fetchNudgeLine(n: Nudge): Promise<string> {
   return String((data as { text?: string })?.text ?? '');
 }
 
+let inflight: { user: string; stream: string; at: string } | null = null;
+const inflightListeners = new Set<() => void>();
+/** The message being answered right now, shared by every chat on screen, so a reopened sheet shows it and cannot send twice. */
+export function setInflight(v: typeof inflight) { inflight = v; inflightListeners.forEach(f => f()); }
+export const getInflight = () => inflight;
+export function useInflight() {
+  return useSyncExternalStore(f => { inflightListeners.add(f); return () => { inflightListeners.delete(f); }; }, () => inflight, () => null);
+}
+
 let opener: string | null = null;
 const openerListeners = new Set<() => void>();
 /** A line the fox said first (a nudge): the next chat on screen opens with it. */

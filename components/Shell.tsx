@@ -15,7 +15,7 @@ import { focusFoxComposer } from './FoxChat';
 import { FoxBubble } from './FoxBubble';
 import { useFoxNudges } from '@/lib/useFoxNudges';
 import { setFoxOpener } from '@/lib/assistant';
-import { useTaskActions } from '@/lib/tasks';
+import { useTaskActions, useTasks } from '@/lib/tasks';
 import { toast } from '@/lib/toast';
 import { ToastHost } from './ToastHost';
 import { AskHost } from './AskHost';
@@ -120,7 +120,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const foxReplied = () => { if (!foxOpenRef.current) foxTalk(true); };
   const fox = useFoxNudges();
   const TA = useTaskActions();
-  const moveToTomorrow = (ids: string[]) => {
+  const liveTasks = useTasks().data ?? [];
+  const moveToTomorrow = (picked: string[]) => {
+    // Only what is still open now: a task finished or deleted since the bubble appeared stays put.
+    const ids = picked.filter(id => liveTasks.some(t => t.id === id && !t.done && !t.deleted_at));
     const d = new Date(); d.setDate(d.getDate() + 1);
     const due = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     for (const id of ids) TA.update.mutate({ id, patch: { due_on: due } });

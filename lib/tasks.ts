@@ -588,7 +588,7 @@ export function useTaskActions() {
           // Read before comeBack, which moves a repeat's rule to the next instance.
           const repeats = isRepeat(getPrefs().taskRepeat?.[v.id]);
           const title = previous.title.trim().toLowerCase();
-          const series = (queryClient.getQueryData<Task[]>(TASKS_KEY) ?? []).filter(t => t.title.trim().toLowerCase() === title)
+          const series = (queryClient.getQueryData<Task[]>(TASKS_KEY) ?? []).filter(t => !t.deleted_at && t.title.trim().toLowerCase() === title)
             .map(t => t.id === v.id ? { ...t, done: true, completed_at: new Date().toISOString() } : t);
           const days = repeats ? streak(series) : 0;
           foxReact(STREAK_MILESTONES.includes(days) ? { kind: 'streak', id: v.id, title: previous.title, days } : { kind: 'task_done', id: v.id, title: previous.title });

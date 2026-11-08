@@ -28,14 +28,24 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
   const data = useRef({ tasks: tasks.data ?? [], events: events.data ?? [] });
   data.current = { tasks: tasks.data ?? [], events: events.data ?? [] };
   const opened = useRef(true);
+  const shown = useRef<ShownNudge | null>(null);
+  shown.current = nudge;
+  // Only the newest request may put up a bubble; an older one finishing late is dropped.
+  const latest = useRef(0);
+  // Account prefs arriving is a reason to check again, without re-running on every unrelated pref write.
+  const ready = prefsLoaded();
 
   const show = useCallback(async (n: Nudge) => {
     // Read live: the first render runs on default prefs, before this device's and the account's arrive.
     const may = () => mayShow({ loaded: prefsLoaded(), online: navigator.onLine, proactive: getPrefs().fox?.proactive, visible: document.visibilityState === 'visible', notify: notifyRef.current });
     if (!may()) return;
+    // A reaction never covers the evening wrap-up and its Move button.
+    if (n.kind === 'reaction' && shown.current?.kind === 'evening' && shown.current.moveIds?.length) return;
     // Claimed before the wording is fetched, so a second window or the next tick cannot show it too.
     if (!claimNudge(localStorage, n, new Date())) return;
+    const mine = ++latest.current;
     const line = await nudgeLine(n, fetchNudgeLine);
+    if (mine !== latest.current || !may()) return;
     setNudge({ ...n, line });
     foxTalk(true);
     // Web and Windows: a browser notification only while the app is open in the background.
@@ -59,7 +69,10 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
     const seen = () => { if (document.visibilityState === 'visible') check(true); };
     document.addEventListener('visibilitychange', seen);
     return () => { clearInterval(tick); document.removeEventListener('visibilitychange', seen); };
-  }, [on, loaded, times, show, prefs]);
+  }, [on, loaded, times, show, ready]);
+
+  // Switching the fox off takes a bubble that is already up away too.
+  useEffect(() => { if (!on) { latest.current++; setNudge(null); foxTalk(false); } }, [on]);
 
   useEffect(() => {
     if (!on) return;
@@ -67,7 +80,7 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
   }, [on, show]);
 
   // The phone app: tomorrow's morning and the next evening notification, replaced on every open. Off cancels them.
-  const tomorrow = dayKey(new Date(Date.now() + 86_400_000));
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return dayKey(d); })();
   const dueTomorrow = (tasks.data ?? []).filter(t => !t.done && !t.deleted_at && t.due_on === tomorrow).length;
   useEffect(() => {
     if (!loaded) return;

@@ -14,6 +14,7 @@ export const PARTS = {
   'H.composer': 'Message box',
   'H.threads': 'Past chats',
   'F.chat': 'Fox chat',
+  'F.composer': 'Fox chat message box',
   N: 'Notes',
   'N.shelf': 'Notebook shelf',
   'N.types': 'New page types',

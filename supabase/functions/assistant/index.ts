@@ -136,6 +136,10 @@ async function gemini(key: string, system: string, contents: Content[], withTool
 
 /** Same call as `gemini`, streamed: `onText` gets each piece of text as it arrives; the turn's parts come back whole. */
 async function geminiStream(key: string, system: string, contents: Content[], onText: (t: string) => void) {
+  // 45 s to start, then 30 s of silence at most between pieces: a long reply that keeps coming is never cut off.
+  const idle = new AbortController();
+  let timer = setTimeout(() => idle.abort(), 45_000);
+  const alive = () => { clearTimeout(timer); timer = setTimeout(() => idle.abort(), 30_000); };
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
@@ -145,7 +149,7 @@ async function geminiStream(key: string, system: string, contents: Content[], on
       tools: [{ functionDeclarations: TOOLS }],
       generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
     }),
-    signal: AbortSignal.timeout(45_000),
+    signal: idle.signal,
   });
   if (res.status === 429) throw Object.assign(new Error('rate_limited'), { status: 429, retry: res.headers.get('retry-after') });
   if (!res.ok || !res.body) throw Object.assign(new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: 502 });
@@ -155,6 +159,7 @@ async function geminiStream(key: string, system: string, contents: Content[], on
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
+    alive();
     const { events, rest } = splitSse(buf + value);
     buf = rest;
     for (const ev of events) {
@@ -164,6 +169,7 @@ async function geminiStream(key: string, system: string, contents: Content[], on
       }
     }
   }
+  clearTimeout(timer);
   return parts;
 }
 

@@ -68,4 +68,16 @@ assert generate.keeps_slots('remind me to Fix bike tire next friday', 'pls remin
 assert not generate.keeps_slots('remind me to Fix bike tire next friday', 'remind me to fix the bike next friday', {'title': 'Fix bike tire'})
 assert not generate.keeps_slots('remind me to Fix bike tire next friday', 'remind me to Fix bike tire this friday', {'title': 'Fix bike tire'})
 
+# M9: the router eval holds enough distinct chat lines to mean something, none a near-copy of a train line.
+ev_chat = {r['messages'][1]['content'].strip(' !.:)').lower() for r in load('router.eval') if r['expect']['route'] == 'chat'}
+assert len(ev_chat) >= 10, sorted(ev_chat)
+tr_chat = {r['messages'][1]['content'].strip(' !.:)').lower() for r in rows if r['expect']['route'] == 'chat'}
+assert not {c for c in ev_chat if c.replace(' fox', '').replace(' sorro', '') in tr_chat}, sorted(ev_chat)
+# M7: a task list never holds the requested title twice, so the id label is unambiguous.
+for r in actor:
+    if r['expect']['name'] == 'complete_task':
+        listed = json.loads(r['messages'][3]['content'])['tasks']
+        titles = [t['title'] for t in listed]
+        assert len(titles) == len(set(titles)), titles
+
 print('ok')

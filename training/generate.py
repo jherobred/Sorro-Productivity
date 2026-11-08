@@ -137,7 +137,7 @@ def tool(name, result):
 
 def fake_tasks(rng, keep=None, n=3, today=None):
     rows = [{'id': new_id(rng), 'title': t, 'due_on': (today + timedelta(days=rng.randint(-3, 5))).isoformat() if today and rng.random() < 0.7 else None}
-            for t in rng.sample(TITLES, n)]
+            for t in rng.sample([t for t in TITLES if t != keep], n)]  # never the requested title twice
     if keep:
         rows[rng.randrange(n)] = {'id': new_id(rng), 'title': keep, 'due_on': None}
     return rows
@@ -149,18 +149,23 @@ ROUTER_READ = ["what's due {when}?", 'do I have anything {when}', 'show me my ov
                'find my notes on {topic}', 'any news today?', 'when am I free {when}?', 'what did I write about {topic}',
                'how many tasks are left this week', 'is anything overdue?', 'list my tasks', 'what meetings do I have {when}',
                'read me the digest', 'do I have a free hour {when}', 'where are my {topic} notes', "what's my week look like",
-               'what tasks are on my School list', 'did I finish {title}?', 'any events {when}?', 'search notes for {topic}']
+               'what tasks are on my School list', 'did I finish {title}?', 'any events {when}?', 'search notes for {topic}',
+               'how busy am I {when}', 'what did Grok send', 'is {title} still open', 'what is my next meeting', 'show me notes about {topic}']
 ROUTER_WRITE = ['add {title} {when}', 'remind me to {title} {when}', 'mark {title} as done', 'schedule {event} {when} at {time}',
                 'write a note about {topic}', "add '{snippet}' to my {topic} note", 'put {title} on my {list} list',
                 'I finished {title}', 'book {event} {when} at {time}', 'new task: {title}', 'create a note called {topic}',
                 'tick off {title}', 'add {event} to my calendar {when}', 'note this down: {snippet}', 'high priority: {title}',
                 'set up {event} {when} at {time} at {place}', 'done with {title}', 'jot down {snippet} in my {topic} note',
-                'add a task to {title}', 'make an event {event} {when}']
+                'add a task to {title}', 'make an event {event} {when}', 'move {title} to {when}', 'log {snippet} under {topic}',
+               'remind me {when} about {title}', 'put {event} at {time} {when}', 'cross off {title}']
 ROUTER_CHAT = ['hi', 'hello', 'hey sorro', 'good morning', 'thanks', 'thank you!', 'you are the best', 'lol', 'how are you?',
                "i'm so tired", 'good night', 'bye', 'what are you?', 'are you a fox?', "i'm bored", 'tell me a joke',
                'ugh mondays', 'you rock', 'ok', 'nice', 'i did it!!', 'who made you?', "i'm stressed", 'yo', 'sup',
                'haha', 'love you sorro', 'what is the meaning of life', 'nevermind', 'cool cool', 'wish me luck',
-               'i hate exams', "it's friday", 'brb', 'do you sleep?', 'can you dance?', 'thanks fox', 'hmm', 'gm', 'gn']
+               'i hate exams', "it's friday", 'brb', 'do you sleep?', 'can you dance?', 'thanks fox', 'hmm', 'gm', 'gn',
+               'what time is it in your head', 'are you real', 'i passed my quiz', 'my wifi is dying', 'rate my day',
+               'do foxes like coffee', 'motivate me', 'should i nap', 'i got the internship', 'what do you think of me',
+               'this app is cute', 'sing something', 'how old are you', 'tell me something nice', 'i forgot what i was doing']
 
 
 def fill(t: str, rng: random.Random, today: date) -> str:
