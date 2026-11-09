@@ -276,6 +276,17 @@ export default function CalendarPage() {
     window.history.replaceState(window.history.state, '', url.pathname + url.search);
   }, [events, isPending]);
 
+  // A day picked elsewhere (the Month widget) arrives as ?day=2026-11-14: open on that day.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(url.searchParams.get('day') ?? '');
+    if (!m) return;
+    setSelectedDate(new Date(+m[1], +m[2] - 1, +m[3]));
+    viewRef.current?.('day');
+    url.searchParams.delete('day');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search);
+  }, []);
+
   /* ------------------------------------------------------------ paging */
 
   /** Prev/next moves by whatever the view actually shows. */

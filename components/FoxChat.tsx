@@ -81,7 +81,8 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
 
   const asking: ChatMessage[] = flight && !local.some(m => m.id === 'u' + flight.at) ? [{ id: 'u' + flight.at, role: 'user', content: flight.user, tools: [], created_at: flight.at }] : [];
   const messages = [...(openerMsg ? [openerMsg] : []), ...(saved.data ?? []), ...local, ...asking];
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [messages.length, busy, stream]);
+  // Only once there is a conversation: an empty Home must not jump past its widgets on open.
+  useEffect(() => { if (messages.length || busy) end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [messages.length, busy, stream]);
 
   async function send(text: string, ctx = context) {
     const t = text.trim();

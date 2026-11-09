@@ -91,19 +91,47 @@ function Focus() {
   </Frame>;
 }
 
+/** How full a day is, 0 to 4, from its events plus open tasks due. */
+export const dayLoad = (n: number) => Math.min(n, 4);
+
 function Month() {
-  const first = useMemo(() => { const d = startOfDay(); d.setDate(1); return d; }, []);
+  const [offset, setOffset] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const first = useMemo(() => { const d = startOfDay(); d.setDate(1); d.setMonth(d.getMonth() + offset); return d; }, [offset]);
   const lead = (first.getDay() + 6) % 7;
   const gridStart = useMemo(() => { const d = new Date(first); d.setDate(d.getDate() - lead); return d; }, [first, lead]);
   const q = useEvents(gridStart, 42);
-  const count = new Map<string, number>();
-  for (const e of q.data ?? []) if (!e.deleted_at) { const k = ymd(new Date(e.starts_at)); count.set(k, (count.get(k) ?? 0) + 1); }
+  const tasks = useTasks().data ?? [];
+  const { complete } = useTaskActions();
+  const on = new Map<string, { events: Ev[]; tasks: Task[] }>();
+  const at = (k: string) => { let v = on.get(k); if (!v) on.set(k, v = { events: [], tasks: [] }); return v; };
+  for (const e of q.data ?? []) if (!e.deleted_at) at(ymd(new Date(e.starts_at))).events.push(e);
+  for (const t of tasks) if (!t.done && !t.deleted_at && t.due_on) at(t.due_on).tasks.push(t);
   const today = ymd(new Date());
   const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(gridStart); d.setDate(d.getDate() + i); return d; });
+  const day = picked ? on.get(picked) ?? { events: [], tasks: [] } : null;
+  const pickedDate = picked ? new Date(picked + 'T12:00') : null;
   return <Frame id="month" title={first.toLocaleDateString([], { month: 'long', year: 'numeric' })} href="/calendar/">
-    <div className="wg-month" role="grid">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="wg-dow">{d}</span>)}
-      {days.map(d => { const k = ymd(d); const n = count.get(k) ?? 0; return <Link key={k} href={`/calendar/?day=${k}`} className="wg-day" data-out={d.getMonth() !== first.getMonth()} data-today={k === today} data-load={Math.min(n, 4)} aria-label={`${d.toDateString()}, ${n} event${n === 1 ? '' : 's'}`}>{d.getDate()}</Link>; })}
+    <div className="wg-monthnav">
+      <button type="button" aria-label="Previous month" onClick={() => setOffset(o => o - 1)}><Icon name="chevronLeft" size={14} /></button>
+      <button type="button" aria-label="Next month" onClick={() => setOffset(o => o + 1)}><Icon name="chevronRight" size={14} /></button>
+      <span />
+      {offset !== 0 && <button type="button" onClick={() => setOffset(0)}>Today</button>}
     </div>
+    <div className="wg-month">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="wg-dow" aria-hidden="true">{d}</span>)}
+      {days.map(d => {
+        const k = ymd(d); const v = on.get(k); const ev = v?.events.length ?? 0, ta = v?.tasks.length ?? 0;
+        return <button type="button" key={k} className="wg-day" data-out={d.getMonth() !== first.getMonth()} data-today={k === today} data-past={k < today} data-load={dayLoad(ev + ta)}
+          aria-pressed={k === picked} aria-label={`${d.toDateString()}, ${ev} event${ev === 1 ? '' : 's'}, ${ta} task${ta === 1 ? '' : 's'} due`} onClick={() => setPicked(k === picked ? null : k)}>{d.getDate()}</button>;
+      })}
+    </div>
+    {day && pickedDate && <div className="wg-dayinfo" aria-live="polite">
+      <p>{pickedDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}<Link href={`/calendar/?day=${picked}`}>Open in Calendar</Link></p>
+      {day.events.length + day.tasks.length ? <ul className="wg-list">
+        {day.events.sort((a, b) => a.starts_at.localeCompare(b.starts_at)).slice(0, 4).map(e => <li key={e.id}><time>{e.all_day ? 'All day' : time(e.starts_at)}</time><span style={{ '--chip': e.color || 'var(--accent)' } as React.CSSProperties} className="wg-chip" /><strong>{e.title}</strong></li>)}
+        {day.tasks.slice(0, 4).map(t => <li key={t.id}><button className="wg-tick" aria-label={`Complete ${t.title}`} onClick={() => complete.mutate({ id: t.id, done: true })}><Icon name="check" size={12} /></button><strong>{t.title}</strong></li>)}
+      </ul> : <Empty>Nothing on this day.</Empty>}
+    </div>}
   </Frame>;
 }
 

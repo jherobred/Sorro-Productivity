@@ -55,12 +55,23 @@
 .wg-capture input { flex: 1; min-width: 0; height: 32px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px }
 .wg-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center }
 .wg-dow { font-size: 11px; color: var(--muted); padding-bottom: 2px }
-.wg-day { height: 28px; display: grid; place-items: center; border-radius: 8px; font-size: 12px; color: var(--ink); text-decoration: none; font-variant-numeric: tabular-nums }
+.wg-day { height: 28px; display: grid; place-items: center; border-radius: 8px; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; cursor: pointer }
 .wg-day[data-out='true'] { color: var(--muted); opacity: .5 }
-.wg-day[data-load='1'] { background: color-mix(in srgb, var(--accent) 10%, transparent) }
-.wg-day[data-load='2'] { background: color-mix(in srgb, var(--accent) 20%, transparent) }
-.wg-day[data-load='3'] { background: color-mix(in srgb, var(--accent) 32%, transparent) }
-.wg-day[data-load='4'] { background: color-mix(in srgb, var(--accent) 46%, transparent) }
+/* Heat: the more events and open tasks on a day, the stronger the tint. Days gone by keep a fainter one. */
+.wg-day[data-load='1'] { background: color-mix(in srgb, var(--accent) 16%, transparent) }
+.wg-day[data-load='2'] { background: color-mix(in srgb, var(--accent) 32%, transparent) }
+.wg-day[data-load='3'] { background: color-mix(in srgb, var(--accent) 50%, transparent) }
+.wg-day[data-load='4'] { background: color-mix(in srgb, var(--accent) 72%, transparent); color: var(--accent-ink) }
+.wg-day[data-past='true'] { opacity: .55 }
 .wg-day[data-today='true'] { outline: 1.5px solid var(--ink); outline-offset: -1.5px; font-weight: 600 }
-.wg-day:hover { background: var(--soft-2) }
+.wg-day:hover { box-shadow: inset 0 0 0 1.5px var(--muted) }
+.wg-day[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--pick) }
+.wg-day:focus-visible, .wg-monthnav button:focus-visible { outline: 3px solid var(--pick); outline-offset: 1px }
+.wg-monthnav { display: flex; align-items: center; gap: 2px; margin: -4px 0 4px }
+.wg-monthnav button { display: grid; place-items: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 8px; color: var(--muted); font-size: 12px }
+.wg-monthnav button:hover { background: var(--soft-2); color: var(--ink) }
+.wg-monthnav span { flex: 1 }
+.wg-dayinfo { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px }
+.wg-dayinfo > p { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 600 12.5px/1.3 var(--font-body); color: var(--ink) }
+.wg-dayinfo > p a { margin-left: auto; color: var(--muted); font-weight: 400; text-decoration: underline }
 :is(.wg a, .wg button, .wg input):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }

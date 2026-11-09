@@ -1,4 +1,4 @@
-/* T1 Home: the assistant. The chat keeps a 760px measure; widgets scroll sideways above it. */
+/* T1 Home: the assistant. The chat keeps a 760px measure; widgets wrap into rows above it. */
 .hm { display: flex; flex-direction: column; min-height: 100%; max-width: 980px; margin: 0 auto; gap: 14px }
 .hm-bar { display: flex; gap: 6px; justify-content: center }
 .hm-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); transition: transform .2s var(--snap), background-color .15s }

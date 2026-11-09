@@ -1,11 +1,13 @@
-/* The widget board: reorder by the grip, remove with ×, add with +. Home lays it out in a row, the panel in a column. */
+/* The widget board: move by the grip, remove with ×, add with +. Home lays it out as a grid that wraps into rows, the panel in a column. */
 .wb { display: flex; gap: 10px; min-width: 0 }
 .wb[data-axis='y'] { flex-direction: column }
 .wb[data-axis='x'] { align-items: stretch }
 .wb-list { display: flex; gap: 10px; min-width: 0; flex: 1 }
 .wb[data-axis='y'] .wb-list { flex-direction: column }
-.wb[data-axis='x'] .wb-list { overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x proximity; scrollbar-width: thin }
-.wb[data-axis='x'] .wb-item { flex: 0 0 clamp(220px, 26%, 300px); scroll-snap-align: start }
+/* Rows wrap, so nothing scrolls sideways. The scroll stays only as a fallback for a screen narrower than one widget. */
+.wb[data-axis='x'] .wb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: stretch; overflow-x: auto; padding: 2px; scrollbar-width: thin }
+.wb[data-axis='x'] .wb-item { min-width: 0 }
+.wb-item[data-over='true'] { outline: 2px dashed var(--pick); outline-offset: 2px }
 .wb-item { position: relative; border-radius: var(--r-tile); background: transparent }
 .wb-item > .wg { height: 100% }
 .wb[data-axis='x'] .wb-item > .wg { background: var(--surface) }
@@ -26,7 +28,7 @@
 .wb[data-axis='y'] .wb-addwrap { justify-content: center }
 .wb-add { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-pill); border: 1px dashed var(--line); color: var(--muted); background: transparent }
 .wb[data-axis='y'] .wb-add { width: 100%; height: 36px; border-radius: var(--r-tile) }
-.wb[data-axis='x'] .wb-add { height: 100%; min-height: 96px; width: 44px; border-radius: var(--r-tile) }
+.wb[data-axis='x'] .wb-add { width: 40px; height: 40px; margin-top: 2px }
 .wb-add:hover, .wb-add[aria-expanded='true'] { border-style: solid; color: var(--accent); background: var(--soft) }
 .wb-menu { position: absolute; top: calc(100% + 8px); z-index: 40; width: min(300px, calc(100vw - 32px)); max-height: min(60dvh, 420px); overflow: auto;
   padding: 6px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 16px 40px rgb(0 0 0 / .16); transform-origin: top }
@@ -45,6 +47,8 @@
 .wb-none { align-self: center; margin: 0 }
 
 @media (max-width: 760px) {
-  .wb[data-axis='x'] .wb-item { flex-basis: 82% }
+  .wb[data-axis='x'] .wb-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) }
+  .wb[data-axis='x'] { flex-direction: column }
+  .wb[data-axis='x'] .wb-add { width: 100%; height: 36px; margin: 0; border-radius: var(--r-tile) }
   .wb[data-axis='x'] .wb-menu { top: calc(100% + 8px); right: 0 }
 }
