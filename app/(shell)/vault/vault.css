@@ -1,0 +1,52 @@
+/* T5 Vault: an add bar, filter chips, and a shelf of cards for links and files. */
+.vt { position: relative; max-width: 1080px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px }
+.vt-add { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); color: var(--muted) }
+.vt-add:focus-within { border-color: var(--pick) }
+.vt-add input:not([hidden]) { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--ink); font: 15px/1.4 var(--font-body) }
+.vt-add input:focus { outline: none }
+.vt-upload { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); flex: none }
+.vt-upload:hover { background: var(--soft-2) }
+.vt-upload:disabled { opacity: .6 }
+.vt-hint { margin: -4px 4px 4px; color: var(--muted); font-size: 12.5px }
+
+.vt-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
+.vt-chips { display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
+.vt-chips button { min-height: 32px; padding: 0 14px; border-radius: var(--r-pill); color: var(--muted); font-size: 13px }
+.vt-chips [aria-selected='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
+.vt-search { margin-left: auto; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--muted); min-width: min(240px, 100%) }
+.vt-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 13.5px/1 var(--font-body) }
+.vt-search input:focus { outline: none }
+.vt-search:focus-within { border-color: var(--pick) }
+
+.vt-shelf { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px }
+.vt-card { position: relative; border-radius: var(--r-tile); background: var(--surface); border: 1px solid var(--line); overflow: hidden; animation: row-in .32s var(--drift) backwards; transition: transform .2s var(--snap), border-color .15s }
+.vt-card:hover { border-color: var(--soft-2); transform: translateY(-2px) }
+.vt-card[data-kept='true'] { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)) }
+.vt-open { width: 100%; height: 100%; display: flex; flex-direction: column; text-align: left; color: var(--ink); text-decoration: none }
+.vt-face { aspect-ratio: 16 / 10; display: grid; place-items: center; background: var(--soft); color: var(--muted); overflow: hidden }
+.vt-face img { width: 100%; height: 100%; object-fit: cover; display: block }
+.vt-letter { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--surface); color: var(--accent); font: 600 22px/1 var(--font-body) }
+.vt-text { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; min-width: 0 }
+.vt-text strong { font: 500 14px/1.35 var(--font-body); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere }
+.vt-text small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.vt-text em { color: var(--muted); font-size: 12.5px; font-style: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.vt-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; opacity: 0; transition: opacity .15s var(--snap) }
+.vt-card:hover .vt-tools, .vt-card:focus-within .vt-tools, .vt-card[data-kept='true'] .vt-tools { opacity: 1 }
+@media (pointer: coarse) { .vt-tools { opacity: 1 } }
+.vt-tools button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: color-mix(in oklab, var(--surface) 88%, transparent); color: var(--muted) }
+.vt-tools button:hover { color: var(--ink); background: var(--surface) }
+.vt-tools [aria-pressed='true'] { color: var(--accent) }
+.vt-card[data-kept='true'] .vt-tools button:not([aria-pressed='true']) { opacity: 0 }
+.vt-card[data-kept='true']:hover .vt-tools button, .vt-card[data-kept='true']:focus-within .vt-tools button { opacity: 1 }
+
+.vt-none { margin: 24px 4px; color: var(--muted); font-size: 14px }
+.vt-none button { color: var(--ink); text-decoration: underline }
+.vt-drop { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px; border: 2px dashed var(--pick); border-radius: var(--r-panel); background: color-mix(in oklab, var(--bg) 86%, transparent); color: var(--ink); font: 500 15px/1 var(--font-body); pointer-events: none }
+:is(.vt-upload, .vt-chips button, .vt-open, .vt-tools button, .vt-none button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.nomo .vt-card { animation: none; transition: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .vt-card { animation: none; transition: none } }
+@media (max-width: 760px) {
+  .vt-shelf { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+  .vt-search { margin-left: 0; flex: 1 }
+  .vt-upload { padding: 0 12px }
+}

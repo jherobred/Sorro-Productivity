@@ -10,8 +10,9 @@ Covers master up to the 2.0.0 release (2026-11-04).
 ## What changed
 
 - **Basedly is Sorro, productivity only.** Tabs: Home, Notes (`/notebooks/`),
-  Calendar, Tasks, Vault, News (`lib/destinations.ts`). Vault is a placeholder
-  until S5. Trackers and social tabs are gone; the tracker app (S6) forks from
+  Calendar, Tasks, Vault, News (`lib/destinations.ts`). Vault is one shelf of
+  saved links (`lib/links.ts`) and uploaded files (`lib/vault.ts`); attaching
+  them to notes and AI access wait for S5. Trackers and social tabs are gone; the tracker app (S6) forks from
   tag `basedly-final`.
 - **Renamed everywhere.** Repo `jherobred/sorro`, live
   `https://sorro-jhemsini.vercel.app` (Vercel project `sorro`), Android
