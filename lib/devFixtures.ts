@@ -292,6 +292,8 @@ export function seedDevFixtures() {
 
   const mins = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
   seed(['notifications'], [
+    { id: 'fx1', kind: 'info', title: 'Sorro', body: 'Morning. Due today: Problem set 4 and the STS reading. Start with the first one?', href: null, source: 'fox', read_at: null, created_at: mins(35) },
+    { id: 'fx2', kind: 'info', title: 'Sorro', body: 'Wrap-up time. 3 done today. Still open: Lab report. Move it to tomorrow?', href: null, source: 'fox', read_at: mins(700), created_at: mins(720) },
     { id: 'f1', kind: 'canvas', title: 'CS 191 · Proposal defence moved to Friday', body: 'CS 191 · Bring two printed copies of the revised scope. Slots are first come, first served.', href: null, source: 'canvas_lms', read_at: null, created_at: mins(14) },
     { id: 'f2', kind: 'task', title: 'Problem set 4 is overdue', body: 'Was due four days ago. Still sitting in School.', href: '/tasks/', source: 'app', read_at: null, created_at: mins(52) },
     { id: 'f3', kind: 'challenge', title: 'Rain T. passed you in 6 a.m. club', body: 'You are #2 with 12. One more morning takes it back.', href: '/community/', source: 'app', read_at: null, created_at: mins(140) },

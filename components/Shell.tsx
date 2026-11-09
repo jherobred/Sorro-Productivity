@@ -14,6 +14,7 @@ import { foxDash, foxWork, foxTalk } from '@/lib/foxMood';
 import { FoxSheet } from './FoxSheet';
 import { focusFoxComposer } from './FoxChat';
 import { FoxBubble } from './FoxBubble';
+import { FoxLog } from './FoxLog';
 import { useFoxNudges } from '@/lib/useFoxNudges';
 import { setFoxOpener } from '@/lib/assistant';
 import { useTaskActions, useTasks } from '@/lib/tasks';
@@ -151,18 +152,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return <div className="sx" data-rail={rail} data-phone={phone} data-tablet={tablet}>
     <a className="skip-link" href="#workspace">Skip to content</a>
     {!phone && <aside className="sx-side" data-part="S.side">
-      <div className="sx-brand"><Wordmark word={!rail} onFox={tapFox} bubble={bubble} />{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
+      <div className="sx-brand"><Wordmark word={!rail} onFox={tapFox} />{!tablet && <button className="sx-icon" aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl \" onClick={() => update({ sidebar: rail ? 'open' : 'compact' })}><Icon name="panelLeft" size={18} /></button>}</div>
       <nav className="sx-nav" aria-label="Main navigation">{DESTINATIONS.map(d => <Link key={d.id} href={'/' + d.id + '/'} title={d.name} aria-current={current?.id === d.id ? 'page' : undefined}><Icon name={d.icon} size={18} /><span>{d.name}</span></Link>)}</nav>
       {pinned.length > 0 && <><h3>Pinned</h3><nav className="sx-nav sx-pins" aria-label="Pinned notes">{pinned.map(n => <Link key={n.id} href={'/notebooks/?note=' + n.id} title={n.title || 'Untitled'}><Icon name="pin" size={16} /><span>{n.title || 'Untitled'}</span></Link>)}</nav></>}
       <button className="sx-me" onClick={() => setAccount(true)}><span className="sx-avatar">{name.charAt(0)}</span><span>{name}</span></button>
     </aside>}
     <div className="sx-work">
       <header className="sx-top" data-part="S.top" data-tauri-drag-region={win ? '' : undefined}>
-        {phone && <Wordmark size="sm" onFox={tapFox} bubble={bubble} />}
+        {phone && <Wordmark size="sm" onFox={tapFox} />}
         <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
+        <FoxLog onAsk={line => { setFoxOpener(line); tapFox(); }} />
         <button className="sx-icon" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearch(true)}><Icon name="search" size={18} /></button>
         {withPanel && !docked && <button className="sx-icon" aria-label="Open side panel" aria-expanded={panelOpen} onClick={() => setPanelOpen(true)}><Icon name="panelLeft" size={18} /></button>}
         {phone && <button className="sx-avatar" aria-label="Account and settings" onClick={() => setAccount(true)}>{name.charAt(0)}</button>}
@@ -183,6 +185,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     {account && <Accounts me={{ id: me.id, name, handle: null, photo: stored?.photo || me.photo }} onClose={() => setAccount(false)} onSettings={() => { setAccount(false); setSettings('general'); }} />}
     {capture && <Capture kind="task" onClose={() => setCapture(false)} />}
     {foxOpen && current && <FoxSheet tab={current.name} onClose={() => setFoxOpen(false)} onReply={foxReplied} />}
+    {bubble}
     <ToastHost /><AskHost />
   </div>;
 }

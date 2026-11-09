@@ -6,9 +6,10 @@ import { useEvents } from './events';
 import { foxTalk } from './foxMood';
 import { fetchNudgeLine } from './assistant';
 import { replaceScheduled, showAlerts } from './deviceNotify';
+import { useNotifActions } from './notify';
 import { buildFacts, claimNudge, dayKey, foxAlertId, foxSchedule, mayShow, nextNudge, nudgeLine, onFoxReact, reactionNudge, readLog, DEFAULT_FOX_TIMES, FOX_ALERT_IDS, type Nudge } from './foxNudges';
 
-export type ShownNudge = Nudge & { line: string };
+export type ShownNudge = Nudge & { line: string; logId: string };
 
 /** Runs the fox's rules on this device and holds the bubble it should show. */
 export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
@@ -24,6 +25,9 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
   const today = useMemo(() => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d); }, [day]);
   const events = useEvents(today, 1);
   const [nudge, setNudge] = useState<ShownNudge | null>(null);
+  const notes = useNotifActions();
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
   // The data, not the facts: facts are built at check time, so an idle window never speaks from yesterday.
   const data = useRef({ tasks: tasks.data ?? [], events: events.data ?? [] });
   data.current = { tasks: tasks.data ?? [], events: events.data ?? [] };
@@ -46,7 +50,10 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
     const mine = ++latest.current;
     const line = await nudgeLine(n, fetchNudgeLine);
     if (mine !== latest.current || !may()) return;
-    setNudge({ ...n, line });
+    // Kept in the bell's log on the account. The day and key make one row, however many devices show it.
+    const logId = crypto.randomUUID();
+    notesRef.current.add.mutate({ id: logId, kind: 'info', title: 'Sorro', body: line, source: 'fox', external_id: `${dayKey(new Date())}:${n.key}` });
+    setNudge({ ...n, line, logId });
     foxTalk(true);
     // Web and Windows: a browser notification only while the app is open in the background.
     if (notifyRef.current && document.visibilityState === 'hidden') void showAlerts([{ id: foxAlertId(n.key), title: 'Sorro', body: line }]).catch(() => {});
@@ -87,6 +94,7 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
     void replaceScheduled(FOX_ALERT_IDS, notify ? foxSchedule(new Date(), { dueTomorrow }, times) : []).catch(() => {});
   }, [loaded, notify, times, dueTomorrow]);
 
-  const dismiss = useCallback(() => { setNudge(null); foxTalk(false); }, []);
+  // Dismissed, answered or acted on: the note is read. One nobody touched stays new in the bell.
+  const dismiss = useCallback(() => { if (shown.current) notesRef.current.read.mutate({ id: shown.current.logId }); setNudge(null); foxTalk(false); }, []);
   return { nudge, dismiss };
 }

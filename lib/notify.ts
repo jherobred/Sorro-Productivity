@@ -5,6 +5,7 @@ import { supabase, currentUserId } from './supabase';
 import { defineMutation, queryClient } from './offline';
 import { PAL } from './pal';
 import { settler } from './settle';
+import { fixture } from './devFixtures';
 
 /**
  * The notification feed behind the bell in the top bar and the announcements
@@ -44,9 +45,13 @@ export function useNotifications() {
   return useQuery({
     queryKey: KEY,
     queryFn: async (): Promise<Notif[]> => {
+      const fx = fixture<Notif[]>('notifications');
+      if (fx) return fx;
       const { data, error } = await supabase
         .from('sorro_notifications')
         .select('id,kind,title,body,href,source,read_at,created_at')
+        // Only the fox's notes are shown now; Canvas announcements would crowd them out of the 60.
+        .eq('source', 'fox')
         .order('created_at', { ascending: false })
         .limit(60);
       if (error) throw error;
@@ -61,11 +66,11 @@ export function useUnreadCount() {
 }
 
 const ADD = defineMutation('notif.add', async (v: {
-  kind: Notif['kind']; title: string; body?: string; href?: string; source?: string; external_id?: string;
+  id?: string; kind: Notif['kind']; title: string; body?: string; href?: string; source?: string; external_id?: string;
 }) => {
   const user_id = await currentUserId();
   const { error } = await supabase.from('sorro_notifications').insert({
-    user_id, kind: v.kind, title: v.title, body: v.body ?? '',
+    ...(v.id ? { id: v.id } : {}), user_id, kind: v.kind, title: v.title, body: v.body ?? '',
     href: v.href ?? null, source: v.source ?? 'app', external_id: v.external_id ?? null,
   });
   // A duplicate external_id means the row already arrived from a previous sync,
@@ -104,7 +109,7 @@ export function useNotifActions() {
   const now = () => new Date().toISOString();
 
   return {
-    add: useMutation<unknown, Error, { kind: Notif['kind']; title: string; body?: string; href?: string; source?: string; external_id?: string }>(
+    add: useMutation<unknown, Error, { id?: string; kind: Notif['kind']; title: string; body?: string; href?: string; source?: string; external_id?: string }>(
       { mutationKey: ADD, onSettled: settle }),
     read: useMutation({
       mutationKey: READ,
