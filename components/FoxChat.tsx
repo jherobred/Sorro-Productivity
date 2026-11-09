@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { Fox } from '@/components/Fox';
-import { useChats, useChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, useFoxOpener, setFoxOpener, useInflight, setInflight, getInflight, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
+import { useChats, useChatMessages, fetchChatMessages, sendToAssistant, useAssistantUndo, useCurrentChat, useFoxOpener, setFoxOpener, useInflight, setInflight, getInflight, AssistantError, type ChatMessage, type ToolDone } from '@/lib/assistant';
 import { suggestions } from '@/lib/assistantLogic';
 import { useTasks, useTaskActions } from '@/lib/tasks';
 import { useEvents } from '@/lib/events';
@@ -105,8 +105,10 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
       for (const x of r.tools) if (x.name === 'complete_task' && x.undo) TA.comeBack(x.undo.id);
       setLocal(l => [...l, { id: 'a' + stamp, role: 'assistant', content: r.text, tools: r.tools, created_at: new Date().toISOString() }]);
       if (r.chat_id !== chatId) setChatId(r.chat_id);
-      await qc.invalidateQueries({ queryKey: ['chat', r.chat_id] });
-      setLocal([]);
+      // The local copy goes only once the saved chat holds this turn, so the chat never blanks in between.
+      const before = r.chat_id === chatId ? saved.data?.length ?? 0 : 0;
+      const rows = await qc.fetchQuery({ queryKey: ['chat', r.chat_id], queryFn: () => fetchChatMessages(r.chat_id), staleTime: 0 }).catch(() => null);
+      if (rows && rows.length >= before + 2) setLocal([]);
     } catch (e) {
       const err = e as AssistantError;
       const wait = err.retry ? ` Try again in about ${err.retry} seconds.` : '';
@@ -114,7 +116,7 @@ export function FoxChat({ variant, context, initial, onReply }: { variant: 'page
       // The sheet was shut while it failed: say so, since its error card died with it.
       if (!alive.current) { toast((err.message || 'Sorro could not answer.') + wait); onReply?.(); return; }
       // The server saved this turn with what it did; the chat refetch shows it, so no second copy here.
-      if (err.tools?.length) { setLocal([]); return; }
+      if (err.tools?.length && err.code !== 'save_failed') { setLocal([]); return; }
       setLocal(l => [...l, { id: 'e' + stamp, role: 'assistant', content: '', tools: err.tools ?? [], created_at: stamp, error: (err.message || 'Something went wrong.') + wait + (err.tools?.length ? ' What it already did is below.' : '') }]);
     } finally { setInflight(null); foxBusy(-1); }
   }

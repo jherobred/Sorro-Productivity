@@ -220,10 +220,17 @@ Deno.serve(async (req) => {
   const system = systemPrompt({ name: profile?.name, now, tz });
 
   const done: Done[] = [];
-  const save = (content: string) => db.from('sorro_chat_messages').insert([
-    { chat_id: chatId, user_id: uid, role: 'user', content: message },
-    { chat_id: chatId, user_id: uid, role: 'assistant', content, tools: done },
-  ]);
+  const fresh = !body.chat_id;
+  // Both rows carry the same keys: a bulk insert sends a missing key as null, and `tools` is not null.
+  // The reply is stamped 1 ms after the question, so reading back by time keeps them in order.
+  async function save(content: string) {
+    const at = Date.now();
+    const { error } = await db.from('sorro_chat_messages').insert([
+      { chat_id: chatId, user_id: uid, role: 'user', content: message, tools: [], created_at: new Date(at).toISOString() },
+      { chat_id: chatId, user_id: uid, role: 'assistant', content, tools: done, created_at: new Date(at + 1).toISOString() },
+    ]);
+    if (error) { console.error('assistant: saving the turn failed:', error.message); throw Object.assign(new Error('save_failed'), { status: 500, code: 'save_failed' }); }
+  }
 
   /** The tool rounds. With `emit`, text goes out as Gemini writes it and the saved reply is all of it. */
   async function answer(emit?: (t: string) => void): Promise<string> {
@@ -249,9 +256,13 @@ Deno.serve(async (req) => {
   }
 
   async function failed(e: unknown) {
-    const err = e as Error & { status?: number; retry?: string | null };
-    if (done.length) await save('Done, but the model stopped before it could say so.');
-    return { body: { error: err.status === 429 ? 'rate_limited' : 'model_failed', retry: err.retry ?? null, chat_id: chatId, tools: done }, status: err.status ?? 502 };
+    const err = e as Error & { status?: number; retry?: string | null; code?: string };
+    console.error('assistant: turn failed:', err.message);
+    let kept = false;
+    if (done.length && err.code !== 'save_failed') { try { await save('Done, but the model stopped before it could say so.'); kept = true; } catch { /* logged in save */ } }
+    // A first turn that saved nothing leaves no empty chat behind in Past chats.
+    if (fresh && !kept) await db.from('sorro_chats').delete().eq('id', chatId);
+    return { body: { error: err.code ?? (err.status === 429 ? 'rate_limited' : 'model_failed'), retry: err.retry ?? null, chat_id: fresh && !kept ? undefined : chatId, tools: done }, status: err.status ?? 502 };
   }
 
   async function finish(text: string) {
@@ -261,8 +272,7 @@ Deno.serve(async (req) => {
 
   if (!(req.headers.get('Accept') ?? '').includes('text/event-stream')) {
     let text: string;
-    try { text = await answer(); } catch (e) { const f = await failed(e); return json(f.body, f.status); }
-    await finish(text);
+    try { text = await answer(); await finish(text); } catch (e) { const f = await failed(e); return json(f.body, f.status); }
     return json({ chat_id: chatId, text, tools: done });
   }
 

@@ -27,12 +27,14 @@ export function useChatMessages(chatId: string | null) {
   return useQuery({
     queryKey: ['chat', chatId],
     enabled: !!chatId,
-    queryFn: async (): Promise<ChatMessage[]> => {
-      const { data, error } = await supabase.from('sorro_chat_messages').select('id,role,content,tools,created_at').eq('chat_id', chatId!).order('created_at');
-      if (error) throw error;
-      return (data ?? []) as ChatMessage[];
-    },
+    queryFn: () => fetchChatMessages(chatId!),
   });
+}
+
+export async function fetchChatMessages(chatId: string): Promise<ChatMessage[]> {
+  const { data, error } = await supabase.from('sorro_chat_messages').select('id,role,content,tools,created_at').eq('chat_id', chatId).order('created_at');
+  if (error) throw error;
+  return (data ?? []) as ChatMessage[];
 }
 
 export type SendResult = { chat_id: string; text: string; tools: ToolDone[] };
@@ -43,6 +45,7 @@ const MESSAGES: Record<string, string> = {
   rate_limited: 'The free Gemini quota is used up for now.',
   model_failed: 'Gemini did not answer. Your message is kept; try again.',
   signed_out: 'You are signed out. Sign in again to use the assistant.',
+  save_failed: 'Sorro answered, but the chat could not be saved. Try again.',
   dropped: 'The connection dropped before Sorro finished. Anything he already did is saved in this chat, so check it before trying again.',
 };
 
