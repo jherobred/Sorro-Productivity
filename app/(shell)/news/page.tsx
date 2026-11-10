@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Icon } from '@/components/Icon';
 import { Fox } from '@/components/Fox';
 import { useEdition, useEditionDays, useKeyDate, markRead, rotateKey, fillWeekly, manilaDay, KIND_NAMES, NEWS_KINDS, type Edition, type NewsItem, type NewsKind } from '@/lib/news';
 import { grokPrompt, dropUrl, scheduleHint, type PromptKind } from '@/lib/newsPrompts';
@@ -29,7 +30,7 @@ function Story({ it }: { it: NewsItem }) {
     <h3>{it.link ? <a href={it.link} target="_blank" rel="noreferrer">{it.headline}</a> : it.headline}</h3>
     {it.summary && <p className="nw-sum"><Plain text={it.summary} /></p>}
     {it.why && <p className="nw-why"><strong>Why it matters</strong> {it.why}</p>}
-    {host && <small className="nw-src">{host}</small>}
+    {host && <a className="nw-src" href={it.link} target="_blank" rel="noreferrer">Read it at {host}<Icon name="arrowR" size={13} /></a>}
   </article>;
 }
 

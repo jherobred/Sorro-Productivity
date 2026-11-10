@@ -1,4 +1,5 @@
 'use client';
+import { decodeText, parseItems } from '@/supabase/functions/news-drop/assemble';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from './supabase';
 
@@ -22,9 +23,20 @@ export function useEdition(day: string) {
     queryFn: async (): Promise<Edition[]> => {
       const { data, error } = await supabase.from('sorro_news').select('id,kind,edition,title,body,items,created_at,read_at').eq('edition', day).order('created_at');
       if (error) throw error;
-      return (data ?? []) as Edition[];
+      return ((data ?? []) as Edition[]).map(readEdition);
     },
   });
+}
+
+/**
+ * An edition Grok dropped is read again from its saved text, so one stored before a parsing fix
+ * (colons kept as %3A, which hid its images and links) shows correctly without being sent again.
+ * Editions Sorro writes itself have no text and keep their items.
+ */
+export function readEdition(e: Edition): Edition {
+  if (!e.body?.trim()) return e;
+  const parsed = parseItems(e.body);
+  return { ...e, title: decodeText(e.title), body: decodeText(e.body), items: parsed.items.length ? parsed.items : e.items };
 }
 
 /** The days that have an edition, newest first, for the archive. */

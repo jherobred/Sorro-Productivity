@@ -11,7 +11,7 @@
  * Deployed with --no-verify-jwt: the key is the credential.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { assemble, parseItems, NEWS_KINDS, type NewsKind } from './assemble.ts';
+import { assemble, decodeText, parseItems, NEWS_KINDS, type NewsKind } from './assemble.ts';
 
 const text = (body: string, status = 200) =>
   new Response(body, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
   const kind = (q.get('kind') ?? '') as NewsKind;
   if (!NEWS_KINDS.includes(kind)) return text(`Unknown kind. Use one of: ${NEWS_KINDS.join(', ')}`, 400);
-  const d = q.get('d') ?? '';
+  const d = decodeText(q.get('d') ?? '');
   if (!d.trim()) return text('Nothing to save: put the digest in d=', 400);
   if (d.length > 4000) return text('That part is too long: keep each part under 1500 characters', 400);
   const part = Math.max(1, Number(q.get('part') ?? 1) | 0);
