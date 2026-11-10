@@ -1175,7 +1175,16 @@ function Grid({
   const GRID_H = HOUR_H * SPAN;
   useEffect(() => onHourHeightChange(HOUR_H), [HOUR_H, onHourHeightChange]);
   const oldHourHeight = useRef(HOUR_H);
-  const pendingHour = useRef<number | null>(SCROLL_TO_HOUR);
+  // Opens on the present: when today is on screen the grid starts an hour and a half above the now line,
+  // so what is happening and what comes next are both in view. Any other day opens at 7 AM.
+  const pendingHour = useRef<number | null>(null);
+  const opened = useRef(false);
+  if (!opened.current) {
+    opened.current = true;
+    const now = new Date(nowMs), today = dayIndex(now.toISOString(), ws);
+    const shown = days === 1 ? today === dayOffset : today >= 0 && today < days;
+    pendingHour.current = shown ? Math.max(0, now.getHours() + now.getMinutes() / 60 - 1.5) : SCROLL_TO_HOUR;
+  }
   const suppressClick = useRef(false);
   const lastTouch = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1918,8 +1927,10 @@ function EventChip({
   // Under ~45 minutes there is one line of room, so the time sits beside the title.
   const short = pixelHeight < 42 || Date.parse(ev.ends_at) - Date.parse(ev.starts_at) <= 30 * 60_000;
   const tiny = pixelHeight < 24;
+  // The time left (or until it starts) shows on short events too: at the row's end, in place of the clock times.
+  const showCount = !!cd && cd.status !== 'past';
   const className = [
-    'cal-event', short && 'is-short', tiny && 'is-tiny', selected && 'is-selected',
+    'cal-event', short && 'is-short', tiny && 'is-tiny', selected && 'is-selected', short && showCount && 'has-count',
     isPast && 'is-past', lifted && 'is-lifted',
   ].filter(Boolean).join(' ');
 
@@ -1940,7 +1951,7 @@ function EventChip({
       </span>
       <span className="cal-event-meta"><span className="cal-event-times-full"><span>{label.split(' – ')[0]}</span><span>– {label.split(' – ')[1]}</span></span><span className="cal-event-times-compact" aria-hidden="true">{label.replace(/\s?[AP]M/g, '').replace(' – ', '–')}</span></span>
       {!short && ev.location && <span className="cal-event-location">{ev.location}</span>}
-      {cd && cd.status !== 'past' && !short && <span className="cal-event-count"><CdBadge cd={cd} /></span>}
+      {showCount && <span className="cal-event-count"><CdBadge cd={cd!} subtle={short} /></span>}
       {/* bottom edge resizes the end time in 30-min steps */}
       <div className="cal-event-resize" onPointerDown={onResize} />
     </div>

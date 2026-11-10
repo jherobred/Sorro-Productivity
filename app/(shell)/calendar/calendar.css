@@ -464,3 +464,9 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
  .is-week .cal-event,.is-week .cal-task.is-timed{padding:3px 2px}
  .is-week .cal-task.is-short .cal-task-copy{display:block}
 }
+
+/* A short event (15 or 30 minutes) keeps its countdown: one line, title then the time left at the end of the row. */
+.cal-event.is-short .cal-event-count{margin:0 0 0 auto;flex:none;max-height:none;align-self:center;overflow:visible}
+.cal-event.is-short.has-count .cal-event-meta{display:none}
+.cal-event.is-short .cal-event-count>span{padding:0 6px!important;line-height:14px}
+.cal-event.is-tiny .cal-event-count>span{line-height:12px;font-size:8.5px!important}
