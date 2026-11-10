@@ -91,7 +91,8 @@
 @media (max-width: 760px) {
   .nb-bar { gap: 8px; padding-bottom: 12px; margin-bottom: 18px }
   .nb-bar h2 { font-size: 18px }
-  .nb-bar .studio-input { order: 5; flex: 1 1 0 }
+  /* A 50% basis cannot fit beside the title row, so the search starts the second line and New notebook joins it. */
+  .nb-bar .studio-input { order: 5; flex: 1 1 50% }
   .nb-bar .studio-button { order: 6; padding: 0 14px }
   .nb-size button { padding: 0; width: 32px }
   .nb-size button span { display: none }
@@ -101,6 +102,6 @@
   .tag-menu-pop { left: 0; right: 0; width: auto; top: 44px }
 }
 @media (max-width: 760px) {
-  .nb-bar h2 { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .nb-bar h2 { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
   .tag-menu-pill:not(.is-on) .tag-menu-btn > span:not(.tag-menu-chev) { display: none }
 }
