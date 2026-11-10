@@ -74,7 +74,10 @@ export default function VaultPage() {
     // The tab opens inside the tap, so the browser does not block it; the signed address follows.
     const tab = window.open('', '_blank');
     const url = await signedUrl('sorro-files', f.storage_path);
-    if (url && tab) { tab.opener = null; tab.location.href = url; } else { tab?.close(); toast('Couldn’t open that file. Try again.', undefined, { tone: 'danger' }); }
+    if (!url) { tab?.close(); toast('Couldn’t open that file. Try again.', undefined, { tone: 'danger' }); return; }
+    if (tab) { tab.opener = null; tab.location.href = url; return; }
+    // No new tab (the phone and Windows apps): hand the address to the system as a link.
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.click();
   };
   const keep = (i: VaultItem) => i.type === 'link' ? L.save.mutate({ id: i.id, link: { ...i.link, pinned: !i.kept } }) : F.star.mutate({ id: i.id, starred: !i.kept });
   const remove = (i: VaultItem) => {

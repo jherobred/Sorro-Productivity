@@ -8,6 +8,8 @@
 .wb[data-axis='x'] .wb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: stretch; overflow-x: auto; padding: 2px; scrollbar-width: thin }
 .wb[data-axis='x'] .wb-item { min-width: 0 }
 .wb-item[data-over='true'] { outline: 2px dashed var(--pick); outline-offset: 2px }
+/* A widget in the air reaches past the list: no clipping and no scrollbars while it does. */
+.wb[data-axis='x'][data-dragging='true'] .wb-list { overflow: visible }
 .wb-item { position: relative; border-radius: var(--r-tile); background: transparent }
 .wb-item > .wg { height: 100% }
 .wb[data-axis='x'] .wb-item > .wg { background: var(--surface) }

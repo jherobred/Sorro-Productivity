@@ -18,6 +18,7 @@ import { foxReact } from '@/lib/foxNudges';
 import { toast } from '@/lib/toast';
 import { foxGlad } from '@/lib/foxMood';
 import { ymd } from '@/lib/days';
+import { dayLoad, OPEN_DAY } from '@/lib/dayLoad';
 
 export type WidgetId = 'agenda' | 'due' | 'focus' | 'month' | 'pinned' | 'news' | 'weather' | 'capture';
 export const DEFAULT_WIDGETS: WidgetId[] = ['agenda', 'due', 'focus', 'weather'];
@@ -91,8 +92,6 @@ function Focus() {
   </Frame>;
 }
 
-/** How full a day is, 0 to 4, from its events plus open tasks due. */
-export const dayLoad = (n: number) => Math.min(n, 4);
 
 function Month() {
   const [offset, setOffset] = useState(0);
@@ -107,6 +106,7 @@ function Month() {
   const at = (k: string) => { let v = on.get(k); if (!v) on.set(k, v = { events: [], tasks: [] }); return v; };
   for (const e of q.data ?? []) if (!e.deleted_at) at(ymd(new Date(e.starts_at))).events.push(e);
   for (const t of tasks) if (!t.done && !t.deleted_at && t.due_on) at(t.due_on).tasks.push(t);
+  const busiest = Math.max(0, ...[...on.values()].map(v => v.events.length + v.tasks.length));
   const today = ymd(new Date());
   const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(gridStart); d.setDate(d.getDate() + i); return d; });
   const day = picked ? on.get(picked) ?? { events: [], tasks: [] } : null;
@@ -121,12 +121,12 @@ function Month() {
     <div className="wg-month">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <span key={i} className="wg-dow" aria-hidden="true">{d}</span>)}
       {days.map(d => {
         const k = ymd(d); const v = on.get(k); const ev = v?.events.length ?? 0, ta = v?.tasks.length ?? 0;
-        return <button type="button" key={k} className="wg-day" data-out={d.getMonth() !== first.getMonth()} data-today={k === today} data-past={k < today} data-load={dayLoad(ev + ta)}
+        return <button type="button" key={k} className="wg-day" data-out={d.getMonth() !== first.getMonth()} data-today={k === today} data-past={k < today} data-load={dayLoad(ev + ta, busiest)}
           aria-pressed={k === picked} aria-label={`${d.toDateString()}, ${ev} event${ev === 1 ? '' : 's'}, ${ta} task${ta === 1 ? '' : 's'} due`} onClick={() => setPicked(k === picked ? null : k)}>{d.getDate()}</button>;
       })}
     </div>
     {day && pickedDate && <div className="wg-dayinfo" aria-live="polite">
-      <p>{pickedDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}<Link href={`/calendar/?day=${picked}`}>Open in Calendar</Link></p>
+      <p>{pickedDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}<Link href={`/calendar/?day=${picked}`} onClick={() => window.dispatchEvent(new CustomEvent(OPEN_DAY, { detail: picked }))}>Open in Calendar</Link></p>
       {day.events.length + day.tasks.length ? <ul className="wg-list">
         {day.events.sort((a, b) => a.starts_at.localeCompare(b.starts_at)).slice(0, 4).map(e => <li key={e.id}><time>{e.all_day ? 'All day' : time(e.starts_at)}</time><span style={{ '--chip': e.color || 'var(--accent)' } as React.CSSProperties} className="wg-chip" /><strong>{e.title}</strong></li>)}
         {day.tasks.slice(0, 4).map(t => <li key={t.id}><button className="wg-tick" aria-label={`Complete ${t.title}`} onClick={() => complete.mutate({ id: t.id, done: true })}><Icon name="check" size={12} /></button><strong>{t.title}</strong></li>)}

@@ -62,11 +62,11 @@ const widgetAt = (e: MouseEvent | TouchEvent | PointerEvent, self: WidgetId): Wi
 };
 
 /** The wrapping grid (Home): Reorder only knows one axis, so here a widget is dropped onto the one whose place it takes. */
-function GridItem(p: ItemProps & { over: boolean; onOver(id: WidgetId | null): void; onDropOn(id: WidgetId | null): void }) {
+function GridItem(p: ItemProps & { over: boolean; onLift(): void; onOver(id: WidgetId | null): void; onDropOn(id: WidgetId | null): void }) {
   const controls = useDragControls();
   const W = WIDGETS[p.id].Component;
   return <motion.div layout className="wb-item" data-id={p.id} data-over={p.over} drag dragListener={false} dragControls={controls} dragSnapToOrigin dragElastic={.12}
-    onDrag={e => p.onOver(widgetAt(e, p.id))} onDragEnd={e => p.onDropOn(widgetAt(e, p.id))} {...ENTER}>
+    onDragStart={p.onLift} onDrag={e => p.onOver(widgetAt(e, p.id))} onDragEnd={e => p.onDropOn(widgetAt(e, p.id))} {...ENTER}>
     <Tools {...p} controls={controls} keys={[['ArrowLeft', 'ArrowUp'], ['ArrowRight', 'ArrowDown']]} />
     <W />
   </motion.div>;
@@ -110,6 +110,7 @@ export function WidgetBoard({ axis, className, part }: { axis: 'x' | 'y'; classN
   const [items, setItems] = useState(order);
   const dragging = useRef(false);
   const [over, setOver] = useState<WidgetId | null>(null);
+  const [lifted, setLifted] = useState(false);
   const key = order.join();
   useEffect(() => { if (!dragging.current) setItems(order); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = (widgets: WidgetId[]) => { setItems(widgets); if (widgets.join() !== key) void update({ panel: { ...prefs.panel, widgets } }); };
@@ -119,16 +120,16 @@ export function WidgetBoard({ axis, className, part }: { axis: 'x' | 'y'; classN
   const none = !items.length && <p className="wg-empty wb-none">No widgets yet. Add some with +.</p>;
 
   return <MotionConfig reducedMotion={prefs.motion === false ? 'always' : 'user'}>
-    <div className={`wb ${className}`} data-axis={axis} data-part={part}>
+    <div className={`wb ${className}`} data-axis={axis} data-part={part} data-dragging={lifted}>
       {axis === 'y' ? <Reorder.Group as="div" axis="y" values={items} onReorder={v => { dragging.current = true; setItems(v); }} className="wb-list">
         <AnimatePresence initial={false}>
           {items.map((id, i) => { const { key: k, ...p } = each(id, i); return <ColumnItem key={k} {...p} onDrop={() => { dragging.current = false; save(items); }} />; })}
         </AnimatePresence>
         {none}
       </Reorder.Group> : <div className="wb-list">
-        <AnimatePresence initial={false} mode="popLayout">
-          {items.map((id, i) => { const { key: k, ...p } = each(id, i); return <GridItem key={k} {...p} over={over === id} onOver={setOver}
-            onDropOn={onto => { setOver(null); if (onto) save(moveTo(items, id, onto)); }} />; })}
+        <AnimatePresence initial={false}>
+          {items.map((id, i) => { const { key: k, ...p } = each(id, i); return <GridItem key={k} {...p} over={over === id} onLift={() => setLifted(true)} onOver={setOver}
+            onDropOn={onto => { setOver(null); setLifted(false); if (onto) save(moveTo(items, id, onto)); }} />; })}
         </AnimatePresence>
         {none}
       </div>}

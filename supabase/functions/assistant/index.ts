@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
     if (done.length && err.code !== 'save_failed') { try { await save('Done, but the model stopped before it could say so.'); kept = true; } catch { /* logged in save */ } }
     // A first turn that saved nothing leaves no empty chat behind in Past chats.
     if (fresh && !kept) await db.from('sorro_chats').delete().eq('id', chatId);
-    return { body: { error: err.code ?? (err.status === 429 ? 'rate_limited' : 'model_failed'), retry: err.retry ?? null, chat_id: fresh && !kept ? undefined : chatId, tools: done }, status: err.status ?? 502 };
+    return { body: { error: err.code === 'save_failed' ? 'save_failed' : err.status === 429 ? 'rate_limited' : 'model_failed', retry: err.retry ?? null, chat_id: fresh && !kept ? undefined : chatId, tools: done }, status: err.status ?? 502 };
   }
 
   async function finish(text: string) {

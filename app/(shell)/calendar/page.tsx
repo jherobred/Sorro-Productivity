@@ -2,6 +2,7 @@
 
 import { themeIsDark } from '@/lib/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { OPEN_DAY } from '@/lib/dayLoad';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -276,15 +277,20 @@ export default function CalendarPage() {
     window.history.replaceState(window.history.state, '', url.pathname + url.search);
   }, [events, isPending]);
 
-  // A day picked elsewhere (the Month widget) arrives as ?day=2026-11-14: open on that day.
+  // A day picked in the Month widget: from another tab it arrives as ?day=2026-11-14, from the side panel here as an event.
   useEffect(() => {
+    const open = (day: string | null) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day ?? '');
+      if (!m) return false;
+      setSelectedDate(new Date(+m[1], +m[2] - 1, +m[3]));
+      viewRef.current?.('day');
+      return true;
+    };
     const url = new URL(window.location.href);
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(url.searchParams.get('day') ?? '');
-    if (!m) return;
-    setSelectedDate(new Date(+m[1], +m[2] - 1, +m[3]));
-    viewRef.current?.('day');
-    url.searchParams.delete('day');
-    window.history.replaceState(window.history.state, '', url.pathname + url.search);
+    if (open(url.searchParams.get('day'))) { url.searchParams.delete('day'); window.history.replaceState(window.history.state, '', url.pathname + url.search); }
+    const picked = (e: Event) => { open((e as CustomEvent<string>).detail); };
+    window.addEventListener(OPEN_DAY, picked);
+    return () => window.removeEventListener(OPEN_DAY, picked);
   }, []);
 
   /* ------------------------------------------------------------ paging */
