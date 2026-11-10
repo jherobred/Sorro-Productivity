@@ -1,13 +1,17 @@
 /* N.shelf: notebooks drawn as notebooks. Spine with stitching, page edges, an elastic band,
    a ribbon and a paper label, on the existing cover markup. Sizes come from prefs.shelfSize. */
-.nb-shelf { --cover: 168px; display: grid; grid-template-columns: repeat(auto-fill, var(--cover)); gap: 34px 26px; justify-content: start }
+/* Covers share the row's whole width, so no strip is left empty on the right. --cover is the least a cover may be. */
+.nb-shelf { --cover: 168px; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cover), 1fr)); gap: 34px 26px }
 .nb-shelf[data-size='s'] { --cover: 132px; gap: 28px 20px }
 .nb-shelf[data-size='l'] { --cover: 216px; gap: 40px 30px }
 
 .nb-shelf .notebook-cover { position: relative; perspective: 1100px }
 /* The page block behind the cover, showing on the right and the bottom. */
 .nb-shelf .notebook-cover::before { content: ''; position: absolute; top: 6px; right: -5px; height: calc(var(--face-h) - 4px); left: 10px; border-radius: 3px 10px 10px 3px; background: var(--page-edge); box-shadow: 3px 3px 0 var(--page-edge-2) }
-.nb-shelf .notebook-cover { --face-h: calc(var(--cover) * 1.33) }
+/* The cover's height follows the width it was given (cqi is 1% of the notebook's own width). */
+.nb-shelf .notebook-cover { container-type: inline-size; --face-h: 133cqi; cursor: grab }
+.nb-shelf .notebook-cover[data-dragging] { opacity: .45 }
+.nb-shelf .notebook-cover[data-drop-target] .notebook-cover-face { outline: 3px dashed var(--pick); outline-offset: 4px }
 
 .nb-shelf .notebook-cover-face { position: relative; height: var(--face-h); min-height: 0; padding: 16% 20% 10% 20%; display: flex; flex-direction: column; justify-content: space-between; border-radius: 4px 12px 12px 4px; overflow: hidden; transform-origin: left center; transition: transform .34s var(--drift); box-shadow: none }
 /* The cover art is the whole cover. */
@@ -23,13 +27,16 @@
 .nb-shelf .notebook-cover::after { content: ''; position: absolute; z-index: 3; top: calc(var(--face-h) - 10px); left: 34%; width: 9px; height: 24px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%) }
 
 /* The title on a paper label. */
-.nb-shelf .notebook-cover-title { position: relative; z-index: 3; align-self: flex-start; max-width: 100%; padding: 6px 9px; border-radius: 2px; background: var(--paper); color: var(--paper-ink); font: 600 clamp(13px, calc(var(--cover) * .085), 19px)/1.2 var(--font-body); letter-spacing: -.01em }
+.nb-shelf .notebook-cover-title { position: relative; z-index: 3; align-self: flex-start; max-width: 100%; padding: 6px 9px; border-radius: 2px; background: var(--paper); color: var(--paper-ink); font: 600 clamp(12px, 8.5cqi, 20px)/1.2 var(--font-body); letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere }
+/* A small cover has room for the title only. */
+@container (max-width: 128px) { .nb-shelf .cover-meta > span, .nb-shelf .cover-tags { display: none } }
 .nb-shelf .cover-meta { position: relative; z-index: 3; font-size: 11px; color: var(--paper) }
 .nb-shelf .cover-tags { position: relative; z-index: 3 }
-.nb-shelf .new-notebook { height: var(--face-h); border-radius: 4px 12px 12px 4px }
+.nb-shelf .new-notebook { height: auto; aspect-ratio: 100 / 133; border-radius: 4px 12px 12px 4px }
 
 .nb-size { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
 .nb-size button { height: 30px; padding: 0 12px; border-radius: var(--r-pill); color: var(--muted); font-size: 12.5px }
+.nb-size button b { display: none; font-weight: inherit }
 .nb-size button[aria-pressed='true'] { background: var(--surface); color: var(--ink); font-weight: 500 }
 .nb-size button:focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
 
@@ -38,11 +45,53 @@
 @media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .nb-shelf .notebook-cover-face { transition: none } }
 @media (max-width: 760px) {
   .nb-shelf { --cover: 132px; gap: 30px 18px }
-  .nb-shelf[data-size='l'] { --cover: 160px }
-  .nb-shelf[data-size='s'] { --cover: 104px }
+  .nb-shelf[data-size='l'] { --cover: 220px }
+  .nb-shelf[data-size='s'] { --cover: 92px; gap: 26px 14px }
 }
-.nb-shelf .cover-footer { flex-wrap: wrap; gap: 2px; padding-top: 12px }
-.nb-shelf .cover-footer time { order: -1; flex-basis: 100%; margin-bottom: 2px; font-size: 11.5px; color: var(--muted) }
+/* Under each cover: when it was last touched, and one ⋯ for everything else. */
+.nb-shelf .cover-footer { gap: 2px; padding-top: 10px; min-width: 0 }
+.nb-shelf .cover-footer time { flex: 1; min-width: 0; margin: 0; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.nb-shelf .cover-footer button { width: 30px; height: 30px; flex: none; color: var(--muted) }
+.nb-shelf .cover-footer button:hover { background: var(--soft); color: var(--ink) }
 .nb-shelf .new-notebook { min-height: 0 }
-/* Colour and Rename live in the notebook's menu (right-click or long-press); the shelf keeps one row of tools. */
-.nb-shelf .cover-footer button:is([aria-label^='Colour of'], [aria-label^='Rename']) { display: none }
+
+
+/* N.bar: title, tags, cover size, search and New notebook on one line; on a phone the search and New notebook share the second line. */
+.nb-bar { position: relative; flex-wrap: wrap; gap: 10px; padding: 0 0 16px; border-top: 0; margin-bottom: 22px }
+.nb-bar h2 { margin-right: auto }
+.nb-bar .studio-input { flex: 0 1 240px; min-width: 0; height: 38px }
+.nb-bar .studio-button { height: 38px; flex: none; white-space: nowrap }
+
+/* N.tags: the courses and tags button and its menu. */
+.tag-menu { position: relative; flex: none }
+.tag-menu-pill { display: inline-flex; align-items: stretch; height: 36px; border-radius: var(--r-pill); background: var(--soft); overflow: hidden }
+.tag-menu-pill.is-on { background: color-mix(in srgb, var(--tag) 18%, var(--surface)); box-shadow: inset 0 0 0 1px var(--tag) }
+.tag-menu-btn { display: inline-flex; align-items: center; gap: 7px; padding: 0 10px 0 13px; color: var(--ink); font: 500 13px/1 var(--font-body); white-space: nowrap; max-width: 46vw }
+.tag-menu-btn > span:not(.tag-menu-chev) { overflow: hidden; text-overflow: ellipsis }
+.tag-menu-btn i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--tag) }
+.tag-menu-btn small { display: grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums }
+.tag-menu-chev { display: grid; color: var(--muted) }
+.tag-menu-clear { display: grid; place-items: center; width: 32px; color: var(--muted) }
+.tag-menu-clear:hover { color: var(--ink) }
+.tag-menu-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: min(420px, calc(100vw - 32px)); max-height: min(60dvh, 460px); overflow: auto; padding: 14px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 16px 40px rgb(0 0 0 / .18); transform-origin: top right; display: flex; flex-direction: column; gap: 10px }
+.tag-menu-h { margin: 0; color: var(--muted); font: 600 12px/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em }
+.tag-menu-sub { margin: -4px 0 2px; color: var(--muted); font-size: 12.5px; line-height: 1.45 }
+.tag-menu-pop .tag-add { align-self: flex-start }
+:is(.tag-menu-btn, .tag-menu-clear):focus-visible { outline: 3px solid var(--pick); outline-offset: -3px }
+
+@media (max-width: 760px) {
+  .nb-bar { gap: 8px; padding-bottom: 12px; margin-bottom: 18px }
+  .nb-bar h2 { font-size: 18px }
+  .nb-bar .studio-input { order: 5; flex: 1 1 0 }
+  .nb-bar .studio-button { order: 6; padding: 0 14px }
+  .nb-size button { padding: 0; width: 32px }
+  .nb-size button span { display: none }
+  .nb-size button b { display: inline }
+  /* The menu spans the toolbar instead of hanging off the button's right edge. */
+  .tag-menu { position: static }
+  .tag-menu-pop { left: 0; right: 0; width: auto; top: 44px }
+}
+@media (max-width: 760px) {
+  .nb-bar h2 { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .tag-menu-pill:not(.is-on) .tag-menu-btn > span:not(.tag-menu-chev) { display: none }
+}
