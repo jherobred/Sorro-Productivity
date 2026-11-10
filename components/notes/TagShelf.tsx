@@ -1,11 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { Icon } from '@/components/Icon';
 import type { Tag } from '@/lib/tagList';
-
-const SPRING = { type: 'spring', stiffness: 520, damping: 40, mass: .8 } as const;
 
 /**
  * Courses & tags, kept behind one button in the notebooks toolbar (N.tags). The button shows the
@@ -43,13 +40,11 @@ export function TagShelf({ tags, uses, active, onToggle, onAdd, onMenu }: {
         {on ? <i aria-hidden="true" /> : <Icon name="tag" size={15} />}
         <span>{on ? on.name : 'Tags'}</span>
         {!on && tags.length > 0 && <small>{tags.length}</small>}
-        <motion.span className="tag-menu-chev" aria-hidden="true" animate={{ rotate: open ? 180 : 0 }} transition={SPRING}><Icon name="chevronDown" size={14} /></motion.span>
+        <span className="tag-menu-chev" aria-hidden="true" data-open={open}><Icon name="chevronDown" size={14} /></span>
       </button>
       {on && <button type="button" className="tag-menu-clear" aria-label={`Stop showing only ${on.name}`} title="Show every notebook" onClick={() => onToggle(on.id)}><Icon name="close" size={12} /></button>}
     </span>
-    <AnimatePresence>
-      {open && <motion.div className="tag-menu-pop" role="dialog" aria-label="Courses and tags"
-        initial={{ opacity: 0, y: -6, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: .98, transition: { duration: .12 } }} transition={SPRING}>
+    {open && <div className="tag-menu-pop" role="dialog" aria-label="Courses and tags">
         <p className="tag-menu-h">Courses &amp; tags</p>
         <p className="tag-menu-sub">{tags.length ? 'Pick one to see only its notebooks. Tasks can use them as their course.' : 'Add the courses you take, or any tag you like.'}</p>
         <div className="tag-shelf-row">
@@ -57,8 +52,7 @@ export function TagShelf({ tags, uses, active, onToggle, onAdd, onMenu }: {
             const use = uses[tag.id] ?? { notebooks: 0, tasks: 0 };
             const total = use.notebooks + use.tasks;
             const detail = `${use.notebooks} ${use.notebooks === 1 ? 'notebook' : 'notebooks'}, ${use.tasks} ${use.tasks === 1 ? 'task' : 'tasks'}`;
-            return <motion.span key={tag.id} className={'tag-chip' + (active === tag.id ? ' is-active' : '')} style={{ '--tag': tag.color } as React.CSSProperties}
-              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: { ...SPRING, delay: .015 * i } }}>
+            return <span key={tag.id} className={'tag-chip' + (active === tag.id ? ' is-active' : '')} style={{ '--tag': tag.color, animationDelay: `${i * 18}ms` } as React.CSSProperties}>
               <button type="button" aria-pressed={active === tag.id} title={detail}
                 aria-label={`${tag.name}, ${detail}. ${active === tag.id ? 'Showing its notebooks' : 'Show its notebooks'}`}
                 onClick={() => { onToggle(tag.id); setOpen(false); }} onContextMenu={(e) => { e.preventDefault(); onMenu(e, tag); }}>
@@ -67,7 +61,7 @@ export function TagShelf({ tags, uses, active, onToggle, onAdd, onMenu }: {
               <button type="button" className="tag-chip-menu" aria-label={`Options for ${tag.name}`} title="Rename, recolour or delete" onClick={(e) => onMenu(e, tag)}>
                 <Icon name="dots" size={14} />
               </button>
-            </motion.span>;
+            </span>;
           })}
         </div>
         <form className="tag-add" onSubmit={(e) => { e.preventDefault(); add(); }}>
@@ -84,7 +78,6 @@ export function TagShelf({ tags, uses, active, onToggle, onAdd, onMenu }: {
             }} />
           {draft.trim() && <button type="submit">Add</button>}
         </form>
-      </motion.div>}
-    </AnimatePresence>
+      </div>}
   </div>;
 }

@@ -76,7 +76,7 @@ export default function NotebooksPage(){
  useOverlayBack(!!noteId,()=>{setNoteId(null);setMoveOpen(false);});useOverlayBack(creating,()=>setCreating(false));useOverlayBack(inTrash,()=>setTrash(false));useOverlayBack(!!legacy,()=>setLegacy(null));useOverlayBack(moveOpen,()=>setMoveOpen(false));
  const linked=useSearchParams().get('note');useEffect(()=>{deepLink.current=false;},[linked]);
  useEffect(()=>{if(deepLink.current)return;const params=new URLSearchParams(location.search);const id=params.get('note')||params.get('open');const book=params.get('notebook');if(!id){if(book&&notebooks.some(b=>b.id===book))setNbId(book);if(!book||notebooks.length)deepLink.current=true;return;}const found=notes.find(n=>n.id===id);if(found){deepLink.current=true;setNbId(found.notebook_id);setNoteId(found.id);}},[notes,notebooks,linked]);
- const reorderBook=(from:string,to:string)=>{setNotice('Saving notebook order…');A.reorderNotebooks.mutate({ids:moveNotebook(notebooks.map(b=>b.id),from,to)},{onSuccess:()=>setNotice('Notebook order saved.'),onError:()=>setNotice('Notebook order could not be saved. Try again.')});};
+ const reorderBook=(from:string,to:string)=>{A.reorderNotebooks.mutate({ids:moveNotebook(notebooks.map(b=>b.id),from,to)},{onError:()=>toast('Notebook order could not be saved. Try again.',undefined,{tone:'danger'})});};
  const [opening,setOpening]=useState<string|null>(null);
  // The cover swings open first; with Motion off the notebook opens at once.
  const openBook=(id:string)=>{if(opening)return;const go=()=>{setOpening(null);setPageQuery('');setNbId(id);};if(document.documentElement.classList.contains('nomo')){go();return;}setOpening(id);setTimeout(go,340);};

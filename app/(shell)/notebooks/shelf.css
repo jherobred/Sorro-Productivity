@@ -70,7 +70,16 @@
 .tag-menu-btn > span:not(.tag-menu-chev) { overflow: hidden; text-overflow: ellipsis }
 .tag-menu-btn i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--tag) }
 .tag-menu-btn small { display: grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums }
-.tag-menu-chev { display: grid; color: var(--muted) }
+.tag-menu-chev { display: grid; color: var(--muted); transition: transform .28s var(--snap) }
+.tag-menu-chev[data-open='true'] { transform: rotate(180deg) }
+/* The menu drops in from the button and its tags follow one after another. */
+.tag-menu-pop { animation: tag-pop .24s var(--drift) both }
+@keyframes tag-pop { from { transform: translateY(-8px) scale(.97) } }
+.tag-menu-pop .tag-chip { animation: tag-chip-in .26s var(--drift) backwards }
+@keyframes tag-chip-in { from { opacity: 0; transform: translateY(5px) } }
+.nomo :is(.tag-menu-pop, .tag-menu-pop .tag-chip) { animation: none }
+.nomo .tag-menu-chev { transition: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) :is(.tag-menu-pop, .tag-menu-pop .tag-chip) { animation: none } }
 .tag-menu-clear { display: grid; place-items: center; width: 32px; color: var(--muted) }
 .tag-menu-clear:hover { color: var(--ink) }
 .tag-menu-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: min(420px, calc(100vw - 32px)); max-height: min(60dvh, 460px); overflow: auto; padding: 14px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 16px 40px rgb(0 0 0 / .18); transform-origin: top right; display: flex; flex-direction: column; gap: 10px }
