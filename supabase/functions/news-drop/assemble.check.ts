@@ -54,3 +54,9 @@ test('text left URL-encoded is decoded, so colons, images and links read correct
 test('a bare percent sign and a broken code are left as they are', () => {
   assert.equal(decodeText('up 30% from 5%, and %E0%A4%A is broken'), 'up 30% from 5%, and %E0%A4%A is broken');
 });
+test('a working address keeps its own escapes; only a field that needed decoding is decoded', () => {
+  const r = parseItems('T\nH | s | why | https://i.x/a%20b%2Fc.jpg?w=1%26h=2 | https://x.com/p%20q\n');
+  assert.equal(r.items[0].image, 'https://i.x/a%20b%2Fc.jpg?w=1%26h=2');
+  assert.equal(r.items[0].link, 'https://x.com/p%20q');
+  assert.equal(parseItems('T\nH | s | why | https%3A//i.x/a%20b.jpg | https%3A//x.com/a\n').items[0].image, 'https://i.x/a%20b.jpg');
+});

@@ -36,7 +36,7 @@ export function useEdition(day: string) {
 export function readEdition(e: Edition): Edition {
   if (!e.body?.trim()) return e;
   const parsed = parseItems(e.body);
-  return { ...e, title: decodeText(e.title), body: decodeText(e.body), items: parsed.items.length ? parsed.items : e.items };
+  return { ...e, title: decodeText(e.title), items: parsed.items.length ? parsed.items : e.items };
 }
 
 /** The days that have an edition, newest first, for the archive. */

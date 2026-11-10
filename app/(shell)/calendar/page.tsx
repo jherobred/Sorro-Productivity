@@ -1951,7 +1951,7 @@ function EventChip({
       </span>
       <span className="cal-event-meta"><span className="cal-event-times-full"><span>{label.split(' – ')[0]}</span><span>– {label.split(' – ')[1]}</span></span><span className="cal-event-times-compact" aria-hidden="true">{label.replace(/\s?[AP]M/g, '').replace(' – ', '–')}</span></span>
       {!short && ev.location && <span className="cal-event-location">{ev.location}</span>}
-      {showCount && <span className="cal-event-count"><CdBadge cd={cd!} subtle={short} /></span>}
+      {showCount && <span className="cal-event-count"><CdBadge cd={short ? { ...cd!, badge: cd!.badge.replace(/^.*·\s*/, '') } : cd!} subtle={short} /></span>}
       {/* bottom edge resizes the end time in 30-min steps */}
       <div className="cal-event-resize" onPointerDown={onResize} />
     </div>

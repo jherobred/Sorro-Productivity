@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       case 'list_events': {
         if (!from || !to) return { data: null, error: { message: 'from and to are required (ISO timestamps)' } };
         const r = await db.from('sorro_events')
-          .select('id,title,starts_at,ends_at,all_day,location,color,remind_minutes,source')
+          .select('id,title,starts_at,ends_at,all_day,location,color,remind_minutes,source,repeat_weekly')
           .eq('user_id', uid).is('deleted_at', null)
           .lt('starts_at', to).gt('ends_at', from).order('starts_at').limit(500);
         return { data: r.data?.map(e => ({ ...e, editable: e.source !== MIRROR })) ?? null, error: r.error };
@@ -136,8 +136,9 @@ Deno.serve(async (req) => {
       }
       case 'delete_event': {
         // To the bin, not erased: the app's bin and restore_event bring it back.
+        // A weekly event is one row for every week, so it is left for the user to remove in the app.
         return db.from('sorro_events').update({ deleted_at: new Date().toISOString() })
-          .eq('id', id).eq('user_id', uid).neq('source', MIRROR).is('deleted_at', null)
+          .eq('id', id).eq('user_id', uid).neq('source', MIRROR).eq('repeat_weekly', false).is('deleted_at', null)
           .select('id,title,starts_at').single();
       }
       case 'restore_event': {

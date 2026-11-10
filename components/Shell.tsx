@@ -175,8 +175,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
     {phone && <nav className="sx-bar" data-part="S.bar" aria-label="Main navigation">{DESTINATIONS.filter(d => d.phoneBar).map(d => <Link key={d.id} href={'/' + d.id + '/'} aria-current={current?.id === d.id ? 'page' : undefined}
-      {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><Icon name={d.icon} size={21} /><span>{d.name}</span></Link>)}
-      <button type="button" aria-expanded={more} aria-current={current && !current.phoneBar ? 'page' : undefined} onClick={() => setMore(true)}><Icon name="more" size={21} /><span>More</span></button></nav>}
+      {...(d.id === 'home' ? { onPointerDown: holdStart, onPointerUp: holdEnd, onPointerLeave: holdEnd, onClick: (e: React.MouseEvent) => { if (capture) e.preventDefault(); } } : {})}><i className="sx-bar-ico"><Icon name={d.icon} size={21} /></i><span>{d.name}</span></Link>)}
+      <button type="button" aria-expanded={more} aria-current={current && !current.phoneBar ? 'page' : undefined} onClick={() => setMore(true)}><i className="sx-bar-ico"><Icon name="more" size={21} /></i><span>More</span></button></nav>}
     {withPanel && !docked && panelOpen && <><div className="sp-scrim" onClick={() => setPanelOpen(false)} /><SidePanel mode={phone ? 'sheet' : 'overlay'} context={current?.id} onClose={() => setPanelOpen(false)} /></>}
     {more && <MoreSheet current={current?.id} onClose={() => setMore(false)} onSettings={() => { setMore(false); setSettings('general'); }} />}
     {search && <Search onClose={() => setSearch(false)} />}

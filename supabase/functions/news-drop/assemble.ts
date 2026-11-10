@@ -29,8 +29,20 @@ export function decodeText(text: string): string {
   return text.replace(/(?:%[0-9A-Fa-f]{2})+/g, run => { try { return decodeURIComponent(run); } catch { return run; } });
 }
 
-export type Item = { headline: string; summary: string; why: string; image: string; link: string };
 const url = (s: string | undefined) => (/^https?:\/\/\S+$/.test(s ?? '') ? s! : '');
+
+/**
+ * One field of a line. A working web address is kept exactly as sent: its own %20 or %2F must not be
+ * decoded. Anything else is decoded, and an address that only read as one after decoding (https%3A//…)
+ * has its spaces put back as %20.
+ */
+function cell(x: string): string {
+  if (url(x)) return x;
+  const d = decodeText(x);
+  return /^https?:\/\//.test(d) && /\s/.test(d) ? encodeURI(d) : d;
+}
+
+export type Item = { headline: string; summary: string; why: string; image: string; link: string };
 
 /**
  * Grok writes one item per line as `headline | summary | why it matters | image | link`.
@@ -40,11 +52,11 @@ const url = (s: string | undefined) => (/^https?:\/\/\S+$/.test(s ?? '') ? s! : 
 export function parseItems(text: string): { title: string; items: Item[] } {
   let title = '';
   const items: Item[] = [];
-  for (const raw of decodeText(text).split(/\r?\n/)) {
+  for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim().replace(/^[-*•]\s*/, '');
     if (!line) continue;
-    const c = line.split('|').map(x => x.trim());
-    if (c.length < 2) { if (!title) title = line; continue; }
+    const c = line.split('|').map(x => cell(x.trim()));
+    if (c.length < 2) { if (!title) title = c[0]; continue; }
     // The link is the last cell; the image is any other web address; what is left is the summary and, last, why it matters.
     // Reading by content, not position, keeps a missing image cell or a stray | in the text from losing the link.
     const link = url(c[c.length - 1]);

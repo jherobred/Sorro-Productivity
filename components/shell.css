@@ -47,9 +47,9 @@
 .sx { --bar-h: 58px }
 .sx-bar { display: grid; grid-template-columns: repeat(5, 1fr); height: var(--bar-h); padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; background: var(--surface); border-top: 1px solid var(--line) }
 .sx-bar a, .sx-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 44px; color: var(--muted); font: 500 11px/1 var(--font-body); -webkit-touch-callout: none; user-select: none }
-.sx-bar svg, .sx-bar [aria-hidden] { padding: 4px 16px; border-radius: var(--r-pill); box-sizing: content-box; transition: background-color .2s var(--snap) }
+.sx-bar-ico { display: grid; place-items: center; padding: 4px 16px; border-radius: var(--r-pill); transition: background-color .2s var(--snap), transform .2s var(--snap) }
 .sx-bar [aria-current='page'] { color: var(--ink) }
-.sx-bar [aria-current='page'] > :first-child { background: var(--soft-2) }
+.sx-bar [aria-current='page'] > .sx-bar-ico { background: var(--soft-2) }
 .sx-bar a:active > :first-child, .sx-bar button:active > :first-child { transform: scale(.94) }
 
 /* S.more: the phone sheet for Vault, News and Settings. */

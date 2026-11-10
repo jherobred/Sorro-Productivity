@@ -4,7 +4,7 @@
  * remove one with ×, and add more from the + menu. Home lays them out as a grid that wraps into
  * rows (axis x); the right panel as one column (axis y). Order lives in prefs.panel.widgets, so both show the same set.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig, Reorder, motion, useDragControls, type DragControls } from 'motion/react';
 import { Icon, type IconName } from '../Icon';
 import { usePrefs } from '@/lib/prefs';
@@ -74,7 +74,7 @@ function GridItem(p: ItemProps & { over: boolean; onLift(): void; onOver(id: Wid
   const W = WIDGETS[p.id].Component;
   const fit = useRef<HTMLDivElement>(null);
   const [span, setSpan] = useState(60);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = fit.current;
     if (!el) return;
     // offsetHeight is the laid-out height: a drag's scale does not change it.
