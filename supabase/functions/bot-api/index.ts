@@ -7,9 +7,14 @@
  * credential. The function holds the service role, so every query below pins
  * `user_id` to BOT_API_USER_ID by hand; nothing else scopes it.
  *
- * No deletes on purpose. A bot that gets confused or prompt-injected can add or
- * edit rows, and every edit is visible in the app, but it cannot remove any.
- * Revoke by changing BOT_API_TOKEN.
+ * Nothing is erased. A bot that gets confused or prompt-injected can add or edit
+ * rows, and `delete_event` only moves an event to the bin (`restore_event` or the
+ * app brings it back). Every change is visible in the app. Revoke by changing
+ * BOT_API_TOKEN.
+ *
+ * Events the Google Calendar sync mirrors (`source: gcal_ics`) are read-only
+ * here: the next sync would overwrite an edit. `list_events` returns each
+ * event's `source` and an `editable` flag so the bot can tell.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -20,6 +25,9 @@ const json = (body: unknown, status = 200) =>
 
 const TASK_FIELDS = ['title', 'notes', 'due_on', 'due_at', 'priority', 'stars', 'list_id', 'done'];
 const EVENT_FIELDS = ['title', 'starts_at', 'ends_at', 'all_day', 'location', 'color', 'remind_minutes'];
+
+/** Rows the Google Calendar sync owns. */
+const MIRROR = 'gcal_ics';
 
 const pick = (src: unknown, keys: string[]) => {
   const out: Record<string, unknown> = {};
@@ -102,25 +110,40 @@ Deno.serve(async (req) => {
       }
       case 'list_events': {
         if (!from || !to) return { data: null, error: { message: 'from and to are required (ISO timestamps)' } };
-        return db.from('sorro_events')
+        const r = await db.from('sorro_events')
           .select('id,title,starts_at,ends_at,all_day,location,color,remind_minutes,source')
           .eq('user_id', uid).is('deleted_at', null)
           .lt('starts_at', to).gt('ends_at', from).order('starts_at').limit(500);
+        return { data: r.data?.map(e => ({ ...e, editable: e.source !== MIRROR })) ?? null, error: r.error };
       }
       case 'create_event': {
         const row = pick(body.event, EVENT_FIELDS);
         if (!row.title || !row.starts_at || !row.ends_at) {
           return { data: null, error: { message: 'event.title, starts_at and ends_at are required' } };
         }
-        return db.from('sorro_events')
-          .insert({ color: '#38D6F2', ...row, id: crypto.randomUUID(), user_id: uid, source: 'app' })
-          .select().single();
+        // `source` must be one the table allows: 'app' was rejected by its check, so no bot event was ever saved.
+        // With event.key, sending the same event again updates it instead of adding a copy (a retried request).
+        const key = typeof (body.event as { key?: unknown })?.key === 'string' ? `bot:${(body.event as { key: string }).key.slice(0, 120)}` : null;
+        const full = { color: '#38D6F2', ...row, user_id: uid, source: 'manual', external_id: key, deleted_at: null };
+        if (key) return db.from('sorro_events').upsert(full, { onConflict: 'user_id,source,external_id' }).select().single();
+        return db.from('sorro_events').insert({ ...full, id: crypto.randomUUID() }).select().single();
       }
       case 'update_event': {
-        // Google Calendar rows are a mirror the next sync overwrites; only edit our own.
+        // Google Calendar rows are a mirror the next sync overwrites; every other event can be edited.
         return db.from('sorro_events').update(pick(body.patch, EVENT_FIELDS))
-          .eq('id', id).eq('user_id', uid).or('source.is.null,source.eq.app')
+          .eq('id', id).eq('user_id', uid).neq('source', MIRROR).is('deleted_at', null)
           .select().single();
+      }
+      case 'delete_event': {
+        // To the bin, not erased: the app's bin and restore_event bring it back.
+        return db.from('sorro_events').update({ deleted_at: new Date().toISOString() })
+          .eq('id', id).eq('user_id', uid).neq('source', MIRROR).is('deleted_at', null)
+          .select('id,title,starts_at').single();
+      }
+      case 'restore_event': {
+        return db.from('sorro_events').update({ deleted_at: null })
+          .eq('id', id).eq('user_id', uid).not('deleted_at', 'is', null)
+          .select('id,title,starts_at').single();
       }
       default:
         return { data: null, error: { message: `Unknown action ${action}` } };
