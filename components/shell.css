@@ -98,7 +98,10 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 .sx-mark-sm .sx-mark-word { height: 11px }
 .sx-mark-lg { flex-direction: column; gap: 14px }
 .sx-mark-lg .sx-mark-word { height: 22px }
-.sx-fox { display: inline-grid; place-items: center; min-width: 22px }
+/* One box for every pose: the running fox is wider than the sitting one, and must not push the wordmark and the title along. */
+.sx-fox { display: inline-grid; place-items: center start; width: 36px; flex: none }
+.sx-mark-sm .sx-fox { width: 30px }
+.sx-mark-sm { gap: 6px }
 .sx-fox > span { animation: fox-in .32s var(--snap) both }
 @keyframes fox-in { from { opacity: 0; transform: scale(.82) } }
 .fox-run { display: inline-block; flex: none; -webkit-mask: url(/brand/fox-run.png) 0 0 / 700% 100% no-repeat; mask: url(/brand/fox-run.png) 0 0 / 700% 100% no-repeat; animation: fox-run .56s steps(6) infinite }
@@ -126,7 +129,8 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 
 /* S.foxbubble: the fox speaking first, a card under the top strip on the right, clear of the nav and the composer. */
 .fx-bubble { position: fixed; z-index: 55; top: calc(52px + env(safe-area-inset-top)); right: 16px; width: min(360px, calc(100vw - 32px)); padding: 12px 8px 12px 12px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 12px 32px rgb(0 0 0 / .18); display: flex; align-items: flex-start; gap: 10px; animation: fx-in .32s var(--drift) both }
-@keyframes fx-in { from { opacity: 0; transform: translateY(-10px) scale(.98) } }
+/* Slides in without fading: a card caught mid-animation, or with animation paused, is still solid and readable. */
+@keyframes fx-in { from { transform: translateY(-10px) scale(.98) } }
 .fx-bubble-fox { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-pill); background: var(--soft) }
 .fx-bubble-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px }
 .fx-bubble-who { margin: 0; color: var(--muted); font: 600 12px/1.3 var(--font-body) }

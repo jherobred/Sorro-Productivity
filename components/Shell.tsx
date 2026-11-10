@@ -9,8 +9,7 @@ import { Wordmark } from './Wordmark';
 import { Welcome } from './Welcome';
 import { MoreSheet } from './MoreSheet';
 import { SidePanel } from './SidePanel';
-import { useIsFetching, useIsMutating } from '@tanstack/react-query';
-import { foxDash, foxWork, foxTalk } from '@/lib/foxMood';
+import { foxTalk } from '@/lib/foxMood';
 import { FoxSheet } from './FoxSheet';
 import { focusFoxComposer } from './FoxChat';
 import { FoxBubble } from './FoxBubble';
@@ -70,9 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   foxOpenRef.current = foxOpen;
   useOverlayBack(foxOpen, () => setFoxOpen(false));
   useEffect(() => { setFoxOpen(false); if (pathname.startsWith('/home')) foxTalk(false); }, [pathname]);
-  const working = useIsFetching() + useIsMutating() > 0;
-  useEffect(() => { foxWork(working); }, [working]);
-  useEffect(() => { foxDash(); }, [pathname]);
+  // The fox runs only while it is answering (FoxChat), not on every tab change, load or save.
   const [win, setWin] = useState<TauriWindow | null>(null);
   useEffect(() => setWin(tauriWindow()), []);
   const dark = themeIsDark(prefs.theme);
