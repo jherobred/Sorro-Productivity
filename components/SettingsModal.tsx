@@ -649,11 +649,11 @@ export function SettingsModal({
               </div>
             </Field>
 
-            <Field label="Density">
+            <Field label="Compact view">
               <div style={{ display: 'flex', gap: 8 }}>
                 {[
-                  { v: 'comfortable', n: 'Comfortable (Spacious)' },
-                  { v: 'compact', n: 'Compact (8% more content)' },
+                  { v: 'comfortable', n: 'Comfortable' },
+                  { v: 'compact', n: 'Compact (more on screen)' },
                 ].map((d) => (
                   <button
                     key={d.v}

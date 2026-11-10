@@ -35,6 +35,8 @@ import { themeIsDark } from '@/lib/theme';
 import './shell.css';
 const Settings = dynamic(() => import('./SettingsModal').then(m => m.SettingsModal), { ssr: false });
 const Search = dynamic(() => import('./SearchPalette').then(m => m.SearchPalette), { ssr: false });
+/** Compact view draws every page a little smaller, so more fits; text size still follows the Text size setting. */
+const COMPACT_ZOOM = .92;
 const Accounts = dynamic(() => import('./AccountSheet').then(m => m.AccountSheet), { ssr: false });
 const Capture = dynamic(() => import('./CaptureSheet').then(m => m.CaptureSheet), { ssr: false });
 
@@ -168,7 +170,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {win && <div className="sx-caption"><button aria-label="Minimize" onClick={() => void win.minimize()}><Icon name="minus" size={16} /></button><button aria-label="Maximize" onClick={() => void win.toggleMaximize()}><Icon name="square" size={14} /></button><button className="x" aria-label="Close" onClick={() => void win.close()}><Icon name="close" size={16} /></button></div>}
       </header>
       <div className="sx-body">
-      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale }}>{activePath(pathname) ? <div key={pathname} className="sx-page">{children}</div> : null}</main>
+      <main id="workspace" className="studio-main" data-page={current?.id} data-part={current?.part} style={{ zoom: prefs.fontScale * (prefs.density === 'compact' ? COMPACT_ZOOM : 1) }}>{activePath(pathname) ? <div key={pathname} className="sx-page">{children}</div> : null}</main>
       {docked && <SidePanel mode="dock" context={current?.id} />}
       </div>
     </div>
