@@ -1,0 +1,32 @@
+/* S.account: the account card. Beside the sidebar's name button on a computer, a sheet on a phone. */
+.ac-back { position: fixed; inset: 0; z-index: 96; display: flex; align-items: flex-end; justify-content: flex-start; padding: 12px 12px 56px; background: transparent }
+.ac-back[data-phone='true'] { padding: 0; background: var(--backdrop); animation: sheet-fade .2s ease-out both }
+.ac { width: 320px; max-width: 100%; max-height: min(82dvh, 640px); overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 48px rgb(0 0 0 / .22); transform-origin: bottom left; animation: ac-in .22s var(--drift) both }
+@keyframes ac-in { from { transform: translateY(8px) scale(.97) } }
+.ac-back[data-phone='true'] .ac { width: 100%; max-height: 88dvh; padding: 8px 10px calc(14px + env(safe-area-inset-bottom)); border-radius: var(--r-panel) var(--r-panel) 0 0; border-width: 1px 0 0; animation: sheet-up .28s var(--drift) both }
+@keyframes sheet-up { from { transform: translateY(24px) } }
+
+.ac-me { display: flex; align-items: center; gap: 12px; padding: 8px 6px 12px 8px; border-bottom: 1px solid var(--line) }
+.ac-me div { flex: 1; min-width: 0 }
+.ac-me strong { display: block; font: 600 15px/1.3 var(--font-body); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ac-me small, .ac-item small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ac-face { flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--soft-2); color: var(--ink); font-weight: 600 }
+.ac-x, .ac-mini { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-row); color: var(--muted) }
+.ac-x:hover, .ac-mini:hover { background: var(--soft); color: var(--ink) }
+
+.ac section { display: flex; flex-direction: column; gap: 1px; padding: 4px 0 }
+.ac section + section { border-top: 1px solid var(--line) }
+.ac h3 { margin: 6px 10px 4px; color: var(--muted); font: 600 11.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase }
+.ac-row { display: flex; align-items: center; gap: 2px }
+.ac-item { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 6px 10px; border-radius: var(--r-row); color: var(--ink); font: 14px/1.3 var(--font-body); text-align: left }
+.ac-item:hover { background: var(--soft) }
+.ac-item > span { flex: 1; min-width: 0 }
+.ac-item strong { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ac-item > i { flex: none; width: 10px; height: 10px; margin: 0 3px; border-radius: 3px }
+.ac-item[aria-checked='true'] { background: var(--soft) }
+.ac-quiet { color: var(--muted) }
+.ac-out { color: var(--bad) }
+:is(.ac-item, .ac-x, .ac-mini):focus-visible { outline: 3px solid var(--pick); outline-offset: -2px }
+.ac-back[data-phone='true'] .ac-item { min-height: 46px; font-size: 15px }
+.nomo :is(.ac, .ac-back) { animation: none !important }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) :is(.ac, .ac-back) { animation: none !important } }
