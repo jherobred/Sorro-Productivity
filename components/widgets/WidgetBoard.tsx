@@ -18,7 +18,7 @@ export const WIDGET_INFO: Record<WidgetId, { icon: IconName; blurb: string }> = 
   focus: { icon: 'focus', blurb: 'A 25 or 50 minute focus timer' },
   month: { icon: 'month', blurb: 'The month, shaded by how full each day is' },
   pinned: { icon: 'pin', blurb: 'Your first pinned note' },
-  news: { icon: 'news', blurb: 'Today’s digest headlines' },
+  news: { icon: 'news', blurb: 'Today’s stories with their pictures, one at a time' },
   weather: { icon: 'sun', blurb: 'Weather for your city' },
   capture: { icon: 'plus', blurb: 'Add a task in one line' },
 };
@@ -61,14 +61,35 @@ const widgetAt = (e: MouseEvent | TouchEvent | PointerEvent, self: WidgetId): Wi
   return null;
 };
 
-/** The wrapping grid (Home): Reorder only knows one axis, so here a widget is dropped onto the one whose place it takes. */
+/** Home's grid packs by height: rows are 2px tall and each widget spans as many as its own height needs. */
+const ROW = 2, GAP = 10;
+
+/**
+ * The packed grid (Home): Reorder only knows one axis, so here a widget is dropped onto the one whose place it takes.
+ * Each widget keeps its natural height, measured from its content, so a short one leaves room for another beneath it
+ * beside a tall one.
+ */
 function GridItem(p: ItemProps & { over: boolean; onLift(): void; onOver(id: WidgetId | null): void; onDropOn(id: WidgetId | null): void }) {
   const controls = useDragControls();
   const W = WIDGETS[p.id].Component;
-  return <motion.div layout className="wb-item" data-id={p.id} data-over={p.over} drag dragListener={false} dragControls={controls} dragSnapToOrigin dragElastic={.12}
-    onDragStart={p.onLift} onDrag={e => p.onOver(widgetAt(e, p.id))} onDragEnd={e => p.onDropOn(widgetAt(e, p.id))} {...ENTER}>
-    <Tools {...p} controls={controls} keys={[['ArrowLeft', 'ArrowUp'], ['ArrowRight', 'ArrowDown']]} />
-    <W />
+  const fit = useRef<HTMLDivElement>(null);
+  const [span, setSpan] = useState(60);
+  useEffect(() => {
+    const el = fit.current;
+    if (!el) return;
+    // offsetHeight is the laid-out height: a drag's scale does not change it.
+    const measure = () => setSpan(Math.max(1, Math.ceil((el.offsetHeight + GAP) / ROW)));
+    measure();
+    const seen = new ResizeObserver(measure);
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
+  return <motion.div layout className="wb-item" data-id={p.id} data-over={p.over} style={{ gridRowEnd: `span ${span}` }} drag dragListener={false} dragControls={controls} dragSnapToOrigin dragElastic={.12}
+    onDragStart={p.onLift} onDrag={e => p.onOver(widgetAt(e, p.id))} onDragEnd={e => p.onDropOn(widgetAt(e, p.id))} {...ENTER} whileDrag={{ scale: 1.02, zIndex: 5 }}>
+    <div className="wb-fit" ref={fit}>
+      <Tools {...p} controls={controls} keys={[['ArrowLeft', 'ArrowUp'], ['ArrowRight', 'ArrowDown']]} />
+      <W />
+    </div>
   </motion.div>;
 }
 
@@ -84,9 +105,8 @@ function AddMenu({ order, onAdd, onReset, align }: { order: WidgetId[]; onAdd(id
     return () => { removeEventListener('pointerdown', away); removeEventListener('keydown', esc); };
   }, [open]);
   return <div className="wb-addwrap" ref={box} data-align={align}>
-    <motion.button type="button" className="wb-add" aria-label="Add a widget" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)}
-      whileTap={{ scale: .92 }} animate={{ rotate: open ? 45 : 0 }} transition={SPRING}>
-      <Icon name="plus" size={18} />
+    <motion.button type="button" className="wb-add" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)} whileTap={{ scale: .96 }}>
+      <motion.span className="wb-add-ico" aria-hidden="true" animate={{ rotate: open ? 45 : 0 }} transition={SPRING}><Icon name="plus" size={15} /></motion.span>Add widget
     </motion.button>
     <AnimatePresence>
       {open && <motion.div className="wb-menu" role="menu" aria-label="Widgets you can add"
@@ -133,7 +153,7 @@ export function WidgetBoard({ axis, className, part }: { axis: 'x' | 'y'; classN
         </AnimatePresence>
         {none}
       </div>}
-      <AddMenu order={items} align={axis === 'x' ? 'end' : 'start'} onAdd={id => save([...items, id])} onReset={() => save(DEFAULT_WIDGETS)} />
+      <AddMenu order={items} align="start" onAdd={id => save([...items, id])} onReset={() => save(DEFAULT_WIDGETS)} />
     </div>
   </MotionConfig>;
 }

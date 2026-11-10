@@ -20,6 +20,8 @@ export const PARTS = {
   'F.composer': 'Fox chat message box',
   N: 'Notes',
   'N.shelf': 'Notebook shelf',
+  'N.bar': 'Notebooks toolbar',
+  'N.tags': 'Courses and tags menu',
   'N.types': 'New page types',
   'N.editor': 'Page editor',
   C: 'Calendar',

@@ -75,3 +75,24 @@
 .wg-dayinfo > p { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 600 12.5px/1.3 var(--font-body); color: var(--ink) }
 .wg-dayinfo > p a { margin-left: auto; color: var(--muted); font-weight: 400; text-decoration: underline }
 :is(.wg a, .wg button, .wg input):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+
+/* The News widget: one story with its picture, turning every few seconds. Heights are fixed so the board stays still. */
+.wg-news { display: flex; flex-direction: column; gap: 6px }
+.wg-news-story { display: flex; flex-direction: column; gap: 4px; color: var(--ink); text-decoration: none; animation: wg-news-in .4s var(--drift) both }
+@keyframes wg-news-in { from { opacity: .2; transform: translateX(8px) } }
+.wg-news-pic { height: 104px; border-radius: var(--r-row); overflow: hidden; background: var(--soft); display: grid; place-items: center; color: var(--muted); margin-bottom: 2px }
+.wg-news-pic img { width: 100%; height: 100%; object-fit: cover; display: block }
+.wg-news-story small { color: var(--accent); font: 600 11px/1.2 var(--font-body); letter-spacing: .06em; text-transform: uppercase }
+.wg-news-story strong { height: 2.7em; font: 500 13.5px/1.35 var(--font-body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.wg-news-nav { display: flex; align-items: center; gap: 4px }
+.wg-news-nav button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--muted) }
+.wg-news-nav button:hover { background: var(--soft-2); color: var(--ink) }
+.wg-news-nav > span[aria-hidden] { flex: 1; display: flex; justify-content: center; gap: 4px; overflow: hidden }
+.wg-news-nav i { width: 5px; height: 5px; border-radius: 50%; background: var(--soft-2); transition: background-color .2s, width .2s var(--snap) }
+.wg-news-nav i[data-on='true'] { width: 14px; border-radius: 3px; background: var(--accent) }
+:is(.wg-news-story, .wg-news-nav button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+.nomo .wg-news-story { animation: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .wg-news-story { animation: none } }
+/* A narrow widget: the weather text wraps under the temperature instead of pushing Change off the edge. */
+.wg-weather { flex-wrap: wrap }
+.wg-weather span:nth-child(2) { min-width: 96px }

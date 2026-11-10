@@ -145,11 +145,41 @@ function Pinned() {
   </Frame>;
 }
 
+const NEWS_EVERY_MS = 7000;
+
+/** One story at a time, with its picture, moving on every few seconds. A fixed height, so the board never reshuffles as it turns. */
 function News() {
   const q = useEdition(manilaDay());
+  const stories = useMemo(() => (q.data ?? []).flatMap(e => e.items.length ? e.items.map(it => ({ kind: KIND_NAMES[e.kind], ...it })) : [{ kind: KIND_NAMES[e.kind], headline: e.title, summary: '', link: '', image: '', why: '' }]).slice(0, 12), [q.data]);
+  const [at, setAt] = useState(0);
+  const [held, setHeld] = useState(false);
+  const [broken, setBroken] = useState<string[]>([]);
+  const n = stories.length;
+  useEffect(() => {
+    // Hovering, focusing or Motion being off holds the story still; the arrows always work.
+    if (n < 2 || held || document.documentElement.classList.contains('nomo')) return;
+    const t = setInterval(() => { if (document.visibilityState === 'visible') setAt(i => (i + 1) % n); }, NEWS_EVERY_MS);
+    return () => clearInterval(t);
+  }, [n, held]);
+  const it = stories[Math.min(at, n - 1)];
+  const picture = it?.image && !broken.includes(it.image) ? it.image : '';
+  const step = (by: number) => setAt(i => (i + by + n) % n);
   return <Frame id="news" title="News" href="/news/">
-    {q.isPending ? <Loading /> : q.isError ? <Failed what="today’s news" retry={() => q.refetch()} /> : q.data?.length
-      ? <ul className="wg-list">{q.data.slice(0, 4).map(e => <li key={e.id}><small>{KIND_NAMES[e.kind]}</small><strong>{e.items[0]?.headline || e.title}</strong></li>)}</ul>
+    {q.isPending ? <Loading /> : q.isError ? <Failed what="today’s news" retry={() => q.refetch()} /> : it
+      ? <div className="wg-news" onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={() => setHeld(false)}>
+          <Link key={at} className="wg-news-story" href="/news/" aria-live="off">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <span className="wg-news-pic" data-empty={!picture}>{picture ? <img src={picture} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken(b => [...b, picture])} /> : <Icon name="news" size={22} />}</span>
+            <small>{it.kind}</small>
+            <strong>{it.headline}</strong>
+          </Link>
+          {n > 1 && <div className="wg-news-nav">
+            <button type="button" aria-label="Previous story" onClick={() => step(-1)}><Icon name="chevronLeft" size={14} /></button>
+            <span aria-hidden="true">{[...Array(n)].map((_, i) => <i key={i} data-on={i === at} />)}</span>
+            <span className="sr-only">Story {at + 1} of {n}</span>
+            <button type="button" aria-label="Next story" onClick={() => step(1)}><Icon name="chevronRight" size={14} /></button>
+          </div>}
+        </div>
       : <Empty>No digest yet today. Set up a Grok automation in News.</Empty>}
   </Frame>;
 }

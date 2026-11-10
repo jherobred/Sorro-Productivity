@@ -1,18 +1,21 @@
 /* The widget board: move by the grip, remove with ×, add with +. Home lays it out as a grid that wraps into rows, the panel in a column. */
 .wb { display: flex; gap: 10px; min-width: 0 }
 .wb[data-axis='y'] { flex-direction: column }
-.wb[data-axis='x'] { align-items: stretch }
+.wb[data-axis='x'] { flex-direction: column; align-items: stretch }
 .wb-list { display: flex; gap: 10px; min-width: 0; flex: 1 }
 .wb[data-axis='y'] .wb-list { flex-direction: column }
 /* Rows wrap, so nothing scrolls sideways. The scroll stays only as a fallback for a screen narrower than one widget. */
-.wb[data-axis='x'] .wb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: stretch; overflow-x: auto; padding: 2px; scrollbar-width: thin }
+/* Packed by height: 2px rows, each widget spanning what its own height needs (set in WidgetBoard), and dense flow
+   so a short widget sits under another short one beside a tall one. */
+.wb[data-axis='x'] .wb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: 2px; grid-auto-flow: row dense; gap: 0 10px; align-items: start; overflow-x: auto; padding: 2px; scrollbar-width: thin }
 .wb[data-axis='x'] .wb-item { min-width: 0 }
 .wb-item[data-over='true'] { outline: 2px dashed var(--pick); outline-offset: 2px }
 /* A widget in the air reaches past the list: no clipping and no scrollbars while it does. */
 .wb[data-axis='x'][data-dragging='true'] .wb-list { overflow: visible }
 .wb-item { position: relative; border-radius: var(--r-tile); background: transparent }
 .wb-item > .wg { height: 100% }
-.wb[data-axis='x'] .wb-item > .wg { background: var(--surface) }
+.wb-fit { position: relative }
+.wb[data-axis='x'] .wb-fit > .wg { background: var(--surface) }
 
 /* The grip and × sit in the widget's top right, shown on hover or focus, always on touch screens. */
 .wb-tools { position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; gap: 2px; opacity: 0; transition: opacity .15s var(--snap) }
@@ -27,16 +30,16 @@
 
 /* + and its menu. */
 .wb-addwrap { position: relative; flex: none; display: flex; align-items: flex-start }
-.wb[data-axis='y'] .wb-addwrap { justify-content: center }
-.wb-add { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-pill); border: 1px dashed var(--line); color: var(--muted); background: transparent }
-.wb[data-axis='y'] .wb-add { width: 100%; height: 36px; border-radius: var(--r-tile) }
-.wb[data-axis='x'] .wb-add { width: 40px; height: 40px; margin-top: 2px }
-.wb-add:hover, .wb-add[aria-expanded='true'] { border-style: solid; color: var(--accent); background: var(--soft) }
+.wb-addwrap { align-self: flex-start }
+.wb[data-axis='x'] .wb-addwrap { margin-left: 2px }
+/* One quiet pill, the same on Home and in the panel. */
+.wb-add { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px 0 10px; border-radius: var(--r-pill); background: var(--soft); color: var(--muted); font: 500 13px/1 var(--font-body) }
+.wb-add-ico { display: grid }
+.wb-add:hover, .wb-add[aria-expanded='true'] { background: var(--soft-2); color: var(--ink) }
 .wb-menu { position: absolute; top: calc(100% + 8px); z-index: 40; width: min(300px, calc(100vw - 32px)); max-height: min(60dvh, 420px); overflow: auto;
   padding: 6px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 16px 40px rgb(0 0 0 / .16); transform-origin: top }
 .wb-addwrap[data-align='start'] .wb-menu { left: 0 }
 .wb-addwrap[data-align='end'] .wb-menu { right: 0; transform-origin: top right }
-.wb[data-axis='x'] .wb-menu { top: 8px; right: calc(100% + 8px) }
 .wb-menu-h { margin: 6px 10px 6px; color: var(--muted); font: 600 12px/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em }
 .wb-opt { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-row); text-align: left; color: var(--ink) }
 .wb-opt:hover { background: var(--soft) }
@@ -47,10 +50,8 @@
 .wb-reset { width: 100%; margin-top: 4px; padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; color: var(--muted); font-size: 12.5px }
 .wb-reset:hover { color: var(--ink) }
 .wb-none { align-self: center; margin: 0 }
+.wb[data-axis='x'] .wb-none { grid-column: 1 / -1; grid-row-end: span 16 }
 
 @media (max-width: 760px) {
   .wb[data-axis='x'] .wb-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) }
-  .wb[data-axis='x'] { flex-direction: column }
-  .wb[data-axis='x'] .wb-add { width: 100%; height: 36px; margin: 0; border-radius: var(--r-tile) }
-  .wb[data-axis='x'] .wb-menu { top: calc(100% + 8px); right: 0 }
 }
