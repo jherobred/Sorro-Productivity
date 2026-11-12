@@ -38,7 +38,7 @@ export function downloadLocalModel() {
 export async function forgetLocalModel() {
   try { localStorage.removeItem(KEY); } catch {}
   worker?.terminate(); worker = null;
-  try { for (const k of await caches.keys()) if (k.includes('transformers')) await caches.delete(k); } catch { /* no Cache Storage */ }
+  try { for (const k of await caches.keys()) if (k.includes('transformers') || k === 'sorro-model') await caches.delete(k); } catch { /* no Cache Storage */ }
   set({ status: 'none', progress: 0 });
 }
 

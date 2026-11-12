@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { loadSession } from '@/lib/supabase';
 import { signInWithGoogle, listenForNativeAuth } from '@/lib/nativeAuth';
 import { Welcome } from '@/components/Welcome';
 import '@/components/shell.css';
@@ -13,8 +13,8 @@ export default function SignIn() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace('/home/');
+    void loadSession().then(({ session }) => {
+      if (session) router.replace('/home/');
     });
     // Native shell: the OAuth round-trip comes back as a deep link, not a redirect.
     return listenForNativeAuth(() => router.replace('/auth/callback/'));

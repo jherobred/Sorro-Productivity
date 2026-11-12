@@ -3,7 +3,11 @@ import { env, pipeline, type TextGenerationPipeline } from '@huggingface/transfo
 
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 env.allowLocalModels = false;
-if (env.backends.onnx.wasm) env.backends.onnx.wasm.numThreads = 1;
+if (env.backends.onnx.wasm) {
+  env.backends.onnx.wasm.numThreads = 1;
+  // Transformers points this at cdn.jsdelivr.net, which the service worker cannot serve offline. Use the app's own copy.
+  env.backends.onnx.wasm.wasmPaths = { wasm: new URL('../node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.wasm', import.meta.url).href };
+}
 
 const MODEL = 'onnx-community/Qwen2.5-0.5B-Instruct';
 let generator: Promise<TextGenerationPipeline> | null = null;

@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 
 export const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdkbnsjczanvmmpsovhm.supabase.co';
@@ -27,6 +27,27 @@ export const supabase = createClient(
 );
 
 /**
+ * getSession, but usable offline. An access token lasts an hour; once it has
+ * expired, getSession must refresh it, and with no connection that fails and
+ * returns no session. Offline that is not a sign-out, so the stored session is
+ * used as is until the connection is back and the refresh succeeds.
+ */
+export async function loadSession(): Promise<{ session: Session | null; error: unknown }> {
+  const { data, error } = await supabase.auth.getSession();
+  if (data.session || !error || !isAuthRetryableFetchError(error)) return { session: data.session, error };
+  return { session: storedSession(), error: storedSession() ? null : error };
+}
+
+/** The session saved on this device, without refreshing it. */
+export function storedSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(`sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`);
+    const s = raw && JSON.parse(raw);
+    return s?.user && s.refresh_token ? s : null;
+  } catch { return null; }
+}
+
+/**
  * The signed-in user's id.
  *
  * This is called before almost every insert in the app, so how it gets the id
@@ -48,8 +69,8 @@ export async function currentUserId(): Promise<string> {
   // controls are untestable.
   if (process.env.NEXT_PUBLIC_DEV_FIXTURES === '1' && process.env.NODE_ENV !== 'production') return 'me';
   if (cachedUid) return cachedUid;
-  const { data } = await supabase.auth.getSession();
-  const id = data.session?.user?.id;
+  const { session } = await loadSession();
+  const id = session?.user?.id;
   if (!id) throw new Error('Not signed in');
   cachedUid = id;
   return id;

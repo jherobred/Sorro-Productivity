@@ -10,6 +10,8 @@
 
 const PRE = `sorro-pre-${PRECACHE.version}`;
 const RUNTIME = 'sorro-runtime';
+// The offline AI's 21 MB runtime (.wasm). Too big to precache, and it must survive deploys.
+const MODEL = 'sorro-model';
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -22,8 +24,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // The new precache holds every page, so last version's runtime copies can go.
-    for (const key of await caches.keys()) if (key !== PRE) await caches.delete(key);
+    // The new precache holds every page, so last version's precache and runtime
+    // copies can go. Other caches stay: MODEL, and transformers-cache, which
+    // holds the downloaded offline AI model.
+    for (const key of await caches.keys()) if (key === RUNTIME || (key.startsWith('sorro-pre-') && key !== PRE)) await caches.delete(key);
     await self.clients.claim();
   })());
 });
@@ -51,7 +55,8 @@ async function cacheFirst(request) {
   const hit = await caches.match(request);
   if (hit) return hit;
   const response = await fetch(request);
-  if (response.ok) { const copy = response.clone(); void caches.open(RUNTIME).then((c) => c.put(request, copy)); }
+  const name = request.url.endsWith('.wasm') ? MODEL : RUNTIME;
+  if (response.ok) { const copy = response.clone(); void caches.open(name).then((c) => c.put(request, copy)); }
   return response;
 }
 

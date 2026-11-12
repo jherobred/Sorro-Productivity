@@ -23,7 +23,7 @@ import { AskHost } from './AskHost';
 import { SyncHealth } from './SyncHealth';
 import { usePrefs } from '@/lib/prefs';
 import { useBackGuard, useOverlayBack } from '@/lib/nav';
-import { supabase } from '@/lib/supabase';
+import { loadSession, storedSession, supabase } from '@/lib/supabase';
 import { devFixturesOn } from '@/lib/devFixtures';
 import { useLiveSync } from '@/lib/realtime';
 import { useAutoSync } from '@/lib/integrations';
@@ -88,12 +88,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (devFixturesOn()) { setReady(true); return; }
     let live = true;
-    const timeout = setTimeout(() => { if (live) setAuthError(true); }, 12000);
-    void supabase.auth.getSession().then(({ data, error }) => {
+    const open = (u: { id: string; user_metadata?: Record<string, string> }) => { setReady(true); setMe({ id: u.id, name: u.user_metadata?.full_name || u.user_metadata?.name || 'You', photo: u.user_metadata?.avatar_url || null }); };
+    // A slow or dead connection can hold the token refresh past this; the saved session opens the app anyway.
+    const timeout = setTimeout(() => { if (!live) return; const s = storedSession(); if (s) open(s.user); else setAuthError(true); }, 12000);
+    void loadSession().then(({ session, error }) => {
       if (!live) return;
       clearTimeout(timeout);
       if (error) { setAuthError(true); return; }
-      if (data.session) { setReady(true); const u = data.session.user; setMe({ id: u.id, name: u.user_metadata?.full_name || u.user_metadata?.name || 'You', photo: u.user_metadata?.avatar_url || null }); }
+      if (session) open(session.user);
       else { try { sessionStorage.setItem('sorro-after-auth', location.pathname + location.search); } catch {} router.replace('/'); }
     }).catch(() => { if (live) setAuthError(true); });
     const { data } = supabase.auth.onAuthStateChange((_e, session) => { if (!session) router.replace('/'); });
