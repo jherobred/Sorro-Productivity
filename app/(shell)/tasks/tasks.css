@@ -408,3 +408,19 @@
 .task-repeat-days button[aria-pressed=true]{border-color:var(--poster-blue);background:var(--poster-blue);color:#fff}
 .task-repeat-note{margin:0;font-size:12px;line-height:1.5;color:var(--tx3)}
 .task-repeat-note b{color:var(--tx)}
+
+/* The task's place on the calendar, in its panel. */
+.task-cal p{margin:5px 0 8px;font-size:13.5px;color:var(--tx)}
+.task-cal .task-chips a{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.task-cal-blocks{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.task-cal-blocks a{color:var(--tx2);text-decoration:none}
+.task-cal-blocks a:hover{color:var(--tx);text-decoration:underline}
+/* Stars, links, photos and the cover, folded under one line until used. */
+.task-panel-more{border-top:1px solid var(--line);padding-top:4px}
+.task-panel-more>summary{cursor:pointer;padding:10px 0;font-size:12.5px;font-weight:650;color:var(--tx3);list-style:none;display:flex;align-items:center;gap:8px}
+.task-panel-more>summary::-webkit-details-marker{display:none}
+.task-panel-more>summary::before{content:'';width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.task-panel-more[open]>summary::before{transform:rotate(45deg)}
+.task-panel-more>summary:hover{color:var(--tx)}
+.task-cal .task-chips a{height:30px;padding:0 11px;border-radius:999px;border:1px solid var(--line2);background:var(--card);color:var(--tx2);font-size:12.5px;font-weight:600;white-space:nowrap}
+.task-cal .task-chips a:hover{border-color:var(--tx3);color:var(--tx)}

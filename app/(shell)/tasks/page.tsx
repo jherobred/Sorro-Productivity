@@ -72,8 +72,9 @@ const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? o
 type Bucket = { id: string; title: string; hint?: string; tint: string; tasks: Task[] };
 
 export default function TasksPage() {
-  const [planning,setPlanning]=useState(false);
-  useEffect(()=>{if(new URLSearchParams(location.search).get('plan')==='week')setPlanning(true);},[]);
+  /** Plan week, from the toolbar, the calendar, or a task's "Reserve time" (?plan=week&task=id). */
+  const [planning,setPlanning]=useState<false|{task?:string}>(false);
+  useEffect(()=>{const q=new URLSearchParams(location.search);if(q.get('plan')==='week')setPlanning({task:q.get('task')??undefined});},[]);
   const { phone, width } = useLayout();
   const narrow = phone || width < 1000;
   const { prefs, update } = usePrefs();
@@ -97,7 +98,11 @@ export default function TasksPage() {
   const [scope, setScopeState] = useState<TaskScope>(() => {
     const asked = searchParams?.get('project');
     if (asked) return `list:${asked}` as TaskScope;
-    try { return (localStorage.getItem(SCOPE_KEY) as TaskScope | null) || 'all'; } catch { return 'all'; }
+    try {
+      const saved = localStorage.getItem(SCOPE_KEY) as TaskScope | null;
+      // Overdue and No date are sections of the list now, not places to go.
+      return saved && (saved.includes(':') || SMART_SCOPES.some((s) => s.id === saved)) ? saved : 'all';
+    } catch { return 'all'; }
   });
   const [query, setQuery] = useState('');
   const [priority, setPriority] = useState<string | null>(null);
@@ -118,8 +123,9 @@ export default function TasksPage() {
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, []);
 
   // ?view= wins, so a link to the board opens the board; the saved choice covers the rest.
-  const [picked, setPicked] = useState<'groups' | 'agenda' | 'board' | 'table' | null>(() => { const v = searchParams?.get('view'); return v === 'groups' || v === 'agenda' || v === 'board' || v === 'table' ? v : null; });
-  const view = picked ?? (prefs.taskView === 'list' ? 'agenda' : prefs.taskView ?? 'groups');
+  // One list view: Overdue, then each day as on the calendar, then Later and No date. The old Groups view lands there.
+  const [picked, setPicked] = useState<'agenda' | 'board' | 'table' | null>(() => { const v = searchParams?.get('view'); return v === 'board' || v === 'table' ? v : v === 'groups' || v === 'agenda' ? 'agenda' : null; });
+  const view = picked ?? (prefs.taskView === 'board' || prefs.taskView === 'table' ? prefs.taskView : 'agenda');
   const pickView = (v: typeof view) => { setPicked(v); void update({ taskView: v }); const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(history.state, '', u); };
   const sort: TaskSort = prefs.taskSort ?? { key: 'smart', desc: false };
   const boardBy: BoardBy = prefs.taskBoardBy ?? 'list';
@@ -155,7 +161,7 @@ export default function TasksPage() {
 
   const counts = useMemo(() => {
     const ids: TaskScope[] = [
-      ...SMART_SCOPES.map((s) => s.id), `list:${INBOX}`,
+      ...SMART_SCOPES.map((s) => s.id), 'overdue', `list:${INBOX}`,
       ...lists.map((l) => `list:${l.id}` as TaskScope), ...courses.map((c) => `course:${c}` as TaskScope),
     ];
     return Object.fromEntries(ids.map((id) => [id, pool(id).filter((t) => inScope(t, id, today, weekEnd)).length]));
@@ -194,19 +200,11 @@ export default function TasksPage() {
   const leftToday = counts.today ?? 0;
 
   const buckets: Bucket[] = useMemo(() => {
-    if (view === 'agenda') {
-      const tone = { late: PAL.coral, today: PAL.amber, soon: PAL.mint, later: PAL.indigo, none: 'var(--tx3)' } as const;
-      return agendaSections(shown, today, sort, now).map((s) => ({ id: s.id, title: s.title, hint: s.hint, tint: tone[s.tone], tasks: s.tasks }));
-    }
     if (view === 'board') {
       return boardColumns(shown, boardBy, lists, tags, sort, now).map((c) => ({ id: c.id, title: c.title, tint: c.color, tasks: c.tasks }));
     }
-    return [
-      { id: 'late', title: 'Overdue', hint: 'Past their date', tint: PAL.coral, tasks: shown.filter((t) => !!t.due_on && t.due_on < today) },
-      { id: 'today', title: 'Today', hint: 'Due before midnight', tint: PAL.amber, tasks: shown.filter((t) => t.due_on === today) },
-      { id: 'upcoming', title: 'Upcoming', hint: 'After today', tint: PAL.mint, tasks: shown.filter((t) => !!t.due_on && t.due_on > today) },
-      { id: 'nodate', title: 'No date', hint: 'Whenever you get to them', tint: 'var(--tx3)', tasks: shown.filter((t) => !t.due_on) },
-    ].filter((b) => b.tasks.length);
+    const tone = { late: PAL.coral, today: PAL.amber, soon: PAL.mint, later: PAL.indigo, none: 'var(--tx3)' } as const;
+    return agendaSections(shown, today, sort, now).map((s) => ({ id: s.id, title: s.title, hint: s.hint, tint: tone[s.tone], tasks: s.tasks }));
   }, [view, shown, today, sort, now, boardBy, lists, tags]);
 
   /** Visible order, for selecting a range with Shift. */
@@ -377,14 +375,15 @@ export default function TasksPage() {
     setMenu({ x: r.left, y: r.bottom + 6, label, items });
   };
   const setSort = (next: TaskSort) => void update({ taskSort: next });
-  const openSort = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Sort tasks', [
-    { items: (Object.keys(SORT_LABELS) as TaskSortKey[]).map((key) => ({ icon: SORT_ICONS[key], label: SORT_LABELS[key], hint: SORT_HINTS[key], checked: sort.key === key, run: () => setSort({ key, desc: false }) })) },
+  /** One menu for order and filter: sort, reverse, board columns, and which priority shows. */
+  const openSort = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Sort and filter', [
+    { label: 'Sort', items: (Object.keys(SORT_LABELS) as TaskSortKey[]).map((key) => ({ icon: SORT_ICONS[key], label: SORT_LABELS[key], hint: SORT_HINTS[key], checked: sort.key === key, run: () => setSort({ key, desc: false }) })) },
     { items: [{ icon: 'sort', label: sort.desc ? 'Back to normal order' : 'Reverse the order', run: () => setSort({ ...sort, desc: !sort.desc }) }] },
     ...(view === 'board' ? [{ label: 'Board columns', items: (['list', 'course', 'priority'] as const).map((by) => ({ icon: (by === 'list' ? 'list' : by === 'course' ? 'tag' : 'flag') as IconName, label: `By ${by === 'list' ? 'project' : by}`, checked: boardBy === by, run: () => void update({ taskBoardBy: by }) })) }] : []),
-  ]);
-  const openPriority = (e: React.MouseEvent<HTMLElement>) => menuAt(e, 'Show priority', [
-    { icon: 'flag', label: 'Any priority', checked: priority === null, run: () => setPriority(null) },
-    ...(['high', 'med', 'low', NONE] as const).map((p) => ({ icon: 'flag' as const, label: PRIORITY_NAMES[p], checked: priority === p, run: () => setPriority(p) })),
+    { label: 'Show', items: [
+      { icon: 'flag', label: 'Any priority', checked: priority === null, run: () => setPriority(null) },
+      ...(['high', 'med', 'low', NONE] as const).map((p) => ({ icon: 'flag' as const, label: `${PRIORITY_NAMES[p]} only`, checked: priority === p, run: () => setPriority(p) })),
+    ] },
   ]);
 
   // "/" searches, "n" adds, Escape lets go of a selection.
@@ -461,7 +460,11 @@ export default function TasksPage() {
   const detailTask = tasks.find((t) => t.id === detail) ?? null;
   const wide = !narrow && (view === 'board' || view === 'table') && scope !== 'done';
 
-  if(planning)return <WeeklyPlanner onClose={()=>setPlanning(false)}/>;
+  if (planning) return <WeeklyPlanner initialTask={planning.task} onClose={() => {
+    setPlanning(false);
+    const u = new URL(location.href);
+    if (u.searchParams.has('plan')) { u.searchParams.delete('plan'); u.searchParams.delete('task'); history.replaceState(history.state, '', u); }
+  }} />;
   return (
     <div className={'tasks-page' + (narrow ? ' is-narrow' : '') + (wide ? ' is-wide' : '')}>
       {!narrow && (
@@ -516,22 +519,21 @@ export default function TasksPage() {
           {scope !== 'done' && (
             <TabRail label="Task view" phone={phone}
               tabs={[
-                { id: 'groups', label: 'Groups', icon: 'layers' },
-                { id: 'agenda', label: 'Agenda', icon: 'agenda' },
+                { id: 'agenda', label: 'List', icon: 'agenda' },
                 { id: 'board', label: 'Board', icon: 'proj' },
                 { id: 'table', label: 'Table', icon: 'grid' },
               ] as const}
               value={view} onChange={(v) => pickView(v)} />
           )}
-          <div className="tasks-tools"><button className="tasks-tool" aria-label="Plan week" title="Plan week" onClick={()=>setPlanning(true)}><Icon name="cal" size={16}/><span className="tasks-tool-label">Plan week</span></button>
+          <div className="tasks-tools">
+            <button type="button" className="tasks-tool" aria-label="Plan the week" title="Give tasks time on your calendar" onClick={() => setPlanning({})}><Icon name="week" size={15} />{!phone && <span className="tasks-tool-label">Plan week</span>}</button>
             {scope !== 'done' && (
-              <button type="button" className="tasks-tool" aria-haspopup="menu" aria-label={`Sort: ${SORT_LABELS[sort.key]}${sort.desc ? ', reversed' : ''}`} title={SORT_HINTS[sort.key]} onClick={openSort}>
-                <Icon name="sort" size={15} />{!phone && <span className="tasks-tool-label">{SORT_LABELS[sort.key]}</span>}
+              <button type="button" className={'tasks-tool' + (priority ? ' is-on' : '')} aria-haspopup="menu"
+                aria-label={`Sort: ${SORT_LABELS[sort.key]}${sort.desc ? ', reversed' : ''}${priority ? `. Showing ${PRIORITY_NAMES[priority].toLowerCase()} only` : ''}`}
+                title={SORT_HINTS[sort.key]} onClick={openSort}>
+                <Icon name={priority ? 'filter' : 'sort'} size={15} />{!phone && <span className="tasks-tool-label">{priority ? `${PRIORITY_NAMES[priority]} only` : SORT_LABELS[sort.key]}</span>}
               </button>
             )}
-            <button type="button" className={'tasks-tool' + (priority ? ' is-on' : '')} aria-haspopup="menu" aria-label={priority ? `Priority: ${PRIORITY_NAMES[priority]}` : 'Show priority'} onClick={openPriority}>
-              <Icon name="flag" size={15} />{!phone && <span className="tasks-tool-label">{priority ? PRIORITY_NAMES[priority] : 'Priority'}</span>}
-            </button>
             <button type="button" className={'tasks-tool' + (selecting ? ' is-on' : '')} aria-label={selecting ? 'Done selecting tasks' : 'Select tasks'} aria-pressed={selecting} onClick={() => (selecting ? clearSelection() : setSelectMode(true))}>
               <Icon name="listCheck" size={15} />{!phone && <span className="tasks-tool-label">{selecting ? 'Done selecting' : 'Select'}</span>}
             </button>
@@ -623,7 +625,8 @@ export default function TasksPage() {
           onPatch={(patch) => A.update.mutate({ id: detailTask.id, patch })}
           onComplete={() => complete(detailTask, null)}
           onDelete={() => deleteMany([detailTask])}
-          onDuplicate={() => duplicate(detailTask)} />
+          onDuplicate={() => duplicate(detailTask)}
+          onPlan={() => { setDetail(null); setPlanning({ task: detailTask.id }); }} />
       )}
     </div>
   );

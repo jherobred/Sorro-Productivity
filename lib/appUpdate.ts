@@ -69,6 +69,49 @@ export function useAppUpdate() {
   return { state, check };
 }
 
+/**
+ * Whether a newer Sorro is live than the one running here.
+ *
+ * Every build writes /version.json. A tab left open, a phone app resumed from
+ * the background or a service worker holding an old copy keeps running the old
+ * code; this reads the deployed version on open, on return to the app and every
+ * half hour, and gives back the newer version number, or null.
+ */
+export function useLiveVersion(): string | null {
+  const [live, setLive] = useState<string | null>(null);
+  useEffect(() => {
+    let gone = false;
+    const look = async () => {
+      if (process.env.NODE_ENV !== 'production' || !navigator.onLine || document.visibilityState !== 'visible') return;
+      try {
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return;
+        const { version } = (await res.json()) as { version?: string };
+        if (!gone && version && isNewer(version, APP_VERSION)) setLive(version);
+      } catch { /* offline or a bad answer: try again later */ }
+    };
+    const first = setTimeout(look, 4000);
+    const every = setInterval(look, 30 * 60_000);
+    document.addEventListener('visibilitychange', look);
+    addEventListener('online', look);
+    return () => { gone = true; clearTimeout(first); clearInterval(every); document.removeEventListener('visibilitychange', look); removeEventListener('online', look); };
+  }, []);
+  return live;
+}
+
+/**
+ * Loads the new version: the service worker fetches its new copy first, so the
+ * reload does not come back from the old cache. The installed apps load the
+ * live site, so this updates them too.
+ */
+export async function applyUpdate() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 5000))]);
+  } catch { /* reload anyway: pages are network-first */ }
+  location.reload();
+}
+
 /** Whether the document is currently presented fullscreen. */
 export function useFullscreen() {
   const [on, setOn] = useState(false);

@@ -58,6 +58,8 @@ export type Ev = {
   master_id?: string;
   /** Flag identifying generated recurrence instances */
   is_recurring_instance?: boolean;
+  /** Marked Important in Sorro: only these are named in Sorro's calendar notifications. Kept on the series. */
+  important?: boolean;
 };
 
 const EVENT_META_KEY = 'bd_events_local_meta';
@@ -103,6 +105,7 @@ export type EventLocalMeta = {
   hidden?: boolean;
   short_name?: string;
   recurrence?: RecurrenceRule | null;
+  important?: boolean;
 };
 
 /** The copy each device kept before these synced. Still read, so nothing set that way is lost. */
@@ -403,6 +406,11 @@ export function importedSeriesKey(ev: Ev): string | null {
   return m ? `${ev.source}:${m[1]}` : null;
 }
 
+/** Where Important is kept: on the whole series for a repeating event, so every week's class is marked at once. */
+export function importantKey(ev: Ev): string {
+  return importedSeriesKey(ev) ?? (ev.master_id || ev.id);
+}
+
 /** Live ids of a scanned series, optionally only from one start onward. Filtered
     here rather than with LIKE, so a `%`, `_` or `*` in a class name cannot widen it. */
 export async function scanSeriesIds(ev: Ev, fromStart?: string): Promise<string[]> {
@@ -562,7 +570,7 @@ export function useEvents(ws: Date, days = 7) {
   // Appearance and hidden state are independent of the imported mirror. Sync
   // can update that mirror without resurrecting hidden events or our colors.
   const local = getEventMetaMap();
-  return { ...query, data: query.data?.filter(e => !local[e.master_id || e.id]?.hidden && !local[importedSeriesKey(e) ?? '']?.hidden).map(e => ({ ...e, ...local[e.master_id || e.id] })) };
+  return { ...query, data: query.data?.filter(e => !local[e.master_id || e.id]?.hidden && !local[importedSeriesKey(e) ?? '']?.hidden).map(e => ({ ...e, ...local[e.master_id || e.id], important: !!local[importantKey(e)]?.important })) };
 }
 
 /**

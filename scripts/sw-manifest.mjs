@@ -1,4 +1,5 @@
-// Writes out/sw.js: scripts/sw.js plus this build's version and precache list.
+// Writes out/sw.js: scripts/sw.js plus this build's version and precache list,
+// and out/version.json, which a running app reads to learn it is out of date.
 // The version changes every build, which is what makes browsers install the new worker.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -28,4 +29,6 @@ for (const f of files) if (f.endsWith('.html')) hash.update(readFileSync(join(OU
 const version = hash.digest('hex').slice(0, 12);
 
 writeFileSync(join(OUT, 'sw.js'), `const PRECACHE = ${JSON.stringify({ version, files: urls })};\n${readFileSync('scripts/sw.js', 'utf8')}`);
-console.log(`sw.js: ${urls.length} files, version ${version}`);
+const app = JSON.parse(readFileSync('package.json', 'utf8')).version;
+writeFileSync(join(OUT, 'version.json'), JSON.stringify({ version: app, build: version }));
+console.log(`sw.js: ${urls.length} files, version ${version}; version.json: ${app}`);

@@ -20,6 +20,10 @@ export type Prefs = {
   calendarSurfaceStyle?: 'solid' | 'translucent';
   calendarTimersPosition?: 'top' | 'bottom';
   calendarToolbarPosition?: 'top' | 'bottom';
+  /** The Date & view bar's height and width, 1 = its original size. Desktop and tablet. */
+  calendarBarSize?: { h?: number; w?: number };
+  /** The timers' height (1 = original, under .75 one line each) and the share of the row they take. */
+  calendarTimersSize?: { h?: number; w?: number };
   calendarPowerSave?: boolean;
   calendarTaskPlans?: Record<string, { date: string; starts_at: string | null }>;
 

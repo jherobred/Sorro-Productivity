@@ -32,6 +32,7 @@ import { useNotes } from '@/lib/notes';
 import { DESTINATIONS, activePath } from '@/lib/destinations';
 import { useLayout } from '@/lib/useLayout';
 import { themeIsDark } from '@/lib/theme';
+import { applyUpdate, useLiveVersion } from '@/lib/appUpdate';
 import './shell.css';
 const Settings = dynamic(() => import('./SettingsModal').then(m => m.SettingsModal), { ssr: false });
 const Search = dynamic(() => import('./SearchPalette').then(m => m.SearchPalette), { ssr: false });
@@ -54,6 +55,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState(false);
   const [ready, setReady] = useState(false);
   const [search, setSearch] = useState(false);
+  const liveVersion = useLiveVersion();
+  const [updating, setUpdating] = useState(false);
   const [settings, setSettings] = useState<false | 'general' | 'integrations'>(false);
   const [account, setAccount] = useState(false);
   const [capture, setCapture] = useState(false);
@@ -165,6 +168,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <p className="sx-title" data-tauri-drag-region={win ? '' : undefined}>{current?.name}</p>
         <div id="strip-actions" className="sx-actions" />
         {devFixturesOn() && <span className="sx-demo">Preview data</span>}
+        {liveVersion && <button type="button" className="sx-update" onClick={() => { setUpdating(true); void applyUpdate(); }} disabled={updating} title={`Sorro ${liveVersion} is out. Load it now.`}><Icon name="refresh" size={14} />{updating ? 'Updating…' : 'Update'}</button>}
         <SyncHealth onOpen={() => setSettings('integrations')} />
         <FoxLog onAsk={line => { setFoxOpener(line); tapFox(); }} />
         <button className="sx-icon" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearch(true)}><Icon name="search" size={18} /></button>

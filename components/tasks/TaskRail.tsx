@@ -11,8 +11,7 @@ export const SMART_SCOPES: { id: TaskScope; label: string; icon: IconName }[] = 
   { id: 'all', label: 'All open', icon: 'task' },
   { id: 'today', label: 'Today', icon: 'sun' },
   { id: 'upcoming', label: 'Next 7 days', icon: 'week' },
-  { id: 'overdue', label: 'Overdue', icon: 'flame' },
-  { id: 'nodate', label: 'No date', icon: 'more' },
+  // Overdue and No date are the list's first and last sections, so they need no place here.
   { id: 'starred', label: 'Starred', icon: 'star' },
   { id: 'done', label: 'Completed', icon: 'check' },
 ];
@@ -57,14 +56,14 @@ export function TaskRail({ scope, onScope, counts, lists, courses, tags, phone, 
   const views = phone ? (
     <nav className="task-rail is-phone hbar" aria-label="Task views">
       {tab}
-      {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={14} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
+      {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={14} />, { tone: s.id === 'today' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
       {courses.map((c) => item(`course:${c}`, c, <Icon name="tag" size={13} color={tags.find((t) => t.name === c)?.color} />))}
     </nav>
   ) : (
     <nav className="task-rail" aria-label="Task views">
       {tab}
       <div className="task-rail-group">
-        {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={15} />, { tone: s.id === 'overdue' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
+        {SMART_SCOPES.map((s) => item(s.id, s.label, <Icon name={s.icon} size={15} />, { tone: s.id === 'today' && (counts.overdue ?? 0) > 0 ? 'late' : undefined }))}
       </div>
       {courses.length > 0 && (
         <div className="task-rail-group">

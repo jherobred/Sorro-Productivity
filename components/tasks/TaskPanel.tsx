@@ -3,7 +3,8 @@ import { startFocus } from '@/lib/focusTimer';
 import { toast } from '@/lib/toast';
 import Link from 'next/link';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEvents } from '@/lib/events';
 import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/Icon';
@@ -68,6 +69,43 @@ function DeadlineLine({ task }: { task: Task }) {
   );
 }
 
+/**
+ * Where the task sits on the calendar: its day and time, a link that opens it
+ * there, and the study time reserved for it in the next two weeks.
+ */
+function CalendarLine({ task, time24, onPlan }: { task: Task; time24: boolean; onPlan: () => void }) {
+  const { prefs } = usePrefs();
+  const dayKey = new Date().toDateString();
+  const from = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linked = prefs.taskEventLinks?.[task.id];
+  const { data: events = [] } = useEvents(from, 14);
+  const blocks = linked?.length ? events.filter((e) => linked.includes(e.id) && !e.deleted_at && Date.parse(e.ends_at) > Date.now()) : [];
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !time24 });
+  const day = (d: Date) => d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const where = !task.due_on ? null
+    : task.due_at ? `${day(new Date(task.due_at))} at ${clock(task.due_at)}`
+      : `${day(new Date(`${task.due_on}T12:00:00`))}, any time`;
+  return (
+    <div className="task-prop">
+      <span className="task-prop-name"><Icon name="cal" size={14} />Calendar</span>
+      <div className="task-prop-value task-cal">
+        <p>{where ?? 'Not on your calendar. Give it a date to put it there.'}</p>
+        <div className="task-chips">
+          {task.due_on && <Link href={`/calendar/?day=${task.due_on}&task=${task.id}`} aria-label="Show on calendar" title="Open this day on the calendar"><Icon name="cal" size={12} />Show</Link>}
+          <button type="button" onClick={onPlan}><Icon name="clock" size={12} />Reserve study time</button>
+        </div>
+        {blocks.length > 0 && (
+          <ul className="task-cal-blocks" aria-label="Study time reserved">
+            {blocks.sort((a, b) => a.starts_at.localeCompare(b.starts_at)).map((e) => (
+              <li key={e.id}><Link href={`/calendar/?day=${ymd(new Date(e.starts_at))}`}>{day(new Date(e.starts_at))} · {clock(e.starts_at)}–{clock(e.ends_at)}</Link></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** A step's name, saved when you leave the field rather than on every letter. */
 function StepTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
   const [value, setValue] = useState(title);
@@ -87,11 +125,13 @@ function StepTitle({ title, onSave }: { title: string; onSave: (title: string) =
  * Everything about one task, beside the list on a wide screen and over it on
  * a phone. Typing saves itself a moment after you stop; the chips save at once.
  */
-export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, onDelete, onDuplicate }: {
+export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, onDelete, onDuplicate, onPlan }: {
   task: Task;
   lists: List[];
   phone: boolean;
   onClose: () => void;
+  /** Opens Plan week with this task picked, to reserve study time for it. */
+  onPlan: () => void;
   onPatch: (patch: Partial<Task>) => void;
   onComplete: () => void;
   onDelete: () => void;
@@ -255,6 +295,8 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             </div>
           </div>
 
+          <CalendarLine task={task} time24={prefs.time24} onPlan={() => { save(); onPlan(); }} />
+
           <TaskRepeatProp taskId={task.id} due={task.due_on} />
 
           <div className="task-prop">
@@ -309,17 +351,6 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             </div>
           </div>
 
-          <div className="task-prop">
-            <span className="task-prop-name"><Icon name="star" size={14} />Stars</span>
-            <div className="task-prop-value task-stars" role="radiogroup" aria-label="Stars">
-              {[1, 2, 3, 4, 5].map((v) => (
-                <button key={v} type="button" role="radio" aria-checked={task.stars === v} aria-label={`${v} ${v === 1 ? 'star' : 'stars'}`}
-                  className={v <= (task.stars || 0) ? 'is-on' : undefined} onClick={() => save({ stars: task.stars === v ? 0 : v })}>
-                  <Icon name="star" size={17} />
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
 
         <section className="task-panel-section" aria-label="Steps">
@@ -361,6 +392,21 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
             onChange={(e) => setNotes(e.target.value)} onBlur={() => save()} />
         </section>
 
+        {/* The extras stay folded until a task uses them, so the panel opens on what matters. */}
+        <details className="task-panel-more" open={!!task.stars || !!(submissionLink || googleDocsLink || customLinks.length) || undefined}>
+        <summary>Stars, links and photos</summary>
+        <div className="task-prop">
+          <span className="task-prop-name"><Icon name="star" size={14} />Stars</span>
+          <div className="task-prop-value task-stars" role="radiogroup" aria-label="Stars">
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={task.stars === v} aria-label={`${v} ${v === 1 ? 'star' : 'stars'}`}
+                className={v <= (task.stars || 0) ? 'is-on' : undefined} onClick={() => save({ stars: task.stars === v ? 0 : v })}>
+                <Icon name="star" size={17} />
+              </button>
+            ))}
+          </div>
+        </div>
+
         <section className="task-panel-section" aria-label="Links">
           <header>
             <h3>Links</h3>
@@ -389,6 +435,7 @@ export function TaskPanel({ task, lists, phone, onClose, onPatch, onComplete, on
           <span><b>Cover photo</b><small>Turn a photo into something you recognise at a glance.</small></span>
           <Icon name="image" size={18} />
         </button>
+        </details>
       </aside>
       {captureCover && <CoverCapture target={{ kind: 'task', id: task.id, title: title || task.title }} onClose={() => setCaptureCover(false)} />}
     </>,

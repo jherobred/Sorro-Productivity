@@ -8,12 +8,13 @@ import { usePrefs } from '@/lib/prefs';
 import { ymd } from '@/lib/days';
 import { availableTime, conflicts } from '@/lib/weekPlan';
 
-export function WeeklyPlanner({ onClose }: { onClose: () => void }) {
+/** initialTask: the task a "Reserve time" link asked for, picked already. */
+export function WeeklyPlanner({ onClose, initialTask }: { onClose: () => void; initialTask?: string }) {
   const [offset,setOffset]=useState(0);const [startHour,setStartHour]=useState(8);const [endHour,setEndHour]=useState(20);
   const base=useMemo(()=>{const d=new Date();d.setDate(d.getDate()+offset*7);return weekStart(d);},[offset]);
   const tasksQuery=useTasks();const {data:tasks=[],isError:taskError}=tasksQuery;const eventsQuery=useEvents(base,7);const events=eventsQuery.data||[];
   const A=useEventActions(base);const {prefs,update}=usePrefs();
-  const [selected,setSelected]=useState('');const [day,setDay]=useState(ymd(new Date()));const [time,setTime]=useState('09:00');const [minutes,setMinutes]=useState(50);const [error,setError]=useState('');const [saved,setSaved]=useState('');
+  const [selected,setSelected]=useState(initialTask??'');const [day,setDay]=useState(ymd(new Date()));const [time,setTime]=useState('09:00');const [minutes,setMinutes]=useState(50);const [error,setError]=useState('');const [saved,setSaved]=useState('');
   const dates=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(d.getDate()+i);return d;});
   const first=ymd(dates[0]),last=ymd(dates[6]),today=ymd(new Date());const open=tasks.filter(t=>!t.done&&!t.deleted_at);
   const linked=prefs.taskEventLinks||{};

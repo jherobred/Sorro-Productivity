@@ -76,7 +76,7 @@ test('a failure falls back to the template', async () => assert.equal(await nudg
 test('a slow answer falls back to the template', async () => assert.equal(await nudgeLine(tn, () => new Promise(r => setTimeout(() => r('Late'), 50)), 10), 'Template'));
 test('an empty answer falls back to the template', async () => assert.equal(await nudgeLine(tn, async () => '  '), 'Template'));
 
-test('facts come from open tasks and today\'s timed events, deleted ones left out', () => {
+test('facts come from open tasks and today\'s Important timed events, deleted ones left out', () => {
   const now = at(9);
   const f = buildFacts([
     { id: 'a', title: 'Essay', done: false, due_on: '2026-11-05', deleted_at: null },
@@ -84,8 +84,9 @@ test('facts come from open tasks and today\'s timed events, deleted ones left ou
     { id: 'c', title: 'Done one', done: true, due_on: '2026-11-05', deleted_at: null, completed_at: new Date(2026, 10, 5, 8).toISOString() },
     { id: 'd', title: 'Gone', done: false, due_on: '2026-11-05', deleted_at: '2026-11-04T00:00:00Z' },
   ], [
-    { title: 'Standup', starts_at: new Date(2026, 10, 5, 10, 30).toISOString(), all_day: false, deleted_at: null },
-    { title: 'Holiday', starts_at: new Date(2026, 10, 5).toISOString(), all_day: true, deleted_at: null },
+    { title: 'Standup', starts_at: new Date(2026, 10, 5, 10, 30).toISOString(), all_day: false, deleted_at: null, important: true },
+    { title: 'Travel', starts_at: new Date(2026, 10, 5, 9, 30).toISOString(), all_day: false, deleted_at: null },
+    { title: 'Holiday', starts_at: new Date(2026, 10, 5).toISOString(), all_day: true, deleted_at: null, important: true },
   ], now);
   assert.deepEqual(f.dueToday, ['Essay']);
   assert.deepEqual(f.overdue, ['Lab']);

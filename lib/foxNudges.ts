@@ -129,7 +129,7 @@ export function onFoxReact(f: (e: FoxEvent) => void): () => void {
 }
 
 type TaskLike = { id: string; title: string; done: boolean; due_on: string | null; deleted_at?: string | null; completed_at?: string | null };
-type EventLike = { title: string; starts_at: string; all_day?: boolean | null; deleted_at?: string | null };
+type EventLike = { title: string; starts_at: string; all_day?: boolean | null; deleted_at?: string | null; important?: boolean };
 
 /** What the fox knows about today, from the tasks and events already on this device. */
 export function buildFacts(tasks: TaskLike[], events: EventLike[], now: Date): Facts {
@@ -142,7 +142,8 @@ export function buildFacts(tasks: TaskLike[], events: EventLike[], now: Date): F
     overdue: open.filter(t => t.due_on! < today).map(t => t.title),
     unfinishedToday: dueToday.map(t => ({ id: t.id, title: t.title })),
     doneToday: live.filter(t => t.done && t.completed_at && dayKey(new Date(t.completed_at)) === today).length,
-    events: events.filter(e => !e.deleted_at && !e.all_day && dayKey(new Date(e.starts_at)) === today)
+    // Only events marked Important: travel, breaks and other small blocks stay out of the notifications.
+    events: events.filter(e => e.important && !e.deleted_at && !e.all_day && dayKey(new Date(e.starts_at)) === today)
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       .map(e => { const d = new Date(e.starts_at); return { title: e.title, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }; }),
   };

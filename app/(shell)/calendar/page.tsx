@@ -43,7 +43,7 @@ import { useTasks, useTaskActions, useLists, getTaskAlert, type Task } from '@/l
 import { useOpenItem } from '@/lib/openItem';
 import {
   useEvents, useEventActions, weekStart, hoursOf, dayIndex, hhmm, at, spanRuns, dayLabels, chipInk,
-  isReadOnly, importedSeriesKey, scanSeriesIds, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
+  isReadOnly, importedSeriesKey, importantKey, setEventMeta, scanSeriesIds, liveEventIds, GRID_START, GRID_END, formatEventCountdown, layoutOverlappingEvents,
   computeVacantIntervals, formatVacantCountdown, formatDurationHours, displayedWeekNumber, gridRange,
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
@@ -102,6 +102,10 @@ export default function CalendarPage() {
   }, []);
   const [googleDelete, setGoogleDelete] = useState<Ev | null>(null);
   const [layoutOpen, setLayoutOpen] = useState(false);
+  const barSize = { h: prefs.calendarBarSize?.h ?? 1, w: prefs.calendarBarSize?.w ?? 1 };
+  const timersSize = { h: prefs.calendarTimersSize?.h ?? 1, w: prefs.calendarTimersSize?.w ?? 1 };
+  const sized = barSize.h !== 1 || barSize.w !== 1 || timersSize.h !== 1 || timersSize.w !== 1;
+  const previewSize = (name: string) => (v: number) => pageRef.current?.style.setProperty(name, String(v));
   const [focusFrom, setFocusFrom] = useState('08:00');
   const [focusTo, setFocusTo] = useState('18:00');
   const [effectiveHourHeight, setEffectiveHourHeight] = useState(56);
@@ -358,6 +362,20 @@ export default function CalendarPage() {
       return (d >= from && d < to) || (original >= from && original < to);
     });
   }, [plannedTasks, windowStart, windowDays]);
+
+  // "Show on calendar" from a task arrives as ?day=…&task=id: the day opens (above), then the task's bubble once tasks load.
+  const askedTask = useRef<string | null>(null);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    askedTask.current = url.searchParams.get('task');
+    if (askedTask.current) { url.searchParams.delete('task'); window.history.replaceState(window.history.state, '', url.pathname + url.search); }
+  }, []);
+  useEffect(() => {
+    const t = askedTask.current ? plannedTasks.find((x) => x.id === askedTask.current) : undefined;
+    if (!t) return;
+    askedTask.current = null;
+    setPop({ kind: 'task', task: t, x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 3) });
+  }, [plannedTasks]);
 
   const schedule = (t: Task, day: number, hour: number | null) => {
     const date = new Date(at(ws, day, hour ?? 9));
@@ -694,7 +712,8 @@ export default function CalendarPage() {
   return (
     <div ref={pageRef} className="calendar-page" style={{
       height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0,
-    }}>
+      '--ch': barSize.h, '--cw': barSize.w, '--th': timersSize.h, '--tw': timersSize.w,
+    } as React.CSSProperties} data-head-narrow={barSize.w < 0.85 || undefined} data-timers-slim={timersSize.h < 0.75 || undefined}>
       <header className="cal-head" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 30 : 0 }}>
         <div className="cal-date-navigation">
         <div className="cal-head-title">
@@ -749,6 +768,11 @@ export default function CalendarPage() {
         <label>Timers<select value={prefs.calendarTimersPosition ?? 'top'} onChange={e => void update({ calendarTimersPosition: e.target.value as 'top' | 'bottom' })}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
         <label>Date & view bar<select value={prefs.calendarToolbarPosition ?? 'top'} onChange={e => void update({ calendarToolbarPosition: e.target.value as 'top' | 'bottom' })}><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
         <label>Calendar style<select value={prefs.calendarSurfaceStyle ?? 'solid'} disabled={prefs.reduceTransparency} onChange={e => void update({ calendarSurfaceStyle: e.target.value as 'solid' | 'translucent' })}><option value="solid">Solid</option><option value="translucent">Translucent</option></select></label>
+        <SizeSlider label="Bar height" preview={previewSize('--ch')} value={barSize.h} min={0.6} max={1.4} onChange={h => void update({ calendarBarSize: { ...prefs.calendarBarSize, h } })} />
+        <SizeSlider label="Bar width" preview={previewSize('--cw')} value={barSize.w} min={0.6} max={1.4} onChange={w => void update({ calendarBarSize: { ...prefs.calendarBarSize, w } })} />
+        <SizeSlider label="Timers height" preview={previewSize('--th')} value={timersSize.h} min={0.5} max={1.4} onChange={h => void update({ calendarTimersSize: { ...prefs.calendarTimersSize, h } })} />
+        <SizeSlider label="Timers width" preview={previewSize('--tw')} value={timersSize.w} min={0.4} max={1} onChange={w => void update({ calendarTimersSize: { ...prefs.calendarTimersSize, w } })} />
+        {sized && <button className="studio-button" onClick={() => void update({ calendarBarSize: {}, calendarTimersSize: {} })}>Reset sizes</button>}
         <label className="cal-layout-check"><input type="checkbox" checked={!!prefs.calendarFreeTimeArrows} onChange={e => void update({ calendarFreeTimeArrows: e.target.checked })}/>Free-time arrows</label>
         <button className="cal-icon-button" aria-label="Close layout controls" onClick={() => setLayoutOpen(false)}><Icon name="close" size={16}/></button>
       </section>}
@@ -769,8 +793,13 @@ export default function CalendarPage() {
         data-tour="calendar-grid"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="cal-content" style={{ order: 10, flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}
+        className="cal-content" style={{ order: 10, flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column', position: 'relative' }}
       >
+        {/* Ghost arrows on the grid's edges, seen only on hover: the same as the pager's arrows, where the eye already is. */}
+        {(view === 'week' || view === 'day' || view === 'month') && !isPending && <>
+          <button type="button" className="cal-edge-nav is-prev" onClick={() => shift(-1)} aria-label={`Previous ${view}`} title={`Previous ${view}`}><Icon name="chevronLeft" size={18} /></button>
+          <button type="button" className="cal-edge-nav is-next" onClick={() => shift(1)} aria-label={`Next ${view}`} title={`Next ${view}`}><Icon name="chevronRight" size={18} /></button>
+        </>}
         <div key={view} className="k-zoomfade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: view === 'agenda' || view === 'countdown' ? 'auto' : undefined }}>
           {/* The chrome above is not data-dependent and paints immediately;
               only the grid waits, so only the grid is outlined. */}
@@ -847,6 +876,11 @@ export default function CalendarPage() {
             commitDraft();
             A.edit({ ...pop.ev, id: pop.ev.master_id || pop.ev.id }, patch);
             setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, ...patch } } : prev);
+          }}
+          onImportant={(on) => {
+            commitDraft();
+            setEventMeta(importantKey(pop.ev), { important: on });
+            setPop((prev) => prev && prev.kind === 'event' ? { ...prev, ev: { ...prev.ev, important: on } } : prev);
           }}
           onTakeNotes={() => void takeNotes(pop.ev)}
           onSwitchToTask={switchDraft}
@@ -1068,6 +1102,19 @@ export default function CalendarPage() {
  * (one `layoutId`) so changing view slides the pill along the rail instead of
  * teleporting — the same treatment the tab rail gets.
  */
+/** One size in the Layout panel, as a percentage of the original. Saved when let go, shown live while dragging. */
+function SizeSlider({ label, value, min, max, onChange, preview }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; preview: (v: number) => void }) {
+  const [live, setLive] = useState<number | null>(null);
+  const shown = live ?? value;
+  const commit = () => { if (live != null) { onChange(live); setLive(null); } };
+  return (
+    <label className="cal-size-slider">{label} <small>{Math.round(shown * 100)}%</small>
+      <input type="range" min={min} max={max} step={0.05} value={shown}
+        onChange={e => { const v = Number(e.target.value); setLive(v); preview(v); }} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+    </label>
+  );
+}
+
 function ViewSwitcher({ view, onChange, phone }: { view: View; onChange: (v: View) => void; phone: boolean }) {
   return (
     <div className="cal-view-switcher" data-tour="calendar-view-toggle"

@@ -31,7 +31,7 @@ const agoText = (ms: number) => {
  */
 export function EventBubble({
   ev, x, y, runDays, draft, previousEnd, time24,
-  onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, onPatch, onTakeNotes, onSwitchToTask,
+  onClose, onEdit, onDuplicate, onDelete, onDeleteRun, onUpdateTitle, onPatch, onImportant, onTakeNotes, onSwitchToTask,
 }: {
   ev: Ev; x: number; y: number;
   /** How many days this event's run covers, or 0 when it stands alone. */
@@ -45,6 +45,8 @@ export function EventBubble({
   onDelete: () => void; onDeleteRun: () => void;
   onUpdateTitle: (title: string) => void;
   onPatch: (patch: Partial<Ev>) => void;
+  /** Marks it, and every repeat of it, as one Sorro names in its calendar notifications. */
+  onImportant: (on: boolean) => void;
   onTakeNotes: () => void;
   onSwitchToTask?: () => void;
 }) {
@@ -141,6 +143,15 @@ export function EventBubble({
                   onClick={() => onPatch({ remind_minutes: r.minutes || null })}>{r.label}</button>
               );
             })}
+          </div>
+        </div>
+
+        <div className="cal-bubble-field">
+          <span>Notifications</span>
+          <div className="cal-chips">
+            <button type="button" className="is-high" role="switch" aria-checked={!!ev.important}
+              title="Sorro names Important events in its calendar notifications. Others stay out."
+              onClick={() => onImportant(!ev.important)}><Icon name="star" size={13} />Important</button>
           </div>
         </div>
 

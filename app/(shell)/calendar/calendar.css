@@ -471,3 +471,5 @@ button.cal-timer-title:not(:disabled):hover b{text-decoration:underline;text-und
 .cal-event.is-short.has-count .cal-event-meta{display:none}
 .cal-event.is-short .cal-event-count>span{padding:0 6px!important;line-height:14px}
 .cal-event.is-tiny .cal-event-count>span{line-height:12px;font-size:8.5px!important}
+.cal-chips button[role=switch]{display:inline-flex;align-items:center;gap:6px}
+.cal-layout-panel .cal-size-slider{min-width:120px}.cal-size-slider small{color:var(--tx3);font-variant-numeric:tabular-nums}.cal-layout-panel .cal-size-slider input{min-height:0;padding:0;border:0;background:none;accent-color:var(--accent)}

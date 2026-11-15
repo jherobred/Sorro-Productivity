@@ -186,3 +186,11 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 :root[data-density='compact'] .vt { gap: 8px }
 :root[data-density='compact'] .vt-shelf { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)) }
 :root[data-density='compact'] .nw { gap: 12px }
+
+/* A newer Sorro is live: a bright blue pill in the top strip until it is loaded. */
+.sx-update { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: #1d9bf0; color: #fff; font: 600 13px/1 var(--font-body); cursor: pointer; flex: none; box-shadow: 0 1px 2px rgb(0 0 0 / .18); transition: background .15s }
+.sx-update:hover { background: #1a8cd8 }
+.sx-update:focus-visible { outline: 2px solid #1d9bf0; outline-offset: 2px }
+.sx-update:disabled { opacity: .75; cursor: progress }
+.sx-update:disabled svg { animation: sx-spin 1s linear infinite }
+@keyframes sx-spin { to { transform: rotate(360deg) } }

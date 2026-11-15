@@ -7,31 +7,57 @@
 .calendar-page .cal-now-line { background: var(--accent) }
 .calendar-page .cal-dayhead.is-today { color: var(--accent) }
 
-/* Compact: the Date & view bar, the timers and the all-day row take as little height as they can, so the grid gets it. */
-.calendar-page .cal-head { gap: 6px 8px; margin: 0 0 6px; padding: 0 }
-.calendar-page .cal-date-navigation { gap: 10px; flex-basis: 260px }
-.calendar-page .cal-head-title h1 { font-size: 18px; line-height: 1.1 }
-.calendar-page .cal-head-title p { margin-top: 1px; font-size: 11.5px; line-height: 1.2 }
-.calendar-page .cal-pager { height: 30px; padding: 2px }
-.calendar-page .cal-pager button { height: 24px; width: 26px }
-.calendar-page .cal-pager .cal-pager-today { width: auto; padding: 0 10px; font-size: 12px }
-.calendar-page .cal-head-nav { gap: 6px }
-.calendar-page .cal-view-switcher { padding: 2px !important }
-.calendar-page .cal-view-switcher button { height: 24px !important; padding: 0 8px !important; font-size: 11.5px !important }
-.calendar-page .cal-zoom { min-height: 30px }
-.calendar-page .cal-zoom button { height: 28px; min-width: 26px; font-size: 17px }
-.calendar-page .cal-zoom .cal-zoom-fit { font-size: 11px }
-.calendar-page .cal-head-actions { gap: 4px }
-.calendar-page .cal-head-actions .studio-button { min-height: 30px; height: 30px; padding: 0 10px; font-size: 12px }
-.calendar-page .cal-google { height: 30px; padding: 0 9px 0 4px; border-radius: 9px; font-size: 12px }
-.calendar-page .cal-google-mark { width: 22px; height: 22px; border-radius: 6px; font-size: 12px }
-.calendar-page .cal-new { height: 30px; padding: 0 12px 0 10px; font-size: 12.5px }
-.calendar-page .cal-head-actions .cal-icon-button { width: 30px; height: 30px }
-/* Labels go before the bar wraps: the icons stay, with their names on hover and for screen readers. */
-@media (max-width: 1440px) {
-  .calendar-page .cal-view-switcher button > span > span, .calendar-page .cal-head-actions .studio-button > span, .calendar-page .cal-google-label { display: none }
-  .calendar-page .cal-view-switcher button { padding: 0 7px !important }
-  .calendar-page .cal-head-actions .studio-button { padding: 0 8px }
+/* The Date & view bar and the timers are sized from Calendar options → Layout. 100% is their original size.
+   --ch/--cw: the bar's height and width; --th: the timers' height; --tw: the share of the row they take. */
+.calendar-page { --ch: 1; --cw: 1; --th: 1; --tw: 1 }
+@media (min-width: 761px) {
+  .calendar-page .cal-head { gap: calc(10px * var(--ch)) calc(10px * var(--cw)); margin-bottom: calc(8px * var(--ch)); padding: calc(2px * var(--ch)) 0 }
+  .calendar-page .cal-date-navigation { gap: calc(18px * var(--cw)) }
+  .calendar-page .cal-head-title h1 { font-size: calc(22px * var(--ch)) }
+  .calendar-page .cal-head-title p { margin-top: calc(6px * var(--ch)); font-size: calc(12.5px * (.5 + var(--ch) / 2)) }
+  .calendar-page .cal-pager { height: calc(36px * var(--ch)); padding: calc(3px * var(--ch)) }
+  .calendar-page .cal-pager button { height: calc(28px * var(--ch)); width: calc(30px * var(--cw)) }
+  .calendar-page .cal-pager .cal-pager-today { width: auto; padding: 0 calc(13px * var(--cw)) }
+  .calendar-page .cal-head-nav { gap: calc(10px * var(--cw)) }
+  .calendar-page .cal-view-switcher { padding: calc(3px * var(--ch)) !important }
+  .calendar-page .cal-view-switcher button { height: calc(28px * var(--ch)) !important; padding: 0 calc(11px * var(--cw)) !important }
+  .calendar-page .cal-zoom { min-height: calc(36px * var(--ch)) }
+  .calendar-page .cal-zoom button { height: calc(34px * var(--ch)); min-width: calc(32px * var(--cw)) }
+  .calendar-page .cal-head-actions { gap: calc(6px * var(--cw)) }
+  .calendar-page .cal-head-actions .studio-button { min-height: 0; height: calc(43px * var(--ch)); padding: 0 calc(16px * var(--cw)) }
+  .calendar-page .cal-google { height: calc(38px * var(--ch)); padding: 0 calc(12px * var(--cw)) 0 calc(6px * var(--cw)) }
+  .calendar-page .cal-google-mark { width: calc(26px * var(--ch)); height: calc(26px * var(--ch)) }
+  .calendar-page .cal-new { height: calc(36px * var(--ch)); padding: 0 calc(16px * var(--cw)) 0 calc(13px * var(--cw)) }
+  .calendar-page .cal-head-actions .cal-icon-button { height: calc(36px * var(--ch)); width: calc(36px * var(--cw)) }
+  /* Narrow (width under 85%): the icons stay, their names on hover and for screen readers. */
+  .calendar-page[data-head-narrow] .cal-view-switcher button > span > span, .calendar-page[data-head-narrow] .cal-head-actions .studio-button > span, .calendar-page[data-head-narrow] .cal-google-label, .calendar-page[data-head-narrow] .cal-new > span { display: none }
+
+  .calendar-page .cal-timers:not(.is-large) { width: calc(100% * var(--tw)); margin-bottom: calc(12px * var(--th)) }
+  .calendar-page .cal-timers-position[style*='20'] .cal-timers:not(.is-large) { margin: calc(12px * var(--th)) 0 0 }
+  .calendar-page .cal-timers:not(.is-large) .cal-timer { padding: calc(10px * var(--th)) 12px; row-gap: calc(6px * var(--th)) }
+  .calendar-page .cal-timers:not(.is-large) .cal-timer-label { font-size: calc(12px * (.5 + var(--th) / 2)) }
+  .calendar-page .cal-timers:not(.is-large) .cal-timer-main strong { font-size: calc(clamp(17px, 6.3cqi, 27px) * var(--th)) }
+  .calendar-page .cal-timers:not(.is-large) .cal-timer-title b { font-size: calc(13.5px * (.5 + var(--th) / 2)) }
+}
+
+@media (min-width: 761px) {
+  /* Slim timers (height under 75%): each clock on one line, its progress a hairline along the bottom. */
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) { gap: 6px; margin: 0 0 6px }
+  .calendar-page[data-timers-slim] .cal-timers-position[style*='20'] .cal-timers:not(.is-large) { margin: 6px 0 0 }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer { display: flex; flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; min-height: 0; padding: 5px 8px 7px 10px; border-radius: 9px; overflow: hidden }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-label { flex: none; grid-column: auto; gap: 5px; font-size: 11.5px; white-space: nowrap }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-focus-button { order: 9; padding: 0; min-height: 0; height: 22px; width: 22px; justify-content: center }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-focus-button span { display: none }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-main { flex: none; flex-direction: row; align-items: baseline; flex-wrap: nowrap; gap: 4px }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-main strong { font-size: 16px }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-main span { font-size: 10.5px }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-title { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-end; gap: 6px }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-title b { font-size: 12px; min-width: 0 }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-title small { display: block; flex: 0 1 auto; min-width: 0; font-size: 11px }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer.is-day .cal-timer-title small { display: none }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer-title.is-empty { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer .studio-progress { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 }
+  .calendar-page[data-timers-slim] .cal-timers:not(.is-large) .cal-timer .progress-track { height: 2px; border-radius: 0 }
 }
 
 /* Quick add: one slim line, the week's load right under it. */
@@ -45,45 +71,21 @@
 .calendar-page .cq-load i { order: 2; flex: 1; height: 3px; box-shadow: none }
 .calendar-page .cq-load small { order: 1; font-size: 10.5px; white-space: nowrap }
 
-/* Timers: each clock on one line, its progress a hairline along the bottom. */
-.calendar-page .cal-timers:not(.is-large) { gap: 6px; margin: 0 0 6px }
-.calendar-page .cal-timers-position[style*='20'] .cal-timers:not(.is-large) { margin: 6px 0 0 }
-.calendar-page .cal-timers:not(.is-large) .cal-timer { display: flex; flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; min-height: 0; padding: 5px 8px 7px 10px; border-radius: 9px; overflow: hidden }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-label { flex: none; grid-column: auto; gap: 5px; font-size: 11.5px; white-space: nowrap }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-focus-button { order: 9; padding: 0; min-height: 0; height: 22px; width: 22px; justify-content: center }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-focus-button span { display: none }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-main { flex: none; flex-direction: row; align-items: baseline; flex-wrap: nowrap; gap: 4px }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-main strong { font-size: 16px }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-main span { font-size: 10.5px }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-title { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: baseline; justify-content: flex-end; gap: 6px }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-title b { font-size: 12px; min-width: 0 }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-title small { display: block; flex: 0 1 auto; min-width: 0; font-size: 11px }
-.calendar-page .cal-timers:not(.is-large) .cal-timer.is-day .cal-timer-title small { display: none }
-.calendar-page .cal-timers:not(.is-large) .cal-timer-title.is-empty { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block }
-.calendar-page .cal-timers:not(.is-large) .cal-timer .studio-progress { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 }
-.calendar-page .cal-timers:not(.is-large) .cal-timer .progress-track { height: 2px; border-radius: 0 }
-
 /* All-day row: slim chips, no spare row under them; empty space in a column still makes a new one. */
 .calendar-page .cal-all-day-tray { min-height: 26px; max-height: 92px }
 .calendar-page .cal-all-day-column { min-height: 26px; padding: 2px 2px 6px !important }
 .calendar-page .cal-all-day-event, .calendar-page .cal-all-day-column > .cal-task.is-compact { min-height: 18px; padding: 1px 5px !important; margin-bottom: 2px; border-radius: 4px !important; font-size: 10.5px !important; line-height: 1.25 }
 .calendar-page .cal-all-day-label { margin-top: 5px !important }
 
-@media (max-width: 760px) {
-  .calendar-page .cal-head { gap: 6px; margin-bottom: 6px }
-  .calendar-page .cal-head-title h1 { font-size: 17px }
-  .calendar-page .cal-head-title p { font-size: 10.5px }
-  /* Views and actions share one row: icons only, still 36px to tap. */
-  .calendar-page .cal-view-switcher { grid-column: 1; grid-row: 2; justify-self: start; padding: 2px !important; height: auto }
-  .calendar-page .cal-view-switcher button { flex: none; width: 34px !important; min-width: 34px; height: 32px !important; padding: 0 !important }
-  .calendar-page .cal-head-actions { grid-column: 2; grid-row: 2 }
-  .calendar-page .cal-head-actions .cal-google, .calendar-page .cal-head-actions .cal-new, .calendar-page .cal-head-actions .cal-more { min-width: 36px; width: 36px; height: 36px; padding: 0; justify-content: center }
-  .calendar-page .cal-head-actions .cal-google i { display: none }
-  .calendar-page .cal-head .cal-zoom { grid-column: 1 / -1; grid-row: 3; min-height: 32px }
-  .calendar-page .cal-head .cal-zoom button { height: 30px; min-width: 34px }
-  .calendar-page .cal-pager { height: 36px }
-  .calendar-page .cal-pager button { width: 32px; height: 34px }
-  .calendar-page .cal-timers:not(.is-large) .cal-timer-title, .calendar-page .cal-timers:not(.is-large) .cal-timer-main span { display: none }
-  .calendar-page .cal-timers:not(.is-large) .cal-timer { padding: 4px 6px 6px 8px }
-  .calendar-page .cal-timers:not(.is-large) .cal-timer { justify-content: space-between }
+/* Edge arrows: a ghost strip on each side of the grid. Hidden until the pointer is on the calendar, clear under it.
+   Only with a mouse; on a phone the grid swipes. */
+.calendar-page .cal-edge-nav { display: none }
+@media (hover: hover) and (pointer: fine) {
+  .calendar-page .cal-edge-nav { display: grid; place-items: center; position: absolute; top: 0; bottom: 0; z-index: 30; width: 16px; padding: 0; border: 0; color: var(--tx2); background: transparent; opacity: 0; cursor: pointer; transition: opacity .18s ease, width .18s ease, background .18s ease }
+  .calendar-page .cal-edge-nav.is-prev { left: 0; border-radius: 0 10px 10px 0 }
+  .calendar-page .cal-edge-nav.is-next { right: 0; border-radius: 10px 0 0 10px }
+  .calendar-page .cal-content:hover > .cal-edge-nav { opacity: .35 }
+  .calendar-page .cal-content > .cal-edge-nav:hover, .calendar-page .cal-content > .cal-edge-nav:focus-visible { opacity: 1; width: 26px; color: var(--tx); background: color-mix(in srgb, var(--card) 70%, transparent); backdrop-filter: blur(6px); box-shadow: 0 0 0 1px var(--line) }
+  .calendar-page .cal-edge-nav:active svg { transform: scale(.9) }
 }
+@media (prefers-reduced-motion: reduce) { .calendar-page .cal-edge-nav { transition: none } }
