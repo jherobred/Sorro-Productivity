@@ -109,6 +109,8 @@ export type Prefs = {
   notebookTags: Record<string, string[]>;
   /** Notebooks whose cover photo fills the whole cover instead of sitting inside a margin. */
   coverFill: Record<string, boolean>;
+  /** Notebooks wearing one of Sorro's own covers (fern, market or cup), by notebook id. Colour removes the entry. */
+  coverBuiltin?: Record<string, 'fern' | 'market' | 'cup'>;
   /** How My Tasks sorts, and which way. */
   taskSort: { key: TaskSortKey; desc: boolean };
   /** A description, an archived flag, and whether its tasks stay out of My Tasks' main views, for each project by its list id. See lib/projects.ts. */

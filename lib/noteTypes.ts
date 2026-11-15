@@ -1,39 +1,92 @@
 /**
- * Sorro's own note types. Page and Recall are new formats; the rest reuse the
- * editors that already exist. Every body written before still opens as what it
- * was: an old Document stays a Document until the user converts it.
+ * Sorro's own note types. The New page menu offers Note, Board, Reminders,
+ * Markup and Artifact. Note keeps Page's format, Board and Markup reuse the
+ * board format, Reminders and Artifact are new formats. Every body written
+ * before still opens as what it was: an old Document stays a Document until
+ * the user converts it, and Map, Recall, Cornell, Fieldbook, Code, Checklist,
+ * Flashcards and free pages keep their editors though they are no longer offered.
  */
 import { isDocBody, markdownToHtml } from './docFormat.ts';
 import { parse } from './md.ts';
-import { readBoard, readStudy, readFreePage, initialBody, writeBoard, type PageKind } from './pageKinds.ts';
+import { readBoard, readStudy, readFreePage, initialBody, writeBoard } from './pageKinds.ts';
 
 /** Icon names as the Icon component knows them; kept as a string union here so lib stays free of components. */
 export type IconName = 'text' | 'grid' | 'files' | 'week' | 'book' | 'pen' | 'code' | 'check';
 
-export type SorroType = 'page' | 'map' | 'recall' | 'cornell' | 'fieldbook' | 'board' | 'code' | 'pdf' | 'document' | 'checklist' | 'flashcards';
+export type SorroType = 'note' | 'board' | 'reminders' | 'markup' | 'artifact'
+  | 'map' | 'recall' | 'cornell' | 'fieldbook' | 'code' | 'document' | 'checklist' | 'flashcards' | 'freepage';
 
 /** What the New page menu offers, in order. */
 export const SORRO_TYPES = [
-  { type: 'page', name: 'Page', icon: 'text', description: 'Write; formatting appears as you type' },
-  { type: 'map', name: 'Map', icon: 'grid', description: 'Boxes and arrows for how ideas connect' },
-  { type: 'recall', name: 'Recall', icon: 'files', description: 'Headings become questions to test yourself' },
-  { type: 'cornell', name: 'Cornell', icon: 'week', description: 'Cues, lecture notes and a summary' },
-  { type: 'fieldbook', name: 'Fieldbook', icon: 'book', description: 'Dated entries with photos' },
-  { type: 'board', name: 'Board', icon: 'pen', description: 'Draw and write anywhere, made for a stylus' },
-  { type: 'code', name: 'Code', icon: 'code', description: 'Java, HTML, CSS and JavaScript you can run' },
-  { type: 'pdf', name: 'PDF', icon: 'files', description: 'Read and mark up a PDF' },
+  { type: 'note', name: 'Note', icon: 'text', description: 'Write the way Notes does. Title, body, lists, checklist, table, scan.' },
+  { type: 'board', name: 'Board', icon: 'pen', description: 'A full whiteboard. Select, draw, type, stickies, shapes, frames.' },
+  { type: 'reminders', name: 'Reminders', icon: 'check', description: 'A list with a circle, a date, a flag and subtasks.' },
+  { type: 'markup', name: 'Markup', icon: 'files', description: 'A PDF, page or picture, with marks on top of it.' },
+  { type: 'artifact', name: 'Artifact', icon: 'code', description: 'HTML from Claude, or any page you import. Preview and source.' },
 ] as const;
+export type NewType = (typeof SORRO_TYPES)[number]['type'];
 
 const TEXT = '<!-- sorro-text:v1 -->\n';
 const RECALL = '<!-- sorro-recall:v1 -->\n';
+const REMINDERS = '<!-- sorro-reminders:v1 -->\n';
+const ARTIFACT = '<!-- sorro-artifact:v1 -->\n';
 
 export const writeText = (html: string) => TEXT + html;
 
-/** The html a Page edits: its own format, or plain markdown converted in memory. Null for every other format. */
+/** The html a Note (once called Page) edits: its own format, or plain markdown converted in memory. Null for every other format. */
 export function textHtml(body: string): string | null {
   if (body.startsWith(TEXT)) return body.slice(TEXT.length);
   if (body.startsWith('<!-- ') || body.startsWith('# Journal · ')) return null;
   return markdownToHtml(body);
+}
+
+/** One reminder. due is a calendar day, YYYY-MM-DD; a subtask names its parent. */
+export type Reminder = { id: string; title: string; note: string; due?: string; flag: boolean; done: boolean; parent?: string };
+export type RemindersDoc = { version: 1; items: Reminder[] };
+export const writeReminders = (r: RemindersDoc) => REMINDERS + JSON.stringify(r);
+export function readReminders(body: string): RemindersDoc | null {
+  if (!body.startsWith(REMINDERS)) return null;
+  try {
+    const d = JSON.parse(body.slice(REMINDERS.length));
+    if (d?.version !== 1 || !Array.isArray(d.items)) return null;
+    const ok = d.items.every((i: Reminder) => !!i && typeof i.id === 'string' && typeof i.title === 'string' && typeof i.note === 'string'
+      && typeof i.flag === 'boolean' && typeof i.done === 'boolean'
+      && (i.due === undefined || /^\d{4}-\d{2}-\d{2}$/.test(i.due)) && (i.parent === undefined || typeof i.parent === 'string'));
+    return ok ? d as RemindersDoc : null;
+  } catch { return null; }
+}
+
+export const REMINDER_LISTS = ['Today', 'Scheduled', 'All', 'Flagged', 'Completed'] as const;
+export type ReminderList = (typeof REMINDER_LISTS)[number];
+/**
+ * Which reminders a list shows, each parent followed by its subtasks. Today
+ * holds anything due today or earlier. Under a parent that shows, its open
+ * subtasks follow it; a subtask that matches on its own shows when its parent does not.
+ */
+export function remindersIn(items: Reminder[], list: ReminderList, today: string): Reminder[] {
+  const keep = (r: Reminder) => list === 'Completed' ? r.done : !r.done && (
+    list === 'Today' ? !!r.due && r.due <= today
+      : list === 'Scheduled' ? !!r.due
+        : list === 'Flagged' ? r.flag : true);
+  const ids = new Set(items.map(r => r.id));
+  const out: Reminder[] = [];
+  for (const top of items.filter(r => !r.parent || !ids.has(r.parent))) {
+    const subs = items.filter(r => r.parent === top.id);
+    if (keep(top)) out.push(top, ...subs.filter(s => list === 'Completed' ? s.done : !s.done));
+    else out.push(...subs.filter(keep));
+  }
+  return out;
+}
+
+/** An imported or pasted HTML page: a Claude artifact or any .html file. */
+export type ArtifactDoc = { version: 1; name: string; html: string; from?: string };
+export const writeArtifact = (a: ArtifactDoc) => ARTIFACT + JSON.stringify(a);
+export function readArtifact(body: string): ArtifactDoc | null {
+  if (!body.startsWith(ARTIFACT)) return null;
+  try {
+    const d = JSON.parse(body.slice(ARTIFACT.length));
+    return d?.version === 1 && typeof d.name === 'string' && typeof d.html === 'string' ? d as ArtifactDoc : null;
+  } catch { return null; }
 }
 
 export type Review = { ease: number; interval: number; due: string };
@@ -49,15 +102,17 @@ export function readRecall(body: string): RecallDoc | null {
 
 export function sorroType(body: string): SorroType {
   if (body.startsWith(RECALL)) return 'recall';
-  if (body.startsWith(TEXT)) return 'page';
+  if (body.startsWith(TEXT)) return 'note';
+  if (body.startsWith(REMINDERS)) return 'reminders';
+  if (body.startsWith(ARTIFACT)) return 'artifact';
   if (isDocBody(body)) return 'document';
   if (body.startsWith('# Journal · ')) return 'fieldbook';
-  if (readFreePage(body)) return 'board';
+  if (readFreePage(body)) return 'freepage';
   const board = readBoard(body);
-  if (board) return board.kind === 'pdf' ? 'pdf' : board.map ? 'map' : 'board';
+  if (board) return board.kind === 'pdf' ? 'markup' : board.map ? 'map' : 'board';
   const study = readStudy(body);
   if (study) return study.kind === 'cornell' ? 'cornell' : study.kind === 'code' ? 'code' : study.kind;
-  return 'page';
+  return 'note';
 }
 
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
@@ -90,23 +145,21 @@ export function nextReview(prev: Review | undefined, grade: 0 | 1 | 2 | 3, today
 
 /** Names for every type, including the older ones that are still opened but no longer offered. */
 export const TYPE_INFO: Record<SorroType, { name: string; icon: IconName }> = {
-  ...Object.fromEntries(SORRO_TYPES.map(t => [t.type, { name: t.name, icon: t.icon }])) as Record<(typeof SORRO_TYPES)[number]['type'], { name: string; icon: IconName }>,
+  ...Object.fromEntries(SORRO_TYPES.map(t => [t.type, { name: t.name, icon: t.icon }])) as Record<NewType, { name: string; icon: IconName }>,
+  map: { name: 'Map', icon: 'grid' }, recall: { name: 'Recall', icon: 'files' }, cornell: { name: 'Cornell', icon: 'week' },
+  fieldbook: { name: 'Fieldbook', icon: 'book' }, code: { name: 'Code', icon: 'code' }, freepage: { name: 'Free page', icon: 'pen' },
   document: { name: 'Document', icon: 'text' }, checklist: { name: 'Checklist', icon: 'check' }, flashcards: { name: 'Flashcards', icon: 'files' },
 };
 
-/** The drawing on each New page choice, borrowed from the editor it opens in. */
-export const TYPE_ART: Record<(typeof SORRO_TYPES)[number]['type'], PageKind> = {
-  page: 'document', map: 'whiteboard', recall: 'flashcards', cornell: 'cornell', fieldbook: 'journal', board: 'freepage', code: 'code', pdf: 'pdf',
-};
-
-export function newBody(type: (typeof SORRO_TYPES)[number]['type']): string {
-  if (type === 'page') return writeText('');
-  if (type === 'recall') return writeRecall({ html: '<h2>Your first question?</h2><p>Write the answer here.</p>', schedule: {} });
-  if (type === 'map') return writeBoard({ version: 1, kind: 'whiteboard', items: [], map: true });
-  return initialBody(TYPE_ART[type]);
+export function newBody(type: NewType): string {
+  if (type === 'note') return writeText('');
+  if (type === 'board') return writeBoard({ version: 1, kind: 'whiteboard', items: [] });
+  if (type === 'markup') return initialBody('pdf');
+  if (type === 'reminders') return writeReminders({ version: 1, items: [] });
+  return writeArtifact({ version: 1, name: 'Untitled page', html: '' });
 }
 
-/** An old Document as a Page: every tab's text, each under its tab's name when there is more than one. */
+/** An old Document as a Note: every tab's text, each under its tab's name when there is more than one. */
 export function documentToPage(tabs: { title: string; html: string }[]): string {
   return writeText(tabs.length === 1 ? tabs[0].html : tabs.map(t => `<h1>${t.title.replace(/</g, '&lt;')}</h1>${t.html}`).join(''));
 }
@@ -114,7 +167,7 @@ export function documentToPage(tabs: { title: string; html: string }[]): string 
 const RICH_LINES = new Set(['math', 'sketch', 'table', 'columns', 'video']);
 
 /**
- * True when the Page editor can hold everything in this body. Markdown with
+ * True when the Note editor can hold everything in this body. Markdown with
  * math, sketches, tables, columns, video or images stays in the Document
  * editor, which keeps them; so does a structured body that failed to parse.
  */
@@ -125,7 +178,7 @@ export function pageCanHold(body: string): boolean {
   return !parse(body).some(l => RICH_LINES.has(l.kind));
 }
 
-/** Convert to Page only when no table, math, image, embed or comment would be dropped. */
+/** Convert to Note only when no table, math, image, embed or comment would be dropped. */
 export function documentSafeForPage(doc: { tabs: { title?: string; html: string }[]; comments?: unknown[] }): boolean {
   if (doc.comments?.length) return false;
   return !doc.tabs.some(t => /<(table|img|iframe|video)\b|data-type="(math|sketch)/i.test(t.html));

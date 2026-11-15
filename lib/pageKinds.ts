@@ -19,11 +19,15 @@ export type PageAsset = {localId:string;path?:string;name:string};
  * A schema card keeps its text in body and may carry a photo; cards written before either
  * existed have fields instead. All of these are optional, so older boards read unchanged.
  */
-export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema';x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];body?:string;photo?:PageAsset;background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number;frame?:'polaroid';caption?:string;tilt?:number};
+/** A shape is a rectangle, an ellipse, a frame (labelled by text, drawn behind) or an arrow (points: its two ends, inside the box). */
+export type ShapeKind = 'rect'|'ellipse'|'arrow'|'frame';
+export type BoardItem = {id:string;type:'text'|'image'|'stroke'|'schema'|'shape';shape?:ShapeKind;x:number;y:number;w:number;h:number;text?:string;title?:string;fields?:string[];body?:string;photo?:PageAsset;background?:string;brush?:'pen'|'marker'|'highlighter';opacity?:number;src?:string;asset?:PageAsset;color:string;points?:number[][];width?:number;frame?:'polaroid';caption?:string;tilt?:number};
 export type BoardConnection = {id:string;from:string;to:string};
 /** `drive` is the Google Drive file a PDF was opened from, so a device without a copy can fetch it again. */
 export type PdfSource = {asset:PageAsset;pages:{w:number;h:number;y:number}[];margin?:number;drive?:string};
-export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource;/** A concept map: a board that opens on its cards and connections. */map?:true};
+/** An HTML page a Markup page reads: its source, shown sandboxed, at a fixed width and height on the board. */
+export type HtmlSource = {name:string;html:string;w:number;h:number};
+export type BoardDocument = {version:1;kind:'whiteboard'|'moodboard'|'pdf';items:BoardItem[];connections?:BoardConnection[];pdf?:PdfSource;html?:HtmlSource;/** A concept map: a board that opens on its cards and connections. */map?:true};
 export type ChecklistDocument = {version:1;kind:'checklist';items:{id:string;text:string;done:boolean}[]};
 export type FlashcardDocument = {version:1;kind:'flashcards';cards:{id:string;front:string;back:string}[];sourceNoteId?:string};
 export type CornellDocument = {version:1;kind:'cornell';cues:string;notes:string;summary:string};
@@ -55,15 +59,18 @@ export function readBoard(body:string):BoardDocument|null {
   try {
     const data: unknown=JSON.parse(body.slice(BOARD_MARKER.length));
     if(!record(data)||data.version!==1||!['whiteboard','moodboard','pdf'].includes(String(data.kind))||!Array.isArray(data.items))return null;
+    if(data.html!==undefined&&(!record(data.html)||!str(data.html.name)||!str(data.html.html)||!finite(data.html.w)||!finite(data.html.h)))return null;
     if(data.pdf!==undefined&&(!record(data.pdf)||!validAsset(data.pdf.asset)||!Array.isArray(data.pdf.pages)||!data.pdf.pages.every(p=>record(p)&&finite(p.w)&&p.w>0&&finite(p.h)&&p.h>0&&finite(p.y))||(data.pdf.margin!==undefined&&(!finite(data.pdf.margin)||Number(data.pdf.margin)<0))||(data.pdf.drive!==undefined&&!str(data.pdf.drive))))return null;
     const ids = new Set<string>();
     for(const item of data.items){
-      if(!record(item)||!str(item.id)||ids.has(item.id)||!['text','image','stroke','schema'].includes(String(item.type))||!['x','y','w','h'].every(k=>finite(item[k]))||Number(item.w)<0||Number(item.h)<0||!str(item.color))return null;
+      if(!record(item)||!str(item.id)||ids.has(item.id)||!['text','image','stroke','schema','shape'].includes(String(item.type))||!['x','y','w','h'].every(k=>finite(item[k]))||Number(item.w)<0||Number(item.h)<0||!str(item.color))return null;
       if(item.type==='schema'&&(!str(item.title)||!Array.isArray(item.fields)||!item.fields.every(str)))return null;
       if(item.background!==undefined&&!str(item.background))return null;
       if((item.body!==undefined&&!str(item.body))||(item.photo!==undefined&&!validAsset(item.photo)))return null;
       if(item.opacity!==undefined&&(!finite(item.opacity)||item.opacity<0||item.opacity>1))return null;
       if(item.type==='text'&&!str(item.text))return null;
+      if(item.type==='shape'&&(!['rect','ellipse','arrow','frame'].includes(String(item.shape))||(item.text!==undefined&&!str(item.text))))return null;
+      if(item.type==='shape'&&item.shape==='arrow'&&(!Array.isArray(item.points)||item.points.length!==2||!item.points.every(p=>Array.isArray(p)&&p.length>=2&&p.every(finite))))return null;
       if(item.type==='image'&&!validAsset(item.asset)&&(!str(item.src)||!/^data:image\/(png|jpeg|webp);base64,/.test(item.src)))return null;
       if(item.type==='stroke'&&(!Array.isArray(item.points)||!item.points.every(p=>Array.isArray(p)&&p.length>=2&&p.every(finite))))return null;
       if(item.width!==undefined&&(!finite(item.width)||item.width<=0))return null;
@@ -168,10 +175,12 @@ export function initialBody(kind:PageKind):string {
   return '';
 }
 export function pagePreview(body:string) {
-  // Page and Recall store html (lib/noteTypes.ts): show the words, not the markup.
+  // Note and Recall store html (lib/noteTypes.ts): show the words, not the markup.
   if(body.startsWith('<!-- sorro-text:v1 -->')||body.startsWith('<!-- sorro-recall:v1 -->')){let html=body.slice(body.indexOf('-->')+3);if(body.startsWith('<!-- sorro-recall')){try{html=JSON.parse(html).html||'';}catch{html='';}}return html.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,150);}
   const doc=readDoc(body);if(doc)return docText(doc).replace(/\[\[|\]\]/g,'').replace(/\s+/g,' ').trim().slice(0,150);
-  const board=readBoard(body);if(board)return board.kind==='pdf'?`${board.pdf?.pages.length||0} PDF pages · ${board.items.length} annotations`:board.items.length+' objects · board';
+  const board=readBoard(body);if(board)return board.kind==='pdf'?(board.html?`${board.html.name} · ${board.items.length} marks`:`${board.pdf?.pages.length||0} PDF pages · ${board.items.length} annotations`):board.items.length+' objects · board';
+  if(body.startsWith('<!-- sorro-reminders:v1 -->')){try{const items:{done:boolean;title:string}[]=JSON.parse(body.slice(body.indexOf('-->')+3)).items||[];const open=items.filter(i=>!i.done);return items.length?`${open.length} open · ${items.length-open.length} done${open[0]?' · '+open[0].title:''}`.slice(0,150):'No reminders yet';}catch{return '';}}
+  if(body.startsWith('<!-- sorro-artifact:v1 -->')){try{const a=JSON.parse(body.slice(body.indexOf('-->')+3));return a.html?`${a.name}.html · ${String(a.html).replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}`.slice(0,150):'Import or paste HTML';}catch{return '';}}
   const free=readFreePage(body);
   if(free)return free.boxes.map(b=>richText(b.doc)).join(' · ').replace(/\s+/g,' ').trim().slice(0,150)||`${free.boxes.length} ${free.boxes.length===1?'note':'notes'} on the sheet`;
   const study=readStudy(body);

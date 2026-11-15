@@ -58,3 +58,32 @@
 .pe-convert { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 10px 14px; border-radius: var(--r-tile); background: var(--soft); color: var(--ink); font-size: 13.5px }
 .pe-convert span { flex: 1 }
 .pe-convert button { min-height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font-weight: 500 }
+
+/* N.editor as a Note: the tools across the top the way Notes keeps them, then when it was edited, the title, the body. */
+.pe-note .pe-tools { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 6px 0; background: var(--editor-paper, var(--paper)); border-bottom: 1px solid var(--line) }
+.pe-tools > button, .pe-aa > button { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--r-row); color: var(--muted) }
+.pe-tools button:hover, .pe-tools button[aria-pressed='true'], .pe-aa > button[aria-expanded='true'] { background: var(--soft); color: var(--ink) }
+.pe-tools .pe-grow { flex: 1 }
+.pe-aa { position: relative }
+.pe-format { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 248px; padding: 6px; display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 12px 32px #0000001f; font-family: var(--font-body); animation: pe-pop 140ms var(--snap, ease-out) }
+.pe-format > button { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; border-radius: var(--r-row); color: var(--ink); font-size: 14px; text-align: left }
+.pe-format > button:hover, .pe-format > button[aria-checked='true'] { background: var(--soft) }
+.pe-format > button[aria-checked='true']::after { content: '✓'; margin-left: auto; color: var(--accent) }
+.pe-format .pe-style-title { font-size: 20px; font-weight: 700 }
+.pe-format .pe-style-heading { font-size: 17px; font-weight: 600 }
+.pe-format .pe-style-subheading { font-size: 15px; font-weight: 600 }
+.pe-format .pe-style-monospaced { font-family: var(--font-mono); font-size: 13px }
+.pe-format hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px }
+.pe-marks { display: flex; gap: 2px; padding: 2px }
+.pe-marks button { flex: 1; height: 34px; display: grid; place-items: center; border-radius: var(--r-row); color: var(--muted) }
+.pe-marks button:hover, .pe-marks button[aria-pressed='true'] { background: var(--soft); color: var(--ink) }
+.pe-edited { margin: 14px 0 0; text-align: center; color: var(--muted); font: 500 12px/1.4 var(--font-body) }
+.pe-edited span { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line) }
+.pe-note .pe-prose table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 1em 0 }
+.pe-note .pe-prose th, .pe-note .pe-prose td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; min-width: 60px }
+.pe-note .pe-prose th { background: var(--soft); font-weight: 600; text-align: left }
+.pe-note .pe-prose .selectedCell { background: color-mix(in srgb, var(--pick) 30%, transparent) }
+:is(.pe-tools button, .pe-format button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+@keyframes pe-pop { from { opacity: 0; transform: translateY(-4px) } }
+.nomo .pe-format { animation: none }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .pe-format { animation: none } }
