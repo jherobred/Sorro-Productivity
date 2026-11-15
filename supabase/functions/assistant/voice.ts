@@ -18,10 +18,11 @@ const NUDGE_JOB: Record<NudgeKind, string> = {
   evening: 'It is the evening wrap-up: sum up the day and mention what is still open.',
 };
 
-/** The fox speaking first: one line from the facts, no tools. */
+/** The fox speaking first: one opening line from the facts, no tools. The app puts the items under it as bullets. */
 export function nudgePrompt(kind: NudgeKind, facts: string): string {
   return `You are Sorro, speaking first without being asked. ${FOX_VOICE} ${NUDGE_JOB[kind]} ` +
-    `Write one short line, at most 30 words, using only these facts and inventing nothing:\n${facts}`;
+    'Write one short line, at most 25 words, using only these facts and inventing nothing. ' +
+    `The app lists the items under your line as bullet points, so do not list them again; name one at most:\n${facts}`;
 }
 
 /** The nudge line from a Gemini candidate, or '' when it stopped early (token cap, safety), so the template shows. */

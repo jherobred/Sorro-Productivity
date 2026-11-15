@@ -2,6 +2,7 @@
 import { decodeText, parseItems } from '@/supabase/functions/news-drop/assemble';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import { CARRY_DAYS, dayBefore, latestPerKind } from './newsLatest';
 
 export const NEWS_KINDS = ['ai-digest', 'dev-stack', 'trending', 'hackathons', 'jobs', 'research', 'gaming', 'ph-brief', 'weekly'] as const;
 export type NewsKind = typeof NEWS_KINDS[number];
@@ -17,13 +18,21 @@ export type Edition = { id: string; kind: NewsKind; edition: string; title: stri
 /** Today in Manila, the day Grok's editions are filed under. */
 export const manilaDay = (d = new Date()) => new Date(d.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
 
+/**
+ * The paper for `day`. Today's keeps each section's last edition until the new one arrives
+ * (lib/newsLatest.ts), so opening the app before Grok's 5 a.m. drop still shows yesterday's news.
+ * A past day from the archive shows exactly what was filed that day.
+ */
 export function useEdition(day: string) {
   return useQuery({
     queryKey: ['news', day],
     queryFn: async (): Promise<Edition[]> => {
-      const { data, error } = await supabase.from('sorro_news').select('id,kind,edition,title,body,items,created_at,read_at').eq('edition', day).order('created_at');
+      const today = day === manilaDay();
+      const base = supabase.from('sorro_news').select('id,kind,edition,title,body,items,created_at,read_at');
+      const { data, error } = await (today ? base.gte('edition', dayBefore(day, CARRY_DAYS)).lte('edition', day) : base.eq('edition', day)).order('created_at');
       if (error) throw error;
-      return ((data ?? []) as Edition[]).map(readEdition);
+      const rows = (data ?? []) as Edition[];
+      return (today ? latestPerKind(rows, day) : rows).map(readEdition);
     },
   });
 }

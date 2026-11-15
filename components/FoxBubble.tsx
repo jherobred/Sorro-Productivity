@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { Fox } from './Fox';
+import { FoxText } from './FoxText';
 import type { ShownNudge } from '@/lib/useFoxNudges';
 
 /** What the fox says first: a card under the top strip, on the right. Reply, move today's leftovers, or dismiss. Every one is kept in the bell's log. */
@@ -21,7 +22,7 @@ export function FoxBubble({ nudge, onOpen, onDismiss, onMove }: { nudge: ShownNu
     <span className="fx-bubble-fox" aria-hidden="true"><Fox pose="alert" size={22} /></span>
     <div className="fx-bubble-body">
       <p className="fx-bubble-who">Sorro</p>
-      <p className="fx-bubble-line" role="status">{nudge.line}</p>
+      <p className="fx-bubble-line" role="status"><FoxText text={nudge.line} /></p>
       <div className="fx-bubble-row">
         <button type="button" className="fx-bubble-act" data-main="true" onClick={onOpen}>Reply</button>
         {onMove && n > 0 && <button type="button" className="fx-bubble-act" onClick={leave(onMove)}>Move {n} to tomorrow</button>}

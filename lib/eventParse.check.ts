@@ -77,3 +77,21 @@ test('today\'s weekday later today is today', () => {
   const friday = new Date(2026, 10, 6, 10, 0);
   assert.equal(local(parseEvent('dentist fri 3pm', friday)!.starts_at), '2026-11-06 15:00');
 });
+test('a range past midnight ends the next day', () => {
+  const a = parseEvent('party tomorrow 11pm-1am', now)!;
+  assert.equal(local(a.starts_at), '2026-11-04 23:00');
+  assert.equal(local(a.ends_at), '2026-11-05 01:00');
+  const b = parseEvent('night shift 11-1am', now)!;
+  assert.equal(local(b.starts_at), '2026-11-03 23:00');
+  assert.equal(local(b.ends_at), '2026-11-04 01:00');
+  const c = parseEvent('stream 10pm-2', now)!;
+  assert.equal(local(c.starts_at), '2026-11-03 22:00');
+  assert.equal(local(c.ends_at), '2026-11-04 02:00');
+  const d = parseEvent('late study 10:30pm-12:30am', now)!;
+  assert.equal(local(d.ends_at), '2026-11-04 00:30');
+});
+test('a daytime range still stays in the day', () => {
+  const e = parseEvent('lab 1-3am', now)!;
+  assert.equal(local(e.starts_at), '2026-11-03 01:00');
+  assert.equal(local(e.ends_at), '2026-11-03 03:00');
+});

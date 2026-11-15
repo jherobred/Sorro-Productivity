@@ -24,6 +24,7 @@ import { startCalendarGesture, type CalendarPoint } from '@/lib/calendarGesture'
 import { getPrefs, setPrefs } from '@/lib/prefs';
 import { TaskBubble } from '@/components/calendar/TaskBubble';
 import { CalendarTimers } from '@/components/calendar/CalendarTimers';
+import { useGoogleColors } from '@/lib/googleColorSync';
 import { NextView } from '@/components/calendar/NextView';
 import { ContextMenu, type CtxGroup } from '@/components/ContextMenu';
 import { useNotebooks, useNoteActions, NOTE_KEY, type Note } from '@/lib/notes';
@@ -46,6 +47,7 @@ import {
   computeVacantIntervals, formatVacantCountdown, formatDurationHours, displayedWeekNumber, gridRange,
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
+import { extraDays, formRange, spillRange } from '@/lib/calendarRange';
 import { QuickAdd, LoadBar, type QuickEvent } from '@/components/calendar/QuickAdd';
 import './quick.css';
 import './calendar-sorro.css';
@@ -219,6 +221,7 @@ export default function CalendarPage() {
   // re-adding the listener once a second while the clock ticks.
   const shiftRef = useRef<(dir: number) => void>(() => {});
   const quickRef = useRef<HTMLInputElement>(null);
+  useGoogleColors();
   const todayRef = useRef<() => void>(() => {});
   const viewRef = useRef<(v: View) => void>(() => {});
 
@@ -1727,6 +1730,11 @@ function Grid({
                         starts_at: e.starts_at,
                         ends_at: e.ends_at,
                       })),
+                    // An overnight event still running after midnight is not free time.
+                    ...events.flatMap((e) => {
+                      const spill = !e.all_day && !e.deleted_at ? spillRange(e.starts_at, e.ends_at, colDate) : null;
+                      return spill ? [{ id: `${e.id}~tail`, title: e.title, ...spill, starts_at: e.starts_at, ends_at: e.ends_at }] : [];
+                    }),
                     ...slotTasks(idx).map((t) => ({
                       id: t.id,
                       title: t.title,
@@ -1755,7 +1763,7 @@ function Grid({
                 {/* Events and timed tasks for this day, packed together into non-obstructing sub-columns */}
                 {(() => {
                   type ScheduleItem =
-                    | { kind: 'event'; ev: Ev; id: string }
+                    | { kind: 'event'; ev: Ev; id: string; tail?: boolean }
                     | { kind: 'task'; task: Task; id: string };
 
                   const dayColEvents = events
@@ -1783,6 +1791,16 @@ function Grid({
                         end,
                       };
                     });
+
+                  // The part of an overnight event after midnight, drawn on the next day too.
+                  // It opens the event; moving and resizing stay on the day it starts.
+                  const colDay = new Date(ws); colDay.setDate(colDay.getDate() + idx);
+                  const dayColTails = events.flatMap((e) => {
+                    if (e.all_day || e.deleted_at || spanned.has(e.id) || drag?.id === e.id || resize?.id === e.id) return [];
+                    const spill = spillRange(e.starts_at, e.ends_at, colDay);
+                    return spill ? [{ ev: { kind: 'event' as const, ev: e, id: `${e.id}~${idx}`, tail: true }, ...spill }] : [];
+                  });
+                  dayColEvents.push(...dayColTails);
 
                   const dayColTasks = slotTasks(idx).map(t => ({
                     ev: { kind: 'task' as const, task: t, id: t.id }, start: hoursOf(t.due_at!), end: Math.min(24, hoursOf(t.due_at!) + 1),
@@ -1816,6 +1834,29 @@ function Grid({
                     const leftStyle = `calc(${leftPct}% - ${connectionSpace * pos.colIndex / pos.totalCols}px + 2px)`;
                     const widthStyle = `calc(${widthPct}% - ${connectionSpace / pos.totalCols + 4}px)`;
 
+                    if (item.kind === 'event' && item.tail) {
+                      const e = item.ev;
+                      return (
+                        <EventChip
+                          key={`tail-${item.id}`}
+                          ev={e}
+                          pixelHeight={(pos.end - pos.start) * HOUR_H}
+                          top={Math.min(pct(pos.start), 100 - 20 / GRID_H * 100)}
+                          height={Math.max(20 / GRID_H * 100, pct(pos.end) - pct(pos.start))}
+                          left={leftStyle}
+                          width={widthStyle}
+                          label={`until ${hhmm(pos.end)}`}
+                          lifted={false}
+                          selected={sel === e.id}
+                          isNext={false}
+                          onPointerDown={() => {}}
+                          onResize={() => {}}
+                          dark={dark} nowMs={nowMs}
+                          onOpen={(p) => { if (suppressClick.current) return; openEvent(e, p.clientX, p.clientY); }}
+                          onContext={(p) => { p.preventDefault(); p.stopPropagation(); if (!lastTouch.current) openMenu(e, p.clientX, p.clientY); }}
+                        />
+                      );
+                    }
                     if (item.kind === 'event') {
                       const e = item.ev;
                       const isDrag = drag?.id === e.id;
@@ -2536,6 +2577,8 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   const [from, setFrom] = useState(timeValue(ev.starts_at));
   const [to, setTo] = useState(timeValue(ev.ends_at));
   const [allDay, setAllDay] = useState(ev.all_day);
+  // A multi-day event keeps its length; an overnight one is worked out from the times (lib/calendarRange.ts).
+  const [extra] = useState(() => ev.all_day ? 0 : extraDays(ev.starts_at, ev.ends_at));
   const [recurrence, setRecurrence] = useState<RecurrenceRule | null>(ev.recurrence ?? null);
   const [showCustomRec, setShowCustomRec] = useState(Boolean(ev.recurrence?.freq === 'custom' || (ev.recurrence?.interval && ev.recurrence.interval > 1) || ev.recurrence?.until || ev.recurrence?.count));
 
@@ -2569,9 +2612,9 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
   const save = () => {
     // Native date/time inputs give local wall-clock strings; `new Date(...)`
     // reads them in the browser's zone, which is what we want stored.
-    const starts = new Date(`${date}T${allDay ? '00:00' : from}`);
-    const ends = new Date(`${date}T${allDay ? '23:59' : to}`);
-    if (ends <= starts) { toast('The end time has to be after the start'); return; }
+    // An end at or before the start is the next day: 11:00 PM to 1:00 AM runs overnight.
+    const { starts, ends } = allDay ? formRange(date, '00:00', '23:59') : formRange(date, from, to, extra);
+    if (!allDay && from === to && !extra) { toast('The end time has to be after the start'); return; }
     onSave({
       title, short_name: shortName.trim(), location, color, text_color: textColor, title_color: titleColor, detail_color: detailColor, all_day: allDay,
       starts_at: starts.toISOString(), ends_at: ends.toISOString(), recurrence,
@@ -2619,6 +2662,11 @@ function EditSheet({ ev, onClose, onSave }: { ev: Ev; onClose: () => void; onSav
             </>
           )}
         </div>
+        {!allDay && date && from && to && (formRange(date, from, to, extra).nextDay || extra > 0) && (
+          <p style={{ margin: '-6px 0 12px', fontSize: 12, color: 'var(--muted)' }}>
+            Ends {formRange(date, from, to, extra).ends.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{extra ? '' : ', the next day'}
+          </p>
+        )}
 
         {/* Google Calendar Recurrence Dropdown */}
         <span style={LABEL}>Repeat</span>

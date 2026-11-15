@@ -21,6 +21,8 @@ test('priority is one of low, med, high', () => {
 test('an event must end after it starts', () => {
   assert.equal(validateArgs('create_event', { title: 'Lab', starts_at: '2026-11-04T10:00:00+08:00', ends_at: '2026-11-04T09:00:00+08:00' }).ok, false);
   assert.equal(validateArgs('create_event', { title: 'Lab', starts_at: '2026-11-04T09:00:00+08:00', ends_at: '2026-11-04T10:30:00+08:00' }).ok, true);
+  const late = validateArgs('create_event', { title: 'Shift', starts_at: '2026-11-30T23:00:00+08:00', ends_at: '2026-11-30T01:00:00+08:00' });
+  assert.equal(late.ok && (late.value as { ends_at: string }).ends_at, '2026-12-01T01:00:00+08:00', 'past midnight ends the next day');
 });
 test('list ranges are fixed words', () => {
   assert.equal(validateArgs('list_tasks', { range: 'today' }).ok, true);

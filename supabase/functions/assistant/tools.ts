@@ -15,7 +15,7 @@ export const TOOLS: Tool[] = [
   }, required: ['range'] } },
   { name: 'complete_task', description: 'Mark one task done. Use an id from list_tasks.', parameters: { type: 'object', properties: { id: str('Task id.') }, required: ['id'] } },
   { name: 'create_event', description: 'Add an event to the user\'s Sorro calendar.', parameters: { type: 'object', properties: {
-    title: str('Event name.'), starts_at: str('Start, ISO 8601 with the user\'s offset.'), ends_at: str('End, ISO 8601 with offset.'), location: str('Place, optional.'),
+    title: str('Event name.'), starts_at: str('Start, ISO 8601 with the user\'s offset.'), ends_at: str('End, ISO 8601 with offset. An event past midnight ends on the date of the next day.'), location: str('Place, optional.'),
   }, required: ['title', 'starts_at', 'ends_at'] } },
   { name: 'list_events', description: 'Read calendar events between two dates.', parameters: { type: 'object', properties: {
     from: str('First day YYYY-MM-DD.'), to: str('Last day YYYY-MM-DD.'),
@@ -33,6 +33,14 @@ export const TOOLS: Tool[] = [
 
 /** Tools that change data; each returns an undo descriptor and shows a card with Undo. */
 export const WRITES = new Set(['create_task', 'complete_task', 'create_event', 'create_note', 'append_note']);
+
+/** The same wall-clock time a day later, keeping the offset as sent: "2026-11-04T01:00:00+08:00" becomes the 5th. */
+function nextDay(iso: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})(.*)$/.exec(iso);
+  if (!m) return new Date(Date.parse(iso) + 86_400_000).toISOString();
+  const d = new Date(`${m[1]}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10) + m[2];
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function realDay(s: unknown): s is string {
@@ -64,8 +72,14 @@ export function validateArgs(name: string, a: Record<string, unknown>): Checked 
     case 'create_event':
       if (!text(a.title, 200)) return bad('An event needs a title.');
       if (!instant(a.starts_at) || !instant(a.ends_at)) return bad('starts_at and ends_at must be ISO 8601 times.');
-      if (Date.parse(a.ends_at) <= Date.parse(a.starts_at)) return bad('The event must end after it starts.');
-      return { ok: true, value: { ...a, title: String(a.title).trim() } };
+      {
+        // "11 pm to 1 am" sent with both on the start's date: the end is the next morning.
+        // A gap of 12 to 24 hours backwards is that; anything shorter is a real mistake.
+        const gap = Date.parse(a.starts_at) - Date.parse(a.ends_at);
+        const ends_at = gap >= 12 * 3600_000 && gap < 24 * 3600_000 ? nextDay(String(a.ends_at)) : a.ends_at;
+        if (Date.parse(ends_at) <= Date.parse(a.starts_at)) return bad('The event must end after it starts.');
+        return { ok: true, value: { ...a, ends_at, title: String(a.title).trim() } };
+      }
     case 'list_events':
       if (!realDay(a.from) || !realDay(a.to) || a.to < a.from) return bad('from and to are dates, from first.');
       return { ok: true, value: { ...a } };

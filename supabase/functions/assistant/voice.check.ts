@@ -18,6 +18,7 @@ test('the nudge prompt carries the voice, the kind and the facts, and asks for o
   assert.match(p, /morning/);
   assert.ok(p.includes('Due today: Essay'));
   assert.match(p, /one (short )?line|one sentence/i);
+  assert.match(p, /bullet/i);
 });
 test('F6: a line cut off by the token cap is dropped, so the template shows', () => {
   assert.equal(nudgeText({ content: { parts: [{ text: 'Morning. Due today: Essay and' }] }, finishReason: 'MAX_TOKENS' }), '');

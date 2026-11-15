@@ -88,10 +88,11 @@ export function useFoxNudges(): { nudge: ShownNudge | null; dismiss(): void } {
 
   // The phone app: tomorrow's morning and the next evening notification, replaced on every open. Off cancels them.
   const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return dayKey(d); })();
-  const dueTomorrow = (tasks.data ?? []).filter(t => !t.done && !t.deleted_at && t.due_on === tomorrow).length;
+  // Joined, so the effect re-runs on a changed list and not on every new array.
+  const dueTomorrow = (tasks.data ?? []).filter(t => !t.done && !t.deleted_at && t.due_on === tomorrow).map(t => t.title).join('\n');
   useEffect(() => {
     if (!loaded) return;
-    void replaceScheduled(FOX_ALERT_IDS, notify ? foxSchedule(new Date(), { dueTomorrow }, times) : []).catch(() => {});
+    void replaceScheduled(FOX_ALERT_IDS, notify ? foxSchedule(new Date(), { dueTomorrow: dueTomorrow ? dueTomorrow.split('\n') : [] }, times) : []).catch(() => {});
   }, [loaded, notify, times, dueTomorrow]);
 
   // Dismissed, answered or acted on: the note is read. One nobody touched stays new in the bell.

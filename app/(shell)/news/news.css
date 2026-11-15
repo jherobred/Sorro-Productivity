@@ -20,6 +20,7 @@
 .nw-seg > header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px }
 .nw-kicker { color: var(--accent); font: 600 12px/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase }
 .nw-seg[data-unread='true'] .nw-kicker::after { content: ' · New'; color: var(--muted); letter-spacing: .04em }
+.nw-carried { color: var(--muted); font-weight: 500; letter-spacing: .04em; text-transform: none }
 .nw-seg h2 { margin: 0; font: 600 24px/1.25 var(--read); color: var(--ink) }
 
 .nw-story { display: flex; flex-direction: column; gap: 10px; padding-bottom: 26px; margin-bottom: 26px; border-bottom: 1px dashed var(--line) }

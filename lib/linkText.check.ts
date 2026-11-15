@@ -19,10 +19,11 @@ test('a link is found inside a pasted line or a dropped list', () => {
 });
 
 test('a stored link survives the round trip, and other scratch rows are ignored', () => {
-  const text = encodeLink({ url: 'https://gci.world/2026', label: 'GCI World 2026', note: 'Portal login', category: 'Programs' });
+  const text = encodeLink({ url: 'https://gci.world/2026', label: 'GCI World 2026', note: 'Portal login', category: 'Programs', folder: 'fd1' });
   assert.ok(text.startsWith(LINK_PREFIX));
   const row = { id: 'a', text, pinned: true, position: -3, created_at: '2026-09-15T00:00:00Z' };
-  assert.deepEqual(decodeLink(row), { id: 'a', url: 'https://gci.world/2026', label: 'GCI World 2026', note: 'Portal login', category: 'Programs', pinned: true, position: -3, created_at: '2026-09-15T00:00:00Z' });
+  assert.deepEqual(decodeLink(row), { id: 'a', url: 'https://gci.world/2026', label: 'GCI World 2026', note: 'Portal login', category: 'Programs', folder: 'fd1', pinned: true, position: -3, created_at: '2026-09-15T00:00:00Z' });
+  assert.equal(decodeLink({ ...row, text: encodeLink({ url: 'https://a.io', label: '', note: '', category: '' }) })?.folder, '', 'a link saved before folders sits at the top');
   assert.equal(decodeLink({ ...row, text: 'Buy eggs' }), null);
   assert.equal(decodeLink({ ...row, text: `${LINK_PREFIX}{"u":"javascript:alert(1)"}` }), null);
   assert.equal(decodeLink({ ...row, text: `${LINK_PREFIX}{broken` }), null);

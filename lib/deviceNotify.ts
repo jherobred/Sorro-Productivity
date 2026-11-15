@@ -15,6 +15,8 @@ export type DeviceAlert = { id: number; title: string; body: string; at?: Date }
 export type AlertPermission = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
 const isNative = () => Capacitor.isNativePlatform();
+/** Android shows a body's first line until the alert is opened up; largeBody keeps a bullet list whole. */
+const expanded = (body: string) => (body.includes('\n') ? { largeBody: body } : {});
 const plugin = async () => (await import('@capacitor/local-notifications')).LocalNotifications;
 
 export async function alertPermission(): Promise<AlertPermission> {
@@ -39,7 +41,7 @@ export async function askAlertPermission(): Promise<boolean> {
 export async function showAlerts(alerts: DeviceAlert[]): Promise<void> {
   if (!alerts.length) return;
   if (isNative()) {
-    await (await plugin()).schedule({ notifications: alerts.map((a) => ({ id: a.id, title: a.title, body: a.body })) });
+    await (await plugin()).schedule({ notifications: alerts.map((a) => ({ id: a.id, title: a.title, body: a.body, ...expanded(a.body) })) });
     return;
   }
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -61,7 +63,7 @@ export async function replaceScheduled(previous: number[], next: DeviceAlert[]):
   const future = next.filter((a) => a.at && a.at.getTime() > Date.now());
   if (future.length) {
     await notifications.schedule({
-      notifications: future.map((a) => ({ id: a.id, title: a.title, body: a.body, schedule: { at: a.at!, allowWhileIdle: true } })),
+      notifications: future.map((a) => ({ id: a.id, title: a.title, body: a.body, ...expanded(a.body), schedule: { at: a.at!, allowWhileIdle: true } })),
     });
   }
   return true;

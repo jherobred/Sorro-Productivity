@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { Fox } from '@/components/Fox';
+import { carriedLabel } from '@/lib/newsLatest';
 import { useEdition, useEditionDays, useKeyDate, markRead, rotateKey, fillWeekly, manilaDay, KIND_NAMES, NEWS_KINDS, type Edition, type NewsItem, type NewsKind } from '@/lib/news';
 import { grokPrompt, dropUrl, scheduleHint, type PromptKind } from '@/lib/newsPrompts';
 import { useTasks } from '@/lib/tasks';
@@ -34,9 +35,11 @@ function Story({ it }: { it: NewsItem }) {
   </article>;
 }
 
-function Segment({ e }: { e: Edition }) {
-  return <section className="nw-seg" data-unread={!e.read_at} aria-label={KIND_NAMES[e.kind]}>
-    <header><span className="nw-kicker">{KIND_NAMES[e.kind]}</span>{e.title && <h2>{e.title}</h2>}</header>
+function Segment({ e, today }: { e: Edition; today: string }) {
+  // A section carried over while today's has not come yet says which day it is from.
+  const carried = e.edition < today ? carriedLabel(e.edition, today) : '';
+  return <section className="nw-seg" data-unread={!e.read_at} data-carried={!!carried || undefined} aria-label={KIND_NAMES[e.kind]}>
+    <header><span className="nw-kicker">{KIND_NAMES[e.kind]}{carried && <span className="nw-carried"> · from {carried}, today’s is on its way</span>}</span>{e.title && <h2>{e.title}</h2>}</header>
     {e.items.length ? e.items.map((it, i) => <Story key={i} it={it} />) : <pre className="nw-raw">{e.body}</pre>}
   </section>;
 }
@@ -87,7 +90,7 @@ export default function NewsPage() {
 
   // Mondays: Sorro writes "Your week" itself from the tasks due in the next seven days.
   useEffect(() => {
-    if (day !== today || new Date().getDay() !== 1 || q.isPending || editions.some(e => e.kind === 'weekly')) return;
+    if (day !== today || new Date().getDay() !== 1 || q.isPending || editions.some(e => e.kind === 'weekly' && e.edition === today)) return;
     const end = new Date(); end.setDate(end.getDate() + 7);
     const last = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
     const due = tasks.filter(t => !t.done && !t.deleted_at && t.due_on && t.due_on >= today && t.due_on <= last).sort((a, b) => a.due_on!.localeCompare(b.due_on!));
@@ -111,7 +114,7 @@ export default function NewsPage() {
       <div className="nw-today" data-part="W.today">
         {q.isPending ? <div className="wg-skel" aria-label="Loading"><span /><span /></div>
           : q.isError ? <p className="wg-empty">Couldn’t load the news. <button onClick={() => q.refetch()}>Try again</button></p>
-          : editions.length ? <div data-part="W.segments">{editions.map(e => <Segment key={e.id} e={e} />)}</div>
+          : editions.length ? <div data-part="W.segments">{editions.map(e => <Segment key={e.id} e={e} today={day === today ? today : e.edition} />)}</div>
           : <div className="sx-empty"><Fox pose="sleep" size={52} tone="muted" /><p>{day === today ? 'No digest yet today. The coffee is still brewing.' : 'Nothing was filed that day.'}</p>{day === today && <button className="sx-pill" onClick={() => setTab('setup')}>Connect Grok</button>}</div>}
       </div>
     </div>}

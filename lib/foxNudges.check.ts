@@ -51,11 +51,23 @@ test('a claim is refused the second time, as from another window', () => {
   assert.equal(claimNudge(store, n, at(9)), true);
   assert.equal(claimNudge(store, n, at(9)), false);
 });
-test('templates name three titles, then the rest as a count', () => {
-  const n = nextNudge(at(9), { ...none, dueToday: ['A', 'B', 'C', 'D', 'E'] }, log0, DEFAULT_FOX_TIMES)!;
-  assert.match(n.text, /A.*B.*C/);
-  assert.match(n.text, /2 more/);
-  assert.doesNotMatch(n.text, /\bD\b/);
+test('templates list five titles as bullets, one a line, then the rest as a count', () => {
+  const n = nextNudge(at(9), { ...none, dueToday: ['A', 'B', 'C', 'D', 'E', 'F', 'G'], events: [{ title: 'Lab', time: '10:00' }] }, log0, DEFAULT_FOX_TIMES)!;
+  assert.match(n.text, /Due today:\n• A\n• B\n• C\n• D\n• E\n• and 2 more/);
+  assert.match(n.text, /On the calendar:\n• 10:00 Lab/);
+  assert.doesNotMatch(n.text, /\bF\b/);
+  assert.ok(n.text.endsWith(n.list!));
+  const e = nextNudge(at(21), { ...none, unfinishedToday: [{ id: 'x', title: 'Essay' }, { id: 'y', title: 'Lab' }] }, log0, DEFAULT_FOX_TIMES)!;
+  assert.match(e.text, /Still open:\n• Essay\n• Lab/);
+  const o = nextNudge(at(12), { ...none, overdue: ['Lab'] }, { ...log0, morning: true }, DEFAULT_FOX_TIMES)!;
+  assert.equal(o.kind, 'overdue');
+  assert.match(o.text, /\n• Lab$/);
+});
+test('Gemini writes the opening; the exact bullets stay under it, and a list it wrote is dropped', async () => {
+  const n: Nudge = { key: 'k', kind: 'morning', text: 'T\n• A', list: 'Due today:\n• A' };
+  assert.equal(await nudgeLine(n, async () => 'Essay first.'), 'Essay first.\nDue today:\n• A');
+  assert.equal(await nudgeLine(n, async () => 'Busy one.\n- A\n* B'), 'Busy one.\nDue today:\n• A');
+  assert.equal(await nudgeLine(n, async () => '• A'), n.text);
 });
 
 const tn: Nudge = { key: 'k', kind: 'morning', text: 'Template' };
@@ -83,12 +95,12 @@ test('facts come from open tasks and today\'s timed events, deleted ones left ou
 });
 
 test('the phone gets tomorrow morning and the next evening', () => {
-  const a = foxSchedule(new Date(2026, 10, 5, 22, 0), { dueTomorrow: 3 }, DEFAULT_FOX_TIMES);
+  const a = foxSchedule(new Date(2026, 10, 5, 22, 0), { dueTomorrow: ['Essay', 'Lab', 'Quiz'] }, DEFAULT_FOX_TIMES);
   assert.equal(a.length, 2);
   assert.deepEqual(a.map(x => x.at!.getDate()), [6, 6]);
   assert.equal(a[0].at!.getHours(), 8);
-  assert.match(a[0].body, /3 due today/);
-  const b = foxSchedule(new Date(2026, 10, 5, 9, 0), { dueTomorrow: 0 }, DEFAULT_FOX_TIMES);
+  assert.match(a[0].body, /3 due today:\n• Essay\n• Lab\n• Quiz/);
+  const b = foxSchedule(new Date(2026, 10, 5, 9, 0), { dueTomorrow: [] }, DEFAULT_FOX_TIMES);
   assert.equal(b[1].at!.getDate(), 5);
   assert.equal(b[1].at!.getHours(), 21);
 });

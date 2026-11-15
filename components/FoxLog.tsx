@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { Fox } from './Fox';
+import { FoxText } from './FoxText';
 import { ago, useNotifications, useNotifActions } from '@/lib/notify';
 
 export const FOX_SOURCE = 'fox';
@@ -38,7 +39,7 @@ export function FoxLog({ onAsk }: { onAsk(line: string): void }) {
       {q.isPending ? <p className="fl-empty">Loading.</p> : q.isError ? <p className="fl-empty">Couldn’t load the notes. <button type="button" onClick={() => q.refetch()}>Try again</button></p> : rows.length
         ? <ul>{rows.map(n => <li key={n.id} data-new={fresh.current.includes(n.id)}>
             <span className="fl-fox" aria-hidden="true"><Fox pose="sit" size={16} tone="muted" /></span>
-            <button type="button" className="fl-line" onClick={() => { toggle(false); onAsk(n.body); }}>{n.body}<small>{ago(n.created_at)}</small></button>
+            <button type="button" className="fl-line" onClick={() => { toggle(false); onAsk(n.body); }}><FoxText text={n.body} /><small>{ago(n.created_at)}</small></button>
             <button type="button" className="fl-x" aria-label="Remove this note" onClick={() => clear.mutate({ id: n.id })}><Icon name="close" size={12} /></button>
           </li>)}</ul>
         : <p className="fl-empty">Nothing yet. When Sorro speaks up, it is kept here.</p>}

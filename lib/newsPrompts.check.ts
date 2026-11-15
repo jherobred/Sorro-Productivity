@@ -27,3 +27,10 @@ test('the AI digest asks for what the old automation asked for', () => {
   const p = grokPrompt('ai-digest', dropUrl('K', 'ai-digest'));
   for (const w of ['model releases', 'research papers', 'funding rounds', 'policy changes', 'Skip minor product updates and rumors']) assert.ok(p.includes(w), w);
 });
+test('every prompt asks for plenty of news, never a handful', () => {
+  for (const kind of PROMPT_KINDS) {
+    const p = grokPrompt(kind, dropUrl('K', kind));
+    assert.match(p, /as much news as possible/, kind);
+    assert.doesNotMatch(p, /Up to \d|6 to 8|6 to 10/, kind);
+  }
+});

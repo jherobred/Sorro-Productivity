@@ -98,7 +98,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       if (session) open(session.user);
       else { try { sessionStorage.setItem('sorro-after-auth', location.pathname + location.search); } catch {} router.replace('/'); }
     }).catch(() => { if (live) setAuthError(true); });
-    const { data } = supabase.auth.onAuthStateChange((_e, session) => { if (!session) router.replace('/'); });
+    // Only a real sign-out. Offline, Supabase also reports "no session" while it cannot refresh.
+    const { data } = supabase.auth.onAuthStateChange((e) => { if (e === 'SIGNED_OUT') router.replace('/'); });
     return () => { live = false; clearTimeout(timeout); data.subscription.unsubscribe(); };
   }, [router]);
   useEffect(() => { if (!activePath(pathname)) router.replace('/home/'); }, [pathname, router]);

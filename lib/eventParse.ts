@@ -49,9 +49,12 @@ export function parseEvent(input: string, now: Date): ParsedEvent | null {
     const [a, b] = lower[i].split('-'); const ca = clock(a), cb = clock(b);
     if (!ca || !cb) return false;
     end = minutes(cb);
+    // "10pm-2": a bare end after an evening start is the small hours, not the afternoon.
+    if (!cb.mer && ca.mer === 'pm' && end <= minutes(ca)) end = minutes(cb, 'am');
     // The start borrows the end's am/pm only when that keeps it before the end ("9-1pm" starts at 9 am).
+    // Ending in the small hours, it is the evening before ("11-1am" runs 11 pm to 1 am the next day).
     const borrowed = minutes(ca, ca.mer || cb.mer);
-    start = ca.mer ? minutes(ca) : borrowed <= end ? borrowed : minutes(ca, 'am');
+    start = ca.mer ? minutes(ca) : borrowed <= end ? borrowed : minutes(ca, cb.mer === 'am' ? 'pm' : 'am');
     used[i] = true; return true;
   };
 
@@ -124,6 +127,7 @@ export function parseEvent(input: string, now: Date): ParsedEvent | null {
     return { title, starts_at: s.toISOString(), ends_at: e.toISOString(), all_day: true, location, repeat };
   }
   const s = new Date(day); s.setHours(0, start, 0, 0);
-  const e = new Date(day); e.setHours(0, end !== null && end > start ? end : start + 60, 0, 0);
+  // An end at or before the start is the next morning: "11pm-1am" ends tomorrow at 1, not earlier today.
+  const e = new Date(day); e.setHours(0, end === null || end === start ? start + 60 : end > start ? end : end + 24 * 60, 0, 0);
   return { title, starts_at: s.toISOString(), ends_at: e.toISOString(), all_day: false, location, repeat };
 }

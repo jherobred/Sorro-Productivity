@@ -1,5 +1,5 @@
-/* T5 Vault: an add bar, filter chips, and a shelf of cards for links and files. */
-.vt { position: relative; max-width: 1080px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px }
+/* T5 Vault: an add bar, a folder bar, filter chips, folders, and a shelf of cards for links and files (grid or list). */
+.vt { position: relative; max-width: 1080px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 64px }
 .vt-add { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); color: var(--muted) }
 .vt-add:focus-within { border-color: var(--pick) }
 .vt-add input:not([hidden]) { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--ink); font: 15px/1.4 var(--font-body) }
@@ -7,7 +7,7 @@
 .vt-upload { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); flex: none }
 .vt-upload:hover { background: var(--soft-2) }
 .vt-upload:disabled { opacity: .6 }
-.vt-hint { margin: -4px 4px 4px; color: var(--muted); font-size: 12.5px }
+.vt-hint { margin: 4px 4px 0; color: var(--muted); font-size: 12px }
 
 .vt-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
 .vt-chips { display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
@@ -39,14 +39,84 @@
 .vt-card[data-kept='true'] .vt-tools button:not([aria-pressed='true']) { opacity: 0 }
 .vt-card[data-kept='true']:hover .vt-tools button, .vt-card[data-kept='true']:focus-within .vt-tools button { opacity: 1 }
 
+/* V.bar: the folder trail on the left, new folder, sort, view and select on the right. */
+.vt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 36px }
+.vt-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; flex: 1 }
+.vt-trail button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 8px; color: var(--muted); font: 500 13.5px/1 var(--font-body); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.vt-trail button:hover { background: var(--soft); color: var(--ink) }
+.vt-trail [aria-current='page'] { color: var(--ink); font-weight: 600 }
+.vt-crumb { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-size: 13px; min-width: 0 }
+.vt-crumb > span { padding: 0 8px }
+.vt-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap }
+.vt-ghost { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: var(--r-pill); color: var(--ink); font: 500 13px/1 var(--font-body) }
+.vt-ghost:hover:not(:disabled), .vt-ghost[aria-pressed='true'] { background: var(--soft) }
+.vt-ghost:disabled { opacity: .45 }
+.vt-danger { color: var(--bad) }
+.vt-sort { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 4px 0 10px; border-radius: var(--r-pill); color: var(--muted) }
+.vt-sort:hover { background: var(--soft) }
+.vt-sort select { border: 0; background: transparent; color: var(--ink); font: 500 13px/1 var(--font-body); padding: 0 2px; cursor: pointer }
+.vt-views { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--r-pill); background: var(--soft) }
+.vt-views button { display: grid; place-items: center; width: 30px; height: 28px; border-radius: var(--r-pill); color: var(--muted) }
+.vt-views [aria-pressed='true'] { background: var(--surface); color: var(--ink) }
+.vt-search button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted) }
+.vt-grow { flex: 1 }
+
+/* V.folders: one tile per folder inside the one you are in. Each takes cards dropped on it. */
+.vt-folders { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px }
+.vt-folder { position: relative; display: flex; align-items: center; border-radius: var(--r-row); background: var(--surface); border: 1px solid var(--line); transition: border-color .15s, background .15s }
+.vt-folder:hover { border-color: var(--soft-2) }
+.vt-folder-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 4px 9px 12px; text-align: left; color: var(--accent) }
+.vt-folder-open span { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.vt-folder-open strong { color: var(--ink); font: 500 13.5px/1.25 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.vt-folder-open small { color: var(--muted); font-size: 11.5px }
+.vt-folder-more { display: grid; place-items: center; width: 30px; height: 30px; margin-right: 4px; border-radius: 8px; color: var(--muted); flex: none }
+.vt-folder-more:hover { background: var(--soft); color: var(--ink) }
+.vt [data-drop='true'] { outline: 2px dashed var(--pick); outline-offset: 1px; background: color-mix(in oklab, var(--pick) 12%, var(--surface)) }
+
+/* Selecting: a tick on each card and a bar of actions at the bottom. */
+.vt-card[data-selected='true'] { border-color: var(--pick); box-shadow: 0 0 0 2px color-mix(in oklab, var(--pick) 40%, transparent) }
+.vt-check { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--soft-2); background: var(--surface); color: var(--accent-ink); pointer-events: none }
+.vt-card[data-selected='true'] .vt-check { background: var(--pick); border-color: var(--pick) }
+.vt-selbar { position: sticky; bottom: 10px; z-index: 6; align-self: center; display: flex; align-items: center; gap: 4px; width: min(640px, 100%); padding: 6px 8px 6px 16px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 30px rgb(0 0 0 / .18); font-size: 13px }
+
+/* The list view: one slim row per item. */
+.vt-shelf[data-view='list'] { grid-template-columns: 1fr; gap: 4px }
+.vt-shelf[data-view='list'] .vt-card { border-radius: var(--r-row) }
+.vt-shelf[data-view='list'] .vt-card:hover { transform: none }
+.vt-shelf[data-view='list'] .vt-open { flex-direction: row; align-items: center; padding-right: 110px }
+.vt-shelf[data-view='list'] .vt-face { aspect-ratio: 1; width: 40px; flex: none; margin: 5px; border-radius: 8px }
+.vt-shelf[data-view='list'] .vt-face svg { width: 18px; height: 18px }
+.vt-shelf[data-view='list'] .vt-letter { width: 28px; height: 28px; border-radius: 8px; font-size: 14px }
+.vt-shelf[data-view='list'] .vt-text { padding: 5px 4px; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 1px }
+.vt-shelf[data-view='list'] .vt-text strong { -webkit-line-clamp: 1 }
+.vt-shelf[data-view='list'] .vt-text em { flex-basis: 100%; -webkit-line-clamp: 1 }
+.vt-shelf[data-view='list'] :is(.vt-tools, .vt-check) { top: 50%; transform: translateY(-50%) }
+.vt-text small svg { vertical-align: -1px }
+
+/* V.edit: a small form over the page, a sheet from the bottom on a phone. */
+.vt-sheet-back { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: var(--backdrop); animation: sheet-fade .2s ease-out both }
+.vt-sheet { width: min(440px, 100%); max-height: calc(100dvh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 20px 60px rgb(0 0 0 / .25) }
+.vt-sheet header { display: flex; align-items: center; justify-content: space-between; font: 600 16px/1.2 var(--font-body) }
+.vt-sheet header button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--muted) }
+.vt-sheet label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 500 }
+.vt-sheet :is(input:not([type='checkbox']), textarea, select) { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 14px/1.4 var(--font-body); resize: vertical }
+.vt-sheet :is(input, textarea, select):focus { outline: none; border-color: var(--pick) }
+.vt-sheet .vt-sheet-check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-size: 13.5px }
+.vt-sheet footer { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px }
+
 .vt-none { margin: 24px 4px; color: var(--muted); font-size: 14px }
 .vt-none button { color: var(--ink); text-decoration: underline }
 .vt-drop { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px; border: 2px dashed var(--pick); border-radius: var(--r-panel); background: color-mix(in oklab, var(--bg) 86%, transparent); color: var(--ink); font: 500 15px/1 var(--font-body); pointer-events: none }
-:is(.vt-upload, .vt-chips button, .vt-open, .vt-tools button, .vt-none button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
+:is(.vt-upload, .vt-chips button, .vt-open, .vt-tools button, .vt-none button, .vt-trail button, .vt-ghost, .vt-views button, .vt-folder-open, .vt-folder-more, .vt-sheet button):focus-visible { outline: 3px solid var(--pick); outline-offset: 2px }
 .nomo .vt-card { animation: none; transition: none }
 @media (prefers-reduced-motion: reduce) { html:not([data-motion='on']) .vt-card { animation: none; transition: none } }
 @media (max-width: 760px) {
   .vt-shelf { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
   .vt-search { margin-left: 0; flex: 1 }
   .vt-upload { padding: 0 12px }
+  .vt-acts .vt-ghost span { display: none }
+  .vt-folders { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) }
+  .vt-sheet-back { place-items: end stretch; padding: 0 }
+  .vt-sheet { width: 100%; border-radius: var(--r-panel) var(--r-panel) 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); animation: sheet-up .38s var(--drift) both }
+  .vt-selbar { bottom: calc(8px + env(safe-area-inset-bottom)) }
 }

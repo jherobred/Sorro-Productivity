@@ -6,7 +6,8 @@ export type NudgeKind = 'morning' | 'overdue' | 'reaction' | 'evening';
 export type Facts = { dueToday: string[]; overdue: string[]; events: { title: string; time: string }[]; doneToday: number; unfinishedToday: { id: string; title: string }[] };
 export type FoxTimes = { morning: string; evening: string };
 export type NudgeLog = { day: string; morning: boolean; evening: boolean; overdue: number; lastOverdueAt: number; lastReactionAt: number; seen: string[] };
-export type Nudge = { key: string; kind: NudgeKind; text: string; moveIds?: string[] };
+/** `text` is the whole template; `list` is its bullet lines, kept under Gemini's wording too. */
+export type Nudge = { key: string; kind: NudgeKind; text: string; list?: string; moveIds?: string[] };
 export type FoxEvent =
   | { kind: 'task_done'; id: string; title: string }
   | { kind: 'streak'; id: string; title: string; days: number }
@@ -24,26 +25,25 @@ export const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-
 const minutes = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0); };
 const nowMinutes = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
-/** A, B and C, and 2 more */
-function list(titles: string[]): string {
-  const shown = titles.slice(0, 3);
-  const rest = titles.length - shown.length;
-  const head = shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0] ?? '';
-  return rest > 0 ? `${shown.join(', ')}, and ${rest} more` : head;
+const BULLETS = 5;
+/** One bullet a line, five at most, then the rest as a count: easier to read than one long sentence. */
+export function bullets(titles: string[]): string {
+  const shown = titles.slice(0, BULLETS).map(t => `• ${t}`);
+  const rest = titles.length - BULLETS;
+  return [...shown, ...(rest > 0 ? [`• and ${rest} more`] : [])].join('\n');
 }
+const section = (head: string, titles: string[]) => titles.length ? `${head}\n${bullets(titles)}` : '';
+const join = (...parts: string[]) => parts.filter(Boolean).join('\n');
 
 export function freshLog(log: NudgeLog | null, day: string): NudgeLog {
   if (log && log.day === day) return log;
   return { day, morning: false, evening: false, overdue: 0, lastOverdueAt: 0, lastReactionAt: 0, seen: [] };
 }
 
-function morningText(f: Facts): string {
-  if (!f.dueToday.length && !f.events.length && !f.overdue.length) return 'Clear day. Nothing due, nothing booked. Suspicious, but I will allow it.';
-  const parts: string[] = [];
-  if (f.dueToday.length) parts.push(`due today: ${list(f.dueToday)}`);
-  if (f.events.length) parts.push(`on the calendar: ${list(f.events.map(e => `${e.title} at ${e.time}`))}`);
-  if (f.overdue.length) parts.push(`still waiting from before: ${list(f.overdue)}`);
-  return `Morning. ${parts.join('; ')}. Start with the first one?`.replace(/^Morning\. d/, 'Morning. D');
+function morning(f: Facts): Pick<Nudge, 'text' | 'list'> {
+  if (!f.dueToday.length && !f.events.length && !f.overdue.length) return { text: 'Clear day. Nothing due, nothing booked. Suspicious, but I will allow it.' };
+  const list = join(section('Due today:', f.dueToday), section('On the calendar:', f.events.map(e => `${e.time} ${e.title}`)), section('Still waiting from before:', f.overdue));
+  return { text: `Morning. Here is today. Start with the first one?\n${list}`, list };
 }
 
 /**
@@ -56,15 +56,15 @@ export function nextNudge(now: Date, f: Facts, log: NudgeLog, times: FoxTimes, o
   const day = dayKey(now);
   if (!log.evening && t >= minutes(times.evening)) {
     const left = f.unfinishedToday;
-    const text = left.length
-      ? `Wrap-up time. ${f.doneToday} done today. Still open: ${list(left.map(x => x.title))}. Move them to tomorrow?`
-      : `Wrap-up time. ${f.doneToday} done today and nothing left hanging. Show-off.`;
-    return { key: `evening:${day}`, kind: 'evening', text, ...(left.length ? { moveIds: left.map(x => x.id) } : {}) };
+    if (!left.length) return { key: `evening:${day}`, kind: 'evening', text: `Wrap-up time. ${f.doneToday} done today and nothing left hanging. Show-off.` };
+    const list = section('Still open:', left.map(x => x.title));
+    return { key: `evening:${day}`, kind: 'evening', text: `Wrap-up time. ${f.doneToday} done today. Move the rest to tomorrow?\n${list}`, list, moveIds: left.map(x => x.id) };
   }
-  if (!log.morning && t < minutes(times.evening) && (opened || t >= minutes(times.morning))) return { key: `morning:${day}`, kind: 'morning', text: morningText(f) };
+  if (!log.morning && t < minutes(times.evening) && (opened || t >= minutes(times.morning))) return { key: `morning:${day}`, kind: 'morning', ...morning(f) };
   const quiet = now.getHours() >= 22 || now.getHours() < 7;
   if (f.overdue.length && log.overdue < OVERDUE_MAX && !quiet && now.getTime() - log.lastOverdueAt >= OVERDUE_GAP) {
-    return { key: `overdue:${day}:${log.overdue + 1}`, kind: 'overdue', text: `${list(f.overdue)} ${f.overdue.length > 1 ? 'are' : 'is'} overdue and getting comfortable. Ten minutes on one?` };
+    const list = bullets(f.overdue);
+    return { key: `overdue:${day}:${log.overdue + 1}`, kind: 'overdue', text: `Overdue and getting comfortable. Ten minutes on one?\n${list}`, list };
   }
   return null;
 }
@@ -103,13 +103,15 @@ export function readLog(store: Pick<Storage, 'getItem'>, now: Date): NudgeLog {
   try { return freshLog(JSON.parse(store.getItem(LOG_KEY) ?? 'null'), dayKey(now)); } catch { return freshLog(null, dayKey(now)); }
 }
 
-/** Gemini's wording if it comes back in time and non-empty, else the template. */
+/** Gemini's wording if it comes back in time and non-empty, with the template's bullets under it; else the template. */
 export async function nudgeLine(n: Nudge, fetchLine: (n: Nudge) => Promise<string>, ms = 6000): Promise<string> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<string>(r => { timer = setTimeout(() => r(''), ms); });
   try {
+    // Gemini writes the opening only; a list it wrote anyway is dropped for the exact one.
     const line = (await Promise.race([fetchLine(n), late])).trim();
-    return line || n.text;
+    const lead = n.list ? line.split('\n').filter(l => l.trim() && !/^\s*[•*-]/.test(l)).join(' ').trim() : line;
+    return lead ? join(lead, n.list ?? '') : n.text;
   } catch { return n.text; } finally { clearTimeout(timer); }
 }
 
@@ -155,11 +157,11 @@ export function foxAlertId(key: string): number {
 export const FOX_ALERT_IDS = [foxAlertId('fox:morning'), foxAlertId('fox:evening')];
 
 /** The phone's next morning and evening notifications, rescheduled each time the app opens. */
-export function foxSchedule(now: Date, f: { dueTomorrow: number }, times: FoxTimes): { id: number; title: string; body: string; at: Date }[] {
+export function foxSchedule(now: Date, f: { dueTomorrow: string[] }, times: FoxTimes): { id: number; title: string; body: string; at: Date }[] {
   const atTime = (hhmm: string, plusDays: number) => { const [h, m] = hhmm.split(':').map(Number); const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + plusDays, h, m || 0); return d; };
   const evening = atTime(times.evening, 0) > now ? atTime(times.evening, 0) : atTime(times.evening, 1);
   return [
-    { id: FOX_ALERT_IDS[0], title: 'Sorro', body: f.dueTomorrow ? `${f.dueTomorrow} due today. Open me for the plan.` : 'Nothing due. Rare.', at: atTime(times.morning, 1) },
+    { id: FOX_ALERT_IDS[0], title: 'Sorro', body: f.dueTomorrow.length ? `${f.dueTomorrow.length} due today:\n${bullets(f.dueTomorrow)}` : 'Nothing due. Rare.', at: atTime(times.morning, 1) },
     { id: FOX_ALERT_IDS[1], title: 'Sorro', body: 'Time to wrap up the day.', at: evening },
   ];
 }

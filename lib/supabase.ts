@@ -33,7 +33,12 @@ export const supabase = createClient(
  * used as is until the connection is back and the refresh succeeds.
  */
 export async function loadSession(): Promise<{ session: Session | null; error: unknown }> {
-  const { data, error } = await supabase.auth.getSession();
+  // With an expired token, getSession keeps retrying the refresh for ~30 s when offline. Don't make the user wait.
+  const saved = storedSession();
+  const wait = saved && saved.expires_at && saved.expires_at * 1000 < Date.now() ? 3000 : 60000;
+  const result = await Promise.race([supabase.auth.getSession(), new Promise<null>(r => setTimeout(() => r(null), wait))]);
+  if (!result) return { session: saved, error: null };
+  const { data, error } = result;
   if (data.session || !error || !isAuthRetryableFetchError(error)) return { session: data.session, error };
   return { session: storedSession(), error: storedSession() ? null : error };
 }

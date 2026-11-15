@@ -134,8 +134,13 @@ html.parts [data-part]::before { content: attr(data-part); position: absolute; t
 .fx-bubble-fox { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-pill); background: var(--soft) }
 .fx-bubble-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px }
 .fx-bubble-who { margin: 0; color: var(--muted); font: 600 12px/1.3 var(--font-body) }
-/* A long plan is cut at seven lines on the card; the bell's log has all of it. */
-.fx-bubble-line { margin: 0; color: var(--ink); font: 14px/1.5 var(--font-body); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden }
+/* A long plan scrolls inside the card past twelve lines; the bell's log has all of it too. */
+.fx-bubble-line { margin: 0; color: var(--ink); font: 14px/1.5 var(--font-body); overflow-wrap: anywhere; max-height: calc(1.5em * 12); overflow-y: auto }
+/* One line of what the fox said; a bullet is indented under its heading with a dot hanging in the margin. */
+.fx-text { display: block }
+.fx-text + .fx-text:not([data-bullet]) { margin-top: 4px }
+.fx-text[data-bullet] { position: relative; padding-left: 16px }
+.fx-text[data-bullet]::before { content: ''; position: absolute; left: 5px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent) }
 .fx-bubble-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px }
 .fx-bubble-act { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--soft); color: var(--ink); font: 500 13px/1 var(--font-body); cursor: pointer }
 .fx-bubble-act:hover { background: var(--soft-2) }

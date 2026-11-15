@@ -40,7 +40,7 @@ export function useLinks() {
   });
 }
 
-export type NewLink = Pick<LinkItem, 'id' | 'url' | 'label' | 'note' | 'category' | 'position'> & { color: string };
+export type NewLink = Pick<LinkItem, 'id' | 'url' | 'label' | 'note' | 'category' | 'folder' | 'position'> & { color: string };
 
 const ADD = defineMutation('links.add', async (v: NewLink) => {
   const user_id = await currentUserId();
@@ -79,7 +79,7 @@ export function useLinkActions() {
 
   const add = useMutation<unknown, Error, NewLink, LinkItem[]>({
     mutationKey: ADD,
-    onMutate: (v) => patch((p) => [{ id: v.id, url: v.url, label: v.label, note: v.note, category: v.category, pinned: false, position: v.position, created_at: new Date().toISOString() }, ...p]),
+    onMutate: (v) => patch((p) => [{ id: v.id, url: v.url, label: v.label, note: v.note, category: v.category, folder: v.folder ?? '', pinned: false, position: v.position, created_at: new Date().toISOString() }, ...p]),
     onError: rollback,
     onSettled: settle,
   });

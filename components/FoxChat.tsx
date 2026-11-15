@@ -30,12 +30,21 @@ function ToolCard({ t, onUndo }: { t: ToolDone; onUndo: () => void }) {
   </div>;
 }
 
+const ITEM = /^\s*([-*•]|\d+\.)\s/;
+/** Paragraphs and lists; a heading line straight above its bullets (the fox's plans) works too. */
 function Text({ s }: { s: string }) {
-  return <>{s.split(/\n{2,}/).map((block, i) => {
-    const lines = block.split('\n');
-    if (lines.every(l => /^\s*([-*•]|\d+\.)\s/.test(l))) return <ul key={i}>{lines.map((l, j) => <li key={j}>{l.replace(/^\s*([-*•]|\d+\.)\s/, '').replace(/\*\*/g, '')}</li>)}</ul>;
-    return <p key={i}>{block.replace(/\*\*/g, '')}</p>;
-  })}</>;
+  const runs: { list: boolean; lines: string[] }[] = [];
+  for (const block of s.split(/\n{2,}/)) {
+    let last: (typeof runs)[number] | null = null;
+    for (const l of block.split('\n')) {
+      const list = ITEM.test(l);
+      if (last && last.list === list) last.lines.push(l);
+      else runs.push(last = { list, lines: [l] });
+    }
+  }
+  return <>{runs.map((r, i) => r.list
+    ? <ul key={i}>{r.lines.map((l, j) => <li key={j}>{l.replace(ITEM, '').replace(/\*\*/g, '')}</li>)}</ul>
+    : <p key={i}>{r.lines.join('\n').replace(/\*\*/g, '')}</p>)}</>;
 }
 
 let composer: HTMLTextAreaElement | null = null;

@@ -20,6 +20,7 @@ import { ago } from '@/lib/notify';
 import { runSync, useIntegrationActions, useIntegrations } from '@/lib/integrations';
 import { gcalUrls, googleCalendarId } from '@/lib/googleCalendarApi';
 import { MAX_GOOGLE_ACCOUNTS, connectGoogleAccount, googleTokens } from '@/lib/googleAccounts';
+import { syncGoogleColors } from '@/lib/googleColorSync';
 
 const SETTINGS_URL = 'https://calendar.google.com/calendar/r/settings';
 const looksLikeIcs = (v: string) => /^https:\/\/calendar\.google\.com\/calendar\/ical\/.+\.ics(\?.*)?$/i.test(v.trim()) || /^https:\/\/.+\.ics(\?.*)?$/i.test(v.trim());
@@ -59,6 +60,8 @@ export function GoogleCalendarSheet({ onClose }: { onClose: () => void }) {
   const sync = async () => {
     setBusy(true);
     const r = await runSync('gcal_ics');
+    // Then Google's own event colors, when a Google sign-in is live; the feed has none.
+    if (r.ok) await syncGoogleColors(row?.config).catch(() => 0);
     setBusy(false);
     toast(r.ok ? `Google Calendar: ${r.message}` : syncMessage(r.message), undefined, { icon: 'cal' });
     for (const k of ['events', 'integrations']) void qc.invalidateQueries({ queryKey: [k] });

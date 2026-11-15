@@ -299,6 +299,15 @@ async function readIcs(url: string, from: number, to: number) {
 }
 
 async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<typeof readCalendar>, from: number, to: number) {
+  // The feed has no colors. The app puts Google's own on the rows (lib/googleColorSync.ts), so a row keeps the one it has.
+  const colors = new Map<string, string>();
+  for (let at = 0; ; at += 1000) {
+    const { data, error } = await db.from('sorro_events').select('external_id,color')
+      .eq('user_id', user_id).eq('source', 'gcal_ics').order('id').range(at, at + 999);
+    if (error) throw new Error(error.message);
+    for (const r of data ?? []) if (r.color) colors.set(r.external_id, r.color);
+    if ((data ?? []).length < 1000) break;
+  }
   const all = events
     .sort((a, b) => a.start.localeCompare(b.start))
     .map((e) => ({
@@ -308,7 +317,7 @@ async function storeIcs(db: SupabaseClient, user_id: string, events: ReturnType<
       ends_at: e.end,
       all_day: e.allDay,
       location: e.location ?? '',
-      color: '#38BDF8',
+      color: colors.get(e.externalId) ?? '#38BDF8',
       source: 'gcal_ics',
       external_id: e.externalId,
       // A meeting deleted in Google and then restored there comes back here too.

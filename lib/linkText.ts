@@ -12,18 +12,21 @@ export type LinkItem = {
   note: string;
   /** A category name, or '' for none. */
   category: string;
+  /** The Vault folder it sits in (a sorro_folders id), or '' for the top. */
+  folder?: string;
   pinned: boolean;
   position: number;
   created_at: string;
 };
 
-type Stored = { u: string; l?: string; n?: string; c?: string };
+type Stored = { u: string; l?: string; n?: string; c?: string; f?: string };
 
-export function encodeLink(v: Pick<LinkItem, 'url' | 'label' | 'note' | 'category'>): string {
+export function encodeLink(v: Pick<LinkItem, 'url' | 'label' | 'note' | 'category' | 'folder'>): string {
   const body: Stored = { u: v.url };
   if (v.label) body.l = v.label;
   if (v.note) body.n = v.note;
   if (v.category) body.c = v.category;
+  if (v.folder) body.f = v.folder;
   return LINK_PREFIX + JSON.stringify(body);
 }
 
@@ -33,7 +36,7 @@ export function decodeLink(row: { id: string; text: string; pinned: boolean; pos
     const body = JSON.parse(row.text.slice(LINK_PREFIX.length)) as Stored;
     const url = safeUrl(body.u);
     if (!url) return null;
-    return { id: row.id, url, label: body.l ?? '', note: body.n ?? '', category: body.c ?? '', pinned: !!row.pinned, position: row.position ?? 0, created_at: row.created_at };
+    return { id: row.id, url, label: body.l ?? '', note: body.n ?? '', category: body.c ?? '', folder: body.f ?? '', pinned: !!row.pinned, position: row.position ?? 0, created_at: row.created_at };
   } catch {
     return null;
   }
