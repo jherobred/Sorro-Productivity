@@ -4,6 +4,7 @@ import { forwardRef, useMemo, useState } from 'react';
 import { Icon } from '../Icon';
 import { parseEvent } from '@/lib/eventParse';
 import type { RecurrenceDay, RecurrenceRule } from '@/lib/events';
+import { SLEEP_HOURS, type SleepHours } from '@/lib/sleepBlock';
 
 const CODES: RecurrenceDay[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -33,6 +34,17 @@ export const QuickAdd = forwardRef<HTMLInputElement, { color: string; onAdd: (e:
     <button className="sx-pill" disabled={!parsed}>Add</button>
   </form>;
 });
+
+/** One tap writes a Sleep block of that length onto the day open in the calendar. */
+export function SleepAdd({ onAdd }: { onAdd: (hours: SleepHours) => void }) {
+  return <div className="cq-sleep" role="group" aria-label="Add sleep">
+    <Icon name="moon" size={15} />
+    <span>Sleep</span>
+    {SLEEP_HOURS.map((hours) => (
+      <button type="button" key={hours} onClick={() => onAdd(hours)} aria-label={`Add ${hours} hour sleep`}>{hours}h</button>
+    ))}
+  </div>;
+}
 
 /** The week's booked hours per day, so a heavy day shows before you open it. */
 export function LoadBar({ days }: { days: { label: string; hours: number }[] }) {

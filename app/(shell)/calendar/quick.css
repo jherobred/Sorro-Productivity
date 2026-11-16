@@ -8,10 +8,17 @@
 .cq-preview strong { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis }
 .cq .sx-pill { height: 34px }
 .cq .sx-pill:disabled { opacity: .45 }
+.cq-sleep { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 8px 4px 14px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line); color: var(--muted) }
+.cq-sleep > span { font: 500 13px var(--font-body); color: var(--ink) }
+.cq-sleep button { height: 34px; min-width: 44px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--soft-2); color: var(--ink); font: 500 13px var(--font-body) }
+.cq-sleep button:hover { border-color: var(--pick) }
+.cq-sleep button:focus-visible { outline: 2px solid var(--pick); outline-offset: 2px }
+.cq-sleep button:active { transform: scale(.97) }
+.nomo .cq-sleep button { transition: none }
 .cq-load { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px }
 .cq-load span { display: flex; flex-direction: column; gap: 4px }
 .cq-load i { display: block; height: 4px; border-radius: var(--r-pill); background: var(--accent); transform-origin: left; transition: transform .4s var(--drift) }
 .cq-load span::before { content: ''; display: block; height: 4px; margin-bottom: -8px; border-radius: var(--r-pill); background: var(--soft-2) }
 .cq-load small { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums }
 .nomo .cq-load i { transition: none }
-@media (max-width: 760px) { .cq-preview { display: none } .cq-load small { font-size: 10.5px } }
+@media (max-width: 760px) { .cq-preview { display: none } .cq-load small { font-size: 10.5px } .cq-sleep button { flex: 1; min-width: 0; padding: 0 8px } }

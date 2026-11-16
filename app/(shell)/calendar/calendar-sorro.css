@@ -65,6 +65,8 @@
 .calendar-page .cq { min-height: 34px; padding: 2px 2px 2px 12px; gap: 8px }
 .calendar-page .cq input { font-size: 13px }
 .calendar-page .cq .sx-pill { height: 28px }
+.calendar-page .cq-sleep { min-height: 34px; padding: 2px 6px 2px 12px }
+.calendar-page .cq-sleep button { height: 28px }
 .calendar-page .cq-load { gap: 4px }
 .calendar-page .cq-load span { flex-direction: row; align-items: center; gap: 6px }
 .calendar-page .cq-load span::before { display: none }

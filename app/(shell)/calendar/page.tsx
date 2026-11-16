@@ -48,7 +48,8 @@ import {
   DOW_NAMES, type Ev, type Span, type RecurrenceRule, type RecurrenceDay, type RecurrenceFreq,
 } from '@/lib/events';
 import { extraDays, formRange, spillRange } from '@/lib/calendarRange';
-import { QuickAdd, LoadBar, type QuickEvent } from '@/components/calendar/QuickAdd';
+import { QuickAdd, LoadBar, SleepAdd, type QuickEvent } from '@/components/calendar/QuickAdd';
+import { SLEEP_COLOR, sleepRange, type SleepHours } from '@/lib/sleepBlock';
 import './quick.css';
 import './calendar-sorro.css';
 
@@ -312,6 +313,12 @@ export default function CalendarPage() {
     A.create.mutate({ id: q.id, title: q.title, starts_at: q.starts_at, ends_at: q.ends_at, color: q.color, location: q.location, all_day: q.all_day, recurrence: q.recurrence ?? undefined });
     setSelectedDate(new Date(q.starts_at));
     toast(`Added ${q.title}`, () => A.remove.mutate({ id: q.id }));
+  };
+  const addSleep = (hours: SleepHours) => {
+    const id = crypto.randomUUID();
+    const range = sleepRange(hours, new Date(), selectedDate);
+    A.create.mutate({ id, title: 'Sleep', starts_at: range.starts_at, ends_at: range.ends_at, color: SLEEP_COLOR, location: 'Bed', all_day: false });
+    toast(`Added ${hours}h sleep, ${hhmm(hoursOf(range.starts_at), prefs.time24)} – ${hhmm(hoursOf(range.ends_at), prefs.time24)}`, () => A.remove.mutate({ id }));
   };
   const weekLoad = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(ws); d.setDate(d.getDate() + i);
@@ -754,7 +761,7 @@ export default function CalendarPage() {
           </button>
         </div>
       </header>
-      <div className="cq-row" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 29 : 1 }}><QuickAdd ref={quickRef} color={EVENT_COLORS[6][1]} onAdd={quickAdd} />{view === 'week' && <LoadBar days={weekLoad} />}</div>
+      <div className="cq-row" style={{ order: prefs.calendarToolbarPosition === 'bottom' ? 29 : 1 }}><QuickAdd ref={quickRef} color={EVENT_COLORS[6][1]} onAdd={quickAdd} /><SleepAdd onAdd={addSleep} />{view === 'week' && <LoadBar days={weekLoad} />}</div>
 
       {layoutOpen && <section className="cal-layout-panel" aria-label="Calendar layout" style={{ order: 1 }}>
         <div><strong>Focus hours</strong><label>From<input aria-label="Focus hours start" type="time" value={focusFrom} onChange={e => setFocusFrom(e.target.value)}/></label><label>To<input aria-label="Focus hours end" type="time" value={focusTo} onChange={e => setFocusTo(e.target.value)}/></label>
